@@ -74,11 +74,6 @@ class DesktopTestShardsTest {
             DesktopTestShard.entries.filter { it.selects(testClass) }.map(DesktopTestShard::id)
         }.filterValues { it.size != 1 }
         assertEquals(emptyMap(), notExactlyOnce, "classes not run by exactly one shard")
-
-        val union = DesktopTestShard.entries.flatMap { shard -> desktopTestClasses.filter(shard::selects) }
-        assertEquals(desktopTestClasses.size, union.size)
-        assertEquals(desktopTestClasses, union.toSet())
-        desktopTestClasses.forEach { testClass -> assertTrue(DesktopTestShard.of(testClass).selects(testClass)) }
     }
 
     @Test
@@ -131,6 +126,10 @@ class DesktopTestShardsTest {
         }
 
         val desktopTestClasses: Set<String> by lazy { desktopTestSources.keys }
+
+        /** Whether this shard's `desktopTest` filter (kinetickk.kmp-platforms) keeps [testClass]. */
+        fun DesktopTestShard.selects(testClass: String): Boolean =
+            (testClasses.isEmpty() || testClass in testClasses) && testClass !in excludedTestClasses
 
         val TEST_SOURCE_ROOTS = listOf(
             "/src/commonTest/kotlin/", "/src/desktopTest/kotlin/",

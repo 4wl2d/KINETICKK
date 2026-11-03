@@ -92,22 +92,11 @@ enum class DesktopTestShard(
     REST("rest", null, emptyList()),
     ;
 
-    /** Exact class names this shard's `desktopTest` includes; empty for [REST], which includes every other class. */
-    val includedTestClasses: List<String>
-        get() = testClasses
-
     /** Exact class names this shard's `desktopTest` excludes: [REST] leaves out every listed class. */
     val excludedTestClasses: List<String>
         get() = if (this == REST) entries.flatMap(DesktopTestShard::testClasses) else emptyList()
 
-    /** Whether this shard's `desktopTest` filter keeps [testClass] (a fully qualified top-level class name). */
-    fun selects(testClass: String): Boolean =
-        (includedTestClasses.isEmpty() || testClass in includedTestClasses) && testClass !in excludedTestClasses
-
     companion object {
-        /** The shard that runs [testClass]: the one that lists it, otherwise [REST]. */
-        fun of(testClass: String): DesktopTestShard = entries.firstOrNull { testClass in it.testClasses } ?: REST
-
         fun parse(value: String): DesktopTestShard =
             entries.firstOrNull { it.id == value }
                 ?: throw GradleException(

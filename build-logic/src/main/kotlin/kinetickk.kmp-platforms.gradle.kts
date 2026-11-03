@@ -33,9 +33,9 @@ tasks.withType<Test>().configureEach {
         jvmArgs("--enable-native-access=ALL-UNNAMED")
         desktopTestShard.orNull?.let { shard ->
             filter {
-                // A gate shard's classes live in one or two modules; every other module's task selects none.
+                // A gate shard's classes live in its projectPath; every other module's task selects none.
                 isFailOnNoMatchingTests = false
-                shard.includedTestClasses.forEach(::includeTestsMatching)
+                shard.testClasses.forEach(::includeTestsMatching)
                 shard.excludedTestClasses.forEach(::excludeTestsMatching)
             }
         }

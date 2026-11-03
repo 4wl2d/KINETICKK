@@ -4,7 +4,7 @@
 import kinetickk.gradle.packageLegalDocuments
 import kinetickk.gradle.BuildVariant
 import kinetickk.gradle.gameBuildVariant
-import kinetickk.gradle.RejectDebugReleaseTask
+import kinetickk.gradle.RejectReleaseInDebugAction
 import kinetickk.gradle.macOsPackageVersion
 import org.gradle.api.JavaVersion
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -18,17 +18,16 @@ plugins {
 
 val gameVariant = gameBuildVariant()
 val currentJavaHome = providers.systemProperty("java.home").get()
-val packagingJavaHome = providers.gradleProperty("kinetickk.packagingJdk").orElse(
-    if (file("$currentJavaHome/jmods/java.base.jmod").isFile) {
-        providers.provider { currentJavaHome }
-    } else {
-        // Some JEP 493 JDK distributions omit jmods. Compose's ProGuard task still
-        // requires those library inputs; use the installed LTS toolchain in that case.
+// Some JEP 493 JDK distributions omit jmods. Compose's ProGuard task still requires those library
+// inputs; use the installed LTS toolchain in that case. Without one, configuration still succeeds
+// and only packaging fails, with Compose's missing-jmods error.
+val packagingJavaHome = providers.gradleProperty("kinetickk.packagingJdk").orNull
+    ?: currentJavaHome.takeIf { file("$it/jmods/java.base.jmod").isFile }
+    ?: runCatching {
         javaToolchains.launcherFor {
             languageVersion.set(JavaLanguageVersion.of(21))
-        }.map { it.metadata.installationPath.asFile.absolutePath }
-    },
-)
+        }.get().metadata.installationPath.asFile.absolutePath
+    }.getOrDefault(currentJavaHome)
 
 composeCompiler {
     includeSourceInformation.set(false)
@@ -56,7 +55,7 @@ dependencies {
 
 compose.desktop {
     application {
-        javaHome = packagingJavaHome.get()
+        javaHome = packagingJavaHome
         mainClass = "kinetickk.app.desktop.DesktopMainKt"
         jvmArgs += listOf("--enable-native-access=ALL-UNNAMED")
 
@@ -91,8 +90,8 @@ compose.desktop {
 
 // A task called Release must never package the diagnostic source set.
 if (gameVariant == BuildVariant.DEBUG) {
-    tasks.matching { "Release" in it.name || it.name == "runRelease" }.configureEach {
-        doFirst(RejectDebugReleaseTask())
+    tasks.matching { "Release" in it.name }.configureEach {
+        doFirst(RejectReleaseInDebugAction())
     }
 }
 

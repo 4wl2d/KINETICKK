@@ -5,6 +5,8 @@ import kinetickk.gradle.isolatedProjectsProfileEnabled
 import kinetickk.gradle.BuildVariant
 import kinetickk.gradle.gameBuildVariant
 import kinetickk.gradle.WriteDebugBuildIdentityTask
+import kinetickk.gradle.gitOutput
+import kinetickk.gradle.sourceIdentityFiles
 
 plugins {
     id("kinetickk.compose-library")
@@ -13,21 +15,10 @@ plugins {
 if (gameBuildVariant() == BuildVariant.DEBUG) {
     val debugBuildIdentity = tasks.register<WriteDebugBuildIdentityTask>("writeDebugBuildIdentity") {
         gameVersion.set(project.version.toString())
-        gitRevision.set(providers.exec {
-            workingDir(rootDir)
-            commandLine("git", "rev-parse", "HEAD")
-            isIgnoreExitValue = true
-        }.standardOutput.asText)
-        gitStatus.set(providers.exec {
-            workingDir(rootDir)
-            commandLine("git", "status", "--porcelain=v1", "--untracked-files=normal")
-            isIgnoreExitValue = true
-        }.standardOutput.asText)
+        gitRevision.set(gitOutput("rev-parse", "HEAD"))
+        gitDirty.set(gitOutput("status", "--porcelain=v1", "--untracked-files=normal").map { it.isNotBlank() })
         repositoryDirectory.set(rootDir)
-        buildSources.from(fileTree(rootDir) {
-            include("**/src/**/*.kt", "**/*.gradle.kts", "gradle/libs.versions.toml", "gradle.properties")
-            exclude("**/build/**", "**/build-debug/**", "**/.gradle/**")
-        })
+        buildSources.from(sourceIdentityFiles())
         outputDirectory.set(layout.buildDirectory.dir("generated/debug-build-identity"))
     }
     kotlin.sourceSets.named("commonMain") { kotlin.srcDir(debugBuildIdentity) }

@@ -212,10 +212,11 @@ jobs:
 
       - name: Verify all optimized application bytecode
         run: |
+          set -o pipefail
           release_jars=(app/desktop/build/compose/jars/*-release.jar)
           test "${#release_jars[@]}" -eq 1
-          java -cp "${release_jars[0]}" tools/build/VerifyJvmClasses.java "${release_jars[0]}" \
-            > build/variant-verification/desktop-bytecode.txt 2>&1
+          java -cp "${release_jars[0]}" tools/build/VerifyJvmClasses.java "${release_jars[0]}" 2>&1 \
+            | tee build/variant-verification/desktop-bytecode.txt
 
       - name: Upload variant reports
         if: always()
@@ -224,8 +225,9 @@ jobs:
           name: desktop-variant-reports
           path: |
             build/variant-verification/
-            app/shared/build-debug/test-results/
-            app/shared/build-debug/reports/
+            **/build-debug/test-results/**/*.xml
+            **/build-debug/reports/
+          if-no-files-found: warn
           retention-days: 7
 
   android-build:

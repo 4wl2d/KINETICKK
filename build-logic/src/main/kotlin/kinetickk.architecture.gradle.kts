@@ -40,7 +40,9 @@ tasks.register<VerifyArchitectureTask>("verifyArchitecture") {
             nucleusPath.removePrefix(":").replace(':', '/') + "/src",
         )
         nucleusSourceFiles.from(rootProject.fileTree(sourceDirectory) {
-            include("*Main/kotlin/**/*.kt")
+            // Every production root, including variant roots such as commonDebug; test source set names end in Test.
+            include("*/kotlin/**/*.kt")
+            exclude("*Test/**")
         })
     }
 }

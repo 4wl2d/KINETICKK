@@ -42,7 +42,6 @@ extensions.configure<ApplicationExtension> {
             versionNameSuffix = "-debug"
         }
         getByName("release") {
-            isDebuggable = false
             // Local launch uses the developer key explicitly; distribution stays unsigned
             // unless a release-signing setup is supplied by the distributor.
             if (providers.gradleProperty("kinetickk.localSigning").orNull == "true") {

@@ -15,32 +15,23 @@ import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
-import java.security.MessageDigest
 
 /** Portable source identity; deliberately excludes the clock and machine-specific paths. */
 @CacheableTask
 abstract class WriteDebugBuildIdentityTask : DefaultTask() {
     @get:Input abstract val gameVersion: Property<String>
     @get:Input abstract val gitRevision: Property<String>
-    @get:Input abstract val gitStatus: Property<String>
+    @get:Input abstract val gitDirty: Property<Boolean>
     @get:Internal abstract val repositoryDirectory: DirectoryProperty
     @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val buildSources: ConfigurableFileCollection
     @get:OutputDirectory abstract val outputDirectory: DirectoryProperty
 
     @TaskAction fun write() {
-        val root = repositoryDirectory.get().asFile
-        val digest = MessageDigest.getInstance("SHA-256")
-        buildSources.files.sortedBy { it.relativeTo(root).invariantSeparatorsPath }.forEach { file ->
-            digest.update(file.relativeTo(root).invariantSeparatorsPath.toByteArray(Charsets.UTF_8))
-            digest.update(0.toByte())
-            digest.update(file.readBytes())
-            digest.update(0.toByte())
-        }
-        val fingerprint = digest.digest().joinToString("") { "%02x".format(it) }
+        val fingerprint = sourceSha256(repositoryDirectory.get().asFile, buildSources)
         val description = "KINETICKK ${gameVersion.get()} | variant=debug" +
             " | revision=${gitRevision.get().trim().ifBlank { "unknown" }}" +
-            " | dirty=${gitStatus.get().isNotBlank()} | source.sha256=$fingerprint"
+            " | dirty=${gitDirty.get()} | source.sha256=$fingerprint"
         val escaped = description.replace("\\", "\\\\").replace("\"", "\\\"")
             .replace("$", "\\$").replace("\n", "\\n").replace("\r", "\\r")
         val file = outputDirectory.file("kinetickk/app/shared/DebugBuildIdentity.kt").get().asFile

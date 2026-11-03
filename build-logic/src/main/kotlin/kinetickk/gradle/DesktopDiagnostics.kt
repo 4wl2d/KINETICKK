@@ -5,10 +5,13 @@ package kinetickk.gradle
 
 import org.gradle.api.Action
 import org.gradle.api.DefaultTask
+import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.FileTree
 import org.gradle.api.provider.Property
+import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
@@ -20,6 +23,7 @@ import org.gradle.api.tasks.TaskAction
 import org.gradle.work.DisableCachingByDefault
 import java.io.Serializable
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -40,14 +44,6 @@ abstract class WriteDesktopBuildInfoTask : DefaultTask() {
     @get:OutputDirectory abstract val outputDirectory: DirectoryProperty
 
     @TaskAction fun write() {
-        val root = repositoryDirectory.get().asFile
-        val digest = MessageDigest.getInstance("SHA-256")
-        buildSources.files.sortedBy { it.relativeTo(root).invariantSeparatorsPath }.forEach { file ->
-            digest.update(file.relativeTo(root).invariantSeparatorsPath.toByteArray())
-            digest.update(0.toByte())
-            digest.update(file.readBytes())
-            digest.update(0.toByte())
-        }
         val properties = Properties().apply {
             setProperty("game.version", gameVersion.get())
             setProperty("kotlin.version", kotlinVersion.get())
@@ -55,13 +51,38 @@ abstract class WriteDesktopBuildInfoTask : DefaultTask() {
             setProperty("git.revision", gitRevision.get().trim().ifBlank { "unknown" })
             setProperty("git.dirty", gitStatus.get().isNotBlank().toString())
             setProperty("git.status", gitStatus.get().take(64 * 1024))
-            setProperty("source.sha256", digest.digest().joinToString("") { "%02x".format(it) })
+            setProperty("source.sha256", sourceSha256(repositoryDirectory.get().asFile, buildSources))
             // Reproducible timestamp: SOURCE_DATE_EPOCH, or the source commit time.
             setProperty("built.at", Instant.ofEpochSecond(sourceDateEpoch.get()).toString())
         }
         val directory = outputDirectory.get().asFile.apply { mkdirs() }
         directory.resolve("kinetickk-build.properties").writeBytes(deterministicProperties(properties))
     }
+}
+
+/** Inputs of `source.sha256`: this checkout's sources and build scripts, without outputs or nested worktrees. */
+fun Project.sourceIdentityFiles(): FileTree = fileTree(rootDir) {
+    include("**/src/**/*.kt", "**/*.gradle.kts", "gradle/libs.versions.toml", "gradle.properties")
+    exclude(".claude/**", "**/build/**", "**/build-debug/**", "**/.gradle/**")
+}
+
+/** Standard output of `git [args]` in the root directory; a failing command yields its (usually empty) output. */
+fun Project.gitOutput(vararg args: String): Provider<String> = providers.exec {
+    workingDir(rootDir)
+    commandLine("git", *args)
+    isIgnoreExitValue = true
+}.standardOutput.asText
+
+/** SHA-256 of [files] by relative path and content, in path order; independent of where [root] is checked out. */
+internal fun sourceSha256(root: File, files: Iterable<File>): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    files.sortedBy { it.relativeTo(root).invariantSeparatorsPath }.forEach { file ->
+        digest.update(file.relativeTo(root).invariantSeparatorsPath.toByteArray(Charsets.UTF_8))
+        digest.update(0.toByte())
+        digest.update(file.readBytes())
+        digest.update(0.toByte())
+    }
+    return digest.digest().joinToString("") { "%02x".format(it) }
 }
 
 /** Properties.store adds today's date; retain its escaping but replace that unstable header and ordering. */

@@ -7,7 +7,7 @@ import kinetickk.gradle.isolatedProjectsProfileEnabled
 import kinetickk.gradle.BuildVariant
 import kinetickk.gradle.gameBuildVariant
 import kinetickk.gradle.configureVariantSources
-import kinetickk.gradle.RejectDebugReleaseTask
+import kinetickk.gradle.RejectReleaseInDebugAction
 import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.api.tasks.Delete
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
@@ -118,7 +118,7 @@ if (!isolatedProjectsProfile) {
     }
     if (gameVariant == BuildVariant.DEBUG) {
         tasks.matching { "Production" in it.name || it.name == "wasmJsBrowserDistribution" }.configureEach {
-            doFirst(RejectDebugReleaseTask())
+            doFirst(RejectReleaseInDebugAction())
         }
     }
 }

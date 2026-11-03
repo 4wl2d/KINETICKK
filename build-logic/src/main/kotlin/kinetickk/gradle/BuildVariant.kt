@@ -53,7 +53,7 @@ fun Project.configureVariantSources() {
     }
 }
 
-class RejectDebugReleaseTask : Action<Task>, Serializable {
+class RejectReleaseInDebugAction : Action<Task>, Serializable {
     override fun execute(task: Task) {
         throw GradleException("${task.path} requires -Pkinetickk.variant=release; Debug sources cannot be packaged as Release.")
     }

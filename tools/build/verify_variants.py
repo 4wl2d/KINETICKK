@@ -9,7 +9,7 @@ Example:
     --release app/android/build/outputs/apk/release/app-android-release-unsigned.apk \
     --output build/variant-verification/android.json
 
-Use app/shared's desktop JARs, or complete packaged app directories, for desktop.
+Use app/desktop's compose/jars directories (uber JARs), or complete packaged app directories, for desktop.
 This verifies bytes and packaging, not gameplay, FPS or GPU presentation.
 """
 from __future__ import annotations
