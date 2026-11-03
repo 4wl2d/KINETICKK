@@ -42,9 +42,12 @@ kotlin {
     }
 }
 
-// KkIconTableTest compares the generated Kotlin icon table with the design source of truth.
+// KkIconTableTest and KkTokenTableTest compare the Kotlin icon and token tables with the design source of truth.
 tasks.matching { it.name == "desktopTest" }.configureEach {
     inputs.file(rootDir.resolve("docs/design/redesign/icons.json"))
         .withPropertyName("redesignIcons")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(rootDir.resolve("docs/design/redesign/tokens.json"))
+        .withPropertyName("redesignTokens")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }
