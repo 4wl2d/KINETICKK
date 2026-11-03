@@ -166,6 +166,23 @@ class ContentBalanceCharacterizationTest {
                 }
             },
         )
+        // The item rarity odds (decisions D4: Luck saturating, owned Epics and Legendaries decaying, no volatile lift into
+        // Legendary) and the deck's reserve ceiling that keeps a run's dealt Legendary hand.
+        assertEquals(
+            "a27116d1d0bf6469",
+            goldenFingerprint {
+                add("item-rarity")
+                with(build.policy.rarity) {
+                    weights.forEach(::add)
+                    add(luckCeiling)
+                    add(luckHalfSaturation)
+                    luckLift.forEach(::add)
+                    ownedDecay.forEach(::add)
+                    liftShares.forEach(::add)
+                }
+                add(build.policy.draftDeck.reserveCeiling.name)
+            },
+        )
     }
 
     @Test

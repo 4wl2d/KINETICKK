@@ -402,7 +402,7 @@ internal fun MutableGameState.rerollChoices() {
     if (!choicesCanReroll) return
     rerollsRemaining--
     when (activeChoiceType) {
-        ChoiceType.ITEM -> buildItemChoices()
+        ChoiceType.ITEM -> rerollItemChoices()
         ChoiceType.WEAPON -> buildWeaponChoices()
         ChoiceType.RELIC -> buildRelicChoices()
         ChoiceType.TOTEM, ChoiceType.RELIC_BIND, ChoiceType.ACTIVE_SLOT,

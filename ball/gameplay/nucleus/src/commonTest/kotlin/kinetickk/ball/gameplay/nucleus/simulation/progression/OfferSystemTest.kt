@@ -258,22 +258,23 @@ class OfferSystemTest {
     // catalogs on the same seeds, each with at least four standard deviations of margin, so they survive draw-order
     // changes and small odds tuning.
 
+    // Epics and Legendaries are rare by design (the rarity rework): at no Luck, cards 0 and 1 are Epic about 2% of the time
+    // (Legendary falls back to Epic before Rebirth 2) and the volatile card about 4% (it lifts Rare into Epic now and then).
     @Test
-    fun aFullCatalogVeteranSeesAboutOneEpicCardEveryThreeOffers() {
+    fun aFullCatalogVeteranSeesAnEpicCardAboutOnceInThirteenOffers() {
         val offers = veteranOffers
         assertTrue(offers.all { it.size == 3 })
         assertTrue(offers.all { offer -> offer.map { it.id }.toSet().size == offer.size }, "An offer never repeats a card")
-        // Cards 0 and 1 are Epic 7% of the time (Legendary falls back to Epic before Rebirth 2), the volatile card 19%.
-        assertWithin(0.25..0.42, offers.cardsPerOffer { it.rarity == ItemRarity.EPIC }, "Epic cards per offer")
-        assertWithin(0.22..0.38, offers.offerShare { it.rarity == ItemRarity.EPIC }, "offers with an Epic card")
-        assertWithin(0.62..0.82, offers.offerShare { it.rarity.rank >= ItemRarity.RARE.rank }, "offers with a Rare or better")
+        assertWithin(0.05..0.11, offers.cardsPerOffer { it.rarity == ItemRarity.EPIC }, "Epic cards per offer")
+        assertWithin(0.05..0.11, offers.offerShare { it.rarity == ItemRarity.EPIC }, "offers with an Epic card")
+        assertWithin(0.55..0.78, offers.offerShare { it.rarity.rank >= ItemRarity.RARE.rank }, "offers with a Rare or better")
         assertTrue(offers.cardShare { it.rarity.rank <= ItemRarity.UNCOMMON.rank } >= 0.60, "Commons and Uncommons fill most cards")
         assertEquals(0.0, offers.cardShare { it.rarity == ItemRarity.LEGENDARY }, "No Legendary before Rebirth 2")
         // Risk items are all Epic; a lane that overrides the rolled rarity would make the volatile card Epic most of the time.
         repeat(3) { position ->
-            assertTrue(offers.positionShare(position) { it.rarity == ItemRarity.EPIC } <= 0.25, "Epic share of card $position")
+            assertTrue(offers.positionShare(position) { it.rarity == ItemRarity.EPIC } <= 0.06, "Epic share of card $position")
         }
-        assertTrue(offers.cardShare { it.risk } <= 0.15, "Risk items stay a minority of cards")
+        assertTrue(offers.cardShare { it.risk } <= 0.05, "Risk items stay a small minority of cards")
     }
 
     @Test
@@ -284,9 +285,9 @@ class OfferSystemTest {
         }.sampleOffers()
         assertTrue(offers.all { it.size == 4 })
         assertTrue(offers.all { offer -> offer.map { it.id }.toSet().size == offer.size }, "An offer never repeats a card")
-        assertTrue(offers.offerShare { it.rarity == ItemRarity.EPIC } <= 0.52, "offers with an Epic card")
+        assertTrue(offers.offerShare { it.rarity == ItemRarity.EPIC } <= 0.15, "offers with an Epic card")
         repeat(4) { position ->
-            assertTrue(offers.positionShare(position) { it.rarity == ItemRarity.EPIC } <= 0.25, "Epic share of card $position")
+            assertTrue(offers.positionShare(position) { it.rarity == ItemRarity.EPIC } <= 0.06, "Epic share of card $position")
         }
     }
 
@@ -296,8 +297,9 @@ class OfferSystemTest {
             level = 20
             lifetimeMatter = 4_000L
         }.sampleOffers()
-        assertWithin(0.015..0.05, offers.cardShare { it.rarity == ItemRarity.LEGENDARY }, "Legendary share of cards")
-        assertTrue(offers.cardsPerOffer { it.rarity == ItemRarity.EPIC } <= 0.33, "Epic cards per offer")
+        // A Legendary is the base Legendary odds on every card: the volatile card never lifts into it.
+        assertWithin(0.004..0.014, offers.cardShare { it.rarity == ItemRarity.LEGENDARY }, "Legendary share of cards")
+        assertTrue(offers.cardsPerOffer { it.rarity == ItemRarity.EPIC } <= 0.11, "Epic cards per offer")
     }
 
     // The two fallback checks below compare a catalog with the full-catalog veteran on the same seeds and odds, so they
@@ -341,9 +343,11 @@ class OfferSystemTest {
             level = 14
             lifetimeMatter = 0L
         }.sampleOffers()
-        // Cards 0 and 1 are Epic 7% of the time (Legendary falls back to Epic before Rebirth 2).
+        // Cards 0 and 1 are Epic at the Epic odds plus the Legendary odds (Legendary falls back to Epic before Rebirth 2).
+        val odds = buildTestState().run { itemRarityOdds(ItemRarity.EPIC) + itemRarityOdds(ItemRarity.LEGENDARY) }
         repeat(2) { position ->
-            assertTrue(freshRun.positionShare(position) { it.rarity == ItemRarity.EPIC } >= 0.04, "Epic share of card $position")
+            val share = freshRun.positionShare(position) { it.rarity == ItemRarity.EPIC }
+            assertTrue(share >= 0.5 * odds, "Epic share of card $position: $share against the odds $odds")
         }
     }
 
@@ -354,10 +358,13 @@ class OfferSystemTest {
             lifetimeMatter = 4_000L
             luck = 1f
         }.sampleOffers()
-        // Luck 1 lifts offers with a Rare or better from 72% to 81% on the same seeds.
+        // Luck 1 lifts offers with a Rare or better from about 66% to 74% on the same seeds, and the Epic cards more than
+        // the Rares (Luck lifts the rarer tiers by more), while Epics stay rare.
         val luckGain = lucky.offerShare(rareOrBetter) - unlucky.offerShare(rareOrBetter)
         assertTrue(luckGain >= 0.04, "Luck 1 raises the share of offers with a Rare or better by only $luckGain")
-        assertTrue(lucky.cardsPerOffer { it.rarity == ItemRarity.EPIC } <= 0.65, "Epic cards per offer at luck 1")
+        val epicGain = lucky.cardsPerOffer { it.rarity == ItemRarity.EPIC } / unlucky.cardsPerOffer { it.rarity == ItemRarity.EPIC }
+        assertTrue(epicGain >= 1.4, "Luck 1 multiplies Epic cards by only $epicGain")
+        assertTrue(lucky.cardsPerOffer { it.rarity == ItemRarity.EPIC } <= 0.2, "Epic cards per offer at luck 1")
     }
 
     @Test

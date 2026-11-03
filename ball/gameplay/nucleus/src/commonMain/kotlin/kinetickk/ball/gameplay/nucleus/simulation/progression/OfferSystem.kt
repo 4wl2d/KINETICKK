@@ -93,18 +93,20 @@ private fun MutableGameState.experimental(item: ItemDefinition): Boolean =
 
 /**
  * Builds a build-aware item offer from [rewardRandom]: an aligned card, an experimental card and a volatile card
- * (Gambler's Ledger adds a second volatile card). Every card rolls a rarity and keeps it; a lane only chooses
- * inside that tier. The volatile card usually rolls one rarity higher and then sometimes prefers risk items when it
- * lands on their tier, and the pity card never rolls below Rare. A rolled tier with no available item falls to the
- * nearest lower tier (not below Rare for pity while any Rare or better is available), then to the nearest
- * higher one. Never guarantees a perfect synergy; suppressed items are excluded or down-weighted, recently taken
+ * (Gambler's Ledger adds a second volatile card). Every card rolls a rarity ([rollRarity]) and keeps it; a lane only
+ * chooses inside that tier. The volatile card sometimes rolls one rarity higher ([volatileLift], never into Legendary)
+ * and then sometimes prefers risk items when it lands on their tier, and the pity card never rolls below Rare. A rolled
+ * tier with no available item falls to the nearest lower tier (not below Rare for pity while any Rare or better is
+ * available), then to the nearest higher one. [lockedRarities] (a reroll, [rerollItemChoices]) gives every card its tier
+ * instead: no rarity draw, lift, pity or floor, and only a tier left empty falls (to the lower tiers first). Never
+ * guarantees a perfect synergy; suppressed items are excluded or down-weighted, recently taken
  * items (the Profile's history) are down-weighted in every lane, and the Matrix's Data offer weight raises Data-economy
  * items in every lane (weights only, no draw). Active items take the lane policy's active factors ([activeOfferWeight])
  * and at most one shows per offer: once a card is an active item, later cards leave actives out (a filter, never an
- * extra draw). Only items dealt into the run's deck appear (the deck is refilled first). Each card draws the rarity,
- * lane, pick and Reborn values from [rewardRandom] in that order.
+ * extra draw). Only items dealt into the run's deck appear (the deck is refilled first). Each card draws the rarity
+ * (unless locked), lane, pick and Reborn values from [rewardRandom] in that order.
  */
-internal fun MutableGameState.buildItemChoices() {
+internal fun MutableGameState.buildItemChoices(lockedRarities: List<ItemRarity>? = null) {
     refillItemDeck()
     val lanePolicy = content.build.policy.offerLanes
     val familyFits = weaponFamilyFits()
@@ -112,7 +114,7 @@ internal fun MutableGameState.buildItemChoices() {
     val selected = mutableListOf<ItemDefinition>()
     val reborns = mutableListOf<Boolean>()
     val lanes = OfferLane.entries
-    val size = itemOfferSize()
+    val size = lockedRarities?.size ?: itemOfferSize()
     var rareOrBetter = false
     var activeShown = false
     val pityDue = offerPity >= pityOffers()
@@ -122,15 +124,14 @@ internal fun MutableGameState.buildItemChoices() {
             selected.none { it.id == candidate.id } && !(activeShown && candidate.isActive)
         }
         if (available.isEmpty()) break
-        var rarity = rollRarity()
+        val locked = lockedRarities?.get(cardIndex)
+        val rolled = locked ?: rollRarity()
         val laneRoll = rewardRandom.nextFloat()
-        val volatileLift = lane == OfferLane.VOLATILE && laneRoll < lanePolicy.volatileLiftChance
-        if (volatileLift) rarity = ItemRarity.entries.firstOrNull { it.rank == rarity.rank + 1 } ?: rarity
-        val pityCard = lane == OfferLane.VOLATILE && pityDue && !rareOrBetter
-        if (pityCard) rarity = maxOf(rarity, ItemRarity.RARE)
-        offerRarityFloor?.let { rarity = maxOf(rarity, it) }
-        val floor = if (pityCard && available.any { it.rarity.rank >= ItemRarity.RARE.rank }) ItemRarity.RARE else ItemRarity.COMMON
-        val tier = available.nearestRarityTier(rarity, maxOf(floor, offerRarityFloor ?: ItemRarity.COMMON))
+        val tier = if (locked != null) {
+            available.nearestRarityTier(locked, ItemRarity.COMMON)
+        } else {
+            rolledTier(available, rolled, lane, laneRoll, pityCard = lane == OfferLane.VOLATILE && pityDue && !rareOrBetter)
+        }
         val candidates = when (lane) {
             OfferLane.ALIGNED -> if (laneRoll < lanePolicy.alignedChance) {
                 tier.filter { fit(it, familyFits) > 0f && itemSuppressedShare(it) == 0f }
@@ -153,6 +154,25 @@ internal fun MutableGameState.buildItemChoices() {
     choices = selected.mapIndexed { index, item ->
         itemCard(item, item.rarity.displayLabel.uppercase(), reborns[index])
     }
+}
+
+/**
+ * The tier a rolled card draws from: the volatile card's lift, the pity card's Rare and the open offer's rarity floor
+ * raise [rolled]; an empty tier falls as [nearestRarityTier] says, not below Rare for pity while a Rare or better exists.
+ */
+private fun MutableGameState.rolledTier(
+    available: List<ItemDefinition>,
+    rolled: ItemRarity,
+    lane: OfferLane,
+    laneRoll: Float,
+    pityCard: Boolean,
+): List<ItemDefinition> {
+    val offerFloor = offerRarityFloor ?: ItemRarity.COMMON
+    var rarity = if (lane == OfferLane.VOLATILE) volatileLift(rolled, laneRoll) else rolled
+    if (pityCard) rarity = maxOf(rarity, ItemRarity.RARE)
+    rarity = maxOf(rarity, offerFloor)
+    val pityFloor = if (pityCard && available.any { it.rarity.rank >= ItemRarity.RARE.rank }) ItemRarity.RARE else ItemRarity.COMMON
+    return available.nearestRarityTier(rarity, maxOf(pityFloor, offerFloor))
 }
 
 /**
@@ -207,17 +227,6 @@ internal fun MutableGameState.itemCard(item: ItemDefinition, tag: String, reborn
     )
 }
 
-/**
- * The items of the rolled [rarity], else of the nearest lower tier down to [floor], else of the nearest higher tier,
- * else (a rarity floor no remaining item meets) of the nearest tier below [floor].
- */
-private fun List<ItemDefinition>.nearestRarityTier(rarity: ItemRarity, floor: ItemRarity): List<ItemDefinition> {
-    val order = ItemRarity.entries.filter { it.rank in floor.rank..rarity.rank }.asReversed() +
-        ItemRarity.entries.filter { it.rank > rarity.rank } +
-        ItemRarity.entries.filter { it.rank < floor.rank }.asReversed()
-    return order.firstNotNullOfOrNull { tier -> filter { it.rarity == tier }.takeIf { it.isNotEmpty() } } ?: this
-}
-
 /** Called when an item offer is resolved (not rerolled): advances or resets the rarity pity counter. */
 internal fun MutableGameState.resolveItemOfferPity(chosen: ItemDefinition?) {
     offerPity = if (chosen != null && chosen.rarity.rank >= ItemRarity.RARE.rank) 0 else offerPity + 1
@@ -229,18 +238,6 @@ internal fun MutableGameState.rebornChance(): Float {
     if (tagTier(BuildTag.FORTUNE) >= 3) chance += 0.1f
     chance += matrix.rebornChanceBonus
     return chance.coerceIn(0f, 0.5f)
-}
-
-/** Base card odds are Legendary 2%, Epic 5%, Rare 20%, Uncommon 34% and Common 39%; each luck point (up to 2) lowers the roll by 0.08. */
-internal fun MutableGameState.rollRarity(): ItemRarity {
-    val roll = rewardRandom.nextFloat() - effectiveLuck().coerceIn(0f, 2f) * 0.08f
-    return when {
-        roll < 0.02f -> ItemRarity.LEGENDARY
-        roll < 0.07f -> ItemRarity.EPIC
-        roll < 0.27f -> ItemRarity.RARE
-        roll < 0.61f -> ItemRarity.UNCOMMON
-        else -> ItemRarity.COMMON
-    }
 }
 
 private fun MutableGameState.weightedIndex(weights: FloatArray): Int {

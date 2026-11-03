@@ -812,11 +812,15 @@ class DimensionRewardsTest {
         assertEquals(4, taken.offerPity)
         assertTrue(items.any { taken.itemStack(it.id) == 1 })
 
-        // One Legendary left: two Epics fill the hand.
-        val keep = legendaryIds.first { state.offerableOutsideDeck(state.content.items[it]) && state.content.items[it].active == null }
-        val topped = trove {
-            for (id in legendaryIds) if (id != keep) itemStacks[id] = content.items[id].maxStacks
+        // One Legendary of the dealt hand left: two Epics fill the hand, since the deck's reserve never adds a Legendary
+        // (the run keeps the Legendaries it was dealt).
+        val keep = legendaryIds.first {
+            it in state.itemDeck && state.offerableOutsideDeck(state.content.items[it]) && state.content.items[it].active == null
         }
+        val topped = trove {
+            for (id in legendaryIds) if (id != keep && id in itemDeck) itemStacks[id] = content.items[id].maxStacks
+        }
+        assertTrue(legendaryIds.any { it !in topped.itemDeck && topped.offerableOutsideDeck(topped.content.items[it]) }, "precondition: a reserve Legendary")
         topped.openPendingDimensionReward()
         val toppedItems = topped.choices.map { topped.content.items[checkNotNull(it.itemId)] }
         assertEquals(listOf(ItemRarity.LEGENDARY, ItemRarity.EPIC, ItemRarity.EPIC), toppedItems.map { it.rarity })

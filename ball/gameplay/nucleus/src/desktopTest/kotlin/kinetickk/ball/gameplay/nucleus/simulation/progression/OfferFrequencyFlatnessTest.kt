@@ -19,8 +19,9 @@ import kotlin.test.assertTrue
 
 /**
  * No rarity tier over-represents its items any more (items.md §5.3, §5.4): per-item card rates at Rebirth 0, run level
- * 20, an empty Orb build, against the Common rate, with the whole catalog dealt and with the draft deck. Desktop only:
- * 30,000 offers per policy exceed the browser runner's per-test limit.
+ * 20, an empty Orb build, against the Common rate, with the whole catalog dealt and with the draft deck. Commons,
+ * Uncommons and Rares stay about equally exposed per item; Epics are rare by design (the rarity rework, decisions D4),
+ * so their bands follow the rarity odds. Desktop only: 30,000 offers per policy exceed the browser runner's per-test limit.
  *
  * Restated for active items: the tier buckets and the worst-item check cover passive items only, since the lane
  * policy weights active items on purpose. They measure the passive items' exposure as before active items existed: a
@@ -160,8 +161,11 @@ class OfferFrequencyFlatnessTest {
         val ratios = flatness.ratios
         assertTrue(ratios.getValue("Uncommon") in 0.85..1.15, "$label Uncommon ${ratios["Uncommon"]}")
         assertTrue(ratios.getValue("Rare") in 0.80..1.25, "$label Rare ${ratios["Rare"]}")
-        assertTrue(ratios.getValue("Epic") in 0.50..1.00, "$label Epic ${ratios["Epic"]}")
-        assertTrue(ratios.getValue("risk Epic") in 0.80..1.25, "$label risk Epic ${ratios["risk Epic"]}")
+        // Epics are rare by design (ItemRarityPolicy: about 0.13 of the Common rate per item at no Luck), so their bands
+        // bound the tier against those odds instead of the Commons; risk Epics show about twice as often as the other
+        // Epics, since the volatile card prefers them on their tier.
+        assertTrue(ratios.getValue("Epic") in 0.08..0.20, "$label Epic ${ratios["Epic"]}")
+        assertTrue(ratios.getValue("risk Epic") in 0.15..0.40, "$label risk Epic ${ratios["risk Epic"]}")
         assertTrue(flatness.worst.second <= 1.6, "$label ${flatness.worst.first} at ${flatness.worst.second} × its tier")
     }
 
