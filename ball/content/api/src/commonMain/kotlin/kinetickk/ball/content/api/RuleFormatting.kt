@@ -4,8 +4,11 @@
 package kinetickk.ball.content.api
 
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.COMPACT_NUMBER_THRESHOLD
+import kinetickk.foundation.common.localization.formatCompactNumber
 import kotlin.math.abs
 import kotlin.math.floor
+import kotlin.math.roundToLong
 
 internal const val PERCENT_DECIMALS = 1
 internal const val FLAT_DECIMALS = 1
@@ -41,6 +44,23 @@ internal fun AppLanguage.number(value: Double, decimals: Int): String {
     val digits = fraction.toString().padStart(decimals, '0').trimEnd('0')
     return sign + grouped + (if (this == AppLanguage.Russian) ',' else '.') + digits
 }
+
+/**
+ * An absolute integrity, shield or damage amount given in power units, as a run shows it: times [numberScale], with up
+ * to [decimals] decimals while it reads below 1,000 and in the compact form from there ("1.23K").
+ */
+internal fun AppLanguage.amount(value: Double, decimals: Int, numberScale: Double): String {
+    val shown = value * numberScale
+    val whole = shown.roundToLong()
+    return if (abs(whole) < COMPACT_NUMBER_THRESHOLD) number(shown, decimals) else formatCompactNumber(whole, this)
+}
+
+/**
+ * A stat counted in integrity (maximum integrity, shield capacity, regeneration): its amounts are power units, shown
+ * at the run's number scale like damage.
+ */
+val ItemEffect.isIntegrityAmount: Boolean
+    get() = this == ItemEffect.MAX_INTEGRITY || this == ItemEffect.SHIELD_CAPACITY || this == ItemEffect.REGEN
 
 internal val ItemEffect.phrase: BuildRulesText
     get() = when (this) {

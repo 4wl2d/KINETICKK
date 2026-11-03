@@ -201,6 +201,13 @@ private const val REBIRTH_NUMBER_SCALE_LINEAR = 0.0211
 private const val REBIRTH_NUMBER_SCALE_QUADRATIC = 0.03345
 
 /**
+ * Scale of flat element, proc and skill damage [elapsedSeconds] into a run on [rebirth]: the run growth times the tier's
+ * player power. The simulation's flat damage and the reward cards' rule text both read it.
+ */
+fun RunTempoProfile.flatDamageScale(elapsedSeconds: Float, rebirth: RebirthProfile): Float =
+    runScaleGrowth(elapsedSeconds) * rebirth.playerPowerMultiplier
+
+/**
  * Content a Rebirth rank opens, derived from the content gates: weapons, characters (a Reborn-rank
  * unlock target), Relics, items and Core Matrix nodes become available at [rank], and the enemy types
  * gated at that tier join the roster when it is selected. Each list keeps catalog order.

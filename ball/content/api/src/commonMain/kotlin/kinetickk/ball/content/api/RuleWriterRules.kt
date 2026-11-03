@@ -33,7 +33,7 @@ internal fun RuleWriter.rule(rule: ItemRule): List<RuleLine> = when (rule) {
         RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleReactionResidue, stacks(rule.stacks.toDouble(), text(BuildRulesText.IncomingElement), named = false))),
     )
     is ItemRule.ReactionRecoil -> listOf(
-        RuleLine(RuleLineKind.COST, text(BuildRulesText.RuleReactionRecoil, language.number(rule.damage * magnitude, FLAT_DECIMALS)), negative = true),
+        RuleLine(RuleLineKind.COST, text(BuildRulesText.RuleReactionRecoil, integrity(rule.damage * magnitude)), negative = true),
     )
     is ItemRule.AlwaysCrit -> listOf(
         RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleAlwaysCrit, condition(rule.condition)), conditionElement(rule.condition)),

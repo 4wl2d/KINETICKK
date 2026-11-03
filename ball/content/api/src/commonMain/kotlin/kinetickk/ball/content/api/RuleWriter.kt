@@ -21,10 +21,11 @@ internal class RuleWriter(val language: AppLanguage, val context: RuleTextContex
 
     fun stat(delta: StatDelta): RuleLine {
         val amount = delta.amount * gain
+        val scale = if (delta.effect.isIntegrityAmount) context.numberScale else 1.0
         val value = when (delta.effect.unit) {
             ModifierUnit.PERCENT -> signedPercent(amount)
-            ModifierUnit.FLAT -> signed(amount, FLAT_DECIMALS)
-            ModifierUnit.PER_SECOND -> text(BuildRulesText.UnitPerSecond, signed(amount, FLAT_DECIMALS))
+            ModifierUnit.FLAT -> signedAmount(amount, scale)
+            ModifierUnit.PER_SECOND -> text(BuildRulesText.UnitPerSecond, signedAmount(amount, scale))
             ModifierUnit.SECONDS -> text(BuildRulesText.UnitSeconds, signed(amount, SECOND_DECIMALS))
         }
         val sentence = text(delta.effect.phrase, value)
@@ -123,8 +124,8 @@ internal class RuleWriter(val language: AppLanguage, val context: RuleTextContex
         }
         is EffectAction.Pull -> text(BuildRulesText.ActionPull)
         is EffectAction.Push -> text(BuildRulesText.ActionPush)
-        is EffectAction.Heal -> text(BuildRulesText.ActionHeal, language.number(action.amount * gain, FLAT_DECIMALS))
-        is EffectAction.Shield -> text(BuildRulesText.ActionShield, language.number(action.amount * gain, FLAT_DECIMALS))
+        is EffectAction.Heal -> text(BuildRulesText.ActionHeal, integrity(action.amount * gain))
+        is EffectAction.Shield -> text(BuildRulesText.ActionShield, integrity(action.amount * gain))
         is EffectAction.Vent -> text(
             BuildRulesText.ActionVent,
             language.number((action.heat * magnitude).coerceAtMost(MAX_HEAT), FLAT_DECIMALS),
@@ -263,7 +264,7 @@ internal class RuleWriter(val language: AppLanguage, val context: RuleTextContex
     }
 
     private fun resolvedDamage(scale: Float, unit: Float?): String? =
-        unit?.let { text(BuildRulesText.BasisDamage, language.number(scale * it * gain, DAMAGE_DECIMALS)) }
+        unit?.let { text(BuildRulesText.BasisDamage, language.amount(scale * it * gain, DAMAGE_DECIMALS, context.numberScale)) }
 
     private fun pickStacks(count: Int, pick: ElementPick): String {
         val resolved = resolve(pick)
@@ -387,6 +388,12 @@ internal class RuleWriter(val language: AppLanguage, val context: RuleTextContex
     fun signedPercent(fraction: Double): String = sign(fraction) + percent(abs(fraction))
 
     private fun signed(value: Double, decimals: Int): String = sign(value) + language.number(abs(value), decimals)
+
+    /** A flat stat amount: an integrity stat at [scale] (the number scale), any other one as it is. */
+    private fun signedAmount(value: Double, scale: Double): String = sign(value) + language.amount(abs(value), FLAT_DECIMALS, scale)
+
+    /** An integrity amount healed, shielded or taken, at the run's number scale. */
+    fun integrity(value: Double): String = language.amount(value, FLAT_DECIMALS, context.numberScale)
 
     private fun sign(value: Double): String = if (value < 0.0) "−" else "+"
 

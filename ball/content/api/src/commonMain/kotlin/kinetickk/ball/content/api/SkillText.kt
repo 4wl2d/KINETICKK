@@ -21,16 +21,25 @@ enum class SkillLineKind(private val english: String, private val russian: Strin
 
 /**
  * The card lines of the active effect at [rank] (the carrying item's stacks): its rank and cooldown, then its radius,
- * duration, damage and stack values in the order its values list them. Pure presentation of content numbers.
+ * duration, damage and stack values in the order its values list them. Pure presentation of content numbers; damage
+ * reads at [numberScale] (a run's Rebirth number scale, 1 for the tier-0 base).
  */
-fun SkillDefinition.rankLines(rank: Int, language: AppLanguage): List<String> {
+fun SkillDefinition.rankLines(rank: Int, language: AppLanguage, numberScale: Double = 1.0): List<String> {
     val values = rank(rank).values
     return buildList {
         add(SkillLineKind.RANK.text(language, rank.coerceIn(1, ranks.size).toString()))
         add(SkillLineKind.COOLDOWN.text(language, language.skillNumber(rank(rank).cooldownSeconds)))
-        id.cardValues().forEach { (index, kind) -> values.getOrNull(index)?.let { add(kind.text(language, language.skillNumber(it))) } }
+        id.cardValues().forEach { (index, kind) ->
+            values.getOrNull(index)?.let { value ->
+                val shown = if (kind == SkillLineKind.DAMAGE) language.amount(value.toDouble(), 2, numberScale) else language.skillNumber(value)
+                add(kind.text(language, shown))
+            }
+        }
     }
 }
+
+/** Whether the effect's card lines include a damage value, which a run shows at its number scale. */
+val SkillDefinition.showsDamage: Boolean get() = id.cardValues().any { (_, kind) -> kind == SkillLineKind.DAMAGE }
 
 /** At most two decimals, trailing zeros dropped, in the language's number style. */
 private fun AppLanguage.skillNumber(value: Float): String = number(value.toDouble(), 2)

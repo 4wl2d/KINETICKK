@@ -29,6 +29,14 @@ fun ItemDefinition.ruleLines(
     return (rest + costs).toImmutableList()
 }
 
+/**
+ * Whether the item's lines write an absolute integrity amount (an integrity stat, a heal, a shield, a recoil), which a
+ * run shows at its number scale and the Codex at the tier-0 base.
+ */
+val ItemDefinition.showsIntegrityAmounts: Boolean
+    get() = stats.any { it.effect.isIntegrityAmount } || rules.any { it is ItemRule.ReactionRecoil } ||
+        clauses.any { clause -> clause.actions.any { it is EffectAction.Heal || it is EffectAction.Shield } }
+
 /** The upside in [language] with its `{n}` values at [rank], using the language's decimal separator. */
 fun RelicDefinition.upsideText(language: AppLanguage, rank: Int): String =
     RelicValuePlaceholder.replace(upside.localizedContent(language)) { match ->

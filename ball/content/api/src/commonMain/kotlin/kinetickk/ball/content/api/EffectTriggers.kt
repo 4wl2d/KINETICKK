@@ -147,6 +147,9 @@ val EffectCondition.needsDispatch: Boolean
     get() = this is EffectCondition.ReactionIs || this is EffectCondition.SkillIs || this is EffectCondition.SkillTagged ||
         this is EffectCondition.ObstacleIs
 
+/** Damage of one [DamageBasis.WEAPON] unit per point of ability power; the simulation and the rule text share it. */
+const val WEAPON_BASIS_UNIT_DAMAGE: Float = 40f
+
 /** What a scaled amount is measured against. */
 enum class DamageBasis {
     /** A fraction of the triggering hit. */
@@ -155,7 +158,7 @@ enum class DamageBasis {
     IMPACT,
     /** Impact power at the speed shed while braking. */
     BRAKE,
-    /** 40 × effective weapon power. */
+    /** [WEAPON_BASIS_UNIT_DAMAGE] × effective weapon power. */
     WEAPON,
     /** A flat amount scaled by run progress and Rebirth power. */
     FLAT,
