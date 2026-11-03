@@ -64,6 +64,62 @@ class NucleusSourceRulesTest {
     }
 
     @Test
+    fun ambientRandomnessCallsAreRejectedOnePerCall() {
+        val calls = listOf(
+            "Random.nextFloat()",
+            "Random.Default.nextInt()",
+            "list.random()",
+            "xs.shuffled()",
+            "items.shuffle()",
+            "Random\n    .nextInt(3)",
+        )
+        for (call in calls) {
+            val violations = ambientRandomnessViolations("package example\nfun decide() {\n    val x = $call\n}\n")
+            assertEquals(1, violations.size, "Ambient randomness escaped the sensor: $call -> $violations")
+            assertTrue(violations.single().startsWith("3: ambient randomness '"), violations.single())
+            assertTrue(violations.single().endsWith("; draw from a seeded run stream or worldHash"), violations.single())
+        }
+    }
+
+    @Test
+    fun seededRandomnessAndRandomnessInStringsOrCommentsRemainAllowed() {
+        assertTrue(ambientRandomnessViolations("""
+            package example
+            import kotlin.random.Random
+            fun decide(random: Random, rng: Random, list: List<Int>) {
+                random.nextFloat()
+                rng.nextInt(3)
+                list.random(rng)
+                list.shuffled(rng)
+                CloneableXorWowRandom(seed)
+                val label = "Random.nextFloat()"
+                // list.random()
+            }
+        """.trimIndent()).isEmpty())
+    }
+
+    @Test
+    fun apiSourcesRejectPlatformAndEffectImportsButMayUseDispatchReplies() {
+        for (target in listOf(
+            "androidx.compose.runtime.Stable",
+            "kinetickk.foundation.diagnostics.X",
+            "kotlinx.coroutines.flow.StateFlow",
+            "java.io.File",
+            "kinetickk.foundation.design.KkColors",
+        )) {
+            val violations = apiImportViolations("package example\nimport $target\n")
+            assertEquals(1, violations.size, "Import escaped the api sensor: $target")
+            assertTrue(violations.single().startsWith("2: forbidden api import '$target'"), violations.single())
+        }
+        assertTrue(apiImportViolations("""
+            package example
+            import kinetickk.foundation.dispatch.InlineReply
+            import kinetickk.foundation.collections.ImmutableList
+            import kotlin.random.Random
+        """.trimIndent()).isEmpty())
+    }
+
+    @Test
     fun similarlyNamedPurePackagesDoNotMatchForbiddenPackagePrefixes() {
         assertTrue(nucleusImportViolations("""
             import example.java.io.FileData

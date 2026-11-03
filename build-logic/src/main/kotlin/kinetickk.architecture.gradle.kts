@@ -78,17 +78,21 @@ tasks.register<UpdateSourceStructureBaselineTask>("updateSourceStructureBaseline
 
 val verifyModuleGraph = tasks.register<VerifyArchitectureTask>("verifyModuleGraph") {
     group = "verification"
-    description = "Verifies module boundaries and forbidden nucleus imports without resolving classpaths."
+    description = "Verifies module boundaries, forbidden nucleus and API imports and ambient nucleus randomness " +
+        "without resolving classpaths."
     leafProjectPaths.set(leafProjectPathValues)
     architectureEdgeReportFiles.from(architectureEdgeReports)
     rootSourceFiles.from(rootProject.fileTree("src"))
     leafProjectPathValues.filter { it.endsWith(":nucleus") }.forEach { nucleusPath ->
         nucleusSourceFiles.from(leafSourceTree(nucleusPath, production = true))
     }
+    leafProjectPathValues.filter { it.endsWith(":api") }.forEach { apiPath ->
+        contractSourceFiles.from(leafSourceTree(apiPath, production = true))
+    }
 }
 
 tasks.register("verifyArchitecture") {
     group = "verification"
-    description = "Verifies module boundaries and forbidden nucleus imports."
+    description = "Verifies module boundaries and forbidden nucleus and API imports."
     dependsOn(verifyModuleGraph)
 }
