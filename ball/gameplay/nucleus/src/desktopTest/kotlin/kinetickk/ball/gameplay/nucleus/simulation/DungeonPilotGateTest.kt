@@ -16,10 +16,11 @@ import kotlin.test.assertTrue
 /**
  * The dungeon pilot gate (structures §11.2): structures are opt-in content, so the population gates never enter them
  * and this gate measures them with an engaging pilot. [DungeonPilot] flies one dungeon attempt per run on the first
- * [GATE_RUNS] of [PopulationSeeds] (C42), in two arms: FRESH, gate A's fresh tier-0 profile (the Orb and the Flux
- * Wake, no Matrix), and STRONG, gate B's full-Matrix tier-3 Pentagon with its signature Arc Coil. A run stops
- * [TAIL_SECONDS] after its attempt's outcome (long enough for the pilot to open a waiting Totem chest, which the
- * finished attempt no longer measures), or when no attempt started by 150 s before the Architect.
+ * [GATE_RUNS] of [PopulationSeeds] (C42), in two arms: FRESH, gate A's fresh tier-0 profile (the Orb, no Matrix)
+ * loaded out by seed parity with an orbiting weapon (Arc Coil) or a ram weapon (Flux Wake), and STRONG, gate B's
+ * full-Matrix tier-3 Pentagon with its signature Arc Coil. A run stops [TAIL_SECONDS] after its attempt's outcome
+ * (long enough for the pilot to open a waiting Totem chest, which the finished attempt no longer measures), or when
+ * no attempt started by 150 s before the Architect.
  *
  * The thresholds are the structures design's bands (§11.2): a fresh build clears most of its dungeons without
  * trivialising them and rarely dies inside, a strong build clears nearly all of them, clearly more often and within
@@ -36,6 +37,16 @@ import kotlin.test.assertTrue
  * change that meets it: fresh clear 0.807 (SE 0.023), died 0.146 (SE 0.021), strong clear 1.000, median 23.98 s.
  * The gate population confirms it without changing its design bands: fresh clear 0.670 (SE 0.043), died 0.186
  * (SE 0.036), abandoned 0.144; strong clear 1.000, median 24.88 s.
+ *
+ * Elite resonance (a weapon level per Elite-class kill) then shortened fresh fights: the gate read fresh clear 0.867
+ * (SE 0.031), above the 0.85 ceiling, and nothing abandoned, so the 0.30 death ceiling became a 0.70 clear floor.
+ * Orbiting runs clear every attempt; only ram runs die. Room integrity, the counterweight to weapon power, was chosen
+ * on i = 2,301..2,400 and, as above, its sub-windows 2,401..2,500 and 2,501..2,600, against a stated target: pooled
+ * fresh clear in [0.75, 0.80], the middle of that band, every sub-window inside the band and strong clear at least
+ * 0.95. 0.90 is the smallest step that meets it (0.85 left 0.809): fresh clear 0.773 (SE 0.024), died 0.224, median
+ * 69.40 s (the pre-resonance gate's 69.30 s), sub-windows 0.810, 0.758 and 0.750; strong clear 0.997, median 25.58 s.
+ * The gate confirms it: fresh clear 0.758 (SE 0.039), died 0.242 (SE 0.039), median 73.86 s; strong clear 1.000,
+ * median 26.54 s.
  */
 class DungeonPilotGateTest {
     /**

@@ -376,7 +376,7 @@ data class StructurePolicy(
     val garrisonExtraPerTiers: Int = 4,
     val garrisonScale: Float = 0.8f,
     /** Room enemies and guardians keep their attack patterns, but their integrity can be balanced independently. */
-    val garrisonHealthMultiplier: Float = 0.75f,
+    val garrisonHealthMultiplier: Float = 0.90f,
     /** Damage dealt by room-owned enemies, including their adds; world and site enemies keep their own balance. */
     val garrisonDamageMultiplier: Float = 0.72f,
     val directorRateWhileSealed: Float = 0.35f,
