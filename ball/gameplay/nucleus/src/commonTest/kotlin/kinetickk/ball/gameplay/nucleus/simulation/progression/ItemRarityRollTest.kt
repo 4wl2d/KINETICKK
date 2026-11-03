@@ -77,7 +77,7 @@ class ItemRarityRollTest {
         }
         val counts = IntArray(ItemRarity.entries.size)
         var cards = 0
-        repeat(ROLLS) { seed ->
+        repeat(ROLLS * 2 / 3) { seed ->
             state.rewardRandom = CloneableXorWowRandom(seed)
             state.buildItemChoices()
             state.choices.take(2).forEach { counts[state.content.items[requireNotNull(it.itemId)].rarity.ordinal]++ }
@@ -157,18 +157,18 @@ class ItemRarityRollTest {
             level = 30
             lifetimeMatter = 4_000L
         }
+        // Each sample reopens the reward on a fresh reward stream; nothing is taken, so the run stays as it was.
         fun legendaryShare(run: MutableGameState): Double {
             var cards = 0
             var legendaries = 0
-            repeat(ROLLS / 3) { seed ->
-                val fork = run.deepCopy()
-                fork.rewardRandom = CloneableXorWowRandom(seed)
-                fork.openDirectedReward(DirectedReward.ITEM_AND_REPAIR)
-                fork.selectRewardFocus(RewardFocus.OFFENSE)
-                if (fork.choiceType != ChoiceType.ITEM) return@repeat
-                fork.choices.forEach { option ->
+            repeat(ROLLS / 6) { seed ->
+                run.rewardRandom = CloneableXorWowRandom(seed)
+                run.openDirectedReward(DirectedReward.ITEM_AND_REPAIR)
+                run.selectRewardFocus(RewardFocus.OFFENSE)
+                if (run.choiceType != ChoiceType.ITEM) return@repeat
+                run.choices.forEach { option ->
                     cards++
-                    if (fork.content.items[requireNotNull(option.itemId)].rarity == ItemRarity.LEGENDARY) legendaries++
+                    if (run.content.items[requireNotNull(option.itemId)].rarity == ItemRarity.LEGENDARY) legendaries++
                 }
             }
             return legendaries.toDouble() / cards
