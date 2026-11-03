@@ -27,9 +27,6 @@ internal fun String.rewardStatLabel(language: AppLanguage): RewardStatLabel {
     }
 }
 
-/** The stat name without its condition (kept for callers that show one line). */
-internal fun String.rewardLabel(language: AppLanguage): String = rewardStatLabel(language).name
-
 private val RewardLabelsInRussian = mapOf(
     "Drones" to "Дроны",
     "Blades" to "Клинки",
