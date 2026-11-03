@@ -64,14 +64,21 @@ a real layering problem; package moves inside a module need no visibility change
   mutates its input. It exists for tests and tools; production frames and inputs never call it.
 - **Run state**: `MutableGameState`
   (`ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/simulation/MutableGameState.kt`) is the
-  one run state, with plain eagerly copied storage. Cohesive groups live in state holders, each written by exactly one
-  domain: `StepScratch` (`simulation`, per step), `PendingChoiceState` (`progression`), `SkillCastState` (`skills`),
-  `CoreReactionState` (`elements`), `RelicMechanicState` (`build`), `SpawnDirectorState` (`director`),
-  `StructureRunState` (`structures`) and `CoreStasisState` (`flight`). The other root fields move into holders one
-  domain at a time (§12).
-- **Forwarders**: `MutableGameStateForwarders.kt` holds extension properties that forward the old root field names to
-  their holder, so older call sites, tests and fingerprints stay source-identical. They are legacy: new code uses
-  `state.<holder>.<field>`, the forwarder list may only shrink, and a new field never gets a forwarder.
+  one run state, with plain eagerly copied storage. Its root keeps only the Core motion, vitals, live entity
+  collections and the few fields several domains read; every other cohesive group lives in a state holder in its
+  owning package, written by exactly one domain and reset by its own `reset()` from `GameSession.startRun`:
+  `StepScratch`, `FrameState` and `CueOutbox` (`simulation`); `CoreStasisState` (`flight`); `CoreReactionState` and
+  `ElementRunState` (`elements`); `SpawnDirectorState` (`director`); `VarietyRunState` (`variety`); `WeaponRunState`
+  (`weapons`); `CharacterRunState` (`characters`); `SkillCastState` (`skills`); `BuildRunState` and
+  `RelicMechanicState` (`builds`); `PendingChoiceState`, `RunProfileCapture`, `DiscoveryState`, `ProgressOutbox`,
+  `RelicRunState`, `OfferRunState`, `RunStatsState`, `RunEconomyState` and `CoreStatsState` (`progression`);
+  `WorldRunState` (`world`); `StructureRunState` (`structures`); `SiteRunState` (`sites`); `DimensionVisitState`
+  (`dimensions`).
+- **Forwarders**: `MutableGameStateForwarders.kt`, `FrameStateForwarders.kt`, `LoadoutStateForwarders.kt`,
+  `ProgressionStateForwarders.kt` and `WorldStateForwarders.kt` (all in `simulation`) hold extension properties that
+  forward the old root field names to their holder, so older call sites, tests and fingerprints stay
+  source-identical. They are legacy: new code uses `state.<holder>.<field>`, the forwarder lists may only shrink, and
+  a new field never gets a forwarder.
 - **Render contract**: `kinetickk.ball.gameplay.nucleus.render` (render model, projections, domain enums, formatting)
   and `kinetickk.ball.gameplay.nucleus.protocol` (FX and sound cue types). Interaction code reads nucleus state only
   through these packages **[checked]**, and these packages import no other nucleus package **[checked]**.
@@ -105,7 +112,7 @@ Rules for every module:
 | `reducer` | `GameReducer`: pulse admission and the in-place step core shared by `tick` and the pure `decide(Intent)` wrapper |
 | `model` | plain state data, runtimes and pure value helpers used by the simulation |
 | `simulation` | the run state, its holders and forwarders, the step order and frame admission (`GameLoop.kt`), run start and reset (`GameSession.kt`), cue output (`SimulationOutput.kt`), shared math and engagement |
-| `simulation.<domain>` | one package per domain: `flight`, `combat`, `elements`, `enemies`, `director`, `variety`, `weapons`, `characters`, `skills`, `build`, `progression`, `world`, `structures`, `sites`, `dimensions` |
+| `simulation.<domain>` | one package per domain: `flight`, `combat`, `elements`, `enemies`, `director`, `variety`, `weapons`, `characters`, `skills`, `builds`, `progression`, `world`, `structures`, `sites`, `dimensions` |
 | `projection` | state → render-model mapping (`GameplayRenderModelMapper` and the site, structure and dimension mappers) |
 | `render`, `protocol` | the render contract (§2) |
 
@@ -342,8 +349,8 @@ Full report: build/reports/source-structure/report.txt
   packages. Do it with the redesign, or in one scripted pass that updates `DesktopTestShards.kt`.
 - **Domain enums**: they stay in `render`. Move them only into a new contract vocabulary package (then forbid
   `model → render` imports), never into `model`, which the contract may not import.
-- **More holders**: sites, variety, world, dimensions, flight, outbox, presentation, stats, inventory and discovery
-  state; then move call sites off the forwarders, one domain at a time.
+- **Off the forwarders**: move call sites from the forwarder files to `state.<holder>.<field>`, one domain at a
+  time, deleting each forwarder once nothing uses it.
 - Forbid `api(...)` edges from an `impl` module to an `interaction` module as a module rule.
 - Enforce the interaction package direction (§3) as an import rule once the layout has been stable for a release.
 - Enable `allWarningsAsErrors` module by module after a build reports zero warnings.
