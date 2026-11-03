@@ -12,7 +12,12 @@ import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.gameplay.nucleus.model.clamp
 import kinetickk.ball.gameplay.nucleus.model.length
+import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.SimulationOutputs
+import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
+import kinetickk.ball.profile.api.GameplayProgressUpdate
+import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.simulation.*
 import kotlin.math.max
@@ -61,98 +66,184 @@ internal sealed interface GameReductionResult {
     data class Rejected(val reason: GameplayRejection) : GameReductionResult
 }
 
+/** What one reduction does to its model; the pure copy path and the in-place path share this classification. */
+internal enum class ReductionOutcome {
+    /** Rejected before any mutation; [ReductionSink.rejection] holds the reason. */
+    REJECTED,
+
+    /** A user gesture: nothing changes; the owner unlocks audio. */
+    AUDIO_UNLOCKED,
+
+    /** A frame of a stopped run with nothing pending: nothing changes; music advances by the frame. */
+    IDLE_FRAME,
+
+    /** A running frame shorter than the remaining fixed step: only the accumulator advances. */
+    SUB_STEP,
+
+    /** An input that changes nothing. */
+    UNCHANGED,
+
+    /** A fixed-step frame or a state-changing input runs; its outputs are drained into the sink. */
+    STEPPED,
+}
+
+/** Drain target of one reduction. Its owner may reuse it; the values are valid until the next reduction. */
+internal class ReductionSink {
+    var rejection: GameplayRejection? = null
+    /** A running frame admitted its real time: [admittedAccumulator] is the accumulator it runs with. */
+    var admitsFrame: Boolean = false
+    var admittedAccumulator: Float = 0f
+    var visualFxCues: ImmutableList<VisualFxCue> = immutableListOf()
+    var progressUpdate: GameplayProgressUpdate? = null
+    var soundCues: ImmutableList<GameplayAudioCue> = immutableListOf()
+
+    fun reset() {
+        rejection = null
+        admitsFrame = false
+        admittedAccumulator = 0f
+        visualFxCues = immutableListOf()
+        progressUpdate = null
+        soundCues = immutableListOf()
+    }
+}
+
 /** Purely coordinates a synchronous state transition; effect execution belongs to feature-impl. */
 internal class GameReducer {
+    /** The pure entry: the committed [state] is never mutated; a changing outcome runs on an isolated copy. */
     fun reduce(state: EngineState, intent: GameplayInteractionPulse): GameReductionResult {
-        validate(state, intent)?.let { return GameReductionResult.Rejected(it) }
-
-        if (intent == GameplayInteractionPulse.UserGestureObserved) {
-            return GameReductionResult.Accepted(
+        val sink = ReductionSink()
+        return when (val outcome = admit(state.model, intent, sink)) {
+            ReductionOutcome.REJECTED -> GameReductionResult.Rejected(checkNotNull(sink.rejection))
+            ReductionOutcome.AUDIO_UNLOCKED -> GameReductionResult.Accepted(
                 state = state,
                 outputs = SimulationOutputs.EnsureAudioUnlocked,
             )
-        }
-
-        if (
-            intent is GameplayInteractionPulse.FrameElapsed &&
-            state.model.phase != GamePhase.RUNNING &&
-            state.model.accumulator == 0f &&
-            state.model.lastTransitionSteps == 0 &&
-            !state.model.hasPendingReductionOutputs()
-        ) {
-            return GameReductionResult.Accepted(
+            ReductionOutcome.IDLE_FRAME -> GameReductionResult.Accepted(
                 state = state,
-                outputs = SimulationOutputs.create(
-                    advanceAudio = true,
-                    audioRealDeltaSeconds = intent.realDeltaSeconds,
-                ),
-            )
-        }
-
-        // A running frame admits its real time into the accumulator exactly once.
-        val admittedAccumulator = if (
-            intent is GameplayInteractionPulse.FrameElapsed &&
-            state.model.phase == GamePhase.RUNNING
-        ) {
-            nextSimulationAccumulator(
-                currentAccumulator = state.model.accumulator,
-                rawDeltaSeconds = intent.realDeltaSeconds,
-                simulationSpeed = state.model.settings.simulationSpeed,
-            )
-        } else {
-            null
-        }
-        if (
-            admittedAccumulator != null &&
-            !fixedStepIsDue(admittedAccumulator) &&
-            !state.model.hasPendingReductionOutputs()
-        ) {
-            return GameReductionResult.Accepted(
-                state = EngineState(state.model.accumulateWithoutStep(admittedAccumulator)),
                 outputs = SimulationOutputs.create(
                     advanceAudio = true,
                     audioRealDeltaSeconds = (intent as GameplayInteractionPulse.FrameElapsed).realDeltaSeconds,
                 ),
             )
-        }
-
-        if (
-            intent.leavesStateUnchanged(state.model) &&
-            !state.model.hasPendingReductionOutputs()
-        ) {
-            return GameReductionResult.Accepted(
+            ReductionOutcome.UNCHANGED -> GameReductionResult.Accepted(
                 state = state,
                 outputs = SimulationOutputs.Empty,
             )
+            ReductionOutcome.SUB_STEP -> {
+                val candidate = state.model.copyForScalarInputReduction()
+                reduceInPlace(candidate, intent, outcome, sink)
+                GameReductionResult.Accepted(
+                    state = EngineState(candidate),
+                    outputs = SimulationOutputs.create(
+                        advanceAudio = true,
+                        audioRealDeltaSeconds = (intent as GameplayInteractionPulse.FrameElapsed).realDeltaSeconds,
+                    ),
+                )
+            }
+            ReductionOutcome.STEPPED -> {
+                val candidate = if (intent.preservesStableSimulationStorage()) {
+                    state.model.copyForScalarInputReduction()
+                } else {
+                    state.model.copyForReduction()
+                }
+                reduceInPlace(candidate, intent, outcome, sink)
+                val frameIntent = intent as? GameplayInteractionPulse.FrameElapsed
+                val advanceAudio = frameIntent != null || sink.soundCues.isNotEmpty()
+                GameReductionResult.Accepted(
+                    state = EngineState(candidate),
+                    outputs = SimulationOutputs.create(
+                        visualFxCues = sink.visualFxCues,
+                        progressUpdate = sink.progressUpdate,
+                        advanceAudio = advanceAudio,
+                        audioRealDeltaSeconds = frameIntent?.realDeltaSeconds ?: 0f,
+                        audioCues = sink.soundCues,
+                    ),
+                )
+            }
+        }
+    }
+
+    /** Classifies [intent] against [model] without mutating it; a running frame's admitted accumulator goes to [sink]. */
+    fun admit(model: MutableGameState, intent: GameplayInteractionPulse, sink: ReductionSink): ReductionOutcome {
+        sink.reset()
+        validate(model, intent)?.let { reason ->
+            sink.rejection = reason
+            return ReductionOutcome.REJECTED
         }
 
-        val candidate = if (intent.preservesStableSimulationStorage()) {
-            state.model.copyForScalarInputReduction()
-        } else {
-            state.model.copyForReduction()
-        }
-        if (admittedAccumulator != null) {
-            candidate.runAdmittedFrame(admittedAccumulator)
-        } else {
-            applyIntent(candidate, intent)
-        }
-        val visualFxCues = candidate.takeVisualFxCues()
-        val progressUpdate = candidate.takeProgressUpdate()
-        val soundCues = candidate.takeSoundCues()
-        val frameIntent = intent as? GameplayInteractionPulse.FrameElapsed
-        val advanceAudio = frameIntent != null || soundCues.isNotEmpty()
-        val outputs = SimulationOutputs.create(
-            visualFxCues = visualFxCues,
-            progressUpdate = progressUpdate,
-            advanceAudio = advanceAudio,
-            audioRealDeltaSeconds = frameIntent?.realDeltaSeconds ?: 0f,
-            audioCues = soundCues,
-        )
+        if (intent == GameplayInteractionPulse.UserGestureObserved) return ReductionOutcome.AUDIO_UNLOCKED
 
-        return GameReductionResult.Accepted(
-            state = EngineState(candidate),
-            outputs = outputs,
-        )
+        if (
+            intent is GameplayInteractionPulse.FrameElapsed &&
+            model.phase != GamePhase.RUNNING &&
+            model.accumulator == 0f &&
+            model.lastTransitionSteps == 0 &&
+            !model.hasPendingReductionOutputs()
+        ) {
+            return ReductionOutcome.IDLE_FRAME
+        }
+
+        // A running frame admits its real time into the accumulator exactly once.
+        if (intent is GameplayInteractionPulse.FrameElapsed && model.phase == GamePhase.RUNNING) {
+            sink.admitsFrame = true
+            sink.admittedAccumulator = nextSimulationAccumulator(
+                currentAccumulator = model.accumulator,
+                rawDeltaSeconds = intent.realDeltaSeconds,
+                simulationSpeed = model.settings.simulationSpeed,
+            )
+        }
+        if (
+            sink.admitsFrame &&
+            !fixedStepIsDue(sink.admittedAccumulator) &&
+            !model.hasPendingReductionOutputs()
+        ) {
+            return ReductionOutcome.SUB_STEP
+        }
+
+        if (
+            intent.leavesStateUnchanged(model) &&
+            !model.hasPendingReductionOutputs()
+        ) {
+            return ReductionOutcome.UNCHANGED
+        }
+        return ReductionOutcome.STEPPED
+    }
+
+    /**
+     * The shared in-place core: applies an [outcome] that [admit] returned for [intent] to [model], with no copy. A
+     * sub-step frame only advances the accumulator; a stepped one runs and drains its outputs into [sink]. Every other
+     * outcome leaves [model] untouched.
+     */
+    fun reduceInPlace(
+        model: MutableGameState,
+        intent: GameplayInteractionPulse,
+        outcome: ReductionOutcome,
+        sink: ReductionSink,
+    ) {
+        when (outcome) {
+            ReductionOutcome.SUB_STEP -> {
+                model.accumulator = sink.admittedAccumulator
+                model.lastTransitionSteps = 0
+                check(model.lastTransitionSteps == 0 && !fixedStepIsDue(model.accumulator)) {
+                    "A sub-step frame cannot execute a fixed step"
+                }
+            }
+            ReductionOutcome.STEPPED -> {
+                if (sink.admitsFrame) {
+                    model.runAdmittedFrame(sink.admittedAccumulator)
+                } else {
+                    applyIntent(model, intent)
+                }
+                sink.visualFxCues = model.takeVisualFxCues()
+                sink.progressUpdate = model.takeProgressUpdate()
+                sink.soundCues = model.takeSoundCues()
+            }
+            ReductionOutcome.REJECTED,
+            ReductionOutcome.AUDIO_UNLOCKED,
+            ReductionOutcome.IDLE_FRAME,
+            ReductionOutcome.UNCHANGED,
+            -> Unit
+        }
     }
 
     private fun applyIntent(state: MutableGameState, intent: GameplayInteractionPulse) {
@@ -175,27 +266,12 @@ internal class GameReducer {
         }
     }
 
-    /**
-     * A frame shorter than the remaining fixed step only advances the accumulator (and with it the
-     * render interpolation): the candidate shares every stable collection and random stream with
-     * the committed state, runs no step and so cannot write into the shared storage.
-     */
-    private fun MutableGameState.accumulateWithoutStep(admittedAccumulator: Float): MutableGameState {
-        val candidate = copyForScalarInputReduction()
-        candidate.accumulator = admittedAccumulator
-        candidate.lastTransitionSteps = 0
-        check(candidate.lastTransitionSteps == 0 && !fixedStepIsDue(candidate.accumulator)) {
-            "A sub-step frame cannot execute a fixed step"
-        }
-        return candidate
-    }
-
-    private fun validate(state: EngineState, intent: GameplayInteractionPulse): GameplayRejection? =
+    private fun validate(model: MutableGameState, intent: GameplayInteractionPulse): GameplayRejection? =
         when (intent) {
             is GameplayInteractionPulse.PointerMoved -> when {
-                intent.x < 0f || intent.x > state.model.screenWidth ->
+                intent.x < 0f || intent.x > model.screenWidth ->
                     GameplayRejection.PointerOutsideViewport(GameplayPointerAxis.HORIZONTAL)
-                intent.y < 0f || intent.y > state.model.screenHeight ->
+                intent.y < 0f || intent.y > model.screenHeight ->
                     GameplayRejection.PointerOutsideViewport(GameplayPointerAxis.VERTICAL)
                 else -> null
             }
