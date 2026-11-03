@@ -109,8 +109,10 @@ class ContentBalanceCharacterizationTest {
     fun buildCatalogTuningIsGolden() {
         val build = ui.build
 
+        // Rocket Clap's text says its launch never runs against the Core's travel
+        // (c5ea14c28212923a -> 7ddff247e2f622d1).
         assertEquals(
-            "c5ea14c28212923a",
+            "7ddff247e2f622d1",
             goldenFingerprint {
                 build.elements.forEach { element ->
                     add(element.element.name)

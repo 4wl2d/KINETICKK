@@ -79,9 +79,11 @@ import kotlin.test.assertTrue
  * The 0.5.0 vocabulary has its own encounters: skills cast on cooldown (SKILLS), reactions forced next to the Core
  * that leave pools, hushes, bubbles and maws on its path while bolts fly at it (FIELDS), bolt volleys with one
  * erased every 0.6 s (SHOTS), pre-marked packs rammed and braked on (MARKS) and the Apex unlocked and cast whenever
- * ready (APEX); they also measure bolts erased, refunded seconds, control seconds, distance flown at 900 u/s and Apex
- * recharge progress. Protection that holds only at speed is flown through fast passes while hits land (RUSH), a keystone
- * that strips defenses also against Elites immune to the weapon's element, and a Spored mark where marked targets die.
+ * ready (APEX, the one encounter not flown by the Orb but by the Prism, whose Apex leaves the fight's damage as it
+ * is: [APEX_CHARACTER]); they also measure bolts erased, refunded seconds, control seconds, distance flown at 900 u/s
+ * and Apex recharge progress. Protection that holds only at speed is flown through fast passes while hits land
+ * (RUSH), a keystone that strips defenses also against Elites immune to the weapon's element, and a Spored mark where
+ * marked targets die.
  * A 0.5.0 action whose trigger its encounter never fires is flown there again with the trigger scripted in (a Brake,
  * ricochets, fragile targets that fall), and an IntegrityBelow item is flown wounded below its threshold. A skill stat that
  * holds only at speed is flown through the fast passes with the skill loadout (SPRINT), and a thrower's targets fly their
@@ -421,7 +423,10 @@ class PerceptibleItemImpactTest {
         SHOTS(true, Motion.CLOSE_HOVER, 8, 1_500f, shots = true),
         /** Pre-marked targets rammed, dashed through and braked on: Spall throws and Cracked detonations. */
         MARKS(true, Motion.ORBIT, 10, 1_500f, dashEvery = 1f, brake = true, marks = true),
-        /** The Apex from the start: cast at once and whenever ready, over a fight long enough for a cooldown cut to tell. */
+        /**
+         * The Apex from the start: cast at once and whenever ready, over a fight long enough for a cooldown cut to
+         * tell. Flown by [APEX_CHARACTER], not the Orb.
+         */
         APEX(true, Motion.ORBIT, 10, 1_500f, dashEvery = 2f, apex = true, seconds = 100f),
         /** The fast passes while bursts of hits land every 6 s: protection that holds only at speed. */
         RUSH(false, Motion.PASS, 8, 600f, dashEvery = 0.5f, hits = 4.5f),
@@ -607,7 +612,7 @@ class PerceptibleItemImpactTest {
         val arena = setup.arena
         val phase = variant * 0.7f
         val game = MutableGameState(content.withoutGeneratedObstacles(), seed = SEED + variant, initialMatter = 0).apply {
-            coreShape = CoreShape.ORB
+            coreShape = if (arena.apex) APEX_CHARACTER else CoreShape.ORB
             startingWeapon = setup.weapon ?: WeaponId.FLUX_WAKE
             unlockWeaponsForTesting(listOf(startingWeapon))
             resize(1_280f, 720f)
@@ -1412,6 +1417,16 @@ class PerceptibleItemImpactTest {
         /** How far from the origin the vocabulary encounters let the Core fly (the start area is obstacle-free to 900). */
         const val LEASH = 560f
         const val VARIANTS = 5
+        /**
+         * The character the APEX arena is flown by; every other encounter flies the Orb. The arena exists for effects
+         * tied to the Apex (its trigger, its window, its cooldown), so its Apex must leave the fight's damage as it is:
+         * the Prism's Monolith only restores and regrows facets and refracts hits, and nothing attacks there, so its
+         * window holds the same weapon hits and impacts as the rest of the fight. The Orb's Perihelion moves the Orb's
+         * damage into Orbit releases for exactly that window, and item amplification never touches ability damage, so
+         * an ApexActive damage modifier read about half of what it adds anywhere else (+50 % for the Apex read +4.0 %
+         * with the Orb, +8.0 % with the Prism; every character other than the Orb read +5.3 to +9.7 %).
+         */
+        val APEX_CHARACTER: CoreShape = CoreShape.PRISM
         /** Weapon power and impact power in the alchemy arena: hits that land, with almost no damage of their own. */
         const val TAP = 0.02f
         const val MIN_GAIN = 0.05f

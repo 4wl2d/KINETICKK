@@ -322,10 +322,23 @@ internal fun MutableGameState.resolveReaction(
             shockwave(x, y, 0.32f, radius, FxColorCode.elementTone(StatusElement.SONIC))
             val clapDistanceSquared = distanceSquared(x, y, coreX, coreY)
             if (keystone) {
-                // Rocket Clap: a clap close by launches the Core away from it.
+                // Rocket Clap: a clap close by launches the Core away from it, never back against its travel: a push
+                // that would brake the Core is mirrored along its travel, so a clap ahead carries it on.
                 if (clapDistanceSquared <= square(ROCKET_CLAP_REACH)) {
                     val angle = awayFromCoreAngle(x, y) + PI.toFloat()
-                    if (applyCoreImpulse(cos(angle), sin(angle), ROCKET_CLAP_SPEED, gated = true)) {
+                    var launchX = cos(angle)
+                    var launchY = sin(angle)
+                    val travel = speed
+                    if (travel > 1f) {
+                        val alongX = velocityX / travel
+                        val alongY = velocityY / travel
+                        val against = launchX * alongX + launchY * alongY
+                        if (against < 0f) {
+                            launchX -= 2f * against * alongX
+                            launchY -= 2f * against * alongY
+                        }
+                    }
+                    if (applyCoreImpulse(launchX, launchY, ROCKET_CLAP_SPEED, gated = true)) {
                         flags = flags or ReactionCueFlags.VERB
                     }
                 }

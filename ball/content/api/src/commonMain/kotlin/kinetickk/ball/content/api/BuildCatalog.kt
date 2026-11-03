@@ -164,7 +164,8 @@ private val DefaultBuildCatalog = BuildCatalog(
             "Heat and sound hurl enemies away; Dash right on the clap to ride the blast for free.",
             power = 6f, radius = 150f, values = immutableListOf(260f, 0.6f, 1.6f),
             verb = "Blast Jump", cue = "Dash on the clap", keystone = "Rocket Clap",
-            keystoneDescription = "No Dash needed: a clap within 220 launches the Core away at 560; no free Dash."),
+            keystoneDescription = "No Dash needed: a clap within 220 launches the Core away at 560, never against " +
+                "its travel; no free Dash."),
         ReactionDefinition(ReactionId.SHATTERPOINT, "Shatterpoint",
             "The frozen ring of sound splits into ice shards; near you they circle the Core, striking enemies and " +
                 "breaking hostile shots.",

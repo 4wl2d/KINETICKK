@@ -1500,11 +1500,28 @@ crowd 1.32, Spear single 1.33. J5's Pentagon/Arc Coil weapon side 1.116 ->
 1.160 (Orb/Flux Wake 1.243). Field Marshal forces three reactions instead of
 two (2.1 % over fifteen fights -> 11.1 %).
 
-Still failing: Blast Rider moves no output. Its Rocket Clap launches the Core
-away from each clap at 560; under the slower re-acceleration that brakes every
-head-on pass, so the at-speed reduction rarely holds (RUSH taken -8 %; the
-reduction alone gives +63 % integrity, the keystone alone -12 %). Only a launch
-of about 200 passes, so it is left to the owner. The ApexActive probe reads
-+4.0 % (3.2 to 4.1 % over fifteen fights): +50 % during the Apex covers about a
-fifth of the fight and touches only direct hits, while the Orb's Orbit deals
-about half the APEX arena's damage.
+Blast Rider's Rocket Clap launched the Core away from each clap at 560. On a
+head-on pass that is backwards, and under the slower re-acceleration it braked
+the Core in every arena, so the at-speed reduction rarely held: best output
+-0.1 % (RUSH taken -8.0 %, IMPACT damage -28.2 %, STATUS -37.3 %). The launch
+now never runs against the Core's travel: a push that would brake it is
+mirrored along the travel, so a clap ahead carries it on; the 560, the 220
+reach and the 0.5 s gate are unchanged, and the EN and RU keystone texts say
+so (build golden `c5ea14c28212923a` -> `7ddff247e2f622d1`). Candidates on the
+catalog's own measure (5 fights per encounter): mirrored +14.5 % (RUSH
+integrity; IMPACT -0.6 %, FAST +0.1 %, STATUS -10.0 %); the braking part
+dropped, sideways at 560, +10.9 % (RUSH taken); dropped without restoring the
+speed +4.1 %, chaotic over fifteen fights; along the travel +32.4 % (RUSH
+damage), but it ended one IMPACT fight early (190.4 of 200 s), which no other
+candidate did. The mirror is the smallest change and kept the most of every
+arena.
+
+The ApexActive probe read +4.0 % (3.2 to 4.1 % over fifteen fights) with 5 %
+needed, at its own +50 % damage during the Apex. The APEX arena was flown by
+the Orb, whose Perihelion moves its damage into Orbit releases for exactly the
+Apex window, and item amplification never touches ability damage. The arena
+is there for effects tied to the Apex, so it is now flown by the Prism, whose
+Monolith leaves the fight's damage as it is (nothing attacks there): ApexActive
++8.0 %, the APEX trigger probe +11.6 -> +22.1 %, ApexCooldown +25.0 % either
+way; every character other than the Orb read ApexActive +5.3 to +9.7 %. The
+probe's strength and the 5 % floor are unchanged.

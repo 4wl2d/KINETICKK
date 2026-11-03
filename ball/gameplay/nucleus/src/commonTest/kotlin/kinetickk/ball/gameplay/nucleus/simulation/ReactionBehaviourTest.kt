@@ -727,6 +727,28 @@ class ReactionBehaviourTest {
     }
 
     @Test
+    fun rocketClapNeverLaunchesTheCoreBackAgainstItsTravel() {
+        val state = buildTestState().apply { useKeystones(ReactionId.THUNDERCLAP) }
+        // Dead ahead the push away would brake the Core: it is mirrored along the travel and carries the Core on.
+        state.setVelocityForTesting(400f, 0f)
+        state.setOff(ReactionId.THUNDERCLAP, state.dummy(x = 200f))
+        assertEquals(960f, state.velocityX, 0.01f)
+        assertEquals(0f, state.velocityY, 0.01f)
+        // Ahead and to one side: the sideways push away stays, the braking part turns forward.
+        state.elapsed += 0.5f
+        state.setVelocityForTesting(400f, 0f)
+        state.setOff(ReactionId.THUNDERCLAP, state.dummy(x = 120f, y = 160f))
+        assertEquals(400f + 0.6f * 560f, state.velocityX, 0.05f)
+        assertEquals(-0.8f * 560f, state.velocityY, 0.05f)
+        // Behind the Core the push away already runs along the travel and is unchanged.
+        state.elapsed += 0.5f
+        state.setVelocityForTesting(400f, 0f)
+        state.setOff(ReactionId.THUNDERCLAP, state.dummy(x = -150f))
+        assertEquals(960f, state.velocityX, 0.01f)
+        assertEquals(0f, state.velocityY, 0.01f)
+    }
+
+    @Test
     fun crystalChoirFiresSevenShardsAnywhereAndShattersResonantEnemies() {
         val state = buildTestState().apply { useKeystones(ReactionId.SHATTERPOINT) }
         val target = state.dummy(x = 300f)
