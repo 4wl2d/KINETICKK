@@ -19,8 +19,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.gameplay.api.GameplayAcceptance
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.interaction.canvas.HudBlock
-import kinetickk.ball.gameplay.interaction.canvas.HudLayoutProbe
+import kinetickk.ball.gameplay.interaction.canvas.hud.HudBlock
+import kinetickk.ball.gameplay.interaction.canvas.hud.HudLayoutProbe
 import kinetickk.ball.gameplay.interaction.canvas.hudTestSnapshot
 import kinetickk.ball.gameplay.interaction.canvas.with
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry

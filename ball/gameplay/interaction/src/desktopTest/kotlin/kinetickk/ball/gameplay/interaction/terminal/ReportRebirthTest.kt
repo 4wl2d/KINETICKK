@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.interaction.terminal
 
 import kinetickk.ball.gameplay.interaction.canvas.hudTestModel
 import kinetickk.ball.gameplay.interaction.canvas.with
+import kinetickk.ball.gameplay.interaction.overlay.*
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.foundation.common.localization.AppLanguage
 import kotlin.test.Test

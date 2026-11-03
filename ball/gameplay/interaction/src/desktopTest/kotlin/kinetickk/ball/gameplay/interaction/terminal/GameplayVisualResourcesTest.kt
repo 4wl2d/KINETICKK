@@ -18,6 +18,7 @@ import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertSame
+import kinetickk.ball.gameplay.interaction.canvas.fx.*
 
 class GameplayVisualResourcesTest {
     @Test

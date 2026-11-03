@@ -46,6 +46,7 @@ import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
 import kotlin.test.Test
+import kinetickk.ball.gameplay.interaction.overlay.*
 
 /**
  * Visual QA gallery of the reward card styles (writes PNGs only when `KK_SHOTS_OUT` names a folder):

@@ -18,6 +18,8 @@ import java.lang.management.ManagementFactory
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.rewards.art.*
 
 /**
  * The Solar Choir scene loops without a seam (a frame one whole loop later is the same frame) and,

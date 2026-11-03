@@ -74,6 +74,8 @@ import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.sin
 import kotlin.test.Test
+import kinetickk.ball.gameplay.interaction.*
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
 
 /**
  * Local visual QA harness for the in-run HUD (SPEC §12). With `KK_SHOTS=1` every state draws at every size, language,

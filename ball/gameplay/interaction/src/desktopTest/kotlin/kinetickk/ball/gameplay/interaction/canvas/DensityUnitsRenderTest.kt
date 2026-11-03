@@ -35,6 +35,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.*
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
+import kinetickk.ball.gameplay.interaction.canvas.world.*
+import kinetickk.ball.gameplay.interaction.canvas.world.places.*
 
 /**
  * The simulation runs in dp: the interaction boundary divides the viewport and the pointer by the

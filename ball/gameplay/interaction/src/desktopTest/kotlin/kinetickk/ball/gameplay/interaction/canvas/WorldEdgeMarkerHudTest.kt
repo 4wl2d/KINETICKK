@@ -14,6 +14,9 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.StructureTemplateId
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
+import kinetickk.ball.gameplay.interaction.canvas.world.*
+import kinetickk.ball.gameplay.interaction.canvas.world.places.*
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds

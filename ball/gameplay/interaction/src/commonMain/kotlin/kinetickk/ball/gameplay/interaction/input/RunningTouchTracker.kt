@@ -3,8 +3,8 @@
 
 package kinetickk.ball.gameplay.interaction.input
 
+import kinetickk.ball.gameplay.interaction.canvas.hud.GameplayFpsCounter
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
-import kinetickk.ball.gameplay.interaction.performance.GameplayFpsCounter
 
 /**
  * The running HUD's multi-pointer model: which of up to [MAX_POINTERS] pressed pointers steers the

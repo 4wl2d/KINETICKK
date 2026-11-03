@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.interaction.canvas
 
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.gameplay.interaction.canvas.look.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

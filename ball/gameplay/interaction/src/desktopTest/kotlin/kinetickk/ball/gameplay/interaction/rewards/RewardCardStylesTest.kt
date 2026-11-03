@@ -40,9 +40,9 @@ import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.impl.createContentCatalog
-import kinetickk.ball.gameplay.interaction.canvas.activeItemEmptyPipColor
-import kinetickk.ball.gameplay.interaction.canvas.elementFill
-import kinetickk.ball.gameplay.interaction.canvas.skillGlyph
+import kinetickk.ball.gameplay.interaction.canvas.look.activeItemEmptyPipColor
+import kinetickk.ball.gameplay.interaction.canvas.look.elementFill
+import kinetickk.ball.gameplay.interaction.canvas.look.skillGlyph
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
@@ -70,6 +70,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.rewards.art.*
 
 /** The shipped catalog (content implementation), for checks over every real card. */
 internal val shippedRewardContent: GameplayContentSnapshot by lazy { createContentCatalog().gameplayContent() }

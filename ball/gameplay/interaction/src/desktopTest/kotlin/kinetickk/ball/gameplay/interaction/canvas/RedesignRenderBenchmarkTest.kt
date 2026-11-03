@@ -53,6 +53,7 @@ import java.lang.management.ManagementFactory
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.test.Test
+import kinetickk.ball.gameplay.interaction.*
 
 /** Local, uncommitted redesign benchmark: HUD + world draw cost per frame. */
 class RedesignRenderBenchmarkTest {

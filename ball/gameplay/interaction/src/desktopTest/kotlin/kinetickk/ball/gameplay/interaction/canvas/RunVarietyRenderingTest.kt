@@ -23,6 +23,10 @@ import kinetickk.ball.content.api.EliteAffix
 import kinetickk.ball.content.api.SignalKind
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WorldEventKind
+import kinetickk.ball.gameplay.interaction.canvas.fx.*
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
+import kinetickk.ball.gameplay.interaction.canvas.world.*
+import kinetickk.ball.gameplay.interaction.canvas.world.places.*
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection

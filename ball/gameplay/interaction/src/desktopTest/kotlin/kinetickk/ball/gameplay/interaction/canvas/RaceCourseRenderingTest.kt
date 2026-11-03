@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.toArgb
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.interaction.canvas.WorldRenderHarness.drawAt
 import kinetickk.ball.gameplay.interaction.canvas.WorldRenderHarness.render
+import kinetickk.ball.gameplay.interaction.canvas.world.places.*
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection

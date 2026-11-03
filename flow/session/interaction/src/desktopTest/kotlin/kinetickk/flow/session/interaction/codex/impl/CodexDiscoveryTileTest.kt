@@ -22,11 +22,11 @@ import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.content.api.WorldDiscoveryKind
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.content.api.localizedContent
-import kinetickk.ball.gameplay.interaction.canvas.SiteGlyph
-import kinetickk.ball.gameplay.interaction.canvas.drawSiteGlyph
-import kinetickk.ball.gameplay.interaction.canvas.drawWorldDiscoveryMark
-import kinetickk.ball.gameplay.interaction.canvas.worldDiscoveryGlyph
-import kinetickk.ball.gameplay.interaction.canvas.worldDiscoveryLayer
+import kinetickk.ball.gameplay.interaction.canvas.look.SiteGlyph
+import kinetickk.ball.gameplay.interaction.canvas.look.drawSiteGlyph
+import kinetickk.ball.gameplay.interaction.canvas.look.drawWorldDiscoveryMark
+import kinetickk.ball.gameplay.interaction.canvas.look.worldDiscoveryGlyph
+import kinetickk.ball.gameplay.interaction.canvas.look.worldDiscoveryLayer
 import kinetickk.flow.session.interaction.codex.api.CodexRenderModel
 import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
 import kinetickk.flow.session.interaction.localization.CodexText

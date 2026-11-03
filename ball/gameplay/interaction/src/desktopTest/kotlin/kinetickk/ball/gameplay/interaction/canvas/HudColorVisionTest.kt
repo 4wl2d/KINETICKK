@@ -31,6 +31,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
 
 /** SPEC §9: under Mono every hazard meter of the HUD carries the threat hatch. */
 class HudColorVisionTest {

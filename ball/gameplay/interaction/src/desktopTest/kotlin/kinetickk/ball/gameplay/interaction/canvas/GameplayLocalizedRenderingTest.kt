@@ -40,8 +40,8 @@ import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
-import kinetickk.ball.gameplay.interaction.terminal.TerminalContent
-import kinetickk.ball.gameplay.interaction.terminal.drawCoreDeath
+import kinetickk.ball.gameplay.interaction.overlay.TerminalContent
+import kinetickk.ball.gameplay.interaction.canvas.world.drawCoreDeath
 import kinetickk.ball.gameplay.interaction.GameplayContent
 import kinetickk.ball.gameplay.interaction.GameplayInteractionPort
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
@@ -58,7 +58,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.input.key.Key
 import kotlin.test.assertTrue
 import kotlin.test.assertEquals
-import kinetickk.ball.gameplay.interaction.terminal.terminalPresentation
+import kinetickk.ball.gameplay.interaction.overlay.terminalPresentation
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.rewards.RewardContent
 import kinetickk.ball.gameplay.interaction.rewards.RewardPresentation
@@ -91,6 +91,9 @@ import javax.imageio.ImageIO
 import org.junit.Rule
 import org.junit.Test
 import kotlin.test.assertIs
+import kinetickk.ball.gameplay.interaction.*
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
+import kinetickk.ball.gameplay.interaction.overlay.*
 
 @OptIn(ExperimentalTestApi::class)
 class GameplayLocalizedRenderingTest {

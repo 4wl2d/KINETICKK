@@ -28,7 +28,8 @@ import kinetickk.ball.content.api.RebirthMutator
 import kinetickk.ball.content.api.RunModifierEffect
 import kinetickk.ball.content.api.SignalOption
 import kinetickk.ball.content.api.localizedContent
-import kinetickk.ball.gameplay.interaction.canvas.overlayGrouped
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayGrouped
 import kinetickk.ball.gameplay.interaction.localization.RunVarietyText
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType

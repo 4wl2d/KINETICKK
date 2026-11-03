@@ -56,6 +56,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.canvas.world.places.*
 
 class HudPresentationMemoryTest {
     private val base = hudTestModel()

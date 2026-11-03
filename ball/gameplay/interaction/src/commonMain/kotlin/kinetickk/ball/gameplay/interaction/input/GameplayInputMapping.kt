@@ -5,8 +5,8 @@ package kinetickk.ball.gameplay.interaction.input
 
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.interaction.canvas.HudTrialPanelLayout
-import kinetickk.ball.gameplay.interaction.canvas.activeTrial
+import kinetickk.ball.gameplay.interaction.canvas.hud.HudTrialPanelLayout
+import kinetickk.ball.gameplay.interaction.canvas.hud.activeTrial
 import kinetickk.ball.gameplay.interaction.layout.PauseTarget
 import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget

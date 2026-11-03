@@ -47,6 +47,9 @@ import kinetickk.foundation.design.Kk
 import java.lang.management.ManagementFactory
 import kotlin.test.Test
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.canvas.world.places.*
 
 /** The running HUD draws every frame: once its caches are warm it must not allocate. */
 class HudHotPathAllocationTest {

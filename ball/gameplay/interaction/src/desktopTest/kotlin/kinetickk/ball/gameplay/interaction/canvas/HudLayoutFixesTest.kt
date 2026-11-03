@@ -50,6 +50,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
+import kinetickk.ball.gameplay.interaction.canvas.look.*
 
 /** Layout findings of the review round, drawn with the real fonts in both languages. */
 class HudLayoutFixesTest {

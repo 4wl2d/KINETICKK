@@ -20,6 +20,7 @@ import javax.imageio.ImageIO
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.canvas.world.places.*
 
 /** Real floor pixels identify the dungeon with an elemental wash and glyph, including without colour. */
 class DungeonIdentityRenderingTest {

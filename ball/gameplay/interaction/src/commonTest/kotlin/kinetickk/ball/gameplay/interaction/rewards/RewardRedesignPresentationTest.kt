@@ -9,7 +9,7 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RuleLineKind
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.upsideText
-import kinetickk.ball.gameplay.interaction.canvas.overlayUpsideMultiplier
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayUpsideMultiplier
 import kinetickk.ball.gameplay.nucleus.render.BuildForecast
 import kinetickk.ball.gameplay.nucleus.render.BuildProjection
 import kinetickk.ball.gameplay.nucleus.render.ForecastKind
@@ -23,9 +23,9 @@ import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.liabilityText
-import kinetickk.ball.gameplay.interaction.canvas.UNKNOWN_PAIRING_NAME
-import kinetickk.ball.gameplay.interaction.canvas.overlayName
-import kinetickk.ball.gameplay.interaction.canvas.overlayRelicLinks
+import kinetickk.ball.gameplay.interaction.canvas.look.UNKNOWN_PAIRING_NAME
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayName
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayRelicLinks
 import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
 import kinetickk.ball.gameplay.nucleus.render.RelicLinkKind
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption

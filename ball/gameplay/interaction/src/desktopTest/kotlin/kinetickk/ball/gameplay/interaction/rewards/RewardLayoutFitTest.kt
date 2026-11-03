@@ -67,6 +67,7 @@ import org.junit.Test
 import kotlin.math.abs
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.overlay.*
 
 /**
  * Reward layouts at the game's default text size (125 %) and the largest (175 %), English and

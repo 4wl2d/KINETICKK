@@ -23,6 +23,7 @@ import kinetickk.foundation.design.monoStyle
 import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
 
 internal class PerformanceHudProjection(
     val frameLine: String,

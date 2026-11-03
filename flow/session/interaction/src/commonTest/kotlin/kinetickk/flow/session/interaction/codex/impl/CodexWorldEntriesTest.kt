@@ -6,8 +6,8 @@ package kinetickk.flow.session.interaction.codex.impl
 import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.content.api.WorldDiscoveryKind
 import kinetickk.ball.content.api.localizedContent
-import kinetickk.ball.gameplay.interaction.canvas.SiteGlyph
-import kinetickk.ball.gameplay.interaction.canvas.worldDiscoveryGlyph
+import kinetickk.ball.gameplay.interaction.canvas.look.SiteGlyph
+import kinetickk.ball.gameplay.interaction.canvas.look.worldDiscoveryGlyph
 import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PlayerCollection

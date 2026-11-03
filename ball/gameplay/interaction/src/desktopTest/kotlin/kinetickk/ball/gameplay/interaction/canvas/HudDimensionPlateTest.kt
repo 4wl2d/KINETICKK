@@ -19,6 +19,9 @@ import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.DimensionObjective
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.content.api.localizedContent
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
+import kinetickk.ball.gameplay.interaction.canvas.world.*
+import kinetickk.ball.gameplay.interaction.canvas.world.places.*
 import kinetickk.ball.gameplay.interaction.localization.DimensionHudText
 import kinetickk.ball.gameplay.nucleus.render.DimensionProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection

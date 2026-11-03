@@ -39,19 +39,19 @@ import kinetickk.ball.content.api.rankLines
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.content.api.ruleLines
 import kinetickk.ball.content.api.upsideText
-import kinetickk.ball.gameplay.interaction.canvas.OverlayRelicLink
-import kinetickk.ball.gameplay.interaction.canvas.badgeState
-import kinetickk.ball.gameplay.interaction.canvas.OverlayRelicSlot
-import kinetickk.ball.gameplay.interaction.canvas.UNKNOWN_PAIRING_NAME
-import kinetickk.ball.gameplay.interaction.canvas.overlayColor
-import kinetickk.ball.gameplay.interaction.canvas.overlayDecimal
-import kinetickk.ball.gameplay.interaction.canvas.overlayDescription
-import kinetickk.ball.gameplay.interaction.canvas.overlayIcon
-import kinetickk.ball.gameplay.interaction.canvas.overlayLevel
-import kinetickk.ball.gameplay.interaction.canvas.overlayLinkMultiplier
-import kinetickk.ball.gameplay.interaction.canvas.overlayName
-import kinetickk.ball.gameplay.interaction.canvas.overlayRelicLinks
-import kinetickk.ball.gameplay.interaction.canvas.overlayUpsideMultiplier
+import kinetickk.ball.gameplay.interaction.canvas.look.OverlayRelicLink
+import kinetickk.ball.gameplay.interaction.canvas.look.badgeState
+import kinetickk.ball.gameplay.interaction.canvas.look.OverlayRelicSlot
+import kinetickk.ball.gameplay.interaction.canvas.look.UNKNOWN_PAIRING_NAME
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayColor
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayDecimal
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayDescription
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayLevel
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayLinkMultiplier
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayName
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayRelicLinks
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayUpsideMultiplier
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
 import kinetickk.ball.gameplay.interaction.localization.RunVarietyText
@@ -74,6 +74,8 @@ import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.label
 import kotlin.math.pow
 import kotlin.math.sqrt
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.overlay.*
 
 /** Which of the three reward layouts presents the choice (cards, totem rows, relic matrix). */
 internal enum class RewardLayoutKind { CARDS, TOTEM, RELIC_BIND }

@@ -6,6 +6,7 @@ package kinetickk.ball.gameplay.interaction.canvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.toPixelMap
+import kinetickk.ball.gameplay.interaction.canvas.fx.*
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.fx.WeaponArcProjection
 import kinetickk.foundation.collections.toImmutableList

@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.performance
 
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

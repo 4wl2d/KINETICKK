@@ -31,6 +31,8 @@ import kinetickk.foundation.design.CanvasTextMeasurer
 import java.awt.GraphicsEnvironment
 import java.io.File
 import kotlin.math.max
+import kinetickk.ball.gameplay.interaction.*
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
 
 /**
  * Opt-in real-window companion to [ReactionHeavyRenderBenchmarkTest]. Uses the same prepared

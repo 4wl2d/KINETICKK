@@ -27,6 +27,9 @@ import java.lang.management.ManagementFactory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.*
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
+import kinetickk.ball.gameplay.interaction.canvas.world.places.*
 
 /**
  * Dense combat: the most live damage numbers the reducer allows, each read on every frame of its

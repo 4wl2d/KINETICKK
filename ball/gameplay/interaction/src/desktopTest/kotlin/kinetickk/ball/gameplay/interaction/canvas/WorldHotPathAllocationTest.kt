@@ -114,6 +114,11 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 import kotlin.math.cos
 import kotlin.math.sin
+import kinetickk.ball.gameplay.interaction.*
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.canvas.world.*
+import kinetickk.ball.gameplay.interaction.canvas.world.places.*
 
 /**
  * The world layer runs every frame: once caches are warm (paths, strokes, brushes, strings, text

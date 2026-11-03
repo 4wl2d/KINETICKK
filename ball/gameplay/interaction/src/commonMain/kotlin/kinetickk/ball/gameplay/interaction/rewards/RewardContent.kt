@@ -109,11 +109,11 @@ import androidx.compose.ui.text.style.TextDecoration
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RuleLineKind
 import kinetickk.ball.content.api.SkillId
-import kinetickk.ball.gameplay.interaction.canvas.drawRelicIcon
-import kinetickk.ball.gameplay.interaction.canvas.elementFill
-import kinetickk.ball.gameplay.interaction.canvas.overlayColor
-import kinetickk.ball.gameplay.interaction.canvas.overlayIcon
-import kinetickk.ball.gameplay.interaction.canvas.drawActiveItemMark
+import kinetickk.ball.gameplay.interaction.canvas.look.drawRelicIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.elementFill
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayColor
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.drawActiveItemMark
 import kinetickk.foundation.design.KkFillKind
 import kinetickk.foundation.design.drawKkHatch
 import kinetickk.foundation.design.drawKkIcon
@@ -121,8 +121,8 @@ import kinetickk.foundation.design.drawKkPattern
 import kinetickk.foundation.design.drawKkSheared
 import kinetickk.foundation.design.kkStroke
 import kinetickk.foundation.design.measureKkText
-import kinetickk.ball.gameplay.interaction.canvas.choiceOverlayScrimColor
-import kinetickk.ball.gameplay.interaction.canvas.drawItemIcon
+import kinetickk.ball.gameplay.interaction.overlay.choiceOverlayScrimColor
+import kinetickk.ball.gameplay.interaction.canvas.look.drawItemIcon
 import kinetickk.ball.gameplay.interaction.layout.ChoiceLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
@@ -172,6 +172,9 @@ import kinetickk.foundation.design.wideStyle
 import kotlin.math.max
 import kotlin.math.min
 import kotlinx.coroutines.flow.collectLatest
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.overlay.*
+import kinetickk.ball.gameplay.interaction.rewards.art.*
 
 /** Milliseconds of the reward entrance choreography (rings, badge slam, deal, footer). */
 internal const val RewardEntranceMs = 1_600f

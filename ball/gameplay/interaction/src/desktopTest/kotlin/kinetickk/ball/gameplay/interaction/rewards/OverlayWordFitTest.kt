@@ -24,6 +24,7 @@ import kotlin.math.max
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.overlay.*
 
 /** Preserve the exact fitting decisions of the original per-word algorithm. */
 class OverlayWordFitTest {

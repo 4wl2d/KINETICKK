@@ -40,6 +40,7 @@ import kotlin.math.exp
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
+import kinetickk.ball.gameplay.interaction.canvas.fx.*
 
 /**
  * Shared fixtures for the world FX tests and contact sheets: a model whose camera puts world (x, y)

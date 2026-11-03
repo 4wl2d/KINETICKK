@@ -60,13 +60,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicPolicy
-import kinetickk.ball.gameplay.interaction.canvas.drawRelicIcon
-import kinetickk.ball.gameplay.interaction.canvas.overlayColor
+import kinetickk.ball.gameplay.interaction.canvas.look.drawRelicIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayColor
 import kinetickk.ball.gameplay.nucleus.render.RelicLinkKind
 import kinetickk.foundation.design.drawKkThreatHatch
 import kinetickk.foundation.design.kkMix
 import kinetickk.foundation.design.measureKkText
-import kinetickk.ball.gameplay.interaction.canvas.overlayIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayIcon
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
@@ -102,9 +102,10 @@ import kinetickk.foundation.design.monoStyle
 import kinetickk.foundation.design.rememberInterfaceTypography
 import kinetickk.foundation.design.rememberKkCanvasMeasurer
 import kinetickk.foundation.design.wideStyle
-import kinetickk.ball.gameplay.interaction.canvas.OverlayRelicLink
+import kinetickk.ball.gameplay.interaction.canvas.look.OverlayRelicLink
 import kotlin.math.max
 import kotlin.math.min
+import kinetickk.ball.gameplay.interaction.overlay.*
 
 /** One relic link bracket above the relic row: stacked [level], dashed when it is a [preview]. */
 internal class RelicBracket(
@@ -778,7 +779,7 @@ private fun RelicMatrixRow(
 @Composable
 private fun RelicSlotButton(
     slot: Int,
-    relic: kinetickk.ball.gameplay.interaction.canvas.OverlayRelicSlot?,
+    relic: kinetickk.ball.gameplay.interaction.canvas.look.OverlayRelicSlot?,
     name: String,
     meta: String,
     cardIndex: Int,

@@ -11,6 +11,7 @@ import androidx.compose.ui.text.TextMeasurer as ComposeTextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import kinetickk.ball.gameplay.interaction.canvas.world.*
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
 import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior

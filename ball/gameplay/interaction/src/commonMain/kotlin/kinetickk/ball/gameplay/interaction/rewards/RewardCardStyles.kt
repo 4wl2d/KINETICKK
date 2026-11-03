@@ -21,10 +21,12 @@ import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponFamily
 import kinetickk.ball.content.api.WeaponId
-import kinetickk.ball.gameplay.interaction.canvas.elementFill
-import kinetickk.ball.gameplay.interaction.canvas.overlayColor
-import kinetickk.ball.gameplay.interaction.canvas.overlayIcon
-import kinetickk.ball.gameplay.interaction.canvas.skillGlyph
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.canvas.look.elementFill
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayColor
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.skillGlyph
+import kinetickk.ball.gameplay.interaction.rewards.art.*
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
 import kinetickk.ball.gameplay.nucleus.render.TotemAction
