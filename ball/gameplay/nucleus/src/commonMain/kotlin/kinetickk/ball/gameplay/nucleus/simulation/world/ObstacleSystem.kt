@@ -191,8 +191,6 @@ internal fun obstacleStepEntry(x0: Float, y0: Float, x1: Float, y1: Float, cx: F
     return sweepEntry(x0, y0, x1, y1, cx, cy, reach)
 }
 
-private fun square(value: Float): Float = value * value
-
 // ---------------------------------------------------------------------------------------------
 // Generation.
 

@@ -403,8 +403,6 @@ private fun wallNormal(wall: Wall, offsetX: Float, offsetY: Float, backX: Float,
     return if (back >= WALL_NORMAL_MIN_LENGTH) steeringVector(backX / back, backY / back) else steeringVector(1f, 0f)
 }
 
-private fun square(value: Float): Float = value * value
-
 /** The Core rests this far off a wall surface, like off a rock. */
 private const val WALL_CONTACT_SEPARATION: Float = 0.05f
 
