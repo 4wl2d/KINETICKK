@@ -84,13 +84,8 @@ internal fun MutableGameState.dimensionTrialProjection(): TrialProjection? {
 /** The share of its integrity the objective boss has lost: 0 before it arrives, 1 once the objective is complete. */
 private fun MutableGameState.objectiveBossIntegrityLost(visit: DimensionVisit): Float {
     if (visit.completed) return 1f
-    if (visit.bossId < 0) return 0f
-    for (index in enemies.indices) {
-        val enemy = enemies[index]
-        if (enemy.id != visit.bossId) continue
-        return if (enemy.maxHp > 0f) (1f - enemy.hp / enemy.maxHp).coerceIn(0f, 1f) else 0f
-    }
-    return 0f
+    val boss = enemyById(visit.bossId) ?: return 0f
+    return if (boss.maxHp > 0f) (1f - boss.hp / boss.maxHp).coerceIn(0f, 1f) else 0f
 }
 
 /**
@@ -106,12 +101,12 @@ internal fun MutableGameState.onDimensionEnemyKilled(enemy: Enemy) {
         endEncounter(dimensionEncounterTag(visit), despawn = false)
         return
     }
-    if (visit.objective == DimensionObjective.HARVEST && !visit.failed && burning(enemy)) throwEmber(enemy)
+    if (visit.objective == DimensionObjective.HARVEST && burning(enemy)) throwEmber(enemy)
 }
 
 /** True for a Nadir native or an enemy carrying Thermal stacks. */
 private fun MutableGameState.burning(enemy: Enemy): Boolean =
-    content.enemy(enemy.type).habitats and EnemyHabitat.NADIR.bit != 0 || stacks(enemy, StatusElement.THERMAL) > 0
+    content.enemy(enemy.type).livesIn(EnemyHabitat.NADIR) || stacks(enemy, StatusElement.THERMAL) > 0
 
 /** True while the open choice is a dimension reward (it cannot be rerolled). */
 internal fun MutableGameState.dimensionRewardOpen(): Boolean = dimensionRewardLayer != null

@@ -73,11 +73,9 @@ class DimensionContentTest {
     @Test
     fun realspaceHasNoVisitObjectivePhysicsDirectorChangeOrReward() {
         val base = policy.definition(WorldLayer.BASE)
-        assertEquals(LayerFeatures.REALSPACE, base.features)
         listOf(
             base.copy(visitSeconds = 30f),
             base.copy(objectives = immutableListOf(DimensionObjectiveWeight(DimensionObjective.ASCENT, 1f))),
-            base.copy(features = LayerFeatures.DIMENSION),
             base.copy(physics = DimensionPhysics(matterMultiplier = 2f)),
             base.copy(reward = DimensionReward(DimensionRewardKind.NONE, matterOnFailure = 5f)),
             base.copy(spawnRateMultiplier = 1.1f),
@@ -300,12 +298,11 @@ class DimensionContentTest {
     @Test
     fun dimensionNoticesNameEveryLayerObjectiveAndConstantOnce() {
         assertEquals(DimensionNotices.all.size, DimensionNotices.all.toSet().size)
-        WorldLayer.entries.forEach { assertEquals(policy.definition(it).name, DimensionNotices.layerName(it)) }
-        assertEquals("ZENITH // ASCENT", DimensionNotices.entry(WorldLayer.ZENITH, DimensionObjective.ASCENT))
+        assertEquals("ZENITH // ASCENT", DimensionNotices.entry(DimensionObjective.ASCENT))
         assertEquals("PYRE // COMPLETE", DimensionNotices.completed(DimensionObjective.PYRE))
         assertEquals("ASCENT // COURSE BROKEN", DimensionNotices.broken(DimensionObjective.ASCENT))
         assertTrue(DimensionNotices.broken(DimensionObjective.ASCENT) in DimensionNotices.all)
-        assertTrue(DimensionObjective.entries.all { DimensionNotices.entry(it.layer, it) in DimensionNotices.all })
+        assertTrue(DimensionObjective.entries.all { DimensionNotices.entry(it) in DimensionNotices.all })
         assertTrue(DimensionObjective.entries.all { DimensionNotices.completed(it) in DimensionNotices.all })
     }
 

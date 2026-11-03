@@ -11,7 +11,6 @@ import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.model.DimensionPortal
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.model.windowSiteId
-import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -28,7 +27,7 @@ internal fun GameplayContentSnapshot.withDimensions(change: DimensionPolicy.() -
  * obstacles as the game places its rifts (a played run may have a rock ahead; a test arena keeps the exact point).
  */
 internal fun MutableGameState.openPortalForTesting(target: WorldLayer, distance: Float = 560f, clear: Boolean = false): Pair<Float, Float> {
-    val heading = if (speed >= 80f) atan2(velocityY, velocityX) else atan2(lastAimDirectionY, lastAimDirectionX)
+    val heading = travelHeading()
     val aheadX = coreX + cos(heading) * distance
     val aheadY = coreY + sin(heading) * distance
     val (x, y) = if (clear) nudgedClearOfObstacles(aheadX, aheadY, content.dimensions.portalRadius + RIFT_TEST_CLEARANCE) else aheadX to aheadY

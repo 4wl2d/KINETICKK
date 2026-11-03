@@ -204,7 +204,7 @@ class DimensionSystemTest {
         assertEquals(0, visit.serial)
         assertEquals(WorldLayer.ZENITH.bit, game.dimensionRun.visitedMask)
         assertTrue(game.dimensionVisitActive() && game.dimensionTouched() && game.engagementActive())
-        assertEquals(DimensionNotices.entry(WorldLayer.ZENITH, visit.objective), game.message)
+        assertEquals(DimensionNotices.entry(visit.objective), game.message)
         assertTrue(VisualFxCue.ClearAll in game.takeVisualFxCues())
         assertTrue(game.pendingWorldDiscoveryMask and WorldDiscovery.ZENITH.bit != 0)
         assertEquals(SpawnDirectorPhase.BUILD.ordinal, game.directorPhase)

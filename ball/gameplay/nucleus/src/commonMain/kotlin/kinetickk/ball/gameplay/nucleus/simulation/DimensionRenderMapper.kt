@@ -65,7 +65,6 @@ private fun MutableGameState.visitProjection(
         progress = visit.progress,
         goal = visit.goal,
         completed = visit.completed,
-        bossId = visit.bossId,
         pace = dimensionPace(),
         scorching = scorching(physics),
         localClock = dimensionLocalClock,
@@ -81,7 +80,6 @@ private fun MutableGameState.visitProjection(
         rewardLayer = dimensionRewardLayer,
         splitRemaining = if (visit.splitSeconds > 0f) max(0f, visit.splitEndsAt - elapsed) else 0f,
         splitDuration = visit.splitSeconds,
-        failed = visit.failed,
     )
 }
 

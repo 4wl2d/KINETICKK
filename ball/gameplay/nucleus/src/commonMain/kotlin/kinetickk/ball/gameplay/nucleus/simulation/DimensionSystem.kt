@@ -105,7 +105,7 @@ internal fun MutableGameState.enterDimension(target: WorldLayer): Boolean {
         visit = newVisit(target, objective, serial, endsAt),
     )
     discoverWorld(target.discovery())
-    message = DimensionNotices.entry(target, objective)
+    message = DimensionNotices.entry(objective)
     messageTime = 2.6f
     emitVisualFx(VisualFxCue.ClearAll)
     emitSound(GameplayAudioCue.APEX)

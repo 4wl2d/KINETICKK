@@ -3,7 +3,6 @@
 
 package kinetickk.ball.content.impl
 
-import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.DimensionObjective
 import kinetickk.ball.content.api.DimensionPolicy
 import kinetickk.ball.content.api.DimensionRewardKind
@@ -20,10 +19,6 @@ import kinetickk.ball.content.api.WorldLayer
  * definition validates itself on construction). Runs after the roster check, so enemies follow the EnemyType order.
  */
 internal fun validateDimensions(data: ContentBootstrapData) {
-    require(data.boons.size <= ContentBounds.MAX_BOON_DEFINITIONS) {
-        "boons size ${data.boons.size} exceeds bootstrap bound ${ContentBounds.MAX_BOON_DEFINITIONS}"
-    }
-    require(data.boons.map { it.id }.toSet().size == data.boons.size) { "Boon ids must be unique" }
     validateDimensionNatives(data.enemies)
     validateObjectiveBosses(data.dimensions, data.enemies)
     validateBoonHands(data.dimensions, data.boons)

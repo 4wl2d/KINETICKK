@@ -23,16 +23,16 @@ data class PortalProjection(
 data class HaloProjection(val id: Int, val x: Float, val y: Float, val courseIndex: Int)
 
 /**
- * A Nadir ember waiting to be collected, thrown from the burning kill at ([fromX], [fromY]) [age] seconds ago (a
- * placed ember has no throw: its origin is its position).
+ * A Nadir ember waiting to be collected, thrown from the burning kill at ([fromX], [fromY]); [age] is the seconds since
+ * the throw. An ember without a throw has its origin at its position.
  */
 data class EmberProjection(
     val x: Float,
     val y: Float,
     val remaining: Float,
-    val fromX: Float = x,
-    val fromY: Float = y,
-    val age: Float = Float.POSITIVE_INFINITY,
+    val fromX: Float,
+    val fromY: Float,
+    val age: Float,
 )
 
 /** The world layer the Core is in and its visit; [REALSPACE] outside every dimension. */
@@ -44,7 +44,6 @@ data class DimensionProjection(
     val progress: Int = 0,
     val goal: Int = 0,
     val completed: Boolean = false,
-    val bossId: Int = -1,
     /** Speed the layer asks for; presentation compares the Core's speed with it (the too-slow look). */
     val pace: Float = 0f,
     /** 0..1 Nadir warning (1 while the scorch ticks). */
@@ -67,8 +66,6 @@ data class DimensionProjection(
     val splitRemaining: Float = 0f,
     /** The running split's length; the next ring's dashed ring empties over it. 0 while no split runs. */
     val splitDuration: Float = 0f,
-    /** The objective can no longer be completed before the visit's end (a broken Ascent course). */
-    val failed: Boolean = false,
 ) {
     companion object {
         val REALSPACE: DimensionProjection = DimensionProjection()

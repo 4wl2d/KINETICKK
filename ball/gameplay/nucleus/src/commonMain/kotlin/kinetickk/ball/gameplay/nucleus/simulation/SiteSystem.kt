@@ -178,7 +178,7 @@ private fun MutableGameState.offerDueWindow() {
     val scheduledAt = policy.firstOfferAt + nextSiteWindowIndex * policy.offerInterval
     if (scheduledAt > policy.lastOfferAt || elapsed < scheduledAt) return
     val offerId = nextSiteWindowIndex++
-    if (!layerFeatures().sites || sites.isNotEmpty() || elapsed >= scheduledAt + policy.offerLifetime ||
+    if (!inBaseLayer() || sites.isNotEmpty() || elapsed >= scheduledAt + policy.offerLifetime ||
         scheduledAt + policy.offerLifetime + policy.trialDuration >= content.tempo.bossAtSeconds
     ) return
     val (first, second) = rollWindowKinds(scheduledAt)

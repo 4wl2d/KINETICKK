@@ -3,7 +3,7 @@
 
 package kinetickk.ball.content.api
 
-/** Layer, rift and objective names, dimension notices, Codex lines, Blessings and Pacts. */
+/** Layer, rift and objective names, dimension notices, Blessings and Pacts. */
 internal val DimensionPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Realspace" to "Явь",
     "Zenith" to "Зенит",
@@ -23,8 +23,6 @@ internal val DimensionPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Choose a course" to "Выберите путь",
     "Zenith rift" to "Разлом в Зенит",
     "Nadir rift" to "Разлом в Надир",
-    "Glitch rift" to "Искажённый разлом",
-    "Exit rift" to "Разлом в явь",
     "Fly through to cross over. The layer releases you before the Architect arrives." to
         "Пролетите насквозь, чтобы перейти. Слой отпустит вас до прибытия Архитектора.",
     "Fly through the halo gates in order, faster than cruising. Reach each gate before its time runs out." to
@@ -38,12 +36,6 @@ internal val DimensionPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Blessing" to "Благословение",
     "Pact" to "Сделка",
     "Refuse the pact" to "Отказаться от сделки",
-    "A layer of light above realspace. Grace lightens the Core and halo gates mend it. Blessings wait for those who finish its trial." to
-        "Слой света над явью. Благодать облегчает Ядро, кольца нимба чинят его. Тех, кто пройдёт испытание, ждут благословения.",
-    "A layer of heat beneath realspace. Slow flight scorches, and Matter burns twice as bright. Pacts are offered at a price." to
-        "Слой жара под явью. Медленный полёт обжигает, а материя горит вдвое ярче. Сделки здесь предлагают за плату.",
-    "The Architect's memory. Time moves only when you move. Something older waits inside." to
-        "Память Архитектора. Время идёт, только когда движетесь вы. Внутри ждёт нечто более древнее.",
 
     "Halo of Mending" to "Нимб исцеления",
     "Seraph Wings" to "Крылья серафима",

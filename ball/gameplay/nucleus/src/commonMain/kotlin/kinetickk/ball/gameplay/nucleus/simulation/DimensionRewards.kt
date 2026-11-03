@@ -36,11 +36,8 @@ private const val TROVE_HAND: Int = 1
 private const val BOON_SALVAGE_MATTER: Float = 20f
 /** Matter salvaged when the Archive's trove finds no Legendary or Epic item to deal. */
 private const val TROVE_SALVAGE_MATTER: Float = 40f
-/** The Pact offer's decline card (English content keys). */
+/** The Pact offer's decline card (English content key). */
 internal const val PACT_DECLINE_TITLE: String = "Refuse the pact"
-
-/** The decline card's description, naming the [matter] the card salvages (localized by a content message template). */
-internal fun pactDeclineDescription(matter: Int): String = "Keep the run as it is and salvage $matter Kinetic Matter."
 /** Card tags (English content keys; uppercase variants localize). */
 private const val BLESSING_TAG: String = "BLESSING"
 private const val PACT_TAG: String = "PACT"
@@ -62,18 +59,20 @@ internal fun MutableGameState.openPendingDimensionReward() {
     if (cards <= 0) return
     when (reward.kind) {
         DimensionRewardKind.NONE -> Unit
-        DimensionRewardKind.BLESSING_OFFER -> openBoonOffer(grant, RunBoonKind.BLESSING, cards, reward)
-        DimensionRewardKind.PACT_OFFER -> openBoonOffer(grant, RunBoonKind.PACT, cards, reward)
+        DimensionRewardKind.BLESSING_OFFER, DimensionRewardKind.PACT_OFFER -> openBoonOffer(grant, cards, reward)
         DimensionRewardKind.ARCHIVE_TROVE -> openArchiveTrove(grant, cards)
     }
 }
 
 /**
- * Deals [count] boons of [kind] the run does not own, without replacement over the boons in id order, from a hash of
- * the run and the layer; a Pact offer adds the Refuse card (at most [MutableGameState.MAX_CHOICES] cards). With nothing
- * to deal, or the run's boons at [ContentBounds.MAX_RUN_BOONS], it salvages Matter instead.
+ * Deals [count] boons of the [reward]'s kind (Blessings or Pacts) the run does not own, without replacement over the
+ * boons in id order, from a hash of the run and the layer; a Pact offer adds the Refuse card (at most
+ * [MutableGameState.MAX_CHOICES] cards). With nothing to deal, or the run's boons at [ContentBounds.MAX_RUN_BOONS], it
+ * salvages Matter instead.
  */
-private fun MutableGameState.openBoonOffer(grant: DimensionRewardGrant, kind: RunBoonKind, count: Int, reward: DimensionReward) {
+private fun MutableGameState.openBoonOffer(grant: DimensionRewardGrant, count: Int, reward: DimensionReward) {
+    val pact = reward.kind == DimensionRewardKind.PACT_OFFER
+    val kind = if (pact) RunBoonKind.PACT else RunBoonKind.BLESSING
     val eligible = ArrayList<RunBoonDefinition>()
     if (runBoons.size < ContentBounds.MAX_RUN_BOONS) {
         for (boon in content.boons) if (boon.kind == kind && boon.id !in runBoons) eligible += boon
@@ -84,24 +83,21 @@ private fun MutableGameState.openBoonOffer(grant: DimensionRewardGrant, kind: Ru
         return
     }
     val random = HashRandom(worldHash(runSeed, grant.layer, BOON_HAND, 0, BOON_SALT))
-    val tag = when (kind) {
-        RunBoonKind.BLESSING -> BLESSING_TAG
-        RunBoonKind.PACT -> PACT_TAG
-        RunBoonKind.ASPECT -> error("Dungeon aspects are awarded by their trials")
-    }
+    val tag = if (pact) PACT_TAG else BLESSING_TAG
     val cards = ArrayList<ChoiceOption>(count + 1)
     while (cards.size < count && eligible.isNotEmpty()) {
         val boon = eligible.removeAt(random.nextIndex(eligible.size))
         cards += ChoiceOption(type = ChoiceType.BOON, title = boon.name, description = boon.description, tag = tag, boonId = boon.id)
     }
-    if (reward.kind == DimensionRewardKind.PACT_OFFER) {
+    if (pact) {
         // The card names the Matter refusing grants: the salvage through the run's Matter gain, rounded like the
-        // Derelict cargo card's payout (nothing changes the gain while the choice is open).
+        // Derelict cargo card's payout (nothing changes the gain while the choice is open). Presentation writes the
+        // card's text from that number, so it carries no description.
         val salvage = (reward.declineMatter * matterGain * layerMatterMultiplier()).roundToInt()
         cards += ChoiceOption(
             type = ChoiceType.BOON,
             title = PACT_DECLINE_TITLE,
-            description = pactDeclineDescription(salvage),
+            description = "",
             tag = DECLINE_TAG,
             salvageMatter = salvage,
         )

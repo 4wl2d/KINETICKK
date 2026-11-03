@@ -222,8 +222,6 @@ class ContentLocalizationTest {
                 "Collapse this offering into one of the four bound Relics and raise its rank.",
                 "Collapse the offering into slot 4 and advance rank 2 to 3.",
                 "Slot 4 is already rank 3; salvage the excess resonance.",
-                "Keep the run as it is and salvage 10 Kinetic Matter.",
-                "Keep the run as it is and salvage 25 Kinetic Matter.",
                 "SLOT 4 // REPLACE", "SLOT 4 // RANK 3", "LEVEL 20",
                 "Impact power +0.05×", "Cooling +1.5/s", "Combo window +0.08s",
                 "+4.5% Impact damage  //  +0.2/s Integrity regeneration",
@@ -331,16 +329,13 @@ class ContentLocalizationTest {
     }
 
     @Test
-    fun everyDimensionNameRiftObjectiveAndBoonIsLocalizedAndDistinct() {
-        val dimensions = createContentCatalog().gameplayContent().dimensions
+    fun everyDimensionNameObjectiveAndBoonIsLocalizedAndDistinct() {
+        val layerNames = kinetickk.ball.content.api.WorldLayer.entries.map(DimensionNotices::layerName)
         val boons = createContentCatalog().gameplayContent().boons
-        dimensions.definitions.forEach { definition ->
-            listOf(definition.name, definition.riftName, definition.description).forEach(::assertFullyLocalized)
-        }
+        layerNames.forEach(::assertFullyLocalized)
         kinetickk.ball.content.api.DimensionObjective.entries.forEach { listOf(it.label, it.instruction).forEach(::assertFullyLocalized) }
         boons.forEach { listOf(it.name, it.description).forEach(::assertFullyLocalized) }
-        assertDistinctInRussian(dimensions.definitions.map { it.name })
-        assertDistinctInRussian(dimensions.definitions.map { it.riftName })
+        assertDistinctInRussian(layerNames)
         assertDistinctInRussian(boons.map { it.name })
     }
 
@@ -384,18 +379,12 @@ class ContentLocalizationTest {
     fun everyDimensionHeadingRiftSiteAndBoonFlavorReadsInRussian() {
         val gameplay = createContentCatalog().gameplayContent()
         // The dimension plate, the trial panel and the banners draw layer and objective names as canvas headings.
-        gameplay.dimensions.definitions.forEach { assertFullyLocalized(it.name.uppercase()) }
+        kinetickk.ball.content.api.WorldLayer.entries.forEach { assertFullyLocalized(DimensionNotices.layerName(it).uppercase()) }
         kinetickk.ball.content.api.DimensionObjective.entries.forEach { assertFullyLocalized(it.label.uppercase()) }
         assertDistinctInRussian(kinetickk.ball.content.api.DimensionObjective.entries.map { it.label })
         assertEquals("ОБНАРУЖЕН РАЗЛОМ // ВЫБЕРИТЕ ПУТЬ", DimensionNotices.RIFT_DETECTED.localizedContent(AppLanguage.Russian))
-        // The two window rifts are sites named by their layers' rift names.
+        // The two window rifts are sites.
         val rifts = content.sites.definitions.filter { it.kind.family == kinetickk.ball.content.api.SiteFamily.PORTAL }
-        assertEquals(
-            listOf(kinetickk.ball.content.api.WorldLayer.ZENITH, kinetickk.ball.content.api.WorldLayer.NADIR).map {
-                gameplay.dimensions.definition(it).riftName
-            },
-            rifts.map { it.name },
-        )
         rifts.forEach { listOf(it.name, it.instruction).forEach(::assertFullyLocalized) }
         assertDistinctInRussian(gameplay.boons.map { it.description })
     }

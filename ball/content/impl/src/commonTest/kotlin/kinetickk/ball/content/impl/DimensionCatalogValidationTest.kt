@@ -3,7 +3,6 @@
 
 package kinetickk.ball.content.impl
 
-import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.DimensionPolicy
 import kinetickk.ball.content.api.EnemyDefinition
 import kinetickk.ball.content.api.EnemyHabitat
@@ -89,12 +88,6 @@ class DimensionCatalogValidationTest {
             }.toImmutableList(),
         )
         createContentCatalogForTesting(data.copy(dimensions = twoCardZenith, boons = blessings.take(2) + pacts))
-        // The catalog holds at most the bound, with unique ids.
-        val full = (32..47).map { blessings.first().copy(id = it) } + (48..63).map { pacts.first().copy(id = it) }
-        assertEquals(ContentBounds.MAX_BOON_DEFINITIONS, full.size)
-        createContentCatalogForTesting(data.copy(boons = full))
-        assertRejected(data.copy(boons = full + full.first()), "exceeds bootstrap bound")
-        assertRejected(data.copy(boons = data.boons + data.boons.last()), "Boon ids must be unique")
     }
 
     @Test

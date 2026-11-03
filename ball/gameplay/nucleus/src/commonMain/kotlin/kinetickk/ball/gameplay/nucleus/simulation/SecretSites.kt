@@ -82,11 +82,11 @@ internal fun MutableGameState.updateSecretTrackers(delta: Float) {
 /**
  * Far travel, the Cartographer's condition: the first step, before the policy's time, on which the Core is at least the
  * far-travel distance from the run's spawn in absolute space sets the flag once and places the sigil ahead of the Core.
- * Only where the layer has sites; after the flag or the time nothing is measured.
+ * Only in realspace; after the flag or the time nothing is measured.
  */
 private fun MutableGameState.updateFarTravel() {
     val policy = content.sites.secrets
-    if (hasSecret(RunSecretFlag.FAR_TRAVEL) || elapsed >= policy.farTravelBefore || !layerFeatures().sites) return
+    if (hasSecret(RunSecretFlag.FAR_TRAVEL) || elapsed >= policy.farTravelBefore || !inBaseLayer()) return
     val reach = policy.farTravelDistance.toDouble()
     if (absoluteDistanceSquared(coreX, coreY) < reach * reach) return
     setSecret(RunSecretFlag.FAR_TRAVEL)

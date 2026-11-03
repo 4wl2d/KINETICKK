@@ -130,7 +130,7 @@ internal fun MutableGameState.spawnWave(delta: Float) {
         tryFireSpawnEvent(bossFight)
     }
     if (bossFight) return
-    if (layerFeatures().elites && elapsed >= nextEliteAt) {
+    if (inBaseLayer() && elapsed >= nextEliteAt) {
         nextEliteAt += rebirthProfile.eliteInterval(content.tempo.eliteIntervalSeconds(elapsed)) * jitter(0.75f, 1.25f)
         if (spawnScheduled(EnemyType.ELITE)) {
             message = eliteSignalNotice()
@@ -142,7 +142,7 @@ internal fun MutableGameState.spawnWave(delta: Float) {
         1 -> runMutatorActive(RebirthMutator.OVERCLOCKED_SWARM) && elapsed >= SECOND_HERALD_AT_SECONDS
         else -> false
     }
-    if (layerFeatures().heralds && heraldDue && content.enemy(EnemyType.HERALD).minimumRebirth <= rebirthLevel) {
+    if (inBaseLayer() && heraldDue && content.enemy(EnemyType.HERALD).minimumRebirth <= rebirthLevel) {
         heraldsSpawned++
         if (enemies.size >= content.rebirth.maxActiveEnemies) evictOldestOrdinaryEnemy()
         if (spawnScheduled(EnemyType.HERALD)) {

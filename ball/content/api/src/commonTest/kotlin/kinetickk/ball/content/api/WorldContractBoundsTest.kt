@@ -236,31 +236,13 @@ class WorldContractBoundsTest {
     }
 
     @Test
-    fun dimensionsShipRealspaceAsTheBaseLayerAndKeepTheirBounds() {
+    fun dimensionsShipRealspaceAsTheBaseLayer() {
+        // DimensionContentTest checks every dimension knob's last accepted and first rejected value.
         val policy = DimensionPolicy()
         assertEquals(WorldLayer.entries, policy.definitions.map { it.layer })
         assertTrue(WorldLayer.entries.size <= 1 shl ContentBounds.OBSTACLE_LAYER_BITS)
         assertEquals(EnemyHabitat.SPACE, WorldLayer.BASE.habitat)
-        assertEquals(LayerFeatures.REALSPACE, policy.definition(WorldLayer.BASE).features)
-        assertTrue(WorldLayer.entries.drop(1).all { policy.definition(it).features == LayerFeatures.DIMENSION })
         assertTrue(DimensionObjective.entries.all { objective -> policy.definition(objective.layer).objectives.any { it.objective == objective } })
-
-        DimensionPolicy(maxPortalOffersPerRun = ContentBounds.MAX_PORTAL_OFFERS)
-        assertFailsWith<IllegalArgumentException> { DimensionPolicy(maxPortalOffersPerRun = ContentBounds.MAX_PORTAL_OFFERS + 1) }
-        DimensionObjectiveTuning(harvestEmbers = ContentBounds.MAX_EMBERS)
-        assertFailsWith<IllegalArgumentException> { DimensionObjectiveTuning(harvestEmbers = ContentBounds.MAX_EMBERS + 1) }
-        val zenith = policy.definition(WorldLayer.ZENITH)
-        fun withZenith(definition: DimensionDefinition) =
-            DimensionPolicy(definitions = policy.definitions.map { if (it.layer == WorldLayer.ZENITH) definition else it }.list())
-        withZenith(zenith.copy(physics = zenith.physics.copy(ambientHalos = ContentBounds.MAX_HALO_RINGS - 2)))
-        assertFailsWith<IllegalArgumentException> { withZenith(zenith.copy(physics = zenith.physics.copy(ambientHalos = ContentBounds.MAX_HALO_RINGS - 1))) }
-        assertFailsWith<IllegalArgumentException> {
-            withZenith(zenith.copy(objectives = immutableListOf(DimensionObjectiveWeight(DimensionObjective.HARVEST, 1f))))
-        }
-        assertFailsWith<IllegalArgumentException> { withZenith(zenith.copy(reward = zenith.reward.copy(declineMatter = 10))) }
-        assertFailsWith<IllegalArgumentException> {
-            DimensionPolicy(definitions = policy.definitions.map { if (it.layer == WorldLayer.BASE) it.copy(visitSeconds = 30f) else it }.list())
-        }
     }
 
     @Test

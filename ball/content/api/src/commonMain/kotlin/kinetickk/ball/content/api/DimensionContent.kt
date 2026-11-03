@@ -42,28 +42,6 @@ data class DimensionObjectiveWeight(val objective: DimensionObjective, val weigh
     init { require(weight.isFinite() && weight > 0f) { "Dimension objective weight must be positive" } }
 }
 
-/** What realspace-only systems may run in a layer (other lanes read these, never the layer itself). */
-data class LayerFeatures(
-    /** Window offers, caches, eggs, sigils and event signals. */
-    val sites: Boolean = true,
-    /** Structure placement. */
-    val structures: Boolean = true,
-    /** Ambient world events. */
-    val worldEvents: Boolean = true,
-    val totem: Boolean = true,
-    /** Scheduled Elites. */
-    val elites: Boolean = true,
-    /** Scheduled Heralds. */
-    val heralds: Boolean = true,
-) {
-    companion object {
-        val REALSPACE: LayerFeatures = LayerFeatures()
-        val DIMENSION: LayerFeatures = LayerFeatures(
-            sites = false, structures = false, worldEvents = false, totem = false, elites = false, heralds = false,
-        )
-    }
-}
-
 data class DimensionPhysics(
     val dragMultiplier: Float = 1f,
     val dragFloor: Float = 0f,
@@ -92,12 +70,6 @@ data class DimensionReward(
 
 data class DimensionDefinition(
     val layer: WorldLayer,
-    /** English content key: "Realspace", "Zenith", "Nadir", "Archive". */
-    val name: String,
-    /** Site name of a rift into this layer ("Zenith rift"; BASE: "Exit rift"). */
-    val riftName: String,
-    /** Codex line. */
-    val description: String,
     /** BASE 0. */
     val visitSeconds: Float,
     /** Empty on BASE. */
@@ -106,7 +78,6 @@ data class DimensionDefinition(
     val ordinaryCapMultiplier: Float = 1f,
     val physics: DimensionPhysics = DimensionPhysics(),
     val reward: DimensionReward = DimensionReward(DimensionRewardKind.NONE),
-    val features: LayerFeatures = LayerFeatures.DIMENSION,
     /** The share of its spawn integrity this layer's objective boss arrives with. */
     val bossIntegrityShare: Float = 1f,
     /**
@@ -116,7 +87,6 @@ data class DimensionDefinition(
     val bossDamageShare: Float = 1f,
 ) {
     init {
-        require(name.isNotBlank() && riftName.isNotBlank() && description.isNotBlank()) { "Dimension texts must not be blank" }
         require(bossIntegrityShare in 0.1f..1f) { "Dimension boss integrity share must be in 0.1..1" }
         require(bossDamageShare in 0.25f..1f) { "Dimension boss damage share must be in 0.25..1" }
         // The hostile-scale range of run modifiers.
@@ -207,7 +177,7 @@ data class DimensionPolicy(
         require(minimumVisitSeconds >= 10f) { "A visit lasts at least 10 s" }
         val base = definitions[WorldLayer.BASE.ordinal]
         require(
-            base.visitSeconds == 0f && base.objectives.isEmpty() && base.features == LayerFeatures.REALSPACE &&
+            base.visitSeconds == 0f && base.objectives.isEmpty() &&
                 base.physics == DimensionPhysics() && base.reward == DimensionReward(DimensionRewardKind.NONE) &&
                 base.spawnRateMultiplier == 1f && base.ordinaryCapMultiplier == 1f,
         ) { "Realspace has no visit, objectives, physics, director change or reward" }
@@ -266,13 +236,9 @@ data class DimensionPolicy(
 
 /** The shipped layers in [WorldLayer] order. */
 fun defaultDimensionDefinitions(): ImmutableList<DimensionDefinition> = listOf(
+    DimensionDefinition(WorldLayer.BASE, visitSeconds = 0f, objectives = immutableListOf()),
     DimensionDefinition(
-        WorldLayer.BASE, "Realspace", "Exit rift", "Realspace", visitSeconds = 0f, objectives = immutableListOf(),
-        features = LayerFeatures.REALSPACE,
-    ),
-    DimensionDefinition(
-        WorldLayer.ZENITH, "Zenith", "Zenith rift",
-        "A layer of light above realspace. Grace lightens the Core and halo gates mend it. Blessings wait for those who finish its trial.",
+        WorldLayer.ZENITH,
         visitSeconds = 75f,
         objectives = immutableListOf(
             DimensionObjectiveWeight(DimensionObjective.ASCENT, 1f), DimensionObjectiveWeight(DimensionObjective.JUDGEMENT, 1f),
@@ -285,8 +251,7 @@ fun defaultDimensionDefinitions(): ImmutableList<DimensionDefinition> = listOf(
         bossIntegrityShare = 0.16f,
     ),
     DimensionDefinition(
-        WorldLayer.NADIR, "Nadir", "Nadir rift",
-        "A layer of heat beneath realspace. Slow flight scorches, and Matter burns twice as bright. Pacts are offered at a price.",
+        WorldLayer.NADIR,
         // A shorter stay than the Zenith's: a fresh run's Pyre fight under the Herald's volleys turned deadly late in a
         // 75 s visit, while a Harvest is done well inside 60 s.
         visitSeconds = 60f,
@@ -304,8 +269,7 @@ fun defaultDimensionDefinitions(): ImmutableList<DimensionDefinition> = listOf(
         bossDamageShare = 0.6f,
     ),
     DimensionDefinition(
-        WorldLayer.ARCHIVE, "Archive", "Glitch rift",
-        "The Architect's memory. Time moves only when you move. Something older waits inside.",
+        WorldLayer.ARCHIVE,
         visitSeconds = 100f,
         objectives = immutableListOf(DimensionObjectiveWeight(DimensionObjective.ANTECEDENT, 1f)),
         spawnRateMultiplier = 0.85f, ordinaryCapMultiplier = 0.8f,
@@ -325,7 +289,7 @@ object DimensionNotices {
     const val RIFT_DETECTED: String = "RIFT DETECTED // CHOOSE A COURSE"
     const val COURSE_BROKEN: String = "Course broken"
 
-    /** Layer names equal the definitions' `name` keys: Realspace, Zenith, Nadir, Archive. */
+    /** Layer names (English content keys): Realspace, Zenith, Nadir, Archive. */
     fun layerName(layer: WorldLayer): String = when (layer) {
         WorldLayer.BASE -> "Realspace"
         WorldLayer.ZENITH -> "Zenith"
@@ -333,7 +297,8 @@ object DimensionNotices {
         WorldLayer.ARCHIVE -> "Archive"
     }
 
-    fun entry(layer: WorldLayer, objective: DimensionObjective): String = "${layerName(layer)} // ${objective.label}".uppercase()
+    /** The entry banner of [objective]'s own layer. */
+    fun entry(objective: DimensionObjective): String = "${layerName(objective.layer)} // ${objective.label}".uppercase()
 
     fun completed(objective: DimensionObjective): String = "${objective.label} // $COMPLETE".uppercase()
 
@@ -342,7 +307,7 @@ object DimensionNotices {
 
     /** Every entry banner of a layer and its own objectives, every completion, the broken course, and the constants above. */
     val all: List<String> = buildList {
-        DimensionObjective.entries.forEach { add(entry(it.layer, it)) }
+        DimensionObjective.entries.forEach { add(entry(it)) }
         DimensionObjective.entries.forEach { add(completed(it)) }
         add(broken(DimensionObjective.ASCENT))
         addAll(listOf(COMPLETE, EXIT_OPEN, PULLED_BACK, REALSPACE, ARCHIVE_STIRS, SCORCHED, RIFT_DETECTED))

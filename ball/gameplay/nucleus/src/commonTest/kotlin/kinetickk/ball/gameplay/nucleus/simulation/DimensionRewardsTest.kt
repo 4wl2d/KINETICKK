@@ -189,6 +189,8 @@ class DimensionRewardsTest {
         assertTrue(visit.completed)
         assertEquals(tuning.ascentRings, visit.progress)
         assertTrue(visit.halos.none { it.courseIndex >= 0 })
+        assertEquals(Float.POSITIVE_INFINITY, visit.splitEndsAt, "a completed course leaves no split running")
+        assertEquals(0f, visit.splitSeconds)
         val exit = assertNotNull(visit.exitPortal)
         assertEquals(WorldLayer.BASE, exit.target)
         assertEquals(visit.endsAt, exit.expiresAt)
@@ -241,7 +243,6 @@ class DimensionRewardsTest {
         assertEquals(Float.POSITIVE_INFINITY, broken.splitEndsAt)
         assertEquals(DimensionNotices.broken(DimensionObjective.ASCENT), state.message)
         assertEquals(-1, state.dimensionProjection(null, null).nextHaloId, "no ring to fly through next")
-        assertTrue(state.dimensionProjection(null, null).failed)
         // A broken course counts nothing more, the visit runs on to its timer and pays the smaller reward.
         state.flyThrough(third.x, third.y)
         assertEquals(2, state.visit().progress)
@@ -256,7 +257,7 @@ class DimensionRewardsTest {
     }
 
     @Test
-    fun aBrokenCourseKeepsTheAmbientRingsAndACompletedCourseStopsItsSplit() {
+    fun aBrokenCourseKeepsTheAmbientRings() {
         val state = game(courseWorld).apply { enterDimensionForTesting(WorldLayer.ZENITH, DimensionObjective.ASCENT) }
         val ambient = HaloRing(100, state.coreX - 2_000f, state.coreY + 1_500f, courseIndex = -1)
         state.dimensionRun = state.dimensionRun.copy(
@@ -265,16 +266,6 @@ class DimensionRewardsTest {
         state.updateDimension(step)
         assertTrue(state.visit().failed)
         assertEquals(listOf(ambient), state.visit().halos.toList())
-
-        // The last ring completes the course and leaves no split running.
-        val complete = game(courseWorld).apply { enterDimensionForTesting(WorldLayer.ZENITH, DimensionObjective.ASCENT) }
-        for (index in 0 until tuning.ascentRings) {
-            val ring = checkNotNull(complete.courseRing(index))
-            complete.flyThrough(ring.x, ring.y)
-        }
-        assertTrue(complete.visit().completed)
-        assertEquals(Float.POSITIVE_INFINITY, complete.visit().splitEndsAt)
-        assertEquals(0f, complete.visit().splitSeconds)
     }
 
     // ---- Boss objectives ----
@@ -572,22 +563,6 @@ class DimensionRewardsTest {
         assertEquals(minOf(3, unowned.size), owned.choices.size)
     }
 
-    @Test
-    fun theRefuseCardNamesTheMatterItSalvages() {
-        for (declineMatter in listOf(10, 25)) {
-            val content = canonicalGameplayContent.withDimensions {
-                copy(definitions = definitions.map {
-                    if (it.layer == WorldLayer.NADIR) it.copy(reward = it.reward.copy(declineMatter = declineMatter)) else it
-                }.toImmutableList())
-            }
-            val state = game(content).apply { queue(DimensionRewardGrant(WorldLayer.NADIR, completed = true)) }
-            state.openPendingDimensionReward()
-            val refuse = state.choices.last()
-            assertEquals(declineMatter, refuse.salvageMatter)
-            assertEquals("Keep the run as it is and salvage $declineMatter Kinetic Matter.", refuse.description)
-        }
-    }
-
     /**
      * The Refuse card names the Matter refusing actually grants: the salvage through the run's Matter gain (Rebirth tier,
      * omens), rounded like the cargo card, never the bare decline amount.
@@ -606,7 +581,6 @@ class DimensionRewardsTest {
             val refuse = state.choices.last()
             assertNull(refuse.boonId, where)
             assertEquals(expected, refuse.salvageMatter, where)
-            assertEquals(pactDeclineDescription(expected), refuse.description, where)
 
             val before = state.runMatter + state.matterFraction
             val result = assertIs<GameReductionResult.Accepted>(
@@ -630,7 +604,6 @@ class DimensionRewardsTest {
         assertEquals("DECLINE", refuse.tag)
         assertEquals(PACT_DECLINE_TITLE, refuse.title)
         assertEquals(policy.definition(WorldLayer.NADIR).reward.declineMatter, refuse.salvageMatter)
-        assertEquals(pactDeclineDescription(checkNotNull(refuse.salvageMatter)), refuse.description)
 
         // The last card is a valid selection through the reducer: Refuse salvages its Matter and changes nothing else.
         state.takeSoundCues()
@@ -643,6 +616,22 @@ class DimensionRewardsTest {
         assertNull(result.dimensionRewardLayer)
         assertEquals(10f * result.matterGain, result.runMatter + result.matterFraction - matter, 0.001f)
         assertEquals(GamePhase.CHOICE, state.phase, "the committed offer is untouched")
+
+        // The layer's decline Matter reaches both the card and what refusing grants.
+        val richer = game(canonicalGameplayContent.withDimensions {
+            copy(definitions = definitions.map {
+                if (it.layer == WorldLayer.NADIR) it.copy(reward = it.reward.copy(declineMatter = 25)) else it
+            }.toImmutableList())
+        }).apply {
+            queue(DimensionRewardGrant(WorldLayer.NADIR, completed = true))
+            openPendingDimensionReward()
+        }
+        assertEquals(25, richer.choices.last().salvageMatter)
+        val richerMatter = richer.runMatter + richer.matterFraction
+        val richerResult = assertIs<GameReductionResult.Accepted>(
+            GameReducer().reduce(EngineState(richer), GameplayInteractionPulse.ChoiceSelected.fromValidated(richer.choices.lastIndex)),
+        ).state.model
+        assertEquals(25f * richerResult.matterGain, richerResult.runMatter + richerResult.matterFraction - richerMatter, 0.001f)
 
         val failed = game().apply {
             queue(DimensionRewardGrant(WorldLayer.NADIR, completed = false))

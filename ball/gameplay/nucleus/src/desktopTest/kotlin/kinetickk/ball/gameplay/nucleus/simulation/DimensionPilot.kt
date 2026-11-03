@@ -175,7 +175,8 @@ internal class DimensionPilot(
                 if (best.isFinite()) return goal(goalX, goalY, speed)
             }
             DimensionObjective.JUDGEMENT, DimensionObjective.PYRE, DimensionObjective.ANTECEDENT -> {
-                val boss = s.enemies.firstOrNull { it.id == view.bossId && it.alive }
+                val bossId = s.dimensionRun.visit?.bossId ?: -1
+                val boss = s.enemies.firstOrNull { it.id == bossId && it.alive }
                 if (boss != null) return engage(s, boss, floor)
             }
             null -> Unit

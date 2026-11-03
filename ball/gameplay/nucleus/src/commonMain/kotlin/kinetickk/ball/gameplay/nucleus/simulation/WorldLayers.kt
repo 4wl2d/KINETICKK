@@ -3,7 +3,6 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.LayerFeatures
 import kinetickk.ball.content.api.ObstacleKind
 import kinetickk.ball.content.api.ObstacleMix
 import kinetickk.ball.content.api.WorldLayer
@@ -68,9 +67,6 @@ internal fun MutableGameState.switchWorldWindow() {
     obstacleField = ObstacleField.EMPTY
     refreshObstacleWindow()
 }
-
-/** What realspace-only systems may run in the current layer (other lanes read these, never the layer itself). */
-internal fun MutableGameState.layerFeatures(): LayerFeatures = content.dimensions.definition(worldLayer).features
 
 internal fun MutableGameState.inBaseLayer(): Boolean = worldLayer == WorldLayer.BASE
 

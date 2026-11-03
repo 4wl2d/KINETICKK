@@ -251,6 +251,8 @@ private fun validateBootstrap(data: ContentBootstrapData) {
     validateSkills(data.skills)
     validateSites(data.sites, data.enemies)
     validateRunVariety(data)
+    requireBound("boons", data.boons.size, ContentBounds.MAX_BOON_DEFINITIONS)
+    requireUniqueIds("Boon", data.boons.map(RunBoonDefinition::id))
     validateDimensions(data)
 
     require(data.relicPolicy.maxSlots <= data.relics.size) {
