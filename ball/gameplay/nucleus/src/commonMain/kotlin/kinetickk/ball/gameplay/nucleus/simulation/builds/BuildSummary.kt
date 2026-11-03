@@ -230,7 +230,7 @@ internal fun MutableGameState.captureBuildChange(): BuildChangeSnapshot = BuildC
 )
 
 /** Emits the grouped acquisition toast: stat deltas, then reached tiers as "+ " lines. */
-internal fun MutableGameState.emitBuildChange(before: BuildChangeSnapshot, title: String) {
+internal fun MutableGameState.emitBuildChange(before: BuildChangeSnapshot, title: String, legendary: Boolean = false) {
     val after = buildStats()
     val deltas = after.mapIndexedNotNull { index, stat ->
         val previous = before.stats.getOrNull(index)?.takeIf { it.name == stat.name } ?: return@mapIndexedNotNull null
@@ -243,7 +243,7 @@ internal fun MutableGameState.emitBuildChange(before: BuildChangeSnapshot, title
     } + StatusElement.entries.filter { affinityTier(it) > before.affinityTiers[it.ordinal] }.map {
         "+ " + it.displayLabel + " " + tierNumeral(affinityTier(it))
     }
-    emitVisualFx(VisualFxCue.BuildChanged(title, (deltas + tiers).toImmutableList()))
+    emitVisualFx(VisualFxCue.BuildChanged(title, (deltas + tiers).toImmutableList(), legendary))
 }
 
 internal fun tierNumeral(tier: Int): String = when (tier) {

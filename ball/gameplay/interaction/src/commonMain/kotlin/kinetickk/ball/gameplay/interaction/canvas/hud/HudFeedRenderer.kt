@@ -150,7 +150,7 @@ private fun DrawScope.drawFeedPlate(
         if (second != first) clipRect(gem.x, gem.y - lead, gem.x + lead, gem.y + lead) { drawKkGem(gem, second, lead / density) }
     }
     val title = lines[0]
-    drawKkText(title, textLeft, rowCenter, Kk.Bone, valign = KkVAlign.CENTER)
+    drawKkText(title, textLeft, rowCenter, style?.title(roles) ?: Kk.Bone, valign = KkVAlign.CENTER)
     val titleTop = rowCenter - (title.kkBoxTop + title.kkBoxBottom) * 0.5f
     FeedProbe.line(title, textLeft + shift, titleTop, textLeft + shift + title.size.width, titleTop + title.size.height)
     var y = rowTop + row
@@ -207,4 +207,5 @@ internal object FeedScratch {
     val details = Array(MAX_NOTICES * DETAILS_PER_NOTICE) { LocalizedText() }
     val styles = Array(MAX_NOTICES) { FeedNoticeStyle() }
     val fallback = HudKeyedText()
+    val legendary = HudKeyedText()
 }

@@ -294,6 +294,8 @@ internal class NoPoiBot(
     private val avoidWeaponHarmony: Boolean = false,
     /** How the bot presses Dash; [DashRule.HUMAN] unless a probe flies the old bot. */
     private val dashRule: DashRule = DashRule.HUMAN,
+    /** Item cards the bot takes before every other rule; [RarityTaste.NONE] plays exactly as the reference bot. */
+    private val rarityTaste: RarityTaste = RarityTaste.NONE,
 ) {
     private var cursorAngle = 0f
     private var braking = false
@@ -303,7 +305,7 @@ internal class NoPoiBot(
     private var nextSkillCheckAt = 0f
 
     /** An independent bot in this bot's current state (a forked run continues with it). */
-    fun copy(): NoPoiBot = NoPoiBot(archetypeTag, element, weaponOrder, relicTaste, dataPolicy, avoidWeaponHarmony, dashRule).also { copy ->
+    fun copy(): NoPoiBot = NoPoiBot(archetypeTag, element, weaponOrder, relicTaste, dataPolicy, avoidWeaponHarmony, dashRule, rarityTaste).also { copy ->
         copy.cursorAngle = cursorAngle
         copy.braking = braking
         copy.decisions = decisions
@@ -689,6 +691,11 @@ internal class NoPoiBot(
             s.choose(slotChoice(s))
             return
         }
+        tastePick(s)?.let { index ->
+            decisions++
+            s.choose(index)
+            return
+        }
         // SEEK takes a Data active first (economy §2.1); every policy takes a rank-up of an owned active next.
         val index = seekActiveChoice(s) ?: activeRankUpChoice(s) ?: run {
             when (dataPolicy) {
@@ -727,11 +734,38 @@ internal class NoPoiBot(
     }
 
     /**
+     * The item card [rarityTaste] takes before every other rule: a Legendary, then (luck-seeking) the card with the most
+     * Luck, then an Epic; a card it would only salvage or that would ask for an active slot is left to the other rules.
+     */
+    private fun tastePick(s: MutableGameState): Int? {
+        if (rarityTaste == RarityTaste.NONE || s.choiceType != ChoiceType.ITEM) return null
+        fun taste(c: ChoiceOption): Float {
+            val item = c.itemId?.let(s.content::item) ?: return 0f
+            if (s.itemStacks[item.id] >= item.maxStacks || s.needsActiveSlot(item)) return 0f
+            val luck = luckOf(s, c)
+            return when {
+                item.rarity == ItemRarity.LEGENDARY && (rarityTaste == RarityTaste.LUCK_SEEKING || luck == 0f) -> 10f
+                rarityTaste == RarityTaste.LUCK_SEEKING && luck > 0f -> 5f + luck
+                item.rarity == ItemRarity.EPIC -> 1f
+                else -> 0f
+            }
+        }
+        val best = s.choices.indices.maxByOrNull { taste(s.choices[it]) } ?: return null
+        return best.takeIf { taste(s.choices[it]) > 0f }
+    }
+
+    /** The Luck an item card adds at one stack (0 for any other card). */
+    private fun luckOf(s: MutableGameState, c: ChoiceOption): Float =
+        c.itemId?.let(s.content::item)?.stats?.filter { it.effect == ItemEffect.LUCK }?.sumOf { it.amount.toDouble() }?.toFloat() ?: 0f
+
+    /**
      * SEEK ranks a Data-gain card by its Data weight above every other card; AVOID scores it −15 000, below an
      * active it would only salvage for Matter, so it takes Data only when every card gains Data (a counted breach)
      * or is Decay Spores.
      */
     private fun policyScore(s: MutableGameState, c: ChoiceOption, index: Int): Float = when {
+        // The greedy taste never invests in Luck: a Luck card only when nothing else is offered.
+        rarityTaste == RarityTaste.GREEDY && luckOf(s, c) > 0f -> -5_000f
         // AVOID's Decay Spores (Spored deaths drop Data) ranks below its Data cards.
         dataPolicy == DataPolicy.AVOID && activeEffect(s, c) == SkillId.DECAY_SPORES -> -20_000f
         // Any other active the bot would not take only salvages: a last resort.
@@ -891,6 +925,13 @@ internal class NoPoiBot(
 
 /** How a bot treats Data-gain cards: as any other card, first ([SEEK], with rerolls) or last ([AVOID]). */
 internal enum class DataPolicy { NEUTRAL, SEEK, AVOID }
+
+/**
+ * Item cards a bot takes first: none ([NONE], the reference bot), every Legendary and then every Epic but never a Luck
+ * card while another is offered ([GREEDY], the base-Luck player of the rarity probes), or a Legendary, then the most
+ * Luck, then an Epic ([LUCK_SEEKING], the max-Luck player).
+ */
+internal enum class RarityTaste { NONE, GREEDY, LUCK_SEEKING }
 
 /**
  * The reference run owns the original twelve weapons: the population bots load out from it ([botLoadout]) and its

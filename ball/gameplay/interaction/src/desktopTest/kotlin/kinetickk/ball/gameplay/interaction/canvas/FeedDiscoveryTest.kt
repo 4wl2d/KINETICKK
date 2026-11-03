@@ -17,7 +17,8 @@ import kotlin.test.assertTrue
 /**
  * Discovery, Break and tier toasts as the feed draws them: the nucleus's English titles read in the
  * player's language, a resonance tier line loses its numeral to lit pips (its plate keeps room for
- * them), Russian toasts carry no Latin letters, and toasts of higher rank sit above lower ones.
+ * them), Russian toasts carry no Latin letters, toasts of higher rank sit above lower ones, and a Legendary's toast names
+ * its rarity first in gold.
  */
 class FeedDiscoveryTest {
     private val sizes = listOf(1_440 to 810, 844 to 390, 390 to 844)
@@ -81,6 +82,24 @@ class FeedDiscoveryTest {
         val titles = (0 until FeedProbe.lineCount).filter { line -> (0 until line).none { FeedProbe.linePlate(it) == FeedProbe.linePlate(line) } }
             .map { FeedProbe.lineLayout(it).layoutInput.text.text }
         assertEquals(listOf("REACTION DISCOVERED", "BREAK", "CINDER RAM"), titles, "the discovery leads, the acquisition trails")
+    }
+
+    @Test
+    fun aLegendaryToastNamesItsRarityFirstAndOutranksEveryOtherToast() {
+        val toast = BuildNotificationProjection("Glacial Heart", immutableListOf("Impact damage +0.05"), 7f, BuildNoticeKind.LEGENDARY)
+        for ((language, rarity) in listOf(AppLanguage.English to "LEGENDARY", AppLanguage.Russian to "ЛЕГЕНДАРНЫЙ")) sizes.forEach { (w, h) ->
+            val drawn = draw(w, h, language, toast)
+            assertEquals(3, drawn.size, "$language $w x $h $drawn")
+            assertEquals(rarity, drawn[1], "$language $w x $h: the rarity line leads the details")
+            if (language == AppLanguage.Russian) assertTrue(drawn.none { line -> line.any { it in 'A'..'Z' || it in 'a'..'z' } }, "$drawn")
+        }
+        assertTrue(BuildNoticeKind.entries.all { it == BuildNoticeKind.LEGENDARY || it.priority < BuildNoticeKind.LEGENDARY.priority })
+        assertTrue(BuildNoticeKind.entries.all { it.lifeSeconds <= BuildNoticeKind.LEGENDARY.lifeSeconds })
+        val style = FeedNoticeStyle().of(toast, hudTestModel(1_440f, 810f).content)
+        val roles = kinetickk.foundation.design.KkRolePalette.Default
+        assertEquals(roles.gold.base, style.first(roles))
+        assertEquals(roles.gold.light, style.title(roles))
+        assertTrue(style.bright)
     }
 
     /** Draws one toast and returns the texts of its plate, title first (no-break spaces as spaces). */

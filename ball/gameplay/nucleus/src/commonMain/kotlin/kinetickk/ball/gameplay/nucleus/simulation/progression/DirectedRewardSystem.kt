@@ -7,6 +7,7 @@ import kinetickk.ball.content.api.DirectedReward
 import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.gameplay.nucleus.render.*
@@ -79,17 +80,19 @@ internal fun MutableGameState.selectRewardFocus(focus: RewardFocus) {
             } + relicOfferTailCard()
         }
         DirectedReward.ITEM_AND_REPAIR -> {
-            // A uniform shuffle of the focus pool, no weights. Actives must meet their offer rules first, and the cards
-            // take the first three of the shuffle with at most one active (later actives are skipped, never redrawn).
+            // Each card rolls its rarity like any item card (Luck and the run's owned Epics and Legendaries included) and
+            // draws uniformly inside the focus pool's nearest tier; actives must meet their offer rules first, and once
+            // one is picked later cards leave actives out.
             refillItemDeck()
             val pool = deckPool(content.items.filter {
                 it.minimumRebirth <= rebirthRank && hasUsefulItemEffect(it) && activeOfferable(it) && itemRewardFocus(it) == focus
             }, 3)
             val picks = ArrayList<ItemDefinition>(3)
-            for (item in pool.shuffled(rewardRandom)) {
-                if (picks.size == 3) break
-                if (item.isActive && picks.any { it.isActive }) continue
-                picks += item
+            repeat(3) {
+                val available = pool.filter { item -> picks.none { it.id == item.id } && !(item.isActive && picks.any { it.isActive }) }
+                if (available.isEmpty()) return@repeat
+                val tier = available.nearestRarityTier(rollRarity(), ItemRarity.COMMON)
+                picks += tier[rewardRandom.nextInt(tier.size)]
             }
             choices = picks.map { itemCard(it, it.rarity.displayLabel, reborn = rewardRandom.nextFloat() < rebornChance()) }
         }

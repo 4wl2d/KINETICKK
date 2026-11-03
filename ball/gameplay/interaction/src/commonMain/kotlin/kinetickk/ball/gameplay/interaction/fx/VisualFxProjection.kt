@@ -92,16 +92,17 @@ data class WeaponArcProjection(
 )
 
 /**
- * How a build toast ranks in the feed. Discoveries (reactions, pairings) and warnings (a relic
- * suppressing an item) outrank the first Break notes of a run, which outrank acquisitions and the
- * tiers they reach; a lower toast never evicts a higher one and is dropped while the feed is full
- * of higher ones.
+ * How a build toast ranks in the feed. A Legendary item's arrival outranks everything and stays
+ * longest; discoveries (reactions, pairings) and warnings (a relic suppressing an item) outrank the
+ * first Break notes of a run, which outrank acquisitions and the tiers they reach; a lower toast
+ * never evicts a higher one and is dropped while the feed is full of higher ones.
  */
 enum class BuildNoticeKind(val priority: Int, val lifeSeconds: Float, val merges: Boolean) {
     CHANGE(0, 6f, false),
     BREAK(1, 3.5f, true),
     DISCOVERY(2, 6f, true),
     WARNING(2, 6f, true),
+    LEGENDARY(3, 8f, false),
 }
 
 /**

@@ -26,4 +26,6 @@ enum class SoundId {
     APEX,
     /** A spent structure shatters (a finish, a fought abandon or the Architect's collapse). */
     STRUCTURE_COLLAPSE,
+    /** A Legendary item joins the build: a bright rising chime. */
+    LEGENDARY_ACQUIRED,
 }

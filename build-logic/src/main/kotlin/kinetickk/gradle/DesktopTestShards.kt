@@ -46,6 +46,7 @@ enum class DesktopTestShard(
     GATES_4("gates-4", NUCLEUS, listOf(
         "$SIMULATION.characters.ApexArchitectPrismDefenceTest",
         "$SIMULATION.characters.CharacterBalanceTest",
+        "$SIMULATION.progression.RarityDistributionGateTest",
     )),
     GATES_5("gates-5", NUCLEUS, listOf(
         "$SIMULATION.characters.ApexArchitectCastTest",

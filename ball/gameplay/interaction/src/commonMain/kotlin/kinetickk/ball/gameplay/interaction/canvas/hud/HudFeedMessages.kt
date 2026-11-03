@@ -144,8 +144,9 @@ private fun discoveryTitle(title: String): HudRedesignText? = when (title) {
 /**
  * How one toast is marked, resolved once per toast: its gem's colors (a reaction's two elements,
  * a pairing in bone for concord or threat for discord, as its brackets read in the HUD and pause,
- * a warning in threat, a Break in its element, acquisitions in the you color) and whether its
- * lines read bright (discoveries name things worth reading).
+ * a warning in threat, a Break in its element, a Legendary in gold, acquisitions in the you color),
+ * whether its lines read bright (discoveries name things worth reading) and whether its title reads
+ * in gold (a Legendary).
  */
 internal class FeedNoticeStyle {
     // Keyed by value: a toast is copied every frame as its life runs down, keeping its details list.
@@ -157,6 +158,8 @@ internal class FeedNoticeStyle {
     private var secondCode = YOU
     var bright = false
         private set
+    var gold = false
+        private set
 
     fun of(notice: BuildNotificationProjection, content: GameplayContentSnapshot): FeedNoticeStyle {
         if (notice.details === details && notice.kind == kind && notice.title == title && content === this.content) return this
@@ -166,10 +169,15 @@ internal class FeedNoticeStyle {
         this.content = content
         val line = notice.details.firstOrNull().orEmpty()
         bright = notice.kind != BuildNoticeKind.CHANGE
+        gold = notice.kind == BuildNoticeKind.LEGENDARY
         firstCode = YOU
         secondCode = YOU
         when (notice.kind) {
             BuildNoticeKind.CHANGE -> Unit
+            BuildNoticeKind.LEGENDARY -> {
+                firstCode = GOLD
+                secondCode = GOLD
+            }
             BuildNoticeKind.WARNING -> {
                 firstCode = THREAT
                 secondCode = THREAT
@@ -195,10 +203,14 @@ internal class FeedNoticeStyle {
 
     fun second(roles: KkRolePalette): Color = color(secondCode, roles)
 
+    /** The title's color: a Legendary's in the preset's light gold, every other in bone. */
+    fun title(roles: KkRolePalette): Color = if (gold) roles.gold.light else Kk.Bone
+
     private fun color(code: Int, roles: KkRolePalette): Color = when (code) {
         YOU -> roles.you
         THREAT -> roles.threat
         BONE -> Kk.Bone
+        GOLD -> roles.gold.base
         else -> roles.element(code)
     }
 
@@ -206,5 +218,6 @@ internal class FeedNoticeStyle {
         const val YOU = -1
         const val THREAT = -2
         const val BONE = -3
+        const val GOLD = -4
     }
 }

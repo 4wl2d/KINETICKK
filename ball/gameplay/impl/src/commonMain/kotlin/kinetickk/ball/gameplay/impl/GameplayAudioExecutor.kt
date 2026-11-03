@@ -62,4 +62,5 @@ private fun GameplayAudioCue.soundId(): SoundId = when (this) {
     GameplayAudioCue.SKILL -> SoundId.SKILL
     GameplayAudioCue.APEX -> SoundId.APEX
     GameplayAudioCue.STRUCTURE_COLLAPSE -> SoundId.STRUCTURE_COLLAPSE
+    GameplayAudioCue.LEGENDARY_ACQUIRED -> SoundId.LEGENDARY_ACQUIRED
 }

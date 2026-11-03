@@ -149,7 +149,7 @@ internal val FamilyDrafts: List<ItemDraft> = listOf(
             EffectAction.Chain(5, 520f, DamageBasis.WEAPON, 1.5f))), unlock = 10),
     ItemDraft("Redline Reactor", "Run it hot or do not run it at all.", EPIC, listOf(OVERCLOCK),
         stats = listOf(stat(ItemEffect.COOLING, -0.2f)),
-        rules = listOf(ItemRule.WhileModifier(EffectCondition.HeatAtLeast(60f), BuffStat.DAMAGE, 0.3f)),
+        rules = listOf(ItemRule.WhileModifier(EffectCondition.HeatAtLeast(60f), BuffStat.DAMAGE, 0.45f)),
         unlock = 13, risk = true),
 
     // CHAIN: kills, combos and momentum between targets.
@@ -269,8 +269,8 @@ internal val FamilyDrafts: List<ItemDraft> = listOf(
 
     // Conversions as low-damage enablers.
     ItemDraft("Deadeye Reticle", "Stop hoping for a lucky hit. Make every hit count.", EPIC, listOf(PRECISION),
-        stats = listOf(stat(ItemEffect.CRIT_CHANCE, 0.15f)),
-        rules = listOf(ItemRule.Convert(ConversionKind.CRIT_CHANCE_TO_DAMAGE, 2.5f)), unlock = 12, risk = true),
+        stats = listOf(stat(ItemEffect.CRIT_CHANCE, 0.25f)),
+        rules = listOf(ItemRule.Convert(ConversionKind.CRIT_CHANCE_TO_DAMAGE, 3f)), unlock = 12, risk = true),
     ItemDraft("Detonator Spur", "A Dash through a burning, rotting enemy finishes the job at once.", RARE, listOf(DRIVE),
         listOf(StatusElement.THERMAL, StatusElement.ENTROPY),
         clauses = listOf(on(EffectTrigger.DASH_HIT,
@@ -281,7 +281,7 @@ internal val FamilyDrafts: List<ItemDraft> = listOf(
     ItemDraft("Prismatic Core", "Teaches the weapon your second element.", EPIC, listOf(ARSENAL),
         clauses = listOf(on(EffectTrigger.WEAPON_HIT, applyPick(ElementPick.SECONDARY, 2), every = 5)), unlock = 12),
     ItemDraft("Resonance Fork", "A reaction that rings on after it ends.", LEGENDARY, emptyList(),
-        rules = listOf(ItemRule.ReactionResidue(3)), unlock = 16, rebirth = 4),
+        rules = listOf(ItemRule.ReactionResidue(3), ItemRule.ReactionPower(0.35f)), unlock = 16, rebirth = 4),
     ItemDraft("Volatile Compound", "Stronger reactions, and nothing between you and them.", EPIC, listOf(FORTUNE),
         rules = listOf(ItemRule.ReactionPower(0.8f), ItemRule.ReactionRecoil(5f, 140f)), unlock = 14, risk = true),
 

@@ -43,6 +43,11 @@ data class DraftDeckPolicy(
     val skillFloor: Int = 6,
     /** A tier holding fewer offerable dealt items than this deals its next offerable reserve item. */
     val refillFloor: Int = 3,
+    /**
+     * The highest tier whose reserve the refill and the directed pools may deal from. Above it a run keeps the hand the
+     * deck dealt (its Legendaries), so no run can collect a whole tier however often it rolls one.
+     */
+    val reserveCeiling: ItemRarity = ItemRarity.EPIC,
     /** Deck weight of an item the Profile has never discovered. */
     val undiscoveredWeight: Float = 1.2f,
     /** History: deck weight 1 / (1 + [historyPenalty] × recency penalty), never below [historyFloor]. */
@@ -127,6 +132,51 @@ data class OfferLanePolicy(
     }
 }
 
+/**
+ * How an item card rolls its rarity. [weights] are the base odds by [ItemRarity] (Common to Legendary, summing to 1).
+ * Luck L, clamped to 0..[luckCeiling], saturates as s = L / (L + [luckHalfSaturation]) and raises each tier by
+ * 1 + [luckLift] × s, so Luck lifts Rare, Epic and Legendary by different amounts and its later points add less; each
+ * item of a tier the run already owns multiplies that tier by its [ownedDecay], so a run's Legendaries make the next one
+ * rarer; Common takes the rest (its lift is 0 and its decay 1). The odds are per tier, never per item, so they hold as
+ * the catalog grows. The volatile card lifts a rolled tier one rank at the lane policy's chance times that tier's
+ * [liftShares] entry: half as often from Rare into Epic and never from Epic into Legendary.
+ */
+data class ItemRarityPolicy(
+    val weights: ImmutableList<Float> = immutableListOf(0.4125f, 0.368f, 0.2f, 0.011f, 0.0085f),
+    val luckCeiling: Float = 4f,
+    val luckHalfSaturation: Float = 1.5f,
+    val luckLift: ImmutableList<Float> = immutableListOf(0f, 0f, 0.4f, 3.0f, 2.0f),
+    val ownedDecay: ImmutableList<Float> = immutableListOf(1f, 1f, 1f, 0.85f, 0.5f),
+    val liftShares: ImmutableList<Float> = immutableListOf(1f, 1f, 0.15f, 0f, 0f),
+) {
+    init {
+        val tiers = ItemRarity.entries.size
+        require(weights.size == tiers && weights.all { it.isFinite() && it >= 0f } && kotlin.math.abs(weights.sum() - 1f) < 1e-4f)
+        require(luckCeiling.isFinite() && luckCeiling > 0f && luckHalfSaturation.isFinite() && luckHalfSaturation > 0f)
+        require(luckLift.size == tiers && luckLift.all { it.isFinite() && it >= 0f } && luckLift.first() == 0f)
+        require(ownedDecay.size == tiers && ownedDecay.all { it.isFinite() && it > 0f && it <= 1f } && ownedDecay.first() == 1f)
+        require(liftShares.size == tiers && liftShares.all { it.isFinite() && it in 0f..1f } && liftShares.last() == 0f)
+        // Common must keep a share at the strongest Luck.
+        require((1 until tiers).sumOf { (weights[it] * (1f + luckLift[it])).toDouble() } < 1.0)
+    }
+
+    /** Luck's saturation s, in 0..1, for [luck]. */
+    fun luckSaturation(luck: Float): Float {
+        val clamped = luck.coerceIn(0f, luckCeiling)
+        return clamped / (clamped + luckHalfSaturation)
+    }
+
+    /**
+     * The odds of [rarity] (above Common) at [luck] while the run owns [owned] items of it; the decay is multiplied out
+     * rather than raised with a power, so every platform rolls the same weights.
+     */
+    fun weight(rarity: ItemRarity, luck: Float, owned: Int): Float {
+        var weight = weights[rarity.ordinal] * (1f + luckLift[rarity.ordinal] * luckSaturation(luck))
+        repeat(owned.coerceAtLeast(0)) { weight *= ownedDecay[rarity.ordinal] }
+        return weight
+    }
+}
+
 /** Catalog-wide build tuning captured with the content snapshot. */
 data class BuildPolicy(
     val resonanceThresholds: ImmutableList<Int> = immutableListOf(3, 5, 7),
@@ -162,6 +212,8 @@ data class BuildPolicy(
     val draftDeck: DraftDeckPolicy = DraftDeckPolicy(),
     /** How the item offer's three lanes choose inside a rolled rarity. */
     val offerLanes: OfferLanePolicy = OfferLanePolicy(),
+    /** How an item card rolls its rarity. */
+    val rarity: ItemRarityPolicy = ItemRarityPolicy(),
 ) {
     init {
         require(resonanceThresholds.size == ContentBounds.RESONANCE_TIERS)

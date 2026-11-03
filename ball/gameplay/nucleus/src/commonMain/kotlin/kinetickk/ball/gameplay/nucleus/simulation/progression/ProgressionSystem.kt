@@ -28,6 +28,7 @@ import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
+import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kotlin.math.floor
 import kotlin.math.max
@@ -214,16 +215,19 @@ internal fun MutableGameState.resonateEliteKill() {
 /**
  * Takes one stack of [itemId]. A maxed item, or an unowned active item while every slot holds another active, is
  * salvaged for Matter instead (an offer asks which slot to replace first: [openActiveSlotChoice]); an active item's
- * first stack binds its effect into the lowest empty slot and each later stack ranks it ([stackActiveEffect]).
+ * first stack binds its effect into the lowest empty slot and each later stack ranks it ([stackActiveEffect]). Returns
+ * true when a Legendary joined the build, which it announces ([announceLegendary]) and the pick's sound and toast follow.
  */
-internal fun MutableGameState.acquireItem(itemId: Int, reborn: Boolean = false) {
-    val item = content.item(itemId) ?: return
+internal fun MutableGameState.acquireItem(itemId: Int, reborn: Boolean = false): Boolean {
+    val item = content.item(itemId) ?: return false
     val before = itemStacks[itemId]
     if (before >= item.maxStacks || before == 0 && needsActiveSlot(item)) {
         salvageItem(item)
-        return
+        return false
     }
     stackItem(item, reborn)
+    val legendary = before == 0 && item.rarity == ItemRarity.LEGENDARY
+    if (legendary) announceLegendary()
     val tiersBefore = BuildTag.entries.map { tagTier(it) }
     item.active?.let { stackActiveEffect(item, before + 1) }
     recompileBuild()
@@ -235,7 +239,19 @@ internal fun MutableGameState.acquireItem(itemId: Int, reborn: Boolean = false) 
     }
     messageTime = 1.7f
     if (discoveredItemIds.add(itemId)) pendingDiscoveredItemIds += itemId
+    return legendary
 }
+
+/** A Legendary's arrival: two gold rings and a gold burst at the Core (presentation only, no draw). */
+private fun MutableGameState.announceLegendary() {
+    shockwave(coreX, coreY, LEGENDARY_RING_SECONDS, LEGENDARY_RING_RADIUS, FxColorCode.APEX_GOLD)
+    shockwave(coreX, coreY, LEGENDARY_RING_SECONDS * 1.6f, LEGENDARY_RING_RADIUS * 1.7f, FxColorCode.APEX_GOLD)
+    burst(coreX, coreY, LEGENDARY_SPARKS, FxColorCode.APEX_GOLD)
+}
+
+private const val LEGENDARY_RING_SECONDS = 0.9f
+private const val LEGENDARY_RING_RADIUS = 300f
+private const val LEGENDARY_SPARKS = 40
 
 /** True when [item] is an unowned active item and every slot holds another active: taking it replaces one. */
 internal fun MutableGameState.needsActiveSlot(item: ItemDefinition): Boolean =

@@ -58,6 +58,7 @@ class DefaultAudioServiceTest {
                 ToneRequest(118f, 0.22f, 0.2f, ToneWave.SAW),
                 ToneRequest(76f, 0.13f, 0.22f, ToneWave.SQUARE),
                 ToneRequest(988f, 0.3f, 0.22f, ToneWave.SAW),
+                ToneRequest(1_047f, 0.42f, 0.22f, ToneWave.TRIANGLE),
                 ToneRequest(185f, 0.11f, 0.23f, ToneWave.SAW),
                 ToneRequest(820f, 0.2f, 0.2f, ToneWave.SAW),
                 ToneRequest(58f, 0.40f, 0.22f, ToneWave.SAW),

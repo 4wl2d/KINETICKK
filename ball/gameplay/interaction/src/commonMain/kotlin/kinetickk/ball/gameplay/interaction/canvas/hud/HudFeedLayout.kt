@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.interaction.canvas.hud
 
 import androidx.compose.ui.text.TextLayoutResult
+import kinetickk.ball.gameplay.interaction.fx.BuildNoticeKind
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_BOSS_ROW_DP
@@ -12,6 +13,7 @@ import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
+import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
@@ -291,14 +293,14 @@ private object FeedPick {
 
     operator fun get(index: Int): Int = picked[index]
 
-    /** Fills the picked detail indices and returns their count. */
-    fun pick(details: List<String>, budget: Int): Int {
+    /** Fills the picked detail indices, at most [slots], and returns their count. */
+    fun pick(details: List<String>, budget: Int, slots: Int = DETAILS_PER_NOTICE): Int {
         var synergies = 0
         for (index in details.indices) if (isSynergyLine(details[index])) synergies++
-        var deltas = (min(budget, DETAILS_PER_NOTICE) - synergies).coerceAtLeast(0)
+        var deltas = (min(budget, slots) - synergies).coerceAtLeast(0)
         var count = 0
         for (index in details.indices) {
-            if (count == DETAILS_PER_NOTICE) break
+            if (count == slots) break
             if (isSynergyLine(details[index])) {
                 picked[count++] = index
             } else if (deltas > 0) {
@@ -363,8 +365,14 @@ private fun noticeLines(
     val titleSlot = noticeTitleSlot(slot)
     val lines = FeedLines.clear(narrow, measurer.scale, level)
     lines.title(measurer, frame, titleSlot, FeedScratch.titles[slot].of(notice.title, language), maxWidth, banner = false)
-    val picked = FeedPick.pick(notice.details, maxDetails)
-    if (picked == 0) {
+    // A Legendary's toast names its rarity on the first line, which always shows.
+    val lead = if (notice.kind == BuildNoticeKind.LEGENDARY) 1 else 0
+    if (lead == 1) {
+        lines.detail(measurer, frame, titleSlot + 1, FeedScratch.legendary.of(language, 0L) { language.text(HudRedesignText.LegendaryAcquired) },
+            maxWidth, banner = false, required = true, uppercase = true)
+    }
+    val picked = FeedPick.pick(notice.details, maxDetails - lead, DETAILS_PER_NOTICE - lead)
+    if (picked + lead == 0) {
         lines.detail(measurer, frame, titleSlot + 1, FeedScratch.fallback.of(language, 0L) { language.text(GameplayText.BuildUpdated) },
             maxWidth, banner = false, required = false, uppercase = true)
     }
@@ -372,8 +380,8 @@ private fun noticeLines(
         val source = notice.details[FeedPick[line]]
         val localized = FeedScratch.details[slot * DETAILS_PER_NOTICE + line]
         val text = localized.of(source, language)
-        lines.detail(measurer, frame, titleSlot + 1 + line, text, maxWidth, banner = false, required = isSynergyLine(source), uppercase = true,
-            tier = localized.tier, element = localized.element)
+        lines.detail(measurer, frame, titleSlot + 1 + lead + line, text, maxWidth, banner = false, required = isSynergyLine(source),
+            uppercase = true, tier = localized.tier, element = localized.element)
     }
     return lines.seal(measurer)
 }

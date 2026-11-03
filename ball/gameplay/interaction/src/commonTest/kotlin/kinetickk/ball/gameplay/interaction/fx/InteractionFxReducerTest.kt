@@ -41,6 +41,23 @@ class InteractionFxReducerTest {
     }
 
     @Test
+    fun aLegendaryAcquisitionOpensALegendaryToastThatAFullFeedKeeps() {
+        val reducer = InteractionFxReducer(seed = 11)
+        reducer.apply(listOf(VisualFxCue.BuildChanged("Glacial Heart", kinetickk.foundation.collections.immutableListOf(), legendary = true)))
+        repeat(4) { index ->
+            reducer.apply(listOf(VisualFxCue.BuildChanged("REACTION DISCOVERED",
+                kinetickk.foundation.collections.immutableListOf("+ Reaction $index"))))
+        }
+        val notices = reducer.snapshot().buildNotifications
+        val legendary = notices.single { it.title == "Glacial Heart" }
+        assertEquals(BuildNoticeKind.LEGENDARY, legendary.kind)
+        assertEquals(BuildNoticeKind.LEGENDARY.lifeSeconds, legendary.life)
+        assertEquals(legendary, notices.last(), "the Legendary ranks above every other toast")
+        reducer.apply(listOf(VisualFxCue.BuildChanged("Plain Item", kinetickk.foundation.collections.immutableListOf())))
+        assertTrue(reducer.snapshot().buildNotifications.none { it.title == "Plain Item" && it.kind == BuildNoticeKind.LEGENDARY })
+    }
+
+    @Test
     fun snapshotIsReusedUntilTheVisibleProjectionChanges() {
         val reducer = InteractionFxReducer(seed = 46)
         val empty = reducer.snapshot()

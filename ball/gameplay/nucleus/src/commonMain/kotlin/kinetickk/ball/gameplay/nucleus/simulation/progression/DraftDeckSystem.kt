@@ -150,16 +150,19 @@ internal fun MutableGameState.offerableOutsideDeck(item: ItemDefinition, catalog
  * Keeps a tier from running dry: a tier holding fewer than the policy's refill floor of dealt items the run can still
  * take (rank-eligible and useful, at any unlock level) deals its next reserve items that are offerable now, in priority
  * (reserve items not offerable yet stay in reserve). Unlock levels are not a shortage: early in a run a tier holds few
- * unlocked items with or without a deck, and the rolled rarity falls to the nearest tier as it always has. No draw; the
- * deck is replaced only when something is dealt.
+ * unlocked items with or without a deck, and the rolled rarity falls to the nearest tier as it always has. Tiers above
+ * the policy's reserve ceiling are never refilled: the run keeps the Legendaries it was dealt. No draw; the deck is
+ * replaced only when something is dealt.
  */
 internal fun MutableGameState.refillItemDeck() {
     val deck = itemDeck
     if (deck.dealsEverything) return
-    val floor = content.build.policy.draftDeck.refillFloor
+    val policy = content.build.policy.draftDeck
+    val floor = policy.refillFloor
     val catalogLevel = offerCatalogLevel()
     val newlyDealt = ArrayList<Int>()
     for (tier in ItemRarity.entries) {
+        if (tier.rank > policy.reserveCeiling.rank) continue
         var takeable = content.items.count {
             it.rarity == tier && it.id in deck && it.minimumRebirth <= rebirthRank && hasUsefulItemEffect(it)
         }
@@ -175,11 +178,13 @@ internal fun MutableGameState.refillItemDeck() {
 
 /**
  * A directed reward's item pool: the dealt items among [eligible], topped up to [size] with eligible reserve items in
- * deal priority when the deck holds too few (no draw).
+ * deal priority when the deck holds too few (no draw), never from a tier above the policy's reserve ceiling.
  */
 internal fun MutableGameState.deckPool(eligible: List<ItemDefinition>, size: Int): List<ItemDefinition> {
     val dealt = eligible.filter { it.id in itemDeck }
     if (dealt.size >= size) return dealt
+    val ceiling = content.build.policy.draftDeck.reserveCeiling
     val eligibleIds = eligible.mapTo(HashSet()) { it.id }
-    return dealt + itemDeck.reserve().filter { it in eligibleIds }.take(size - dealt.size).map { content.items[it] }
+    val reserve = itemDeck.reserve().filter { it in eligibleIds && content.items[it].rarity.rank <= ceiling.rank }
+    return dealt + reserve.take(size - dealt.size).map { content.items[it] }
 }
