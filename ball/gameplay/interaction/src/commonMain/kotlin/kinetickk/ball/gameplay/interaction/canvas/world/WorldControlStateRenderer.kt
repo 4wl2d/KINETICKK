@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.render.CombatFieldVisual
 import kinetickk.ball.gameplay.nucleus.render.EnemyControlBits
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
@@ -32,13 +33,13 @@ import kinetickk.ball.gameplay.interaction.canvas.fx.*
 
 private const val TAU = CanvasMath.TAU
 
-private const val THERMAL = 0
-private const val CRYO = 1
-private const val ION = 2
-private const val GRAVITIC = 3
-private const val ENTROPY = 4
-private const val SONIC = 5
-private const val VOID = 6
+private val THERMAL = StatusElement.THERMAL.ordinal
+private val CRYO = StatusElement.CRYO.ordinal
+private val ION = StatusElement.ION.ordinal
+private val GRAVITIC = StatusElement.GRAVITIC.ordinal
+private val ENTROPY = StatusElement.ENTROPY.ordinal
+private val SONIC = StatusElement.SONIC.ordinal
+private val VOID = StatusElement.VOID.ordinal
 
 /** Mark kind ordinals (`MarkKind`, combat-final §2.2). */
 private const val MARK_SPALL = 0

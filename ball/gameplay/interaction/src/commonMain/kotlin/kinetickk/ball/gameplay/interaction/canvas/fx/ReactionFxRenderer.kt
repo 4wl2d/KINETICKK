@@ -40,7 +40,7 @@ import kinetickk.ball.gameplay.interaction.canvas.world.*
 
 private const val TAU = CanvasMath.TAU
 private const val RAD_TO_DEG = CanvasMath.RAD_TO_DEG
-private const val SONIC = 5
+private val SONIC = StatusElement.SONIC.ordinal
 private const val WEAPON_LINK_JITTER = 8f
 private const val WEAPON_LINK_OUTER_WIDTH = 6f
 private const val WEAPON_LINK_EXTENT = WEAPON_LINK_JITTER + WEAPON_LINK_OUTER_WIDTH * 0.5f

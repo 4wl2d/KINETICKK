@@ -37,13 +37,13 @@ import kinetickk.ball.gameplay.interaction.canvas.fx.*
 
 private const val TAU = CanvasMath.TAU
 
-private const val THERMAL = 0
-private const val CRYO = 1
-private const val ION = 2
-private const val GRAVITIC = 3
-private const val ENTROPY = 4
-private const val SONIC = 5
-private const val VOID = 6
+private val THERMAL = StatusElement.THERMAL.ordinal
+private val CRYO = StatusElement.CRYO.ordinal
+private val ION = StatusElement.ION.ordinal
+private val GRAVITIC = StatusElement.GRAVITIC.ordinal
+private val ENTROPY = StatusElement.ENTROPY.ordinal
+private val SONIC = StatusElement.SONIC.ordinal
+private val VOID = StatusElement.VOID.ordinal
 
 /** A field grows from 0.6 of its radius over this long (Pull). */
 private const val FIELD_SPAWN_SECONDS = 0.15f
