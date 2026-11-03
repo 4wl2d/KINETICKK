@@ -142,6 +142,9 @@ internal class MutableGameState(
     /** Choice type, rerolls, offer pity and the last acquisition. */
     internal val offerRun: OfferRunState = OfferRunState(copySource?.offerRun)
 
+    /** Run statistics. */
+    internal val runStats: RunStatsState = RunStatsState(copySource?.runStats)
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -439,17 +442,7 @@ internal class MutableGameState(
         internal set
     var keys: Int = copySource?.keys ?: 0
         internal set
-    var kills: Int = copySource?.kills ?: 0
 
-    var damageDealt: Double = copySource?.damageDealt ?: 0.0
-    var damageTaken: Double = copySource?.damageTaken ?: 0.0
-    var damageAbsorbed: Double = copySource?.damageAbsorbed ?: 0.0
-    var dataCollected: Long = copySource?.dataCollected ?: 0L
-    var pickupsCollected: Long = copySource?.pickupsCollected ?: 0L
-    var keysCollected: Long = copySource?.keysCollected ?: 0L
-    var eliteKills: Int = copySource?.eliteKills ?: 0
-    var bestCombo: Int = copySource?.bestCombo ?: 0
-        internal set
     var combo: Int = copySource?.combo ?: 0
         internal set
     var comboTime: Float = copySource?.comboTime ?: 0f

@@ -227,3 +227,41 @@ internal var MutableGameState.acquiredItemCount: Int
 internal var MutableGameState.recentItem: ItemDefinition?
     get() = offerRun.recentItem
     set(value) { offerRun.recentItem = value }
+
+// RunStatsState
+
+internal var MutableGameState.kills: Int
+    get() = runStats.kills
+    set(value) { runStats.kills = value }
+
+internal var MutableGameState.damageDealt: Double
+    get() = runStats.damageDealt
+    set(value) { runStats.damageDealt = value }
+
+internal var MutableGameState.damageTaken: Double
+    get() = runStats.damageTaken
+    set(value) { runStats.damageTaken = value }
+
+internal var MutableGameState.damageAbsorbed: Double
+    get() = runStats.damageAbsorbed
+    set(value) { runStats.damageAbsorbed = value }
+
+internal var MutableGameState.dataCollected: Long
+    get() = runStats.dataCollected
+    set(value) { runStats.dataCollected = value }
+
+internal var MutableGameState.pickupsCollected: Long
+    get() = runStats.pickupsCollected
+    set(value) { runStats.pickupsCollected = value }
+
+internal var MutableGameState.keysCollected: Long
+    get() = runStats.keysCollected
+    set(value) { runStats.keysCollected = value }
+
+internal var MutableGameState.eliteKills: Int
+    get() = runStats.eliteKills
+    set(value) { runStats.eliteKills = value }
+
+internal var MutableGameState.bestCombo: Int
+    get() = runStats.bestCombo
+    set(value) { runStats.bestCombo = value }
