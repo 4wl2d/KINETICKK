@@ -452,7 +452,7 @@ internal fun MutableGameState.onCharacterDataPickup() {
     for (index in 0 until ability.droneCount) ability.drones[index * DRONE_STRIDE + DRONE_LIFE] = droneLife
     if (ability.droneCount >= CharacterRuntime.MAX_DRONES) return
     ability.droneRolls++
-    val roll = ((characterHash(pickupsCollected + DRONE_HASH_SALT) ushr 40) and 0xFFFFL).toInt()
+    val roll = ((splitMix64(pickupsCollected + DRONE_HASH_SALT) ushr 40) and 0xFFFFL).toInt()
     if (roll >= (DRONE_CHANCE * 65_536f).toInt() && ability.droneRolls < DRONE_GUARANTEE) return
     ability.droneRolls = 0
     addDrone(droneLife)
@@ -1906,14 +1906,6 @@ internal fun MutableGameState.rebaseCharacterRuntime(shiftX: Float, shiftY: Floa
         ability.scars[base + SCAR_X1] = ability.scars[base + SCAR_X1] - shiftX
         ability.scars[base + SCAR_Y1] = ability.scars[base + SCAR_Y1] - shiftY
     }
-}
-
-/** SplitMix64 finalizer: a stateless hash for the Hive's drone roll, so no gameplay stream is drawn. */
-private fun characterHash(value: Long): Long {
-    var z = value + -0x61c8864680b583ebL
-    z = (z xor (z ushr 30)) * -0x40a7b892e31b1a47L
-    z = (z xor (z ushr 27)) * -0x6b2fb644ecceee15L
-    return z xor (z ushr 31)
 }
 
 internal const val DASH_PHASE_SECONDS: Float = 0.24f
