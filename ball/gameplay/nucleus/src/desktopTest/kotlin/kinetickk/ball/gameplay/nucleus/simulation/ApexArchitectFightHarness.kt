@@ -3,6 +3,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.ApexCell
 import kinetickk.ball.gameplay.nucleus.model.WeaponRuntime
@@ -198,13 +199,23 @@ internal object ApexArchitectFightHarness {
         return if (sorted.size % 2 == 0) (sorted[middle - 1] + sorted[middle]) / 2f else sorted[middle]
     }
 
-    /** The run up to the Architect's arrival, its integrity refilled; null when it never arrives. */
-    fun approach(shape: CoreShape, tier: Int, seed: Int): Pair<MutableGameState, NoPoiBot>? {
+    /**
+     * The run up to the Architect's arrival, its integrity refilled; null when it never arrives. Probes pass their own
+     * [content] and an [observer] that sees the state after every input frame.
+     */
+    fun approach(
+        shape: CoreShape,
+        tier: Int,
+        seed: Int,
+        content: GameplayContentSnapshot = canonicalGameplayContent,
+        observer: (MutableGameState) -> Unit = {},
+    ): Pair<MutableGameState, NoPoiBot>? {
         val strong = tier > 0
         val state = startGateRun(
             seed,
             gateProfile(if (strong) GateMatrix.FULL else GateMatrix.NONE, tier, shape, if (strong) WeaponId.ARC_COIL else WeaponId.FLUX_WAKE),
             relics = if (strong) DimensionProfile.STRONG_TIER_10.relics else emptyList(),
+            content = content,
         )
         val bot = NoPoiBot()
         while (state.elapsed < 900f && (state.phase == GamePhase.RUNNING || state.phase == GamePhase.CHOICE)) {
@@ -214,6 +225,7 @@ internal object ApexArchitectFightHarness {
                 state.update(FRAME)
             }
             state.hp = state.maxHp
+            observer(state)
             drain(state)
             if (state.liveArchitect() != null) {
                 state.invulnerableUntil = 0f
@@ -228,7 +240,13 @@ internal object ApexArchitectFightHarness {
      * 180 s of the fight from the fork, the level forced to the cap. With [apex] the Apex unlocks ready and the bot
      * casts it by its rule. [windows] are the activations of the Apex arm (kept for the other arm).
      */
-    fun fight(state: MutableGameState, bot: NoPoiBot, apex: Boolean, windows: List<Pair<Float, Float>>): Fight {
+    fun fight(
+        state: MutableGameState,
+        bot: NoPoiBot,
+        apex: Boolean,
+        windows: List<Pair<Float, Float>>,
+        observer: (MutableGameState) -> Unit = {},
+    ): Fight {
         val start = state.elapsed
         state.level = state.content.tempo.maximumLevel
         if (apex) state.unlockApex()
@@ -317,6 +335,7 @@ internal object ApexArchitectFightHarness {
                 windowDamage += state.damageTaken + state.damageAbsorbed - takenBefore
             }
             state.hp = state.maxHp
+            observer(state)
             drain(state)
             if (!boss.alive || state.phase == GamePhase.VICTORY) {
                 killSeconds = now
@@ -355,8 +374,14 @@ internal object ApexArchitectFightHarness {
      * fires every 1.5 s and a short brake follows each. With [apex] the Apex casts on the first frame. Returns
      * the character's damage to the Architect over the activation (strikes included) and the strikes' share.
      */
-    fun arena(shape: CoreShape, tier: Int, apex: Boolean): ArenaOutcome {
-        val content = canonicalGameplayContent.copy(tempo = canonicalGameplayContent.tempo.copy(bossAtSeconds = 1_000_000f))
+    fun arena(
+        shape: CoreShape,
+        tier: Int,
+        apex: Boolean,
+        base: GameplayContentSnapshot = canonicalGameplayContent,
+        observer: (MutableGameState) -> Unit = {},
+    ): ArenaOutcome {
+        val content = base.copy(tempo = base.tempo.copy(bossAtSeconds = 1_000_000f))
         val state = MutableGameState(content, seed = 4_242, initialRebirthLevel = tier)
         state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
         state.resize(1_280f, 720f)
@@ -392,6 +417,7 @@ internal object ApexArchitectFightHarness {
             state.update(1f / 60f)
             boss.hp = boss.maxHp
             state.hp = state.maxHp
+            observer(state)
             drain(state)
             frame++
         }

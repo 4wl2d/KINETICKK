@@ -180,8 +180,16 @@ class DungeonPilotGateTest {
                 println("DUNGEON GATE $arm ${summary(runs)}")
             }
 
-        /** One gate run of [arm] on [seed]: the pilot's attempt from 90 s, then [TAIL_SECONDS] more. */
-        fun fly(seed: Int, arm: Arm, content: GameplayContentSnapshot = canonicalGameplayContent): DungeonRun {
+        /**
+         * One gate run of [arm] on [seed]: the pilot's attempt from 90 s, then [TAIL_SECONDS] more. Probes pass an
+         * [observer] that sees the state after every input frame.
+         */
+        fun fly(
+            seed: Int,
+            arm: Arm,
+            content: GameplayContentSnapshot = canonicalGameplayContent,
+            observer: (MutableGameState) -> Unit = {},
+        ): DungeonRun {
             val profile = when (arm) {
                 Arm.FRESH -> gateProfile(GateMatrix.NONE, tier = 0, content = content)
                 Arm.STRONG -> gateProfile(GateMatrix.FULL, tier = 3, shape = CoreShape.PENTAGON, weapon = WeaponId.ARC_COIL, content = content)
@@ -229,6 +237,7 @@ class DungeonPilotGateTest {
                     }
                 }
                 pilot.observe(state)
+                observer(state)
                 state.takeSoundCues()
                 state.takeVisualFxCues()
                 if (pilot.attempt != null && stopAt == Float.POSITIVE_INFINITY) stopAt = state.elapsed + TAIL_SECONDS
