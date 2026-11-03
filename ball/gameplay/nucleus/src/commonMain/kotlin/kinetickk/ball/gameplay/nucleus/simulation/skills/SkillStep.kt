@@ -13,8 +13,8 @@ import kotlin.math.max
 
 /*
  * Active effects in the Z, X and C slots. Owned active items bind them ([SkillLoadout], rank = the item's stacks); their
- * timing and per-cast state live in [SkillRuntime]. Every cast and every refund goes through this file: a cast spends its
- * slot's cooldown, and every cooldown loop (Catalysis, character refunds, reaction verbs) draws on one refund
+ * timing and per-cast state live in [SkillRuntime]. Every cast and every refund goes through this package: a cast
+ * spends its slot's cooldown, and every cooldown loop (Catalysis, character refunds, reaction verbs) draws on one refund
  * bank, so no combination more than doubles a skill's cast rate and no skill recasts sooner than
  * [MIN_SKILL_RECAST_SECONDS]. No gameplay or spawn randomness is drawn here.
  */

@@ -27,7 +27,7 @@ import kotlin.math.sin
  * which never brings it below the definition's minimum cooldown after a cast. Every Apex obeys one boss contract:
  * it never amplifies a mechanic against boss-class enemies, it hits them only through [apexStrike] (at most the
  * definition's strikes per activation, each through the Architect's gate) and it erases hostile bolts only within
- * its bolt budget. The per-character forms live in CharacterSystem.kt. No gameplay or spawn randomness is drawn.
+ * its bolt budget. The per-character forms live in CharacterApexForms.kt. No gameplay or spawn randomness is drawn.
  */
 
 /** The run character's Apex. */
