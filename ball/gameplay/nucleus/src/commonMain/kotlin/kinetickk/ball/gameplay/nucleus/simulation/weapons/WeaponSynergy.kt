@@ -7,7 +7,6 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponScaling
-import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.render.WeaponSynergyProjection
 import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.build.*
@@ -172,6 +171,3 @@ internal fun MutableGameState.weaponSynergyProjection(reusable: WeaponSynergyPro
     )
     return if (reusable != null && reusable == projection) reusable else projection
 }
-
-/** Distance helper for weapon geometry. */
-internal fun distanceBetween(x0: Float, y0: Float, x1: Float, y1: Float): Float = length(x1 - x0, y1 - y0)
