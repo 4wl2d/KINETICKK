@@ -207,8 +207,11 @@ places instead of inventing new ones:
   `structures` domain (landed: the run-long spent list, written through `markSpent`, and the bounded Totem chest list,
   whose single writer `TotemChestSystem.kt` is also the only code that spends a Key, in `openTotemChest`).
 - State that tracks how the Core moves over a run goes into `CoreStasisState` in `simulation.flight`, where Core
-  Stasis (the freeze of a Core that stands still) already keeps its clocks. It is reset with the Core motion memory
-  (`resetCoreMotionMemory`, called from `startRun`) and rebased in `WorldRebaseSystem.kt`.
+  Freeze (Core Stasis: a Core whose filtered speed stays under the freeze speed for the freeze time freezes solid and
+  the run ends) keeps its filtered speed, freeze and hold window. It is reset with the Core motion memory
+  (`resetCoreMotionMemory`, called from `startRun`); a field there that stores a world position is rebased in
+  `WorldRebaseSystem.kt`. Every moment the player has no control (a run start, a closed choice, a layer switch, a host
+  without input) holds the freeze through `holdCoreStasis` or the input flag, so a new control lock adds its call there.
 - Values the player sees become top-level fields of `GameplayRenderModel`
   (`ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/render/GameplayRenderProjection.kt`),
   always constructed with named arguments; a list replaces a single projection in the same position.
@@ -265,7 +268,7 @@ advance.
 - A change to gameplay numbers, spawn/reward rules or the order or number of random draws must keep every gate passing
   under the [balance policy](../balance/policy.md); record any restated gate in [baseline.md](../balance/baseline.md).
   Never pick seeds by outcome. Measurement harnesses that script slow movement must explicitly disable any mechanic
-  that reacts to the Core standing still.
+  that reacts to the Core standing still (Core Freeze: `CoreStasisTuning.DISABLED`).
 - A behaviour-neutral refactor proves itself by identical per-test output of the desktop suite before and after.
 - Every bug or exploit fix comes with a regression test that fails without the fix.
 - Run before pushing: `./gradlew :build-logic:test verifyArchitecture` plus the affected modules' `desktopTest`;
