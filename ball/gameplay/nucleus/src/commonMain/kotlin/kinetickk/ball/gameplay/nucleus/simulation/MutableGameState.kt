@@ -22,7 +22,6 @@ import kinetickk.ball.content.api.WeaponMastery
 
 import kinetickk.foundation.random.CloneableXorWowRandom
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
-import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.rank
 import kinetickk.ball.gameplay.api.*
@@ -135,6 +134,9 @@ internal class MutableGameState(
     /** Known and pending discoveries. */
     internal val discoveryState: DiscoveryState = DiscoveryState(content, copySource?.discoveryState, bootstrapProgress)
 
+    /** Profile progress awaiting publication. */
+    internal val progressOutbox: ProgressOutbox = ProgressOutbox(copySource?.progressOutbox)
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -163,11 +165,6 @@ internal class MutableGameState(
      * rank-three upgrades as [relicGain] entries. Decides affinity ties. Immutable value, replaced on change.
      */
     internal var acquisitionOrder: List<Int> = copySource?.acquisitionOrder ?: emptyList()
-    /**
-     * First acquisitions not yet reported to the Profile's recent-item history, oldest first; immutable and replaced on
-     * change, at most [MAX_RECENT_ITEM_IDS] (the oldest drop first).
-     */
-    internal var pendingAcquiredItemIds: List<Int> = copySource?.pendingAcquiredItemIds ?: emptyList()
     /** Baby mode (RunMode.EASY), fixed when the run is created; a run never changes it. */
     internal val easyMode: Boolean = copySource?.easyMode ?: (runMode == RunMode.EASY)
     /** Immutable compiled build shared by reduction siblings; replaced by [recompileBuild]. */
@@ -228,27 +225,10 @@ internal class MutableGameState(
         copySource?.visualFxCueStorage?.copy()
     internal val visualFxCues: PendingVisualFxCueBuffer
         get() = PendingVisualFxCueBuffer(this)
-    internal var pendingBankedMatter: Long = copySource?.pendingBankedMatter ?: 0L
-    internal var pendingClearedRebirthLevel: Int? = copySource?.pendingClearedRebirthLevel
     /** Mutable character state; a deep copy forks it (scalars and buffers copied). */
     internal var characterRuntime: CharacterRuntime = copySource?.characterRuntime?.fork() ?: CharacterRuntime()
     /** Owned state of the equipped weapon (entities, proc gates, element cadences, scaling inputs); a deep copy forks it. */
     internal var weaponRuntime: WeaponRuntime = copySource?.weaponRuntime?.fork() ?: WeaponRuntime()
-    internal var pendingEliteKills: Int = copySource?.pendingEliteKills ?: 0
-    internal var pendingDashHits: Int = copySource?.pendingDashHits ?: 0
-    internal var pendingCompletedOrbits: Int = copySource?.pendingCompletedOrbits ?: 0
-    internal var pendingArchitectDefeatedWith: CoreShape? = copySource?.pendingArchitectDefeatedWith
-    /**
-     * Cumulative achievement counters awaiting publication. They ride along with any other progress
-     * update and are otherwise published once the run banks (exit, death, victory), so a kill or a
-     * pickup never forces a Profile write on its own.
-     */
-    internal var pendingTotalKills: Int = copySource?.pendingTotalKills ?: 0
-    /** Hard obstacle bounces awaiting publication; the obstacle system counts them. */
-    internal var pendingRicochets: Int = copySource?.pendingRicochets ?: 0
-    internal var pendingDataPickups: Int = copySource?.pendingDataPickups ?: 0
-    /** The run banked, so the next progress update also publishes the deferred counters. */
-    internal var achievementFlushDue: Boolean = copySource?.achievementFlushDue ?: false
     /** Window sites: the two offers of a window, or the one active trial. Immutable, replaced on change. */
     internal var sites: List<SiteState> = copySource?.sites ?: emptyList()
     internal var nextSiteWindowIndex: Int = copySource?.nextSiteWindowIndex ?: 0
@@ -410,8 +390,6 @@ internal class MutableGameState(
     internal var hurtCooldown: Float = copySource?.hurtCooldown ?: 0f
     internal var lastAimDirectionX: Float = copySource?.lastAimDirectionX ?: 1f
     internal var lastAimDirectionY: Float = copySource?.lastAimDirectionY ?: 0f
-    /** Run Matter already banked; later grants in the same run bank only the difference. */
-    internal var bankedRunMatter: Long = copySource?.bankedRunMatter ?: 0L
     internal var activeChoiceType: ChoiceType = copySource?.activeChoiceType ?: ChoiceType.ITEM
 
     var phase: GamePhase = copySource?.phase ?: GamePhase.RUNNING

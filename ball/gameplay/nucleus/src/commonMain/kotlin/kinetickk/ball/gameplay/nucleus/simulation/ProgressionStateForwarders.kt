@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.ItemDeck
@@ -93,3 +94,53 @@ internal var MutableGameState.worldDiscoveryMask: Int
 internal var MutableGameState.pendingWorldDiscoveryMask: Int
     get() = discoveryState.pendingWorldDiscoveryMask
     set(value) { discoveryState.pendingWorldDiscoveryMask = value }
+
+// ProgressOutbox
+
+internal var MutableGameState.pendingBankedMatter: Long
+    get() = progressOutbox.pendingBankedMatter
+    set(value) { progressOutbox.pendingBankedMatter = value }
+
+internal var MutableGameState.pendingClearedRebirthLevel: Int?
+    get() = progressOutbox.pendingClearedRebirthLevel
+    set(value) { progressOutbox.pendingClearedRebirthLevel = value }
+
+internal var MutableGameState.pendingEliteKills: Int
+    get() = progressOutbox.pendingEliteKills
+    set(value) { progressOutbox.pendingEliteKills = value }
+
+internal var MutableGameState.pendingDashHits: Int
+    get() = progressOutbox.pendingDashHits
+    set(value) { progressOutbox.pendingDashHits = value }
+
+internal var MutableGameState.pendingCompletedOrbits: Int
+    get() = progressOutbox.pendingCompletedOrbits
+    set(value) { progressOutbox.pendingCompletedOrbits = value }
+
+internal var MutableGameState.pendingArchitectDefeatedWith: CoreShape?
+    get() = progressOutbox.pendingArchitectDefeatedWith
+    set(value) { progressOutbox.pendingArchitectDefeatedWith = value }
+
+internal var MutableGameState.pendingTotalKills: Int
+    get() = progressOutbox.pendingTotalKills
+    set(value) { progressOutbox.pendingTotalKills = value }
+
+internal var MutableGameState.pendingRicochets: Int
+    get() = progressOutbox.pendingRicochets
+    set(value) { progressOutbox.pendingRicochets = value }
+
+internal var MutableGameState.pendingDataPickups: Int
+    get() = progressOutbox.pendingDataPickups
+    set(value) { progressOutbox.pendingDataPickups = value }
+
+internal var MutableGameState.achievementFlushDue: Boolean
+    get() = progressOutbox.achievementFlushDue
+    set(value) { progressOutbox.achievementFlushDue = value }
+
+internal var MutableGameState.pendingAcquiredItemIds: List<Int>
+    get() = progressOutbox.pendingAcquiredItemIds
+    set(value) { progressOutbox.pendingAcquiredItemIds = value }
+
+internal var MutableGameState.bankedRunMatter: Long
+    get() = progressOutbox.bankedRunMatter
+    set(value) { progressOutbox.bankedRunMatter = value }
