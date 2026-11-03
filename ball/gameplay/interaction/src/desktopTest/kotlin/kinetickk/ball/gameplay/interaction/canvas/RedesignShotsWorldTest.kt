@@ -95,6 +95,8 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.test.Test
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
+import kinetickk.ball.gameplay.interaction.canvas.world.*
 
 /**
  * Local visual QA harness (SPEC §12). With `KK_SHOTS=1` it draws every scene and strip at every size in both

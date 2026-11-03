@@ -37,8 +37,6 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.WeaponId
-import kinetickk.ball.gameplay.interaction.canvas.drawGameplay
-import kinetickk.ball.gameplay.interaction.canvas.with
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
@@ -49,7 +47,7 @@ import kinetickk.ball.gameplay.interaction.rewards.rewardActiveFixtureContent
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureActiveBase
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureContent
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureModel
-import kinetickk.ball.gameplay.interaction.terminal.TerminalContent
+import kinetickk.ball.gameplay.interaction.overlay.TerminalContent
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase

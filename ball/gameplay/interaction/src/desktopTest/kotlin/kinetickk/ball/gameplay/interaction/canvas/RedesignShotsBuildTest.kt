@@ -47,7 +47,7 @@ import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureActiveBase
 import kinetickk.ball.gameplay.interaction.rewards.rewardActiveFixtureContent
 import kinetickk.ball.content.api.SkillId
-import kinetickk.ball.gameplay.interaction.terminal.TerminalContent
+import kinetickk.ball.gameplay.interaction.overlay.TerminalContent
 import kinetickk.ball.gameplay.nucleus.render.BuildProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
@@ -68,6 +68,9 @@ import javax.imageio.ImageIO
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.test.Test
+import kinetickk.ball.gameplay.interaction.*
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
+import kinetickk.ball.gameplay.interaction.canvas.look.*
 
 /**
  * Local visual QA of the build system's in-run surfaces: enemy statuses, Break and reaction flashes, the

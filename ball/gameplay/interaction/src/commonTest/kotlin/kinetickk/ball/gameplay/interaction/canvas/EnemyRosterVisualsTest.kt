@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import kinetickk.ball.gameplay.interaction.canvas.look.*
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kotlin.test.Test
 import kotlin.test.assertEquals

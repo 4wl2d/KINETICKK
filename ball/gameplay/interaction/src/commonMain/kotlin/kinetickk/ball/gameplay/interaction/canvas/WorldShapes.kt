@@ -12,6 +12,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import kinetickk.ball.content.api.EliteAffix
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.localizedContent
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.canvas.world.*
 import kinetickk.ball.gameplay.interaction.localization.WorldRedesignText
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text

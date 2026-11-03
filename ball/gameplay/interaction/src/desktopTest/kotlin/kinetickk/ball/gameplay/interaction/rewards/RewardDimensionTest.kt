@@ -7,8 +7,8 @@ import kinetickk.ball.content.api.RunBoonKind
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.canvas.with
-import kinetickk.ball.gameplay.interaction.canvas.elementFill
-import kinetickk.ball.gameplay.interaction.canvas.elementIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.elementFill
+import kinetickk.ball.gameplay.interaction.canvas.look.elementIcon
 import kinetickk.ball.gameplay.interaction.localization.DimensionHudText
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
@@ -33,6 +33,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.canvas.look.*
 
 /**
  * The dimension reward overlay: each reward headed by its layer's reward, Blessing and Pact cards wording the boon's

@@ -8,9 +8,8 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.foundation.collections.mapToImmutableList
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.random.CloneableXorWowRandom
-import kinetickk.ball.gameplay.nucleus.model.clamp
 import kinetickk.ball.profile.api.DamageNumberFormat
-import kinetickk.ball.gameplay.nucleus.model.formatDamageNumber
+import kinetickk.ball.gameplay.nucleus.render.formatDamageNumber
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kotlin.math.atan2
@@ -539,7 +538,7 @@ class InteractionFxReducer(seed: Int) {
     private fun sampleMotionEcho(cue: VisualFxCue.MotionSample): Boolean {
         coreX = cue.previousCoreX
         coreY = cue.previousCoreY
-        val intensity = clamp((cue.speed - 260f) / 1_500f, 0f, 1f)
+        val intensity = ((cue.speed - 260f) / 1_500f).coerceIn(0f, 1f)
         if (intensity <= 0f && cue.dashPhaseTime <= 0f) {
             motionEchoClock = 0f
             return false

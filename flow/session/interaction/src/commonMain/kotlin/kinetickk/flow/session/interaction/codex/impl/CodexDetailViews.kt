@@ -46,7 +46,7 @@ import kinetickk.ball.content.api.RuleLineKind
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.content.api.localizedContent
-import kinetickk.ball.gameplay.interaction.canvas.skillGlyph
+import kinetickk.ball.gameplay.interaction.canvas.look.skillGlyph
 import kinetickk.flow.session.interaction.localization.CodexText
 import kinetickk.flow.session.interaction.localization.SessionRedesignText
 import kinetickk.flow.session.interaction.localization.SessionText

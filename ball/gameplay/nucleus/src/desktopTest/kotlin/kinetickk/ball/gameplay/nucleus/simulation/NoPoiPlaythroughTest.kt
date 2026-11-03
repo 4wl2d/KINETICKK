@@ -12,6 +12,17 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.assertNull
+import kinetickk.ball.gameplay.nucleus.simulation.build.*
+import kinetickk.ball.gameplay.nucleus.simulation.characters.*
+import kinetickk.ball.gameplay.nucleus.simulation.combat.*
+import kinetickk.ball.gameplay.nucleus.simulation.elements.*
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
+import kinetickk.ball.gameplay.nucleus.simulation.flight.*
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
+import kinetickk.ball.gameplay.nucleus.simulation.sites.*
+import kinetickk.ball.gameplay.nucleus.simulation.skills.*
+import kinetickk.ball.gameplay.nucleus.simulation.variety.*
+import kinetickk.ball.gameplay.nucleus.simulation.world.*
 
 /**
  * Real input-only runs of a fresh profile. The controller can inspect current threats, but cannot alter simulation

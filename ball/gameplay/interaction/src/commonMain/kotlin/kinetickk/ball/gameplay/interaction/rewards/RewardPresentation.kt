@@ -39,19 +39,19 @@ import kinetickk.ball.content.api.rankLines
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.content.api.ruleLines
 import kinetickk.ball.content.api.upsideText
-import kinetickk.ball.gameplay.interaction.canvas.OverlayRelicLink
-import kinetickk.ball.gameplay.interaction.canvas.badgeState
-import kinetickk.ball.gameplay.interaction.canvas.OverlayRelicSlot
-import kinetickk.ball.gameplay.interaction.canvas.UNKNOWN_PAIRING_NAME
-import kinetickk.ball.gameplay.interaction.canvas.overlayColor
-import kinetickk.ball.gameplay.interaction.canvas.overlayDecimal
-import kinetickk.ball.gameplay.interaction.canvas.overlayDescription
-import kinetickk.ball.gameplay.interaction.canvas.overlayIcon
-import kinetickk.ball.gameplay.interaction.canvas.overlayLevel
-import kinetickk.ball.gameplay.interaction.canvas.overlayLinkMultiplier
-import kinetickk.ball.gameplay.interaction.canvas.overlayName
-import kinetickk.ball.gameplay.interaction.canvas.overlayRelicLinks
-import kinetickk.ball.gameplay.interaction.canvas.overlayUpsideMultiplier
+import kinetickk.ball.gameplay.interaction.canvas.look.OverlayRelicLink
+import kinetickk.ball.gameplay.interaction.canvas.look.badgeState
+import kinetickk.ball.gameplay.interaction.canvas.look.OverlayRelicSlot
+import kinetickk.ball.gameplay.interaction.canvas.look.UNKNOWN_PAIRING_NAME
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayColor
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayDecimal
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayDescription
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayLevel
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayLinkMultiplier
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayName
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayRelicLinks
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayUpsideMultiplier
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
 import kinetickk.ball.gameplay.interaction.localization.RunVarietyText
@@ -64,7 +64,6 @@ import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
 import kinetickk.ball.gameplay.nucleus.render.RelicLinkKind
 import kinetickk.ball.gameplay.nucleus.render.RewardStatChange
 import kinetickk.ball.gameplay.nucleus.render.TotemAction
-import kinetickk.ball.profile.api.GameAction
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
@@ -75,6 +74,8 @@ import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.label
 import kotlin.math.pow
 import kotlin.math.sqrt
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.overlay.*
 
 /** Which of the three reward layouts presents the choice (cards, totem rows, relic matrix). */
 internal enum class RewardLayoutKind { CARDS, TOTEM, RELIC_BIND }
@@ -913,15 +914,6 @@ private val SpaceBeforeNumber = Regex(" (?=[−+]?\\d)")
 
 /** The active slot prompt's keep card: every held active stays and the incoming active item is salvaged. */
 internal val ChoiceOption.keepsActiveLoadout: Boolean get() = type == ChoiceType.ACTIVE_SLOT && activeSlot == null
-
-/** The key bound to skill slot [slot] (0 Z, 1 X, 2 C) in the player's bindings. */
-internal fun GameplayRenderModel.activeSlotKey(slot: Int, language: AppLanguage): String = settings.keyBindings.key(
-    when (slot) {
-        0 -> GameAction.SKILL_1
-        1 -> GameAction.SKILL_2
-        else -> GameAction.SKILL_3
-    },
-).label(language)
 
 /** The damage of one weapon unit; mirrors the nucleus damage pipeline. */
 private const val WeaponUnitDamage = 40f

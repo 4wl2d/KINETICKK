@@ -10,6 +10,8 @@ import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.SteeringTuning
+import kinetickk.ball.gameplay.nucleus.simulation.combat.*
+import kinetickk.ball.gameplay.nucleus.simulation.flight.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.abs

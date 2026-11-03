@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import kinetickk.ball.gameplay.interaction.canvas.fx.*
 import kinetickk.ball.gameplay.interaction.fx.CoreRibbonProjection
 import kotlin.math.abs
 import kotlin.test.Test

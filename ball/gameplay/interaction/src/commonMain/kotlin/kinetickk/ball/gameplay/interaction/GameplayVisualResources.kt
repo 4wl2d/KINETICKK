@@ -3,10 +3,10 @@
 
 package kinetickk.ball.gameplay.interaction
 
-import kinetickk.ball.gameplay.interaction.canvas.prepareDimensionVisualResources
-import kinetickk.ball.gameplay.interaction.canvas.prepareSiteGlyphs
+import kinetickk.ball.gameplay.interaction.canvas.look.prepareSiteGlyphs
 import kinetickk.ball.gameplay.interaction.canvas.prepareWorldVisualResources
-import kinetickk.ball.gameplay.interaction.terminal.prepareTerminalVisualResources
+import kinetickk.ball.gameplay.interaction.canvas.world.places.prepareDimensionVisualResources
+import kinetickk.ball.gameplay.interaction.overlay.prepareTerminalVisualResources
 import kinetickk.foundation.design.prepareInterfaceIcons
 import kotlinx.coroutines.yield
 

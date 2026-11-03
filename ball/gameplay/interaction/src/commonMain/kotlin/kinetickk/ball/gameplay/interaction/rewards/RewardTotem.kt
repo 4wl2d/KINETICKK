@@ -86,6 +86,8 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.overlay.*
 
 /** Board placement of the totem layout for one layout mode (board px, scaled by the frame). */
 private class TotemSpec(

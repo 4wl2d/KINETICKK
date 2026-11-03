@@ -5,6 +5,8 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.SiteState
+import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
+import kinetickk.ball.gameplay.nucleus.simulation.structures.*
 
 /** One engagement at a time: a window trial, a secret duel, a dungeon or a dimension visit. */
 internal fun MutableGameState.engagementActive(): Boolean =

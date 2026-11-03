@@ -1,0 +1,342 @@
+// SPDX-FileCopyrightText: 2026 Vladislav Tomilov
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package kinetickk.ball.gameplay.nucleus.projection
+
+import kinetickk.ball.content.api.DirectedReward
+import kinetickk.ball.content.api.SiteFamily
+import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.SiteReward
+import kinetickk.ball.gameplay.nucleus.model.CircuitBeacons
+import kinetickk.ball.gameplay.nucleus.model.SiteState
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
+import kinetickk.ball.gameplay.nucleus.render.TrialClock
+import kinetickk.ball.gameplay.nucleus.render.TrialProjection
+import kinetickk.ball.gameplay.nucleus.render.TrialReward
+import kinetickk.ball.gameplay.nucleus.render.TrialValue
+import kinetickk.ball.gameplay.nucleus.simulation.*
+import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
+import kinetickk.ball.gameplay.nucleus.simulation.sites.*
+import kinetickk.ball.gameplay.nucleus.simulation.structures.*
+import kinetickk.ball.gameplay.nucleus.simulation.world.*
+import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.immutableListOfSize
+import kinetickk.foundation.collections.toImmutableList
+import kotlin.math.ceil
+import kotlin.math.min
+
+/** The trial panel's meter has 1..24 cells. */
+private const val MAX_TRIAL_SEGMENTS = 24
+
+/** A bounty or sigil duel shows its foe's integrity as three cells. */
+private const val DUEL_SEGMENTS = 3
+
+/**
+ * The window sites, then the secret sigil if one lies in the world. An offer's or a timed trial's remaining seconds
+ * change every step, so the list is rebuilt while a site is offered or running; the same sites at the same time, or
+ * projections that already carry every derived value, keep the previous immutable list, and a course is the site's own.
+ */
+internal fun MutableGameState.siteProjections(
+    reusable: ImmutableList<SiteProjection>?,
+    identitySource: MutableGameState?,
+): ImmutableList<SiteProjection> {
+    val sigil = if (inBaseLayer()) secretSigil else null
+    val count = sites.size + if (sigil != null) 1 else 0
+    if (reusable != null) {
+        // A duel's progress is its foe's integrity, which the site state does not hold.
+        if (sites === identitySource?.sites && secretSigil === identitySource.secretSigil &&
+            inBaseLayer() == identitySource.inBaseLayer() &&
+            elapsed.sameBitsAs(identitySource.elapsed) && !readsFoeIntegrity()
+        ) return reusable
+        if (reusable.size == count) {
+            var same = true
+            for (index in 0 until count) {
+                if (!siteProjectionMatches(reusable[index], projectedSite(index))) {
+                    same = false
+                    break
+                }
+            }
+            if (same) return reusable
+        }
+    }
+    return immutableListOfSize(count) { index ->
+        siteProjection(projectedSite(index))
+    }
+}
+
+/**
+ * The settled ambient sites (only those are near enough to see or touch), each with its kind's activation radius and
+ * its rule's reveal distance. The window changes only on a refresh, a settle or an opening: the same window, or
+ * projections that already match it, keep the previous immutable list.
+ */
+internal fun MutableGameState.ambientSiteProjections(
+    reusable: ImmutableList<SiteProjection>?,
+    identitySource: MutableGameState?,
+): ImmutableList<SiteProjection> {
+    val window = ambientSites
+    if (reusable != null && window === identitySource?.ambientSites) return reusable
+    val sites = window.sites
+    var count = 0
+    for (index in sites.indices) if (sites[index].settled) count++
+    if (count == 0) return reusable?.takeIf { it.isEmpty() } ?: immutableListOf()
+    if (reusable != null && reusable.size == count) {
+        var projected = 0
+        var same = true
+        for (index in sites.indices) {
+            val site = sites[index]
+            if (!site.settled) continue
+            if (!ambientProjectionMatches(reusable[projected++], site)) {
+                same = false
+                break
+            }
+        }
+        if (same) return reusable
+    }
+    val settled = ArrayList<SiteProjection>(count)
+    for (index in sites.indices) if (sites[index].settled) settled += ambientSiteProjection(sites[index])
+    return settled.toImmutableList()
+}
+
+private fun MutableGameState.ambientSiteProjection(site: SiteState): SiteProjection {
+    val definition = content.sites.definition(site.kind)
+    return SiteProjection(
+        kind = site.kind,
+        name = definition.name,
+        x = site.x,
+        y = site.y,
+        active = false,
+        remaining = 0f,
+        step = -1,
+        progress = 0f,
+        foeIds = site.foeIds,
+        warningRemaining = 0f,
+        volleyAngle = 0f,
+        activationRadius = definition.activationRadius,
+        reveal = ambientRule(site.kind)?.revealDistance ?: 0f,
+    )
+}
+
+private fun MutableGameState.ambientProjectionMatches(projection: SiteProjection, site: SiteState): Boolean {
+    val definition = content.sites.definition(site.kind)
+    return projection.kind == site.kind &&
+        projection.name == definition.name &&
+        projection.x.sameBitsAs(site.x) &&
+        projection.y.sameBitsAs(site.y) &&
+        projection.activationRadius.sameBitsAs(definition.activationRadius) &&
+        projection.reveal.sameBitsAs(ambientRule(site.kind)?.revealDistance ?: 0f)
+}
+
+/**
+ * The trial panel's facts: the active window site or summoned sigil, else the first other engagement that reports one
+ * (a dungeon, then a dimension objective); an equal projection keeps the previous instance.
+ */
+internal fun MutableGameState.trialProjection(previous: TrialProjection?): TrialProjection? {
+    val trial = (activeWindowSite() ?: secretSigil?.takeIf { it.active })?.let { siteTrialProjection(it) }
+        ?: structureTrialProjection() ?: dimensionTrialProjection() ?: return null
+    return if (trial == previous) previous else trial
+}
+
+/**
+ * The trial panel of an active site, or null for kinds that never run one (caches, eggs, rifts). Anomalies keep the
+ * 0.5.0 panel: the circuit's three beacons, the vault's defenders and the orbit's seconds, with their directed reward.
+ */
+internal fun MutableGameState.siteTrialProjection(site: SiteState): TrialProjection? {
+    val policy = content.sites
+    val challenges = policy.challenges
+    val reward = trialReward(policy.definition(site.kind).reward)
+    return when (site.kind) {
+        SiteKind.RESONANT_CIRCUIT -> siteTrial(site, TrialClock.COUNTDOWN, CircuitBeacons.size, TrialValue.COUNT,
+            site.step.toFloat(), CircuitBeacons.size.toFloat(), reward)
+        SiteKind.SEALED_ANOMALY -> siteTrial(site, TrialClock.COUNTDOWN, site.foeIds.size, TrialValue.COUNT,
+            site.count.toFloat(), VAULT_DEFENDERS.toFloat(), reward)
+        SiteKind.COLLAPSING_ORBIT -> secondsTrial(site, site.meter, policy.windows.orbitRequiredSeconds, reward)
+        SiteKind.GATE_RACE -> siteTrial(site, TrialClock.ELAPSED_TENTHS, site.course.size, TrialValue.COUNT,
+            site.step.toFloat(), site.course.size.toFloat(), TrialReward.MEDAL, raceMedal(site))
+        SiteKind.BRAKELESS_TRIAL -> secondsTrial(site, site.meter, challenges.brakelessRequired, reward)
+        SiteKind.UNTOUCHED_TRIAL -> secondsTrial(site, site.meter, challenges.untouchedRequired, reward)
+        SiteKind.VELOCITY_TRIAL -> secondsTrial(site, site.meter, challenges.velocityRequired, reward)
+        SiteKind.RAM_TRIAL -> siteTrial(site, TrialClock.COUNTDOWN, challenges.ramRequired, TrialValue.COUNT,
+            site.count.toFloat(), challenges.ramRequired.toFloat(), reward)
+        SiteKind.SLALOM_TRIAL -> siteTrial(site, TrialClock.COUNTDOWN, challenges.slalomPoles, TrialValue.COUNT,
+            site.step.toFloat(), challenges.slalomPoles.toFloat(), reward)
+        // The bounty's own payout is its mini-boss's Key and Relic drops; the site adds Matter. Its clock is the time limit.
+        SiteKind.BOUNTY_ARENA -> siteTrial(site, TrialClock.COUNTDOWN, DUEL_SEGMENTS, TrialValue.NONE, 0f, 0f, TrialReward.KEY_AND_RELIC)
+        SiteKind.FAR_SIGIL -> siteTrial(site, TrialClock.NONE, DUEL_SEGMENTS, TrialValue.NONE, 0f, 0f, TrialReward.UNKNOWN)
+        SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL, SiteKind.ZENITH_RIFT,
+        SiteKind.NADIR_RIFT,
+        -> null
+    }
+}
+
+private fun MutableGameState.secondsTrial(site: SiteState, earned: Float, required: Float, reward: TrialReward): TrialProjection =
+    siteTrial(site, TrialClock.COUNTDOWN, ceil(required).toInt(), TrialValue.SECONDS, earned, required, reward)
+
+private fun MutableGameState.siteTrial(
+    site: SiteState,
+    clock: TrialClock,
+    segments: Int,
+    value: TrialValue,
+    done: Float,
+    required: Float,
+    reward: TrialReward,
+    medal: Int = 0,
+): TrialProjection {
+    val definition = content.sites.definition(site.kind)
+    return TrialProjection(
+        family = site.kind.family,
+        kind = site.kind,
+        title = definition.name,
+        rules = definition.instruction,
+        clock = clock,
+        seconds = when (clock) {
+            TrialClock.COUNTDOWN -> siteRemaining(site)
+            TrialClock.ELAPSED_TENTHS -> site.clock
+            TrialClock.NONE -> 0f
+        },
+        segments = segments.coerceIn(1, MAX_TRIAL_SEGMENTS),
+        progress = siteProgress(site),
+        value = value,
+        done = done,
+        required = required,
+        reward = reward,
+        medal = medal,
+        rewardMatter = if (site.kind.family == SiteFamily.CHALLENGE) definition.reward.matter else 0,
+    )
+}
+
+/** The panel's reward label: the directed reward when there is one, else the bundle's leading part. */
+private fun trialReward(reward: SiteReward): TrialReward = when (reward.directed) {
+    DirectedReward.WEAPON -> TrialReward.WEAPON
+    DirectedReward.RELIC -> TrialReward.RELIC
+    DirectedReward.ITEM_AND_REPAIR -> TrialReward.ITEM_AND_REPAIR
+    null -> when {
+        reward.itemOffers > 0 || reward.itemOfferFloor != null -> TrialReward.ITEM
+        reward.keys > 0 || reward.relics > 0 -> TrialReward.KEY_AND_RELIC
+        reward.matter > 0 -> TrialReward.MATTER
+        else -> TrialReward.UNKNOWN
+    }
+}
+
+/** Window sites first, then the sigil (only asked for an index below the projected count). */
+private fun MutableGameState.projectedSite(index: Int): SiteState =
+    if (index < sites.size) sites[index] else checkNotNull(secretSigil)
+
+private fun MutableGameState.siteProjection(site: SiteState): SiteProjection {
+    val definition = content.sites.definition(site.kind)
+    return SiteProjection(
+        kind = site.kind,
+        name = definition.name,
+        x = site.x,
+        y = site.y,
+        active = site.active,
+        remaining = siteRemaining(site),
+        step = site.step,
+        progress = siteProgress(site),
+        foeIds = site.foeIds,
+        warningRemaining = site.warningRemaining,
+        volleyAngle = site.volleyAngle,
+        course = site.course,
+        radius = siteRadius(site),
+        sides = site.sides,
+        clock = site.clock,
+        medal = siteMedal(site),
+        activationRadius = definition.activationRadius,
+        aimDx = siteAimDx(site),
+        aimDy = siteAimDy(site),
+    )
+}
+
+/** An offer counts down to its close; a timed trial (the bounty by its time limit) its seconds left; an untimed duel none. */
+private fun MutableGameState.siteRemaining(site: SiteState): Float = when {
+    !site.active -> (site.expiresAt - elapsed).coerceAtLeast(0f)
+    site.kind == SiteKind.BOUNTY_ARENA || content.sites.definition(site.kind).duration > 0f -> site.remaining
+    else -> 0f
+}
+
+private fun MutableGameState.siteProgress(site: SiteState): Float {
+    val challenges = content.sites.challenges
+    return when (site.kind) {
+        SiteKind.RESONANT_CIRCUIT -> site.step / CircuitBeacons.size.toFloat()
+        SiteKind.SEALED_ANOMALY -> site.count / VAULT_DEFENDERS.toFloat()
+        SiteKind.COLLAPSING_ORBIT -> site.meter / content.sites.windows.orbitRequiredSeconds
+        SiteKind.GATE_RACE -> share(site.step.toFloat(), site.course.size.toFloat())
+        SiteKind.BRAKELESS_TRIAL -> share(site.meter, challenges.brakelessRequired)
+        SiteKind.UNTOUCHED_TRIAL -> share(site.meter, challenges.untouchedRequired)
+        SiteKind.VELOCITY_TRIAL -> share(site.meter, challenges.velocityRequired)
+        SiteKind.RAM_TRIAL -> share(site.count.toFloat(), challenges.ramRequired.toFloat())
+        SiteKind.SLALOM_TRIAL -> share(site.step.toFloat(), challenges.slalomPoles.toFloat())
+        SiteKind.BOUNTY_ARENA, SiteKind.FAR_SIGIL -> if (site.active) foeIntegrityLost(site) else 0f
+        SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL, SiteKind.ZENITH_RIFT,
+        SiteKind.NADIR_RIFT,
+        -> 0f
+    }
+}
+
+/** [done] of [required] in 0..1; a goal of nothing is already met. */
+private fun share(done: Float, required: Float): Float = if (required > 0f) min(1f, done / required).coerceAtLeast(0f) else 1f
+
+/** Share of the duel foe's integrity already taken (1 once the kill hook counted it). */
+private fun MutableGameState.foeIntegrityLost(site: SiteState): Float {
+    if (site.count >= 1) return 1f
+    val enemy = enemyById(site.foeIds.firstOrNull() ?: -1) ?: return 0f
+    return if (enemy.maxHp > 0f) (1f - enemy.hp / enemy.maxHp).coerceIn(0f, 1f) else 0f
+}
+
+/** True while an active duel's progress reads an enemy's integrity. */
+private fun MutableGameState.readsFoeIntegrity(): Boolean {
+    for (index in sites.indices) if (sites[index].active && sites[index].kind == SiteKind.BOUNTY_ARENA) return true
+    return secretSigil?.active == true
+}
+
+/** Ring or arena radius around an active challenge or bounty (the brakeless ring shrinks with its clock). */
+private fun MutableGameState.siteRadius(site: SiteState): Float {
+    if (!site.active) return 0f
+    val challenges = content.sites.challenges
+    return when (site.kind) {
+        SiteKind.BRAKELESS_TRIAL -> challenges.brakelessRing(site.clock)
+        SiteKind.RAM_TRIAL -> challenges.ramClamp
+        SiteKind.UNTOUCHED_TRIAL -> challenges.untouchedRadius
+        SiteKind.VELOCITY_TRIAL -> challenges.velocityZoneRadius
+        SiteKind.BOUNTY_ARENA -> content.sites.bounty.arenaRadius
+        SiteKind.RESONANT_CIRCUIT, SiteKind.SEALED_ANOMALY, SiteKind.COLLAPSING_ORBIT, SiteKind.GATE_RACE,
+        SiteKind.SLALOM_TRIAL, SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL,
+        SiteKind.FAR_SIGIL, SiteKind.ZENITH_RIFT, SiteKind.NADIR_RIFT,
+        -> 0f
+    }
+}
+
+private fun MutableGameState.siteMedal(site: SiteState): Int =
+    if (site.active && site.kind == SiteKind.GATE_RACE) raceMedal(site) else 0
+
+/** A running untouched trial's volley aim point from the centre; no other site aims. */
+private fun siteAimDx(site: SiteState): Float = if (aims(site)) site.aimX - site.x else 0f
+
+private fun siteAimDy(site: SiteState): Float = if (aims(site)) site.aimY - site.y else 0f
+
+private fun aims(site: SiteState): Boolean = site.active && site.kind == SiteKind.UNTOUCHED_TRIAL
+
+private fun MutableGameState.siteProjectionMatches(projection: SiteProjection, site: SiteState): Boolean {
+    val definition = content.sites.definition(site.kind)
+    return projection.kind == site.kind &&
+        projection.name == definition.name &&
+        projection.x.sameBitsAs(site.x) &&
+        projection.y.sameBitsAs(site.y) &&
+        projection.active == site.active &&
+        projection.remaining.sameBitsAs(siteRemaining(site)) &&
+        projection.step == site.step &&
+        projection.progress.sameBitsAs(siteProgress(site)) &&
+        (projection.foeIds === site.foeIds || projection.foeIds == site.foeIds) &&
+        projection.warningRemaining.sameBitsAs(site.warningRemaining) &&
+        projection.volleyAngle.sameBitsAs(site.volleyAngle) &&
+        projection.course === site.course &&
+        projection.radius.sameBitsAs(siteRadius(site)) &&
+        projection.sides == site.sides &&
+        projection.clock.sameBitsAs(site.clock) &&
+        projection.medal == siteMedal(site) &&
+        projection.activationRadius.sameBitsAs(definition.activationRadius) &&
+        projection.reveal.sameBitsAs(Float.POSITIVE_INFINITY) &&
+        projection.aimDx.sameBitsAs(siteAimDx(site)) &&
+        projection.aimDy.sameBitsAs(siteAimDy(site))
+}

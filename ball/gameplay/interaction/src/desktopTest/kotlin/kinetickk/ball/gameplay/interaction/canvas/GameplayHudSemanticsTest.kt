@@ -65,6 +65,8 @@ import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
+import kinetickk.ball.gameplay.interaction.layout.*
 
 @OptIn(ExperimentalTestApi::class)
 class GameplayHudSemanticsTest {

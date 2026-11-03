@@ -12,8 +12,10 @@ import kinetickk.ball.gameplay.nucleus.model.FieldCell
 import kinetickk.ball.gameplay.nucleus.model.FieldFlags
 import kinetickk.ball.gameplay.nucleus.model.FieldSource
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
+import kinetickk.ball.gameplay.nucleus.projection.*
 import kinetickk.ball.gameplay.nucleus.render.CombatFieldSource
 import kinetickk.ball.gameplay.nucleus.render.CombatFieldVisual
+import kinetickk.ball.gameplay.nucleus.simulation.elements.*
 import kinetickk.foundation.collections.immutableListOf
 import kotlin.test.Test
 import kotlin.test.assertEquals

@@ -16,6 +16,7 @@ import kinetickk.ball.content.api.DirectedReward
 import kinetickk.ball.content.api.SiteFamily
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.SitePolicy
+import kinetickk.ball.gameplay.interaction.canvas.world.*
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection

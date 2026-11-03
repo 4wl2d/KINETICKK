@@ -6,6 +6,7 @@ package kinetickk.ball.gameplay.interaction.canvas
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.toPixelMap
 import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.gameplay.interaction.canvas.fx.*
 import kinetickk.ball.gameplay.interaction.fx.FxReach
 import kinetickk.ball.gameplay.interaction.fx.ReactionFxSpecs
 import kinetickk.ball.profile.api.ReactionEffectsLevel

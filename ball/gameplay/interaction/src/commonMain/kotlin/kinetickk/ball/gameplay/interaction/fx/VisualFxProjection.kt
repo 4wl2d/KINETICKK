@@ -3,7 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.fx
 
-import kinetickk.ball.gameplay.nucleus.model.formatDamageNumber
+import kinetickk.ball.gameplay.nucleus.render.formatDamageNumber
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf

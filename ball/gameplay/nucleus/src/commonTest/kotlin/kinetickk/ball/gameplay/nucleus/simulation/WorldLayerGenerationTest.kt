@@ -11,6 +11,7 @@ import kinetickk.ball.content.api.ObstacleMix
 import kinetickk.ball.content.api.RebirthMutator
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.model.Obstacle
+import kinetickk.ball.gameplay.nucleus.simulation.world.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.math.sqrt
 import kotlin.test.Test

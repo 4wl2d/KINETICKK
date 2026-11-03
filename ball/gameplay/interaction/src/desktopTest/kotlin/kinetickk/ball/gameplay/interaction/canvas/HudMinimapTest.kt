@@ -17,6 +17,9 @@ import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.phaseShardSolid
 import kinetickk.ball.content.api.ventErupting
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
+import kinetickk.ball.gameplay.interaction.canvas.world.*
+import kinetickk.ball.gameplay.interaction.canvas.world.places.*
 import kinetickk.ball.gameplay.interaction.fx.BuildNoticeKind
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection

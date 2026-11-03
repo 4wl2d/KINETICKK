@@ -31,11 +31,11 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.localizedContent
-import kinetickk.ball.gameplay.interaction.canvas.overlayIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayIcon
 import kinetickk.ball.gameplay.interaction.canvas.with
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
-import kinetickk.ball.gameplay.interaction.rewards.OverlayButtonProbe
+import kinetickk.ball.gameplay.interaction.overlay.OverlayButtonProbe
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureContent
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureModel
 import kinetickk.ball.gameplay.nucleus.render.BuildProjection
@@ -53,6 +53,7 @@ import kotlin.math.max
 import kotlin.math.sqrt
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.overlay.*
 
 /**
  * Integrated visual QA fixes of the run report, checked on rendered pixels with the bundled fonts:

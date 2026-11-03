@@ -9,6 +9,10 @@ import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.ObstacleAspect
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.simulation.characters.*
+import kinetickk.ball.gameplay.nucleus.simulation.combat.*
+import kinetickk.ball.gameplay.nucleus.simulation.flight.*
+import kinetickk.ball.gameplay.nucleus.simulation.world.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.math.min
 import kotlin.test.Test

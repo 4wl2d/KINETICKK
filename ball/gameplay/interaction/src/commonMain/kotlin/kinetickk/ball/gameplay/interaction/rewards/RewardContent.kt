@@ -3,7 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.rewards
 
-import kinetickk.ball.gameplay.interaction.input.hudWidth
+import kinetickk.ball.gameplay.interaction.layout.hudWidth
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -109,11 +109,11 @@ import androidx.compose.ui.text.style.TextDecoration
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RuleLineKind
 import kinetickk.ball.content.api.SkillId
-import kinetickk.ball.gameplay.interaction.canvas.drawRelicIcon
-import kinetickk.ball.gameplay.interaction.canvas.elementFill
-import kinetickk.ball.gameplay.interaction.canvas.overlayColor
-import kinetickk.ball.gameplay.interaction.canvas.overlayIcon
-import kinetickk.ball.gameplay.interaction.canvas.drawActiveItemMark
+import kinetickk.ball.gameplay.interaction.canvas.look.drawRelicIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.elementFill
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayColor
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.drawActiveItemMark
 import kinetickk.foundation.design.KkFillKind
 import kinetickk.foundation.design.drawKkHatch
 import kinetickk.foundation.design.drawKkIcon
@@ -121,8 +121,8 @@ import kinetickk.foundation.design.drawKkPattern
 import kinetickk.foundation.design.drawKkSheared
 import kinetickk.foundation.design.kkStroke
 import kinetickk.foundation.design.measureKkText
-import kinetickk.ball.gameplay.interaction.canvas.choiceOverlayScrimColor
-import kinetickk.ball.gameplay.interaction.canvas.drawItemIcon
+import kinetickk.ball.gameplay.interaction.overlay.choiceOverlayScrimColor
+import kinetickk.ball.gameplay.interaction.canvas.look.drawItemIcon
 import kinetickk.ball.gameplay.interaction.layout.ChoiceLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
@@ -172,6 +172,9 @@ import kinetickk.foundation.design.wideStyle
 import kotlin.math.max
 import kotlin.math.min
 import kotlinx.coroutines.flow.collectLatest
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.overlay.*
+import kinetickk.ball.gameplay.interaction.rewards.art.*
 
 /** Milliseconds of the reward entrance choreography (rings, badge slam, deal, footer). */
 internal const val RewardEntranceMs = 1_600f
@@ -1817,27 +1820,6 @@ private fun connectionColor(connection: RewardConnection, roles: KkRolePalette):
     connection.relic != null -> connection.relic.aspect.overlayColor(roles)
     connection.item != null -> connection.item.elements.firstOrNull()?.overlayColor(roles) ?: roles.kinetic
     else -> Kk.Bone
-}
-
-@Composable
-internal fun RewardScrollIndicator(
-    scrollState: ScrollState,
-    accent: Color,
-    modifier: Modifier,
-    description: String = LocalAppLanguage.current.text(GameplayText.ScrollableRewards),
-) {
-    if (scrollState.maxValue <= 0) return
-    Canvas(modifier.semantics { stateDescription = description }) {
-        // The range can shrink to zero (text size change) before recomposition removes this bar.
-        val max = scrollState.maxValue
-        if (max <= 0) return@Canvas
-        drawRect(accent.copy(alpha = 0.15f))
-        val contentHeight = scrollState.viewportSize + max
-        val fraction = if (contentHeight > 0) scrollState.viewportSize.toFloat() / contentHeight else 1f
-        val thumbHeight = (size.height * fraction).coerceAtLeast(12.dp.toPx()).coerceAtMost(size.height)
-        val top = (size.height - thumbHeight) * scrollState.value.coerceIn(0, max) / max
-        drawRect(accent, Offset(0f, top), Size(size.width, thumbHeight))
-    }
 }
 
 /** Native scrolling handles touch; mouse content dragging is adapted here because

@@ -31,6 +31,7 @@ import kotlin.math.sin
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.overlay.*
 
 /**
  * Where reward cards sit: a decline card's plate and text start clear of its slanted dashed outline at every card size,

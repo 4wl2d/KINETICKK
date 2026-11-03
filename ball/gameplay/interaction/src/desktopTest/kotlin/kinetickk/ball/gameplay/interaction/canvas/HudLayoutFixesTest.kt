@@ -50,6 +50,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.layout.*
 
 /** Layout findings of the review round, drawn with the real fonts in both languages. */
 class HudLayoutFixesTest {
@@ -196,7 +199,7 @@ class HudLayoutFixesTest {
                     affinityBits = bossAffinity(boss)))
                     .toImmutableList(),
             )
-            val controls = kinetickk.ball.gameplay.interaction.input.RunningControlPressLog().apply { fps = 144 }
+            val controls = kinetickk.ball.gameplay.interaction.canvas.hud.RunningControlPressLog().apply { fps = 144 }
             HudDrawCache.forgetLayouts()
             draw(w, h, language, textScale) { measurer -> drawHud(model, measurer, 1f, controls = controls) }
             val where = "$language $w x $h x$textScale $boss"

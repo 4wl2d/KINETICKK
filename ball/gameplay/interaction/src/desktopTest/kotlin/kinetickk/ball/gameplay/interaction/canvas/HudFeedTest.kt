@@ -31,6 +31,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
 
 /** The run feed (banners and build toasts) drawn with the real fonts in both languages. */
 class HudFeedTest {

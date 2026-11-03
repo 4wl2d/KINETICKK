@@ -33,9 +33,9 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.localizedContent
-import kinetickk.ball.gameplay.interaction.canvas.drawRelicIcon
-import kinetickk.ball.gameplay.interaction.canvas.overlayColor
-import kinetickk.ball.gameplay.interaction.canvas.overlayIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.drawRelicIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayColor
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayIcon
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkAlign
@@ -59,6 +59,7 @@ import kinetickk.foundation.design.rememberKkCanvasMeasurer
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kinetickk.ball.gameplay.interaction.canvas.look.*
 
 // Reward card chips: identity marks beside the icon (an active's slot and lane, Risk, Reborn, Heirloom, tags) and the forecast
 // row of what a card changes in the build. Glyphs carry identity, hues only element and role.

@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.gameplay.nucleus.model.SkillCell
+import kinetickk.ball.gameplay.nucleus.projection.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotSame

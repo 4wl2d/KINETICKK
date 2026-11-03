@@ -29,7 +29,7 @@ import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
 import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
-import kinetickk.ball.gameplay.nucleus.simulation.discoverWorld
+import kinetickk.ball.gameplay.nucleus.simulation.sites.discoverWorld
 import kinetickk.ball.gameplay.nucleus.simulation.emitSound
 import kinetickk.ball.gameplay.nucleus.simulation.emitVisualFx
 import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues

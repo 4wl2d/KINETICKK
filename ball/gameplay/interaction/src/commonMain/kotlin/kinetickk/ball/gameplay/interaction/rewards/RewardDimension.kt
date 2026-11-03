@@ -5,14 +5,12 @@ package kinetickk.ball.gameplay.interaction.rewards
 
 import androidx.compose.ui.graphics.Color
 import kinetickk.ball.content.api.DimensionRewardKind
-import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.RunBoonKind
 import kinetickk.ball.content.api.RunModifierEffect
-import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.localizedContent
-import kinetickk.ball.gameplay.interaction.canvas.overlayGrouped
-import kinetickk.ball.gameplay.interaction.canvas.elementFill
-import kinetickk.ball.gameplay.interaction.canvas.elementIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayGrouped
+import kinetickk.ball.gameplay.interaction.canvas.look.elementFill
+import kinetickk.ball.gameplay.interaction.canvas.look.elementIcon
 import kinetickk.ball.gameplay.interaction.localization.DimensionHudText
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -27,6 +25,8 @@ import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkRolePalette
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.rewards.art.*
 
 // The dimension reward overlay: the Zenith's Blessing cards, the Nadir's Pact cards and their Refuse card, and the
 // headings of every dimension reward (the Archive's trove keeps the ordinary item cards). Cards carry facts only: the
@@ -95,10 +95,6 @@ internal fun GameplayRenderModel.rewardBoonCard(choice: ChoiceOption, index: Int
         boonKind = boon.kind,
     )
 }
-
-/** The element of the dungeon whose reward grants the Aspect [boonId], or null. */
-internal fun GameplayContentSnapshot.aspectElement(boonId: Int): StatusElement? =
-    structures.templates.firstOrNull { template -> template.rewards.any { it.boonId == boonId } }?.element
 
 /**
  * A Pact's price as cost lines: a lowered stat ("Max integrity −20"), and each hostile scale above 1 as its own line

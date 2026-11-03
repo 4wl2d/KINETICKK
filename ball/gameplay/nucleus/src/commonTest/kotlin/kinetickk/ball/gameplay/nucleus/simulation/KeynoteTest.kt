@@ -13,7 +13,11 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.usesSkills
 import kinetickk.ball.gameplay.nucleus.model.ItemDeck
 import kinetickk.ball.gameplay.nucleus.model.weaknessElement
+import kinetickk.ball.gameplay.nucleus.projection.*
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.simulation.elements.*
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
+import kinetickk.ball.gameplay.nucleus.simulation.variety.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.random.CloneableXorWowRandom
 import kotlin.test.Test

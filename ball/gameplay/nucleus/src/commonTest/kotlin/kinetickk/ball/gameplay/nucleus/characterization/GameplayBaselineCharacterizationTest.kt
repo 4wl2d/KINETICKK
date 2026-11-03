@@ -28,12 +28,12 @@ import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
-import kinetickk.ball.gameplay.nucleus.simulation.addPickup
-import kinetickk.ball.gameplay.nucleus.simulation.addProjectile
+import kinetickk.ball.gameplay.nucleus.simulation.progression.addPickup
+import kinetickk.ball.gameplay.nucleus.simulation.combat.addProjectile
 import kinetickk.ball.gameplay.nucleus.simulation.applyPreferences
-import kinetickk.ball.gameplay.nucleus.simulation.sampleFluxTrail
+import kinetickk.ball.gameplay.nucleus.simulation.weapons.sampleFluxTrail
 import kinetickk.ball.gameplay.nucleus.simulation.setVelocityForTesting
-import kinetickk.ball.gameplay.nucleus.simulation.spawnEnemy
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.spawnEnemy
 import kinetickk.ball.gameplay.nucleus.simulation.startRun
 import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
 import kinetickk.ball.gameplay.nucleus.simulation.takeVisualFxCues

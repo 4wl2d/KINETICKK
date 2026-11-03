@@ -18,6 +18,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
+import kinetickk.ball.gameplay.nucleus.simulation.sites.*
 
 class SiteRewardsTest {
     private fun game() = MutableGameState(canonicalGameplayContent).apply { startRun(); enemies.clear() }

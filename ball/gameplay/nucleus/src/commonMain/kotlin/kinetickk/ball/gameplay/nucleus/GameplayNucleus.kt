@@ -3,7 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus
 
-import kinetickk.ball.gameplay.nucleus.simulation.buildSummary
+import kinetickk.ball.gameplay.nucleus.simulation.build.buildSummary
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MatrixNodeId
@@ -36,10 +36,10 @@ import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
 import kinetickk.ball.gameplay.nucleus.simulation.exitRun
 import kinetickk.ball.gameplay.nucleus.simulation.pauseForOverlay
 import kinetickk.ball.gameplay.nucleus.simulation.startRun
-import kinetickk.ball.gameplay.nucleus.simulation.takeProgressUpdate
+import kinetickk.ball.gameplay.nucleus.simulation.progression.takeProgressUpdate
 import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
 import kinetickk.ball.gameplay.nucleus.simulation.takeVisualFxCues
-import kinetickk.ball.gameplay.nucleus.simulation.toRenderModel
+import kinetickk.ball.gameplay.nucleus.projection.toRenderModel
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.ball.profile.api.PlayerPreferences

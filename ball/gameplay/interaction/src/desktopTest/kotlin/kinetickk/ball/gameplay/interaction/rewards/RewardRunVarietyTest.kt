@@ -36,7 +36,7 @@ import kinetickk.ball.content.api.SignalOption
 import kinetickk.ball.content.api.SignalTuning
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.localizedContent
-import kinetickk.ball.gameplay.interaction.canvas.overlayGrouped
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayGrouped
 import kinetickk.ball.gameplay.interaction.canvas.with
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
@@ -61,6 +61,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.canvas.look.*
 
 /**
  * The run-variety reward overlays: the omen offer (three omens, No omen, the run conditions under its heading) and the

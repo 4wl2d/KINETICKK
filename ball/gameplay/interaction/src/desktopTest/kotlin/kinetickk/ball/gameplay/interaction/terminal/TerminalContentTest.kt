@@ -32,7 +32,7 @@ import kinetickk.foundation.design.KkIcon
 import kinetickk.ball.gameplay.interaction.rewards.assertTextFitsWithoutBreakingWords
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import kinetickk.ball.gameplay.interaction.rewards.assertNoForbiddenGlyphs
-import kinetickk.ball.gameplay.interaction.rewards.OverlayButtonProbe
+import kinetickk.ball.gameplay.interaction.overlay.OverlayButtonProbe
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureModel
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import org.junit.Rule
@@ -43,6 +43,7 @@ import javax.imageio.ImageIO
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.overlay.*
 
 @OptIn(ExperimentalTestApi::class)
 class TerminalContentTest {

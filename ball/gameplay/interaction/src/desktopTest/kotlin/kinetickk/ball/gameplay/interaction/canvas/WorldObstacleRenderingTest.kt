@@ -20,6 +20,8 @@ import kinetickk.ball.content.api.phaseShardSolid
 import kinetickk.ball.content.api.ventErupting
 import kinetickk.ball.content.api.ventEruptionEnd
 import kinetickk.ball.content.api.ventSecondsToEruption
+import kinetickk.ball.gameplay.interaction.canvas.world.*
+import kinetickk.ball.gameplay.interaction.canvas.world.places.*
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind

@@ -6,7 +6,7 @@ package kinetickk.flow.session.impl
 import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.api.GameplayRunPort
 import kinetickk.ball.gameplay.api.RunId
-import kinetickk.ball.gameplay.interaction.GameplayRunHost
+import kinetickk.ball.gameplay.api.GameplayRunHost
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PreferencesProjection

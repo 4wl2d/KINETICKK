@@ -54,6 +54,7 @@ import kinetickk.foundation.design.rememberInterfaceTypography
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.overlay.*
 
 /**
  * The real pause build view at the three reference frames, in English and Russian, at 100 %, the

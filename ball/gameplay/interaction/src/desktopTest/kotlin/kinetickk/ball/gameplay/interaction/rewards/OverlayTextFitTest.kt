@@ -52,7 +52,7 @@ import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.KkTextRole
 import kinetickk.foundation.design.rememberKkCanvasMeasurer
-import kinetickk.ball.gameplay.interaction.canvas.fitOverlayText
+import kinetickk.ball.gameplay.interaction.overlay.fitOverlayText
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

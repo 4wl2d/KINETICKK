@@ -27,11 +27,11 @@ import kinetickk.ball.content.api.RelicKey
 import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.UiCatalogSnapshot
-import kinetickk.ball.gameplay.interaction.canvas.EnemySilhouette
-import kinetickk.ball.gameplay.interaction.canvas.drawActiveItemMark
-import kinetickk.ball.gameplay.interaction.canvas.drawWorldDiscoveryMark
-import kinetickk.ball.gameplay.interaction.canvas.enemySilhouette
-import kinetickk.ball.gameplay.interaction.canvas.skillGlyph
+import kinetickk.ball.gameplay.interaction.canvas.look.EnemySilhouette
+import kinetickk.ball.gameplay.interaction.canvas.look.drawActiveItemMark
+import kinetickk.ball.gameplay.interaction.canvas.look.drawWorldDiscoveryMark
+import kinetickk.ball.gameplay.interaction.canvas.look.enemySilhouette
+import kinetickk.ball.gameplay.interaction.canvas.look.skillGlyph
 import kinetickk.flow.session.interaction.home.impl.formIndex
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk

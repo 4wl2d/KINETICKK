@@ -8,6 +8,8 @@ import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.gameplay.interaction.canvas.fx.*
+import kinetickk.ball.gameplay.interaction.canvas.world.*
 import kinetickk.ball.gameplay.interaction.fx.FxFlag
 import kinetickk.ball.gameplay.interaction.fx.InteractionFxLimits
 import kinetickk.ball.gameplay.interaction.fx.ReactionFxSpecs

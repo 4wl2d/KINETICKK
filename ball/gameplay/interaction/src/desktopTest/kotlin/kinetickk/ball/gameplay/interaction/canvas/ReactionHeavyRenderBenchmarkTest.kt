@@ -44,6 +44,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.*
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
 
 /**
  * Opt-in Canvas CPU benchmark for reaction feedback, including newly arriving damage text.

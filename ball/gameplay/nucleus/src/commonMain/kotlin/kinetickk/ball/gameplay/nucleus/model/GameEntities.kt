@@ -181,7 +181,7 @@ internal object StatusCell {
     const val MAX_HP_PROC_READY_AT = CINDER_BANK + 1
     const val DETONATE_READY_AT = MAX_HP_PROC_READY_AT + 1
     const val MARKED_UNTIL = DETONATE_READY_AT + 1
-    /** 1 + [kinetickk.ball.gameplay.nucleus.simulation.HitSource] ordinal of the last direct hit. */
+    /** 1 + [kinetickk.ball.gameplay.nucleus.simulation.combat.HitSource] ordinal of the last direct hit. */
     const val LAST_SOURCE = MARKED_UNTIL + 1
     /** [PAIRS] entries in [kinetickk.ball.content.api.ReactionId] order: when each pair may react again. */
     const val REACTION_PAIR_READY_AT = LAST_SOURCE + 1

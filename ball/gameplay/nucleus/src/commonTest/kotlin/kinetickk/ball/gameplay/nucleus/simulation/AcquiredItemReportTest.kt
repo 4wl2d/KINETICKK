@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kotlin.test.Test
 import kotlin.test.assertEquals

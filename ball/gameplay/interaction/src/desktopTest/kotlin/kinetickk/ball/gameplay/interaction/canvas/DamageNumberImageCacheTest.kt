@@ -37,6 +37,7 @@ import kotlin.test.assertNotSame
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.canvas.fx.*
 
 class DamageNumberImageCacheTest {
     @Test

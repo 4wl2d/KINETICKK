@@ -34,6 +34,7 @@ import kotlin.math.PI
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kinetickk.ball.gameplay.interaction.canvas.look.*
 
 /** The same raster contract runs independently in both Interaction owners. */
 class InventoryIconParityTest {

@@ -31,6 +31,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
 
 /** SPEC §9: under Mono every hazard meter of the HUD carries the threat hatch. */
 class HudColorVisionTest {
@@ -246,7 +247,7 @@ class HudColorVisionTest {
         width: Int,
         height: Int,
         roles: KkRolePalette,
-        controls: kinetickk.ball.gameplay.interaction.input.RunningControlPressLog? = null,
+        controls: kinetickk.ball.gameplay.interaction.canvas.hud.RunningControlPressLog? = null,
     ): PixelMap {
         val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1.25f,
             AppLanguage.English, HudTestFonts.typography, roles)
