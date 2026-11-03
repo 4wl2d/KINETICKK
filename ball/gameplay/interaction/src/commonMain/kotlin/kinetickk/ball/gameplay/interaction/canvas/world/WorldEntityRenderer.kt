@@ -32,7 +32,7 @@ import kinetickk.ball.gameplay.interaction.canvas.*
 import kinetickk.ball.gameplay.interaction.canvas.look.*
 import kinetickk.ball.gameplay.interaction.canvas.world.places.*
 
-private const val RAD_TO_DEG = 57.29578f
+internal const val RAD_TO_DEG = 57.29578f
 
 /** Degrees per second for a full turn every [seconds]. */
 private fun spin(seconds: Float): Float = 360f / seconds
