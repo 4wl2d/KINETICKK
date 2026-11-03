@@ -88,6 +88,12 @@ internal data class DungeonAttempt(
  *   and rounds it to the entrance.
  * - After the outcome the bot flies as before (footprint avoidance on), opening a waiting Totem chest while it holds
  *   a Key.
+ * - Unstick ([PilotStallBreaker]), in every phase, after 3 s of crawling (its 1 s speed average below 150 u/s): when a
+ *   wall of at most [ROUND_WALL_LENGTH] (a pillar, the Foundry's conveyor fin) stands between the Core and what it
+ *   chases (its target, its waypoint, or the nearest enemy while the bot steers), it flies round that wall's box by
+ *   its corners at 600 u/s until it sees past it (at most [ROUND_SECONDS]) instead of ramming it for minutes;
+ *   otherwise it side-steps 1.5 s at 600 u/s at right angles to what it chases, which leaves an orbit pressed into a
+ *   wall. Either way out keeps the berth of rocks, walls and skipped sites and the shot dodge.
  *
  * The attempt starts the moment the Core holds a dungeon and ends in one [DungeonOutcome]; [observe] reads it after
  * every simulated input frame.
@@ -121,16 +127,126 @@ internal class DungeonPilot(
     private val siteMarks = FloatArray(MAX_OPTIONAL_SITE_MARKS * 3)
     private val queue = IntArray(ROUTE_NODES)
     private val parentDoor = IntArray(ROUTE_NODES)
+    private val stall = PilotStallBreaker()
+    private var chaseX = 0f
+    private var chaseY = 0f
+    private var escaped = false
+    private var rounding = false
+    private val wallBox = FloatArray(4)
 
-    /** The pilot's steering until the attempt ends, then the bot's. */
+    /** The pilot's steering until the attempt ends, then the bot's; a stall's way out first. */
     fun control(s: MutableGameState) {
         val held = s.dungeon
+        if (unstick(s)) return
         when {
-            attempt != null -> bot.control(s)
+            attempt != null -> botControl(s)
             holding && held != null && held.structureId == heldId -> dungeonControl(s, held)
             s.elapsed >= seekFrom && s.elapsed < s.content.tempo.bossAtSeconds - SEEK_LEAD -> seekControl(s)
-            else -> bot.control(s)
+            else -> botControl(s)
         }
+        escaped = false
+    }
+
+    /** The bot's steering, chasing what it chases (the nearest enemy); its cursor resumes from where a way out left it. */
+    private fun botControl(s: MutableGameState) {
+        var best = Float.POSITIVE_INFINITY
+        for (enemy in s.enemies) {
+            if (!enemy.alive) continue
+            val distance = distanceSquared(s.coreX, s.coreY, enemy.x, enemy.y)
+            if (distance < best) {
+                best = distance
+                chaseX = enemy.x
+                chaseY = enemy.y
+            }
+        }
+        if (escaped) bot.syncCursor(s)
+        bot.control(s)
+    }
+
+    /**
+     * The unstick rule ([PilotStallBreaker]): on a stall, round the short wall that hides what the pilot chases, else
+     * side-step; true while that way out steers. Rounding ends once nothing short stands in the way.
+     */
+    private fun unstick(s: MutableGameState): Boolean {
+        if (stall.stalled(s)) {
+            rounding = roundingCorner(s)
+            if (rounding) stall.hold(s, ROUND_SECONDS) else stall.sideStep(s, chaseX, chaseY)
+        }
+        if (!stall.escaping(s)) return false
+        if (!rounding) {
+            escapeControl(s, stall.escapeX, stall.escapeY)
+            return true
+        }
+        if (!roundingCorner(s)) {
+            stall.stop()
+            return false
+        }
+        val dx = corner[0] - s.coreX
+        val dy = corner[1] - s.coreY
+        val distance = max(1f, length(dx, dy))
+        escapeControl(s, dx / distance * PilotStallBreaker.ESCAPE_SPEED, dy / distance * PilotStallBreaker.ESCAPE_SPEED)
+        return true
+    }
+
+    /** True when a short wall hides what the pilot chases; [corner] then holds the next corner of the way round it. */
+    private fun roundingCorner(s: MutableGameState): Boolean = shortWallBetween(s, chaseX, chaseY) && detourCorner(
+        s.coreX, s.coreY, chaseX, chaseY, wallBox[0], wallBox[1], wallBox[2], wallBox[3],
+        block = s.coreRadius, cornerOffset = s.coreRadius + ROUND_CORNER,
+    )
+
+    /**
+     * True when a solid wall no longer than [ROUND_WALL_LENGTH] stands between the Core and ([toX], [toY]) and the point
+     * itself lies clear of it (a target hugging a wall is reached along the wall, not round it); its box (centre and
+     * half extents, thickness included) lands in [wallBox]. The nearest such wall along the way counts.
+     */
+    private fun shortWallBetween(s: MutableGameState, toX: Float, toY: Float): Boolean {
+        val span = length(toX - s.coreX, toY - s.coreY) * 0.5f + s.coreRadius
+        var first = Float.POSITIVE_INFINITY
+        s.forEachSolidWallNear((s.coreX + toX) * 0.5f, (s.coreY + toY) * 0.5f, span) { _, wall ->
+            if (length(wall.bx - wall.ax, wall.by - wall.ay) > ROUND_WALL_LENGTH) return@forEachSolidWallNear
+            val reach = wall.halfThickness + s.coreRadius
+            val along = segmentNearest(toX, toY, wall.ax, wall.ay, wall.bx, wall.by)
+            val clearX = toX - (wall.ax + (wall.bx - wall.ax) * along)
+            val clearY = toY - (wall.ay + (wall.by - wall.ay) * along)
+            if (clearX * clearX + clearY * clearY <= reach * reach) return@forEachSolidWallNear
+            val entry = sweepCapsuleEntry(s.coreX, s.coreY, toX, toY, wall.ax, wall.ay, wall.bx, wall.by, reach)
+            if (entry < 0f || entry >= first) return@forEachSolidWallNear
+            first = entry
+            wallBox[0] = (wall.ax + wall.bx) * 0.5f
+            wallBox[1] = (wall.ay + wall.by) * 0.5f
+            wallBox[2] = kotlin.math.abs(wall.bx - wall.ax) * 0.5f + wall.halfThickness
+            wallBox[3] = kotlin.math.abs(wall.by - wall.ay) * 0.5f + wall.halfThickness
+        }
+        return first < Float.POSITIVE_INFINITY
+    }
+
+    /**
+     * The unstick rule's way out at ([x], [y]) u/s: with the berth of rocks, of skipped sites the Core is not inside
+     * (never the dungeon it holds) and of walls, and the shot dodge.
+     */
+    private fun escapeControl(s: MutableGameState, x: Float, y: Float) {
+        var desiredX = x
+        var desiredY = y
+        val siteCount = s.optionalSiteMarks(siteMarks)
+        for (mark in 0 until siteCount) {
+            val base = mark * 3
+            val clearance = siteMarks[base + 2] + SITE_CLEARANCE_MARGIN
+            if (distanceSquared(s.coreX, s.coreY, siteMarks[base], siteMarks[base + 1]) < siteMarks[base + 2] * siteMarks[base + 2]) continue
+            val px = s.coreX + s.velocityX * 0.35f - siteMarks[base]
+            val py = s.coreY + s.velocityY * 0.35f - siteMarks[base + 1]
+            val pd = max(1f, length(px, py))
+            if (pd < clearance) {
+                desiredX += px / pd * (clearance - pd) * 8f
+                desiredY += py / pd * (clearance - pd) * 8f
+            }
+        }
+        val avoided = s.avoidRocks(desiredX, desiredY)
+        val walled = repelWalls(s, avoided.first, avoided.second)
+        val dodged = s.dodgeShots(walled.first, walled.second)
+        steer(s, dodged.first, dodged.second, brakeAbove = INSIDE_BRAKE_ON, releaseBelow = INSIDE_BRAKE_OFF)
+        dashOnThreat(s)
+        bot.castSkills(s)
+        escaped = true
     }
 
     /** The bot's choices: it opts into nothing a choice offers and builds as the bot does. */
@@ -238,6 +354,8 @@ internal class DungeonPilot(
             desiredX = vx
             desiredY = vy
         }
+        chaseX = waypointX
+        chaseY = waypointY
         // Skipped optional sites (other structures and the Doodle included) stay outside the path, unless the next
         // waypoint of a target lies in their clearance (a neighbour whose circle overlaps the target's entrance); the
         // target's own mark never counts. The outward search's waypoint is only a heading, so it excuses no site.
@@ -264,19 +382,20 @@ internal class DungeonPilot(
     }
 
     /**
-     * When the segment from ([x], [y]) to ([toX], [toY]) crosses the footprint centred at ([centreX], [centreY]) with
-     * half extents [halfX] × [halfY] (inflated by [FOOTPRINT_BLOCK]), writes into [corner] the first corner (of the
-     * footprint inflated by [FOOTPRINT_CORNER]) of the shortest way round it, one corner or two adjacent ones, and
+     * When the segment from ([x], [y]) to ([toX], [toY]) crosses the box centred at ([centreX], [centreY]) with half
+     * extents [halfX] × [halfY] (inflated by [block]; a footprint by default), writes into [corner] the first corner
+     * (of the box inflated by [cornerOffset]) of the shortest way round it, one corner or two adjacent ones, and
      * returns true.
      */
     private fun detourCorner(
         x: Float, y: Float, toX: Float, toY: Float, centreX: Float, centreY: Float, halfX: Float, halfY: Float,
+        block: Float = FOOTPRINT_BLOCK, cornerOffset: Float = FOOTPRINT_CORNER,
     ): Boolean {
-        val blockX = halfX + FOOTPRINT_BLOCK
-        val blockY = halfY + FOOTPRINT_BLOCK
+        val blockX = halfX + block
+        val blockY = halfY + block
         if (!segmentCrossesBox(x, y, toX, toY, centreX, centreY, blockX, blockY)) return false
-        val cornerX = halfX + FOOTPRINT_CORNER
-        val cornerY = halfY + FOOTPRINT_CORNER
+        val cornerX = halfX + cornerOffset
+        val cornerY = halfY + cornerOffset
         var best = Float.POSITIVE_INFINITY
         for (first in 0 until 4) {
             val ax = centreX + CORNER_SIGNS_X[first] * cornerX
@@ -384,6 +503,8 @@ internal class DungeonPilot(
                 radius = if (s.weapon in BotOrbitWeapons) ORBIT_RADIUS else 0f
             }
         }
+        chaseX = targetX
+        chaseY = targetY
         val dx = s.coreX - targetX
         val dy = s.coreY - targetY
         val distance = max(1f, length(dx, dy))
@@ -530,8 +651,10 @@ internal class DungeonPilot(
     // -----------------------------------------------------------------------------------------
     // Shared steering terms.
 
-    /** Toward ([x], [y]) at up to [cruise], slowing so the Core reaches it at about [arrival]. */
+    /** Toward ([x], [y]) at up to [cruise], slowing so the Core reaches it at about [arrival]; the pilot chases that point. */
     private fun arrive(s: MutableGameState, x: Float, y: Float, cruise: Float, arrival: Float): Pair<Float, Float> {
+        chaseX = x
+        chaseY = y
         val dx = x - s.coreX
         val dy = y - s.coreY
         val distance = length(dx, dy)
@@ -647,6 +770,13 @@ internal class DungeonPilot(
         private const val SEEK_BRAKE_OFF = 780f
         private const val INSIDE_BRAKE_ON = 850f
         private const val INSIDE_BRAKE_OFF = 600f
+
+        /** Unstick: walls up to this long (u) are rounded, for at most this long (s)... */
+        const val ROUND_WALL_LENGTH = 600f
+        const val ROUND_SECONDS = 3f
+
+        /** ...by the corners of the wall's box this far (u) beyond the Core's radius off it. */
+        private const val ROUND_CORNER = 70f
     }
 }
 

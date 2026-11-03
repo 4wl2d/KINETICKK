@@ -46,6 +46,12 @@ import kotlin.math.sin
  * rock starts to hurt it reads obstacles farther ahead and slows below that speed with a solid body on its course
  * (decisions B2). Its own Dashes keep a human cadence (none while a Dash phase runs), leave only once the cursor points
  * their way and never drive the Core into a solid body at a hurting speed.
+ *
+ * The sigil arm, while it flies far, approaches the sigil or duels its boss, keeps the unstick rule of
+ * [PilotStallBreaker]: after 3 s of crawling it flies 1.5 s at 600 u/s at right angles to what it chases (the boss,
+ * the sigil, its far heading), with the usual avoidance. A duel's return leash can hold the Core against a boss that
+ * keeps its range, or against a skipped structure's berth; the other arms fly scripted courses that never crawl that
+ * long.
  */
 
 /** The family of window sites (or the sigil) an arm engages; every other optional site stays avoided. */
@@ -430,6 +436,9 @@ internal class SitePilot(
     private var steered = false
     private var aimHeading = 0f
     private var aimDistance = 0f
+    private val stall = PilotStallBreaker()
+    private var chaseX = 0f
+    private var chaseY = 0f
 
     fun choose(s: MutableGameState) = bot.choose(s)
 
@@ -597,6 +606,8 @@ internal class SitePilot(
      */
     private fun duel(s: MutableGameState, site: SiteState, bossId: Int?, returnReach: Float) {
         val boss = s.enemies.firstOrNull { it.id == bossId && it.alive }
+        chaseX = boss?.x ?: site.x
+        chaseY = boss?.y ?: site.y
         if (boss != null) combat(s, boss.x, boss.y, boss = true) else toward(s, site.x, site.y, tuning.untouchedSpeed)
         val outX = s.coreX - site.x
         val outY = s.coreY - site.y
@@ -615,19 +626,32 @@ internal class SitePilot(
      */
     private fun sigil(s: MutableGameState) {
         val sigil = s.secretSigil
+        val farFlight = sigil == null && !s.hasSecret(RunSecretFlag.FAR_TRAVEL) && s.elapsed >= tuning.farFlightAt
+        val steering = farFlight || sigil != null && (sigil.active || !s.engagementActive())
+        if (steering && stall.stalled(s)) stall.sideStep(s, chaseX, chaseY)
+        if (steering && stall.escaping(s)) {
+            wantX = stall.escapeX
+            wantY = stall.escapeY
+            steer(s, sigil, dodge = true, brake = false)
+            return
+        }
         when {
             sigil != null && sigil.active -> duel(s, sigil, sigil.foeIds.firstOrNull(), tuning.duelReturn)
             sigil != null -> {
                 if (s.engagementActive()) return
+                chaseX = sigil.x
+                chaseY = sigil.y
                 toward(s, sigil.x, sigil.y, s.steadyCursorSpeed(tuning.approachReach))
                 steer(s, sigil, dodge = true, brake = false)
             }
-            !s.hasSecret(RunSecretFlag.FAR_TRAVEL) && s.elapsed >= tuning.farFlightAt -> {
+            farFlight -> {
                 val absoluteX = s.absoluteX(s.coreX).toFloat()
                 val absoluteY = s.absoluteY(s.coreY).toFloat()
                 val out = length(absoluteX, absoluteY)
                 val heading = if (out > 50f) atan2(absoluteY, absoluteX) else s.travelHeading()
                 val speed = s.steadyCursorSpeed(tuning.farFlightReach)
+                chaseX = s.coreX + cos(heading) * FAR_CHASE_REACH
+                chaseY = s.coreY + sin(heading) * FAR_CHASE_REACH
                 wantX = cos(heading) * speed
                 wantY = sin(heading) * speed
                 steer(s, null, dodge = true, brake = false)
@@ -769,6 +793,9 @@ internal class SitePilot(
         steered = true
     }
 }
+
+/** How far ahead along its heading the far flight's chased point lies (u): a direction for the unstick rule. */
+private const val FAR_CHASE_REACH = 1_000f
 
 /** A Dash waits until the cursor points within this angle (radians) of the Dash's direction. */
 private const val DASH_AIM = 0.2f
