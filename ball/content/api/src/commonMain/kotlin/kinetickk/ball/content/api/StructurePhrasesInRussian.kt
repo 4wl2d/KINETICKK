@@ -45,7 +45,7 @@ internal val StructurePhrasesInRussian: List<Pair<String, String>> = listOf(
     "Thermal trial: sentry volleys and exploding bombers pressure the smelting halls. Pillars offer cover before the furnace fight." to
         "Термальное испытание: часовые и взрывающиеся бомбардиры атакуют в плавильных залах. Используйте колонны как укрытие перед боем у печи.",
     "Gravitic trial: aegis guards and wardens hold four chapels. Break their defensive formations to unlock Warden Prime's sanctum." to
-        "Гравитационное испытание: эгиды и стражи удерживают четыре часовни. Разбейте их строй, чтобы открыть святилище Главного стража.",
+        "Гравитационное испытание: эгиды и стражи удерживают четыре часовни. Разбейте их строй, чтобы открыть святилище Верховного стража.",
     "Attack speed +10%. Ion skill cooldowns are 20% shorter. Superconduct becomes Zero Resistance, chaining through frozen enemies." to
         "Скорость атаки +10%. Перезарядка ионных умений короче на 20%. Сверхпроводимость получает Нулевое сопротивление, усиливающее цепь по замёрзшим целям.",
     "Shield capacity +20. Chill lasts 50% longer. Freeze spreads one Chill stack to nearby enemies within 180 u." to
@@ -55,7 +55,7 @@ internal val StructurePhrasesInRussian: List<Pair<String, String>> = listOf(
     "Pickup reach +60 u. Rupture needs one fewer Decay stack and spreads two Decay stacks within 220 u." to
         "Радиус сбора +60 ед. Разрыв требует на один заряд Распада меньше и переносит два заряда Распада на врагов в радиусе 220 ед.",
     "Cooling +20%. Ignite spreads one Scorch stack within 200 u. Wildfire becomes Firewalker, igniting rams from any range." to
-        "Охлаждение +20%. Воспламенение переносит один заряд Ожога в радиусе 200 ед. Лесной пожар получает Огнеходца: реакция с любой дистанции поджигает тараны.",
+        "Охлаждение +20%. Воспламенение переносит один заряд Ожога в радиусе 200 ед. Дикий огонь получает Огнеходца: реакция с любой дистанции поджигает тараны.",
     "Mass +10%. Your fields last 30% longer. Fusion becomes Dwarf Star, pulling harder and burning longer." to
         "Масса +10%. Ваши поля действуют на 30% дольше. Синтез получает Белого карлика: притяжение сильнее, горение дольше.",
 )
