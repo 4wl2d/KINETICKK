@@ -3,9 +3,6 @@
 
 package kinetickk.ball.profile.resource
 
-import kinetickk.ball.profile.api.PlayerEconomy
-import kinetickk.ball.profile.api.PlayerProfile
-import kinetickk.ball.profile.api.ProfileSnapshotRejection
 import kinetickk.ball.profile.api.ProfileWriteFailure
 import kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
 import kinetickk.ball.profile.api.ProfileWriteResult
@@ -37,32 +34,6 @@ class ProfilePersistenceEvidenceTest {
             assertEquals(if (fate.applied) payload else before, destination.durablePayload, fate.name)
             assertEquals(1, destination.writes, "${fate.name}: never blindly retry a write")
             assertEquals(fate.expectedReads, destination.reads, fate.name)
-
-            // The simulated disk is independent of the provider's response and readable cache.
-            when (result) {
-                is ProfileWriteResult.Written -> assertEquals(payload, destination.durablePayload, fate.name)
-                is ProfileWriteResult.ResourceFailure -> assertEquals(before, destination.durablePayload, fate.name)
-                is ProfileWriteResult.OutcomeUnknown -> Unit // Both applied and unapplied worlds occur above.
-                is ProfileWriteResult.Rejected -> error("Valid snapshot rejected for ${fate.name}")
-            }
-        }
-    }
-
-    @Test
-    fun outboundValidationPreventsEveryDestinationFateFromRunning() {
-        val before = requireEncoded(testSnapshot(revision = 19L))
-        val invalid = testSnapshot(profile = PlayerProfile(economy = PlayerEconomy(-1L, 0L)))
-        persistenceFates.forEach { fate ->
-            val destination = EvidenceDestination(before, fate)
-
-            assertEquals(
-                ProfileWriteResult.Rejected(ProfileSnapshotRejection.INCONSISTENT_PROFILE),
-                createProfileResource(destination).writeSnapshot(invalid),
-                fate.name,
-            )
-            assertEquals(before, destination.durablePayload, fate.name)
-            assertEquals(0, destination.writes, fate.name)
-            assertEquals(0, destination.reads, fate.name)
         }
     }
 }

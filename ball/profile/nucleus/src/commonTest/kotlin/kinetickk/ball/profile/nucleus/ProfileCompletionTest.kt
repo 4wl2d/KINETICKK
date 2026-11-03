@@ -75,6 +75,13 @@ class ProfileCompletionTest {
             ProfileNucleus.complete(mutation.nextState, wrongReference, ProfileWriteResult.Written(wrongRevision))
         }
         assertFailsWith<IllegalStateException> {
+            ProfileNucleus.complete(
+                mutation.nextState,
+                ProfileEffectRef(call.effectRef.sourceRevision, call.effectRef.ordinal + 1),
+                ProfileWriteResult.Written(call.snapshot.revision),
+            )
+        }
+        assertFailsWith<IllegalStateException> {
             ProfileNucleus.complete(mutation.nextState, call.effectRef, ProfileWriteResult.Written(wrongRevision))
         }
         assertIs<ProfilePersistenceStatus.Pending>(mutation.nextState.persistence)

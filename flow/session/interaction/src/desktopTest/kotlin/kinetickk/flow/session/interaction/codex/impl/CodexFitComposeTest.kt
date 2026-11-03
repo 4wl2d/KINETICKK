@@ -127,11 +127,6 @@ class CodexFitComposeTest {
     }
 
     /**
-     * The shipped weapons with the longest sheets, opened from the Catalog: their mastery forms,
-     * signature line, twist, harmony and resonance texts wrap only between words in the side panel
-     * and the phone sheet, in both languages at every text size.
-     */
-    /**
      * A locked enemy's facts (where it is found, the Rebirth that opens it) never break a word, whatever the label's
      * length, and a number stays with the word before it, at every layout in both languages and every text size.
      */
@@ -167,6 +162,11 @@ class CodexFitComposeTest {
         }
     }
 
+    /**
+     * The shipped weapons with the longest sheets, opened from the Catalog: their mastery forms,
+     * signature line, twist, harmony and resonance texts wrap only between words in the side panel
+     * and the phone sheet, in both languages at every text size.
+     */
     @Test fun weaponSheetsWrapOnlyBetweenWords() {
         val shipped = kinetickk.ball.content.impl.createContentCatalog().uiCatalog()
         val model = CodexRenderModel(immutableSetOf(), CodexRunStacks(), shipped.items)
@@ -238,7 +238,7 @@ class CodexFitComposeTest {
         assertTrue(codexNavTitleSize(russian, titles, listOf("216/400", "7/12", "23/40", "5/6", "16/19", "3/18"), 250f, 1f) < 24f)
     }
 
-    @Test fun collectionNavFitsA1440x810WindowAtEveryTextSizeAndScrollsWithACueWhenShorter() {
+    @Test fun collectionNavFitsA1440x810WindowUpTo150PercentAndScrollsWithACueOtherwise() {
         for (language in AppLanguage.entries) for (scale in listOf(1f, 1.25f, 1.5f, 1.75f)) codex(1440, 810, language, scale) {
             val where = "${language.code} @$scale"
             onNodeWithTag("codex-tab-1").performSemanticsAction(SemanticsActions.OnClick)

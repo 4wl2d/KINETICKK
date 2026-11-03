@@ -322,7 +322,7 @@ class CodexComposeTest {
         }
     }
 
-    @Test fun tabRowsFitThePhoneWidthInBothLanguagesAtEveryTextScale() {
+    @Test fun tabRowsFitThePhoneWidthInBothLanguagesWhileOnlyCrowdedCategoriesScrollAt175Percent() {
         for (language in AppLanguage.entries) runComposeUiTest {
             var widthValue by mutableIntStateOf(390)
             var heightValue by mutableIntStateOf(844)

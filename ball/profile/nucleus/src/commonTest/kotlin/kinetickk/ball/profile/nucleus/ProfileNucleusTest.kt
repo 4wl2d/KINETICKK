@@ -32,7 +32,6 @@ import kinetickk.ball.profile.api.PreferenceAdjustmentDirection
 import kinetickk.ball.profile.api.PreferencesProjection
 import kinetickk.ball.profile.api.ProfileBootstrapBlockReason
 import kinetickk.ball.profile.api.ProfileBootstrapStatus
-import kinetickk.ball.profile.api.ProfileEffectRef
 import kinetickk.ball.profile.api.ProfileGameplayProgressRejection
 import kinetickk.ball.profile.api.ProfilePersistenceStatus
 import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
@@ -45,8 +44,6 @@ import kinetickk.ball.profile.api.ProfileRunBootstrapResult
 import kinetickk.ball.profile.api.ProfileSnapshot
 import kinetickk.ball.profile.api.ProfileSnapshotReadResult
 import kinetickk.ball.profile.api.ProfileSnapshotRejection
-import kinetickk.ball.profile.api.ProfileWriteFailure
-import kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
 import kinetickk.ball.profile.api.ProfileWriteResult
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProgressProjection
@@ -757,45 +754,6 @@ class ProfileNucleusTest {
         assertIs<ProfileRunBootstrapResult.Unavailable>(
             ProfileNucleus.query(failed, ProfileQuery.GetRunBootstrap).result,
         )
-    }
-
-    @Test
-    fun acceptedResourceEffectSettlesThroughCompletionWithoutARequestVerdict() {
-        val mutation = ProfileNucleus.decide(
-            readyState(),
-            ProfileNucleusPulse.Intent(
-                ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.ToggleSoundEffects),
-            ),
-        ).acceptedFrame()
-        val persist = assertIs<ProfileOutput.PersistSnapshot>(mutation.outputs.single())
-
-        val unknown = ProfileNucleus.complete(
-            mutation.nextState,
-            persist.effectRef,
-            ProfileWriteResult.OutcomeUnknown(
-                ProfileWriteOutcomeUnknownReason.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
-            ),
-        )
-        assertEquals(mutation.nextState.profile, unknown.nextState.profile)
-        assertIs<ProfilePersistenceStatus.OutcomeUnknown>(unknown.nextState.persistence)
-        assertTrue(unknown.outputs.isEmpty())
-
-        val failed = ProfileNucleus.complete(
-            mutation.nextState,
-            persist.effectRef,
-            ProfileWriteResult.ResourceFailure(
-                ProfileWriteFailure.PROVIDER_WRITE_FAILED_BEFORE_EXECUTION,
-            ),
-        )
-        assertIs<ProfilePersistenceStatus.ResourceFailure>(failed.nextState.persistence)
-
-        assertFailsWith<IllegalStateException> {
-            ProfileNucleus.complete(
-                mutation.nextState,
-                ProfileEffectRef(persist.effectRef.sourceRevision, persist.effectRef.ordinal + 1),
-                ProfileWriteResult.Written(persist.snapshot.revision),
-            )
-        }
     }
 
     @Test

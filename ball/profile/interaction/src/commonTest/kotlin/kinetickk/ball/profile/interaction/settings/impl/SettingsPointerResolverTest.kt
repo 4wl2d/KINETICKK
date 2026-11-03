@@ -397,9 +397,9 @@ class SettingsPointerResolverTest {
         assertEquals(32f, phone.key!!.height)
         // A long action name takes room from the cell, down to 70 % of it.
         val large = layout(1000f, 700f, 1f, SettingsGroup.CONTROLS, language = AppLanguage.Russian, scale = 1.4f)
-        // The long Russian Active label exists in both build variants.
+        // The long Russian Active label exists in both build variants, and its cell shrinks in both.
         val skill = assertNotNull(assertNotNull(large.row(SettingsRow.BIND_SKILL_1)).key)
-        assertTrue(skill.width in (132f * 0.7f - 0.01f)..132.01f, "${skill.width}")
+        assertTrue(skill.width in (132f * 0.7f - 0.01f)..131.9f, "${skill.width}")
         assertTrue(skill.width <= assertNotNull(large.row(SettingsRow.BIND_DASH)!!.key).width)
         if (DIAGNOSTICS_ENABLED) {
             val performance = assertNotNull(assertNotNull(large.row(SettingsRow.BIND_PERFORMANCE)).key)
@@ -415,26 +415,25 @@ class SettingsPointerResolverTest {
 
     @Test
     fun platformsShowOnlyTheirDisplayRowsAndHideAnEmptyControlsTab() {
-        val counterRows = listOf(SettingsRow.SHOW_FPS)
         assertEquals(
-            listOf(SettingsRow.FRAME_RATE_CAP, SettingsRow.INTERFACE_SCALE) + counterRows,
+            listOf(SettingsRow.FRAME_RATE_CAP, SettingsRow.INTERFACE_SCALE, SettingsRow.SHOW_FPS),
             SettingsPlatform.DEFAULT.rows(SettingsGroup.DISPLAY),
         )
         assertEquals(
             listOf(SettingsRow.WINDOW_MODE, SettingsRow.WINDOW_SIZE, SettingsRow.VSYNC, SettingsRow.FRAME_RATE_CAP,
-                SettingsRow.REFRESH_RATE, SettingsRow.INTERFACE_SCALE) + counterRows,
+                SettingsRow.REFRESH_RATE, SettingsRow.INTERFACE_SCALE, SettingsRow.SHOW_FPS),
             SettingsPlatform(DESKTOP_SUPPORT).rows(SettingsGroup.DISPLAY),
         )
         val android = SettingsPlatform(ANDROID_SUPPORT)
         assertEquals(
-            listOf(SettingsRow.FRAME_RATE_CAP, SettingsRow.REFRESH_RATE, SettingsRow.IMMERSIVE, SettingsRow.INTERFACE_SCALE) + counterRows,
+            listOf(SettingsRow.FRAME_RATE_CAP, SettingsRow.REFRESH_RATE, SettingsRow.IMMERSIVE, SettingsRow.INTERFACE_SCALE, SettingsRow.SHOW_FPS),
             android.rows(SettingsGroup.DISPLAY),
         )
         assertTrue(SettingsGroup.CONTROLS !in android.groups, "no hardware keyboard: no Controls tab")
         assertEquals(5, layout(390f, 844f, 1f, SettingsGroup.CONTROLS, platform = android).tabs.size)
         assertEquals(SettingsGroup.GAME, layout(390f, 844f, 1f, SettingsGroup.CONTROLS, platform = android).group, "a hidden tab falls back")
         assertEquals(
-            listOf(SettingsRow.FULLSCREEN, SettingsRow.FRAME_RATE_CAP, SettingsRow.INTERFACE_SCALE) + counterRows,
+            listOf(SettingsRow.FULLSCREEN, SettingsRow.FRAME_RATE_CAP, SettingsRow.INTERFACE_SCALE, SettingsRow.SHOW_FPS),
             SettingsPlatform(WEB_SUPPORT).rows(SettingsGroup.DISPLAY),
         )
         // The refresh rate is chosen on Android and read out on desktop.

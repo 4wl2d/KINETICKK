@@ -17,6 +17,7 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.content.api.WorldDiscoveryKind
 import kinetickk.ball.content.api.WorldLayer
@@ -46,9 +47,10 @@ import kotlin.test.assertTrue
 /**
  * The three dimensions in the Codex World category: "???" over their hint until found, then their name and description,
  * each tile carrying its layer's own sigil (bone once found, muted over a hatch before), every other world entry its
- * site glyph as before.
+ * site glyph as before. A secret boss's tile keeps its shape secret until its discovery is recorded: no threat outline,
+ * nothing apart.
  */
-class CodexDimensionTileTest {
+class CodexDiscoveryTileTest {
     private val catalog = codexTestCatalog()
     private val progress = codexTestProgress()
     private val roles = KkRolePalette.Default
@@ -123,8 +125,24 @@ class CodexDimensionTileTest {
         }
     }
 
+    @Test
+    fun aHiddenSecretBossTileShowsNoSilhouetteAndNoHiddenTileTellsTheTwoApart() {
+        val hidden = CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items)
+        val found = hidden.copy(discoveredWorldEntries = immutableSetOf(WorldDiscovery.CARTOGRAPHER, WorldDiscovery.ANTECEDENT))
+        val cartographer = tile(enemyEntry(EnemyType.CARTOGRAPHER, hidden))
+        val antecedent = tile(enemyEntry(EnemyType.ANTECEDENT, hidden))
+        assertContentEquals(pixels(cartographer), pixels(antecedent), "the two hidden tiles are the same tile")
+        assertEquals(0, near(antecedent, roles.threat, 0.15f), "no threat outline of the shape")
+        val revealed = tile(enemyEntry(EnemyType.ANTECEDENT, found))
+        assertTrue(near(revealed, roles.threat, 0.15f) > 40, "the found Antecedent shows its silhouette")
+        assertTrue(near(tile(enemyEntry(EnemyType.DRIFTER, hidden)), roles.threat, 0.15f) > 40, "ordinary kinds always show theirs")
+    }
+
     private fun entry(id: WorldDiscovery, model: CodexRenderModel, language: AppLanguage = AppLanguage.English): CodexEntry =
         codexCatalogEntries(CODEX_WORLD_CATEGORY, "", CodexItemFilter.ALL, model, catalog, progress, language).single { it.key == "world/$id" }
+
+    private fun enemyEntry(type: EnemyType, model: CodexRenderModel): CodexEntry =
+        codexCatalogEntries(CODEX_ENEMIES_CATEGORY, "", CodexItemFilter.ALL, model, catalog, progress).single { it.key == "enemy/$type" }
 
     private fun tile(entry: CodexEntry): PixelMap {
         val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(DENSITY), LayoutDirection.Ltr), 1f, roles = roles)
@@ -146,11 +164,11 @@ class CodexDimensionTileTest {
 
     private fun pixels(map: PixelMap): IntArray = IntArray(SIDE * SIDE) { map[it % SIDE, it / SIDE].toArgb() }
 
-    private fun near(map: PixelMap, color: Color): Int {
+    private fun near(map: PixelMap, color: Color, tolerance: Float = 0.06f): Int {
         var count = 0
         for (y in 0 until SIDE) for (x in 0 until SIDE) {
             val p = map[x, y]
-            if (abs(p.red - color.red) + abs(p.green - color.green) + abs(p.blue - color.blue) < 0.06f) count++
+            if (abs(p.red - color.red) + abs(p.green - color.green) + abs(p.blue - color.blue) < tolerance) count++
         }
         return count
     }
