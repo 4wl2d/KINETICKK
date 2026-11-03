@@ -101,7 +101,8 @@ class DungeonPilotGateTest {
     /**
      * Calibration probe (never the gate population): `KK_DUNGEON_PROBE=first..last` flies the window
      * `i × 7,919 + 13` for both arms (`KK_DUNGEON_ARMS=FRESH,STRONG` picks arms) with the structure knobs of
-     * `KK_DUNGEON_KNOBS=garrisonScale=…,garrisonHealthMultiplier=…,garrisonDamageMultiplier=…,wallDamageScale=…`, and prints every run and the arms' summaries with bootstrap
+     * `KK_DUNGEON_KNOBS=garrisonScale=…,garrisonHealthMultiplier=…,garrisonDamageMultiplier=…,wallDamageScale=…`
+     * (`;` separates knob sets flown one after another), and prints every run and the arms' summaries with bootstrap
      * standard errors.
      */
     @Test
@@ -109,16 +110,18 @@ class DungeonPilotGateTest {
         val window = System.getenv("KK_DUNGEON_PROBE")?.takeIf { it.isNotBlank() } ?: return
         val indices = probeWindow(window)
         val seeds = windowSeeds(indices)
-        val content = probedContent(System.getenv("KK_DUNGEON_KNOBS").orEmpty())
         val arms = System.getenv("KK_DUNGEON_ARMS")?.takeIf { it.isNotBlank() }?.split(',')?.map { Arm.valueOf(it.trim()) }
             ?: Arm.entries
-        println("DUNGEON PROBE window $indices garrisonScale=${content.structures.garrisonScale} " +
-            "garrisonHealthMultiplier=${content.structures.garrisonHealthMultiplier} " +
-            "garrisonDamageMultiplier=${content.structures.garrisonDamageMultiplier} wallDamageScale=${content.structures.wallDamageScale}")
-        for (arm in arms) {
-            val runs = populationOf(seeds) { seed -> fly(seed, arm, content) }
-            runs.forEach { println("DUNGEON PROBE $arm ${it.line()}") }
-            println("DUNGEON PROBE SUMMARY $arm ${summary(runs)}")
+        for (knobs in System.getenv("KK_DUNGEON_KNOBS").orEmpty().split(';')) {
+            val content = probedContent(knobs)
+            println("DUNGEON PROBE window $indices garrisonScale=${content.structures.garrisonScale} " +
+                "garrisonHealthMultiplier=${content.structures.garrisonHealthMultiplier} " +
+                "garrisonDamageMultiplier=${content.structures.garrisonDamageMultiplier} wallDamageScale=${content.structures.wallDamageScale}")
+            for (arm in arms) {
+                val runs = populationOf(seeds) { seed -> fly(seed, arm, content) }
+                runs.forEach { println("DUNGEON PROBE $arm ${it.line()}") }
+                println("DUNGEON PROBE SUMMARY $arm ${summary(runs)}")
+            }
         }
     }
 
