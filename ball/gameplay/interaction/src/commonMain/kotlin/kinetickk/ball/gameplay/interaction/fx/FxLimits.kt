@@ -3,6 +3,8 @@
 
 package kinetickk.ball.gameplay.interaction.fx
 
+import kinetickk.ball.content.api.ContentBounds
+
 internal object InteractionFxLimits {
     const val MAX_PARTICLES = 700
     const val MAX_MOTION_ECHOES = 36
@@ -63,4 +65,10 @@ internal object InteractionFxLimits {
     /** The once-per-profile reaction name stamp (`cond`, −6°, 900 ms). */
     const val REACTION_STAMP_SECONDS = 0.9f
     const val MAX_REACTION_STAMPS = 3
+
+    /** Concurrent structure disintegrations: a whole window shatters at once when the Architect arrives. */
+    const val MAX_DISINTEGRATIONS = ContentBounds.MAX_STRUCTURES_IN_WINDOW
+
+    /** How long a spent structure takes to shatter and fade. */
+    const val DISINTEGRATION_SECONDS = 1.6f
 }

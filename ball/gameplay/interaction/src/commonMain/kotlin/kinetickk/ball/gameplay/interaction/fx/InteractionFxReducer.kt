@@ -64,6 +64,7 @@ class InteractionFxReducer(seed: Int) {
     private val reactionStamps = mutableListOf<ReactionStamp>()
     private val skillBursts = mutableListOf<SkillBurst>()
     private val apexBursts = mutableListOf<ApexBurst>()
+    private val disintegrations = StructureDisintegrationTrack()
     private var runReactionMask = 0
     private var runDiscoveryMask = 0
     private var runBreakMask = 0
@@ -177,6 +178,7 @@ class InteractionFxReducer(seed: Int) {
             runReactionMask = runReactionMask,
             runDiscoveryMask = runDiscoveryMask,
             coreRibbon = if (coreRibbonDirty) buildCoreRibbon() else cachedProjection.coreRibbon,
+            disintegrations = disintegrations.published(),
         )
         projectionDirty = false
         buildNotificationsDirty = false
@@ -247,7 +249,8 @@ class InteractionFxReducer(seed: Int) {
                 true
             }
             is VisualFxCue.WorldRebased -> worldRebased(cue)
-            is VisualFxCue.VisualCuesDropped, is VisualFxCue.StructureDisintegrated -> false
+            is VisualFxCue.VisualCuesDropped -> false
+            is VisualFxCue.StructureDisintegrated -> disintegrations.add(cue, random.nextInt())
             is VisualFxCue.SkillCast -> skillCast(cue)
             is VisualFxCue.ApexActivated -> {
                 apexBursts += ApexBurst(cue.shape.ordinal, cue.x, cue.y, random.nextInt(), ApexFxSpec.activation.life,
@@ -304,7 +307,9 @@ class InteractionFxReducer(seed: Int) {
         if (skillBursts.isNotEmpty()) skillBurstsDirty = true
         if (apexBursts.isNotEmpty()) apexBurstsDirty = true
         val ribbonMoved = rebaseCoreRibbon(cue.shiftX, cue.shiftY)
-        return changed || elementBursts.isNotEmpty() || reactionStamps.isNotEmpty() || skillBursts.isNotEmpty() || apexBursts.isNotEmpty() ||
+        // A shattering structure's shards mark the world like the flashes.
+        val shardsMoved = disintegrations.rebase(cue.shiftX, cue.shiftY)
+        return changed || shardsMoved || elementBursts.isNotEmpty() || reactionStamps.isNotEmpty() || skillBursts.isNotEmpty() || apexBursts.isNotEmpty() ||
             ribbonMoved
     }
 
@@ -319,11 +324,13 @@ class InteractionFxReducer(seed: Int) {
             skillBursts.isNotEmpty() ||
             apexBursts.isNotEmpty() ||
             ribbonCount > 0 ||
-            runReactionMask != 0 || runDiscoveryMask != 0
+            runReactionMask != 0 || runDiscoveryMask != 0 ||
+            !disintegrations.isEmpty
         elementBursts.clear()
         reactionStamps.clear()
         skillBursts.clear()
         apexBursts.clear()
+        disintegrations.clear()
         runReactionMask = 0
         runDiscoveryMask = 0
         runBreakMask = 0
@@ -615,7 +622,8 @@ class InteractionFxReducer(seed: Int) {
             reactionStamps.isEmpty() &&
             skillBursts.isEmpty() &&
             apexBursts.isEmpty() &&
-            ribbonCount == 0
+            ribbonCount == 0 &&
+            disintegrations.isEmpty
         ) return false
         ageCoreRibbon(delta)
         retainInPlace(buildNotifications) { value ->
@@ -670,6 +678,7 @@ class InteractionFxReducer(seed: Int) {
         }
         if (skillBursts.isNotEmpty() || cachedProjection.skillBursts.isNotEmpty()) skillBurstsDirty = true
         if (apexBursts.isNotEmpty() || cachedProjection.apexBursts.isNotEmpty()) apexBurstsDirty = true
+        disintegrations.advance(delta)
         return true
     }
 

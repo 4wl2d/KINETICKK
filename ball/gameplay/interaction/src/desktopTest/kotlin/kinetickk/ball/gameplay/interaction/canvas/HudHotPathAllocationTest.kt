@@ -532,6 +532,22 @@ class HudHotPathAllocationTest {
      * Show FPS on a portrait phone: the strip under the clock with a held readout (it changes at most twice a second, so a
      * steady frame shows one value): once warm, nothing is allocated.
      */
+    /** The Key chip's lock hint (a Totem chest waits and no Key is held) in every layout: steady frames allocate nothing. */
+    @Test
+    fun theKeyChipLockHintAllocatesNothingOnSteadyFrames() {
+        listOf(1_440 to 810, 844 to 390, 390 to 844).forEach { (width, height) ->
+            val base = hudTestModel(width.toFloat(), height.toFloat()).with("keys" to 0, "totemChests" to totemChests(-900f to 300f))
+            val frames = List(FRAMES) { base.with("elapsed" to it * GameplayRenderModel.FIXED_STEP) }
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
+                AppLanguage.Russian)
+            val memory = HudPresentationMemory()
+            val perFrame = steadyFrameBytes(width, height, STEADY_CYCLES) { frame ->
+                drawHud(frames[frame % FRAMES], measurer, 10f + (frame % FRAMES) * 0.002f, 0f, 0f, memory)
+            }
+            assertTrue(perFrame <= 64, "the lock hint at $width x $height allocates $perFrame bytes above an empty frame")
+        }
+    }
+
     @Test
     fun thePortraitShowFpsStripAllocatesNothingOnSteadyFrames() {
         val base = hudTestModel(390f, 844f)

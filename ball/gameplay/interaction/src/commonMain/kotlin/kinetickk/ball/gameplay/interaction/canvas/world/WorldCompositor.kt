@@ -62,6 +62,7 @@ private fun DrawScope.drawWorldLayer(
     // Structure floors and walls, then obstacles, lie on the backdrop, under everything that moves.
     drawStructureFloors(engine, shakeX, shakeY, roles)
     drawStructureWalls(engine, shakeX, shakeY, roles)
+    drawStructureDisintegrations(engine, visualFx, shakeX, shakeY, roles)
     drawObstacles(engine, shakeX, shakeY, roles)
     drawSites(engine, shakeX, shakeY, textMeasurer)
     drawAmbientSites(engine, shakeX, shakeY)

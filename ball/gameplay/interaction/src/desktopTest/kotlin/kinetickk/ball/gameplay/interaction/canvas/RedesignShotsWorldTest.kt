@@ -518,8 +518,8 @@ class RedesignShotsWorldTest {
         add(Scene("site-sigil-hud", hud = true, model = { w, h -> sigil(w, h, summoned = true) }))
         // Structures: two entrances off screen (their markers, a third entrance farther unmarked), a Spire's crown with its
         // promise plates seen from outside, a sealed bay around its garrison under the scrim (in each palette), a
-        // Reliquary's locked sanctum doors with the next way to the chapels, a station cleared but its reactor and the
-        // Architect's Doodle.
+        // Reliquary's locked sanctum doors, a station shattering at 30 % and 70 %, Totem chests (locked; openable and
+        // re-arming), a Spire's promise plates holding a three-charge chest, and the Architect's Doodle.
         add(Scene("structure-signal", hud = true, model = { w, h -> structureSignals(w, h) }))
         add(Scene("structure-exterior", model = { w, h ->
             structureModel(model(w, h), structure(StructureTemplateId.SPIRE, -1_350f, 80f, rotation = 1))
@@ -528,9 +528,9 @@ class RedesignShotsWorldTest {
         add(Scene("dungeon-sealed-mono", roles = KkRolePalette.Mono, model = { w, h -> sealedBay(w, h) }))
         add(Scene("dungeon-sealed-protan", roles = KkRolePalette.Protan, model = { w, h -> sealedBay(w, h) }))
         add(Scene("dungeon-locked", model = { w, h -> lockedSanctum(w, h) }))
-        add(Scene("dungeon-cleared", model = { w, h ->
-            structureModel(model(w, h), structure(StructureTemplateId.DERELICT_STATION, 100f, 0f, cleared = 0b1011))
-        }))
+        for (p in listOf(0.3f, 0.7f)) add(Scene("dungeon-collapse-${(p * 10).toInt()}", model = { w, h -> model(w, h) }, fx = { VisualFxProjection.EMPTY.copy(disintegrations = immutableListOf(kinetickk.ball.gameplay.interaction.fx.StructureDisintegrationProjection(StructureTemplateId.DERELICT_STATION, 0, 1_100f, 1_000f, 1.6f * (1f - p), 1.6f, 9))) }))
+        for (keys in 0..1) add(Scene("totem-chest-$keys", hud = true, model = { w, h -> model(w, h, totem = TotemChestProjection(1L shl 8, 1_240f, 920f, 3, 0f, if (keys == 0) 0f else 99f)).with("keys" to keys) }))
+        add(Scene("dungeon-promise-chest", model = { w, h -> structureModel(model(w, h), StructureFixture(Content.structures.template(StructureTemplateId.SPIRE), -350f, 1_080f, rotation = 1, chestCharges = 3)) }))
         add(Scene("doodle", model = { w, h -> doodle(w, h) }))
         // Every obstacle kind in each state it shows, beside a rock and a bumper; the HUD adds their minimap marks.
         add(Scene("terrain", model = { w, h -> terrain(w, h) }))

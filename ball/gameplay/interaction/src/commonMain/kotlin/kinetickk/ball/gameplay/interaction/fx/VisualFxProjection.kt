@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.fx
 
+import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.gameplay.nucleus.render.formatDamageNumber
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.foundation.collections.ImmutableList
@@ -171,6 +172,20 @@ data class ApexBurstProjection(
 /** The once-per-profile name stamp of a reaction met for the first time, at its world point. */
 data class ReactionStampProjection(val x: Float, val y: Float, val reaction: Int, val life: Float, val maxLife: Float)
 
+/**
+ * A spent structure shattering at its run-local centre ([x], [y]) in quarter turn [rotation]: [life] of [maxLife]
+ * seconds left; [seed] picks its shards' drift, slide and spin.
+ */
+data class StructureDisintegrationProjection(
+    val template: StructureTemplateId,
+    val rotation: Int,
+    val x: Float,
+    val y: Float,
+    val life: Float,
+    val maxLife: Float,
+    val seed: Int,
+)
+
 /** Immutable Interaction-owned visual snapshot attached after the stamped Game read. */
 data class VisualFxProjection(
     val particles: ImmutableList<ParticleProjection>,
@@ -188,6 +203,8 @@ data class VisualFxProjection(
     val runDiscoveryMask: Int = 0,
     /** The Core's recent path for the ribbon behind it (newest first). */
     val coreRibbon: CoreRibbonProjection = CoreRibbonProjection.EMPTY,
+    /** Spent structures shattering, oldest first. */
+    val disintegrations: ImmutableList<StructureDisintegrationProjection> = immutableListOf(),
 ) {
     companion object {
         val EMPTY = VisualFxProjection(

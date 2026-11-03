@@ -37,6 +37,8 @@ internal class StructureFixture(
     val clearedRooms: Int = 0,
     val engagedRoom: Int = -1,
     val id: Long = (template.id.ordinal + 1).toLong() shl 8,
+    /** Totem chest charges its final room promises (0: none). */
+    val chestCharges: Int = 0,
 ) {
     /** The run-local point of the template-space point ([localX], [localY]). */
     fun at(localX: Float, localY: Float): Pair<Float, Float> =
@@ -93,10 +95,12 @@ internal fun structureProjection(
             wallEnd = walls.size,
             clearedRooms = fixture.clearedRooms,
             engagedRoom = fixture.engagedRoom,
+            chestCharges = fixture.chestCharges,
         )
     }
     val held = dungeon?.let { fixture ->
-        DungeonProjection(structureId = fixture.id, engagedRoom = fixture.engagedRoom, panel = !fixture.template.secret)
+        DungeonProjection(structureId = fixture.id, engagedRoom = fixture.engagedRoom, panel = !fixture.template.secret,
+            chestCharges = fixture.chestCharges)
     }
     return StructureRenderProjection(
         structures = placed.toImmutableList(),

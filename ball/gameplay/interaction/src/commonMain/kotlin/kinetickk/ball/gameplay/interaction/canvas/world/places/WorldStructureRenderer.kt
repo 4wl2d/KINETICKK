@@ -13,24 +13,17 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import kinetickk.ball.content.api.STRUCTURE_OUTSIDE
-import kinetickk.ball.content.api.ContentBounds
-import kinetickk.ball.content.api.DUNGEON_ASPECT_SALVAGE_MATTER
 import kinetickk.ball.content.api.StructureRoom
 import kinetickk.ball.content.api.StructureTemplate
 import kinetickk.ball.content.api.StructureTemplateId
-import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.content.api.roomAt
 import kinetickk.ball.content.api.rotateQuarterX
 import kinetickk.ball.content.api.rotateQuarterY
-import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
-import kinetickk.ball.gameplay.interaction.localization.StructureHudText
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.StructureProjection
 import kinetickk.ball.gameplay.nucleus.render.StructureRenderProjection
 import kinetickk.ball.gameplay.nucleus.render.TrialProjection
 import kinetickk.ball.gameplay.nucleus.render.WallKind
-import kinetickk.foundation.common.localization.AppLanguage
-import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkFillKind
 import kinetickk.foundation.design.KkRolePalette
@@ -75,7 +68,7 @@ private val FloorColor = kkMix(Kk.Ink, Kk.Ink1, 0.6f)
 internal fun structureFloorColor(template: StructureTemplate, roles: KkRolePalette): Color =
     template.element?.let { kkMix(FloorColor, roles.element(it.ordinal), 0.075f) } ?: FloorColor
 
-private fun structureAccent(template: StructureTemplate, roles: KkRolePalette): Color =
+internal fun structureAccent(template: StructureTemplate, roles: KkRolePalette): Color =
     template.element?.let { roles.element(it.ordinal) } ?: Kk.Bone
 
 /** The scrim's ink at full depth, and the depth inside the footprint at which it is full (world units). */
@@ -91,10 +84,7 @@ private const val BRACKET_INSET = 36f
 private const val BRACKET_STROKE = 3f
 
 /** The Doodle's planet around its one room (the radius of its ring of chords). */
-private const val DOODLE_PLANET_RADIUS = 672f
-
-/** The stacked plates promising the final room's reward (the Totem chest's plates, 66 units wide). */
-private const val PROMISE_SCALE = 2.2f
+internal const val DOODLE_PLANET_RADIUS = 672f
 
 /** An edge marker stands in for an entrance this far off the view at least (world units), like the Totem chest's. */
 private const val ENTRANCE_MARK_MARGIN = 60f
@@ -142,7 +132,7 @@ internal fun DrawScope.drawStructureFloors(engine: GameplayRenderModel, shakeX: 
  * Wall slabs and doors of the structures in view, right after their floors: each slab a bone-rimmed ink capsule with
  * a darker spine, open doors as two bone dashes (volt for the player's next way), sealed doors as hatched slabs edged
  * in threat while their room's garrison is alive, the sealed room's pulsing threat brackets and the final room's
- * plates until it is cleared (none for a secret template).
+ * plates until it is cleared (a filled key block with charge pips when a Totem chest waits; none for a secret template).
  */
 internal fun DrawScope.drawStructureWalls(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, roles: KkRolePalette) {
     val projection = engine.structures
@@ -188,8 +178,11 @@ internal fun DrawScope.drawStructureWalls(engine: GameplayRenderModel, shakeX: F
         }
         if (engaged >= 0 && engaged < template.rooms.size) drawRoomBrackets(center, template.rooms[engaged], rotation, engine.renderElapsed, roles)
         if (!template.secret && structure.clearedRooms and (1 shl template.finalRoom) == 0) {
-            drawTotemPlates(roomCenter(center, template.rooms[template.finalRoom], rotation), PROMISE_SCALE, accent,
-                keyBlock = false, keyIcon = false)
+            // The Totem chest's own plates promise the reward: a key block and a pip per charge when one waits.
+            val promise = roomCenter(center, template.rooms[template.finalRoom], rotation)
+            val chest = structure.chestCharges > 0
+            drawTotemPlates(promise, TOTEM_CHEST_SCALE, accent, keyBlock = chest, keyIcon = chest)
+            drawTotemChargePips(promise, TOTEM_CHEST_SCALE, structure.chestCharges, accent)
         }
     }
 }
@@ -334,63 +327,6 @@ private const val VIGNETTE_ALPHA = 0.5f
 /** The sealed room's meter cell pulses between these alphas on the brackets' beat (a cleared cell is solid). */
 private const val SEGMENT_PULSE_MIN = 0.2f
 private const val SEGMENT_PULSE_SPAN = 0.35f
-
-/** Draw-thread scratch of the dungeon panel's texts. */
-private object StructurePanelText {
-    val rewards = HudKeyedText()
-    val rules = HudKeyedText()
-}
-
-/** The rules behind the dungeon panel's (!) in [language]. */
-internal fun structureTrialRules(engine: GameplayRenderModel, trial: TrialProjection, language: AppLanguage): String {
-    val id = trial.structure ?: return language.text(StructureHudText.Rules)
-    val template = engine.content.structures.template(id)
-    val fallback = engine.structureAspectFallbackMask(template)
-    val key = (fallback.toLong() shl 16) or (id.ordinal.toLong() shl 8) or language.ordinal.toLong()
-    return StructurePanelText.rules.of(engine.content, key) {
-        buildList {
-            if (template.trialDescription.isNotBlank()) add(template.trialDescription.localizedContent(language))
-            add(language.text(StructureHudText.Rules))
-            for (index in template.rewards.indices) {
-                val reward = template.rewards[index]
-                if (fallback and (1 shl index) != 0) {
-                    add(language.text(StructureHudText.AspectFallback, DUNGEON_ASPECT_SALVAGE_MATTER))
-                    continue
-                }
-                val boon = reward.boonId?.let(engine.content::boon) ?: continue
-                add(boon.description.localizedContent(language))
-            }
-        }.joinToString("\n\n")
-    }
-}
-
-/**
- * The dungeon panel's reward row: its template's reward labels in [language] joined with " + " ("Relic + Rare item"),
- * built once per template and language so a steady panel builds no string.
- */
-internal fun structureTrialRewards(engine: GameplayRenderModel, trial: TrialProjection, language: AppLanguage): String {
-    val id = trial.structure ?: return language.text(HudRedesignText.RewardUnknown)
-    val template = engine.content.structures.template(id)
-    val fallback = engine.structureAspectFallbackMask(template)
-    val key = (fallback.toLong() shl 16) or (id.ordinal.toLong() shl 8) or language.ordinal.toLong()
-    return StructurePanelText.rewards.of(engine.content, key) {
-        template.rewards.mapIndexed { index, reward ->
-            (if (fallback and (1 shl index) != 0) "Matter" else reward.label).localizedContent(language)
-        }.joinToString(" + ")
-    }
-}
-
-/** The same ownership, capacity and content availability that decide the final-room aspect payout. */
-private fun GameplayRenderModel.structureAspectFallbackMask(template: StructureTemplate): Int {
-    var mask = 0
-    for (index in template.rewards.indices) {
-        val id = template.rewards[index].boonId ?: continue
-        if (id in runBoons || runBoons.size >= ContentBounds.MAX_RUN_BOONS || content.boon(id) == null) {
-            mask = mask or (1 shl index)
-        }
-    }
-    return mask
-}
 
 /**
  * The sealed room's cell of the dungeon panel's meter ([meter], drawn with the trial's segments, the cleared rooms

@@ -314,7 +314,9 @@ class GameplayLocalizedRenderingTest {
         for (language in listOf(AppLanguage.Russian, AppLanguage.English)) for ((width, height) in listOf(1_440 to 810, 844 to 390, 390 to 844)) {
             val base = hudTestModel(width.toFloat(), height.toFloat())
             for (textScale in listOf(1f, 1.25f, 1.75f)) base.content.structures.templates.filter { !it.secret }.forEach { template ->
-                val model = base.withDungeon(StructureFixture(template, base.coreX, base.coreY, clearedRooms = 1 shl template.entranceRoom))
+                // The longest reward row: the template's rewards plus a three-charge Totem chest when it can roll one.
+                val chest = if (template.totemChestChance > 0f) 3 else 0
+                val model = base.withDungeon(StructureFixture(template, base.coreX, base.coreY, clearedRooms = 1 shl template.entranceRoom, chestCharges = chest))
                 val measurer = CanvasTextMeasurer(androidx.compose.ui.text.TextMeasurer(androidx.compose.ui.text.font.createFontFamilyResolver(),
                     Density(1f), androidx.compose.ui.unit.LayoutDirection.Ltr), textScale, language,
                     HudTestFonts.typography.copy(localeList = language.localeList()))

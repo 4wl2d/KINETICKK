@@ -241,6 +241,28 @@ class HudMinimapTest {
         assertTrue(pinned.inside(inner).contentEquals(empty.inside(inner)), "only the pinned entrance draws")
     }
 
+    /** Totem chests: a filled volt square while a Key opens them, a hollow bone one while they are locked. */
+    @Test
+    fun totemChestsPinFilledWhileOpenableAndHollowWhileLocked() {
+        val roles = KkRolePalette.Default
+        val base = hudTestModel().with(
+            "velocityX" to 0f, "velocityY" to 0f, "obstacles" to immutableListOf<ObstacleProjection>(),
+            "enemies" to immutableListOf<EnemyProjection>(), "pickups" to immutableListOf<kinetickk.ball.gameplay.nucleus.render.PickupProjection>(),
+        )
+        val chests = totemChests(base.coreX + base.minimapRange * 0.5f to base.coreY)
+        val open = render(base.with("totemChests" to chests, "keys" to 1), 1_440, 810)
+        val minimap = assertNotNull(HudLayoutProbe.rect(HudBlock.MINIMAP))
+        val pinX = minimap.center.x + minimap.width * 0.25f
+        val pinY = minimap.center.y
+        assertTrue(tinted(open.at(pinX, pinY), roles.you), "an openable chest pins a filled volt square")
+        val locked = render(base.with("totemChests" to chests, "keys" to 0), 1_440, 810)
+        assertFalse(tinted(locked.at(pinX, pinY), roles.you), "a locked chest pins no volt")
+        val around = Rect(pinX - 6f, pinY - 6f, pinX + 6f, pinY + 6f)
+        assertTrue(locked.anyNearest(around, Kk.Bone, listOf(Kk.Bone, roles.you, Kk.Ink)), "its hollow square is bone")
+        val none = render(base, 1_440, 810)
+        assertFalse(none.anyNearest(around, Kk.Bone, listOf(Kk.Bone, roles.you, Kk.Ink)), "no chest, no pin")
+    }
+
     @Test
     fun gravityKnotsMarkTheMinimapInGraviticWithTheirField() {
         val gravitic = KkRolePalette.Default.element(3)
