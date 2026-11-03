@@ -118,10 +118,6 @@ internal fun MutableGameState.areaDamage(
     shockwave(x, y, 0.24f, radius, 2)
 }
 
-/** Character abilities predate the build system and keep their area helper name. */
-internal fun MutableGameState.areaRelicDamage(x: Float, y: Float, radius: Float, damage: Float, excludedId: Int = -1) =
-    areaDamage(x, y, radius, damage, excludedId)
-
 /** A short link; [style] is the [LinkStyleCode] of its source (weapons, items and Relics keep the weapon look). */
 internal fun MutableGameState.addRelicArc(
     fromX: Float,
