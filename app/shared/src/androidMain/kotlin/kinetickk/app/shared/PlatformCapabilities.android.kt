@@ -17,7 +17,6 @@ import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
 import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kinetickk.resource.audio.api.ToneRequest
-import kinetickk.resource.audio.api.ToneRequestLimits
 import kinetickk.resource.audio.impl.PreparedPcmTones
 import kinetickk.resource.audio.impl.pcmSample
 import kinetickk.resource.audio.impl.TonePlaybackCapability
@@ -108,28 +107,6 @@ internal object AndroidAudioExecutionPolicy {
     const val BYTES_PER_SAMPLE = 2
     const val MAX_SAMPLE_COUNT = SAMPLE_RATE
     const val MAX_PCM_BYTES = MAX_SAMPLE_COUNT * BYTES_PER_SAMPLE
-}
-
-internal data class AndroidToneBufferShape(
-    val sampleCount: Int,
-    val byteCount: Int,
-)
-
-internal fun androidToneBufferShape(durationSeconds: Float): AndroidToneBufferShape {
-    require(
-        durationSeconds.isFinite() &&
-            durationSeconds >= ToneRequestLimits.MIN_DURATION_SECONDS &&
-            durationSeconds <= ToneRequestLimits.MAX_DURATION_SECONDS,
-    ) {
-        "Android tone duration must remain within the validated Resource bound"
-    }
-    val sampleCount = (AndroidAudioExecutionPolicy.SAMPLE_RATE * durationSeconds)
-        .toInt()
-        .coerceAtLeast(1)
-    check(sampleCount <= AndroidAudioExecutionPolicy.MAX_SAMPLE_COUNT)
-    val byteCount = sampleCount * AndroidAudioExecutionPolicy.BYTES_PER_SAMPLE
-    check(byteCount <= AndroidAudioExecutionPolicy.MAX_PCM_BYTES)
-    return AndroidToneBufferShape(sampleCount = sampleCount, byteCount = byteCount)
 }
 
 internal actual fun createPlatformTonePlaybackCapability(): TonePlaybackCapability =

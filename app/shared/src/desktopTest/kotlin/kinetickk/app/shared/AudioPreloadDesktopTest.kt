@@ -14,6 +14,7 @@ import kinetickk.resource.audio.api.ToneWave
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AudioPreloadDesktopTest {
@@ -46,15 +47,39 @@ class AudioPreloadDesktopTest {
     @Test
     fun missingOutputDoesNotBlockStartupOrRetryDeviceCreationDuringGameplay() = runBlocking {
         val attempts = AtomicInteger()
+        val retried = CountDownLatch(1)
         val player = DesktopTonePlaybackCapability {
-            attempts.incrementAndGet()
+            if (attempts.incrementAndGet() > 1) retried.countDown()
             throw LineUnavailableException("no output device")
         }
         try {
             player.prepare(listOf(tone))
             player.prepare(listOf(tone))
             player.play(tone)
+            // Playback runs on the audio worker; give it time to retry before asserting it did not.
+            assertFalse(retried.await(300, TimeUnit.MILLISECONDS))
             assertEquals(1, attempts.get())
+        } finally {
+            player.close()
+        }
+    }
+
+    @Test
+    fun outputThatStopsAcceptingSamplesIsReopenedForTheNextTone() = runBlocking {
+        val lost = RecordingLine(expectedWrites = 1, acceptsWrites = false)
+        val replacement = RecordingLine(expectedWrites = 1)
+        val creations = AtomicInteger()
+        val player = DesktopTonePlaybackCapability {
+            if (creations.incrementAndGet() == 1) lost.line else replacement.line
+        }
+        try {
+            player.prepare(listOf(tone))
+            player.play(tone)
+            assertTrue(lost.written.await(3, TimeUnit.SECONDS))
+            player.play(tone)
+            assertTrue(replacement.written.await(3, TimeUnit.SECONDS))
+            assertEquals(2, creations.get())
+            assertEquals(1, lost.closes.get())
         } finally {
             player.close()
         }
@@ -96,7 +121,11 @@ class AudioPreloadDesktopTest {
     }
 }
 
-private class RecordingLine(expectedWrites: Int, private val blockDrain: Boolean = false) {
+private class RecordingLine(
+    expectedWrites: Int,
+    private val blockDrain: Boolean = false,
+    private val acceptsWrites: Boolean = true,
+) {
     val opens = AtomicInteger()
     val starts = AtomicInteger()
     val writes = AtomicInteger()
@@ -114,7 +143,7 @@ private class RecordingLine(expectedWrites: Int, private val blockDrain: Boolean
                 buffers.add(checkNotNull(args)[0])
                 writes.incrementAndGet()
                 written.countDown()
-                args[2] as Int
+                if (acceptsWrites) args[2] as Int else 0
             }
             "drain" -> {
                 draining.countDown()

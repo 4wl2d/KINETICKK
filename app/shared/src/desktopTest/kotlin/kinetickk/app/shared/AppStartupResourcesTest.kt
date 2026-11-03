@@ -3,6 +3,7 @@
 
 package kinetickk.app.shared
 
+import androidx.compose.ui.text.font.createFontFamilyResolver
 import kinetickk.foundation.design.InterfaceTypography
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
@@ -12,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 
 class AppStartupResourcesTest {
@@ -25,10 +27,12 @@ class AppStartupResourcesTest {
             resolveFonts = { assertSame(fonts, it); calls += "resolve" },
             prepareAudio = { calls += "audio" },
             prepareGraphics = { calls += "graphics" },
-            onProgress = {}, onFontProgress = {},
+            onProgress = {}, onFontProgress = {}, resolver = createFontFamilyResolver(),
         )
-        assertSame(fonts, prepare())
-        assertSame(fonts, prepare())
+        prepare()
+        assertSame(fonts, resources.readyValue?.typography)
+        prepare()
+        assertSame(fonts, resources.readyValue?.typography)
         assertEquals(listOf("load", "audio", "graphics", "resolve"), calls)
     }
 
@@ -42,9 +46,11 @@ class AppStartupResourcesTest {
             loadFonts = { loads++; InterfaceTypography() }, resolveFonts = {},
             prepareAudio = { audio++; if (audio == 1) error("output not ready") },
             prepareGraphics = { graphics++ }, onProgress = {}, onFontProgress = {},
+            resolver = createFontFamilyResolver(),
         )
         assertFailsWith<IllegalStateException> { prepare() }
         assertEquals(0, graphics)
+        assertNull(resources.readyValue)
         prepare()
         assertEquals(1, loads)
         assertEquals(2, audio)
@@ -59,16 +65,19 @@ class AppStartupResourcesTest {
         val cancelled = async(start = CoroutineStart.UNDISPATCHED) {
             resources.prepare(
                 loadFonts = { blocked.await() }, resolveFonts = {}, prepareAudio = { audio++ },
-                prepareGraphics = {}, onProgress = {}, onFontProgress = {},
+                prepareGraphics = {}, onProgress = {}, onFontProgress = {}, resolver = createFontFamilyResolver(),
             )
         }
         cancelled.cancelAndJoin()
         assertEquals(0, audio)
+        assertNull(resources.readyValue)
         val fonts = InterfaceTypography()
-        assertSame(fonts, resources.prepare(
+        resources.prepare(
             loadFonts = { fonts }, resolveFonts = { error("cancelled fonts were retained") },
             prepareAudio = { audio++ }, prepareGraphics = {}, onProgress = {}, onFontProgress = {},
-        ))
+            resolver = createFontFamilyResolver(),
+        )
+        assertSame(fonts, resources.readyValue?.typography)
         assertEquals(1, audio)
     }
 }

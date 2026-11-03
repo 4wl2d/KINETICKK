@@ -18,7 +18,6 @@ import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
 import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kinetickk.foundation.diagnostics.CrashDiagnostics
 import kinetickk.resource.audio.api.ToneRequest
-import kinetickk.resource.audio.api.ToneRequestLimits
 import kinetickk.resource.audio.impl.PreparedPcmTones
 import kinetickk.resource.audio.impl.pcmSample
 import kinetickk.resource.audio.impl.TonePlaybackCapability
@@ -159,28 +158,6 @@ internal object DesktopAudioExecutionPolicy {
 internal actual fun createPlatformTonePlaybackCapability(): TonePlaybackCapability =
     DesktopTonePlaybackCapability()
 
-internal data class DesktopToneBufferShape(
-    val sampleCount: Int,
-    val byteCount: Int,
-)
-
-internal fun desktopToneBufferShape(durationSeconds: Float): DesktopToneBufferShape {
-    require(
-        durationSeconds.isFinite() &&
-            durationSeconds >= ToneRequestLimits.MIN_DURATION_SECONDS &&
-            durationSeconds <= ToneRequestLimits.MAX_DURATION_SECONDS,
-    ) {
-        "Desktop tone duration must remain within the validated Resource bound"
-    }
-    val sampleCount = (DesktopAudioExecutionPolicy.SAMPLE_RATE * durationSeconds)
-        .toInt()
-        .coerceAtLeast(1)
-    check(sampleCount <= DesktopAudioExecutionPolicy.MAX_SAMPLE_COUNT)
-    val byteCount = sampleCount * DesktopAudioExecutionPolicy.BYTES_PER_SAMPLE
-    check(byteCount <= DesktopAudioExecutionPolicy.MAX_PCM_BYTES)
-    return DesktopToneBufferShape(sampleCount = sampleCount, byteCount = byteCount)
-}
-
 internal class DesktopTonePlaybackCapability(
     private val createLine: (AudioFormat) -> SourceDataLine = AudioSystem::getSourceDataLine,
 ) : TonePlaybackCapability {
@@ -292,7 +269,12 @@ internal class DesktopTonePlaybackCapability(
         val byteCount = samples.size * DesktopAudioExecutionPolicy.BYTES_PER_SAMPLE
         while (written < byteCount && !executor.isShutdown) {
             val count = output.write(bytes, written, byteCount - written)
-            check(count > 0) { "Desktop tone output stopped accepting samples" }
+            if (count <= 0) {
+                // A lost device stops accepting samples. Reopen it for the next tone.
+                output.close()
+                line = null
+                return
+            }
             written += count
         }
         if (!executor.isShutdown) {

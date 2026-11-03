@@ -36,12 +36,10 @@ internal class AppStartupResources {
     var readyValue by mutableStateOf<ReadyStartupResources?>(null)
         private set
 
-    fun publish(fonts: InterfaceTypography, resolver: FontFamily.Resolver) {
-        check(fonts === typography && audioReady && graphicsReady)
-        readyValue = ReadyStartupResources(fonts, resolver)
-    }
-
-    /** A failed/cancelled stage stays unfinished; retry reuses only successfully prepared resources. */
+    /**
+     * A failed/cancelled stage stays unfinished; retry reuses only successfully prepared resources.
+     * Publishes [readyValue] only after every stage has finished.
+     */
     suspend fun prepare(
         loadFonts: suspend ((Int, Int) -> Unit) -> InterfaceTypography,
         resolveFonts: suspend (InterfaceTypography) -> Unit,
@@ -49,7 +47,8 @@ internal class AppStartupResources {
         prepareGraphics: suspend () -> Unit,
         onProgress: suspend (StartupProgress) -> Unit,
         onFontProgress: (StartupProgress) -> Unit,
-    ): InterfaceTypography = mutex.withLock {
+        resolver: FontFamily.Resolver,
+    ): Unit = mutex.withLock {
         onProgress(StartupProgress(StartupStage.Fonts))
         val fonts = typography?.also { resolveFonts(it) } ?: loadFonts { done, total ->
             onFontProgress(StartupProgress(StartupStage.Fonts, done, total))
@@ -65,6 +64,6 @@ internal class AppStartupResources {
             graphicsReady = true
         }
         onProgress(StartupProgress(StartupStage.Graphics, 1, 1))
-        fonts
+        readyValue = ReadyStartupResources(fonts, resolver)
     }
 }

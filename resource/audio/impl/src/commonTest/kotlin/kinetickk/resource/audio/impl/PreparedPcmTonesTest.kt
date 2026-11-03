@@ -13,7 +13,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
-import kotlin.test.assertTrue
 
 class PreparedPcmTonesTest {
     @Test
@@ -24,7 +23,7 @@ class PreparedPcmTonesTest {
         assertSame(original, bank.samples(request.copy(gain = 0.75f)))
         assertSame(original, bank.samples(request.copy(gain = 0f)))
         assertEquals(original.size, bank.sampleCount)
-        assertTrue(bank.contains(request.copy(gain = 0.65f)))
+        assertSame(original, bank.samples(request.copy(gain = 0.65f)))
     }
 
     @Test

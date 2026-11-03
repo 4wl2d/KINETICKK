@@ -39,20 +39,38 @@
             <div id="boot-progress" class="boot-progress" role="progressbar" aria-label="Загрузка игры"></div>
             <p id="boot-status" class="boot-status" role="status">Запускаем игру…</p>
             <button id="boot-retry" class="boot-retry" type="button" hidden>Повторить</button>
-            <noscript><p>Для запуска игры нужен JavaScript.</p></noscript>
+            <noscript>
+                <p>Для запуска игры включите в браузере выполнение скриптов.</p>
+                <p lang="en">Enable JavaScript to play.</p>
+            </noscript>
         </div>
     </main>
     <script>
         (() => {
+            const strings = {
+                ru: { loading: "Загрузка игры", starting: "Запускаем игру…", retry: "Повторить", failed: "Не удалось загрузить игру. Попробуй ещё раз." },
+                en: { loading: "Loading the game", starting: "Starting the game…", retry: "Retry", failed: "Couldn't load the game. Try again." },
+            };
+            // The game saves its language here; Russian matches the default profile.
+            let language = "ru";
+            try {
+                if (window.localStorage.getItem("kinetickk_language") === "en") language = "en";
+            } catch (_) {}
+            const text = strings[language];
             const boot = document.getElementById("kinetickk-boot");
+            const progress = document.getElementById("boot-progress");
             const status = document.getElementById("boot-status");
             const retry = document.getElementById("boot-retry");
+            document.documentElement.lang = language;
+            progress.setAttribute("aria-label", text.loading);
+            status.textContent = text.starting;
+            retry.textContent = text.retry;
             const fail = () => {
                 if (!boot.isConnected) return;
                 boot.setAttribute("aria-busy", "false");
-                document.getElementById("boot-progress").hidden = true;
+                progress.hidden = true;
                 status.setAttribute("role", "alert");
-                status.textContent = "Не удалось загрузить игру. Попробуй ещё раз.";
+                status.textContent = text.failed;
                 retry.hidden = false;
             };
             const onError = event => {

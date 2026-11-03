@@ -31,8 +31,6 @@ class PreparedPcmTones(requests: List<ToneRequest>, private val sampleRate: Int)
     fun samples(request: ToneRequest): FloatArray =
         entries.firstOrNull { it.request.sameWaveform(request) }?.samples ?: synthesizeTone(request, sampleRate)
 
-    fun contains(request: ToneRequest): Boolean = entries.any { it.request.sameWaveform(request) }
-
     val sampleCount: Int get() = entries.sumOf { it.samples.size }
 }
 

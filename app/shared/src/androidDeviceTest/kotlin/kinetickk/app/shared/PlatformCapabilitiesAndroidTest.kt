@@ -16,6 +16,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import kinetickk.resource.audio.api.ToneRequest
 import kinetickk.resource.audio.api.ToneWave
+import kinetickk.resource.audio.impl.PreparedPcmTones
 import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(AndroidJUnit4::class)
@@ -103,15 +104,17 @@ class PlatformCapabilitiesAndroidTest {
 
     @Test
     fun androidSynthesisBufferAcceptsMaximumDurationAndRejectsNext() {
-        val maximum = androidToneBufferShape(1f)
-        assertEquals(22_050, maximum.sampleCount)
-        assertEquals(44_100, maximum.byteCount)
+        val maximum = ToneRequest(20_000f, 1f, 1f, ToneWave.SQUARE)
+        val samples = PreparedPcmTones(listOf(maximum), AndroidAudioExecutionPolicy.SAMPLE_RATE).samples(maximum)
+        assertEquals(22_050, samples.size)
+        assertEquals(AndroidAudioExecutionPolicy.MAX_SAMPLE_COUNT, samples.size)
+        assertEquals(44_100, AndroidAudioExecutionPolicy.MAX_PCM_BYTES)
 
         try {
-            androidToneBufferShape(Math.nextUp(1f))
+            ToneRequest(20_000f, Math.nextUp(1f), 1f, ToneWave.SQUARE)
             fail("The first duration above the Resource maximum must be rejected")
         } catch (expected: IllegalArgumentException) {
-            assertTrue(expected.message.orEmpty().contains("validated Resource bound"))
+            assertTrue(expected.message.orEmpty().contains("between 0.001 and 1 second"))
         }
     }
 }

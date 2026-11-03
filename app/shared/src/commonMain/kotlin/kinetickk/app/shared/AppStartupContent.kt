@@ -72,7 +72,7 @@ internal fun AppStartupContent(
     LaunchedEffect(resources, loader, attemptValue) {
         failedValue = false
         try {
-            val typography = resources.prepare(
+            resources.prepare(
                 loadFonts = { onProgress -> loader.load(onProgress) },
                 resolveFonts = { loader.resolve(it) },
                 prepareAudio = prepareAudio,
@@ -83,11 +83,12 @@ internal fun AppStartupContent(
                     withFrameNanos { }
                 },
                 onFontProgress = { progressValue = it },
+                resolver = loader.fontFamilyResolver,
             )
-            resources.publish(typography, loader.fontFamilyResolver)
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (error: Exception) {
+        } catch (error: Throwable) {
+            // Also covers browser errors, which are not Exceptions on wasm.
             diagnostics.event("startup.failed", "${progressValue.stage}: $error")
             failedValue = true
         }

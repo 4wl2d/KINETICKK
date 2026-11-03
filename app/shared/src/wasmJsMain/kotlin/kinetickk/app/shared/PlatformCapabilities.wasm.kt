@@ -137,7 +137,12 @@ private class WebTonePlaybackCapability : TonePlaybackCapability {
 private fun prepareWebAudio(current: JsAny?): JsAny? = js(
     """{
         const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
-        return current || (AudioContext ? new AudioContext() : null);
+        try {
+            return current || (AudioContext ? new AudioContext() : null);
+        } catch (failure) {
+            // Audio is optional: a browser that refuses a context leaves the game silent.
+            return null;
+        }
     }""",
 )
 

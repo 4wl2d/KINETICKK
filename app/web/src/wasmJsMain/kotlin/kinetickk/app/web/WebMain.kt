@@ -28,6 +28,8 @@ fun main() {
         KinetickkApp(
             onLanguageChanged = { languageCode ->
                 document.documentElement?.setAttribute("lang", languageCode)
+                // The HTML boot splash reads this before the game loads.
+                runCatching { window.localStorage.setItem("kinetickk_language", languageCode) }
             },
             displayHost = display,
         )

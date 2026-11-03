@@ -15,6 +15,9 @@ import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.ProfilePersistenceContract
 import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
 import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
+import kinetickk.resource.audio.api.ToneRequest
+import kinetickk.resource.audio.api.ToneWave
+import kinetickk.resource.audio.impl.PreparedPcmTones
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -269,12 +272,16 @@ class PlatformCapabilitiesDesktopTest {
 
     @Test
     fun synthesisBufferAcceptsMaximumDurationAndRejectsNext() {
-        val exact = desktopToneBufferShape(1f)
+        val maximum = ToneRequest(20_000f, 1f, 1f, ToneWave.SQUARE)
+        val samples = PreparedPcmTones(listOf(maximum), DesktopAudioExecutionPolicy.SAMPLE_RATE).samples(maximum)
 
-        assertEquals(DesktopAudioExecutionPolicy.MAX_SAMPLE_COUNT, exact.sampleCount)
-        assertEquals(DesktopAudioExecutionPolicy.MAX_PCM_BYTES, exact.byteCount)
+        assertEquals(DesktopAudioExecutionPolicy.MAX_SAMPLE_COUNT, samples.size)
+        assertEquals(
+            DesktopAudioExecutionPolicy.MAX_PCM_BYTES,
+            DesktopAudioExecutionPolicy.MAX_SAMPLE_COUNT * DesktopAudioExecutionPolicy.BYTES_PER_SAMPLE,
+        )
         assertFailsWith<IllegalArgumentException> {
-            desktopToneBufferShape(Float.fromBits(1f.toBits() + 1))
+            ToneRequest(20_000f, Float.fromBits(1f.toBits() + 1), 1f, ToneWave.SQUARE)
         }
     }
 }

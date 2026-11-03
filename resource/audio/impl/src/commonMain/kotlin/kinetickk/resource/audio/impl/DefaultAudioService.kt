@@ -48,14 +48,7 @@ class DefaultAudioService(
             musicClock += MUSIC_STEP_SECONDS
             val frequency = MUSIC_NOTES[musicStep % MUSIC_NOTES.size]
             val accent = if (musicStep % 8 == 0) 1.35f else 1f
-            platform.playIfAllowed(
-                ToneRequest(
-                    frequencyHz = frequency,
-                    durationSeconds = 0.18f,
-                    gain = volume * 0.035f * accent,
-                    wave = ToneWave.TRIANGLE,
-                ),
-            )
+            platform.playIfAllowed(musicTone(frequency, gain = volume * 0.035f * accent))
             musicStep++
         }
     }
@@ -75,7 +68,10 @@ class DefaultAudioService(
         const val MAX_SELECTED_EFFECT_REQUESTS_PER_ADVANCE = 3
         const val MUSIC_STEP_SECONDS = 0.32f
         val MUSIC_NOTES = floatArrayOf(110f, 146.83f, 164.81f, 220f, 196f, 164.81f, 146.83f, 123.47f)
-        val MUSIC_TONES = MUSIC_NOTES.distinct().map { ToneRequest(it, 0.18f, 1f, ToneWave.TRIANGLE) }
+        val MUSIC_TONES = MUSIC_NOTES.distinct().map { musicTone(it, gain = 1f) }
+
+        /** The one music tone shape, so every note matches the prepared bank. */
+        fun musicTone(frequencyHz: Float, gain: Float) = ToneRequest(frequencyHz, 0.18f, gain, ToneWave.TRIANGLE)
     }
 }
 
