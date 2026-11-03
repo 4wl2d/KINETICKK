@@ -3,10 +3,20 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.font.createFontFamilyResolver
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.DirectedReward
 import kinetickk.ball.content.api.SiteFamily
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.SitePolicy
+import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
@@ -17,6 +27,9 @@ import kinetickk.ball.gameplay.nucleus.render.TrialValue
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
+import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.design.CanvasTextMeasurer
+import kinetickk.foundation.design.Kk
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.sin
@@ -111,3 +124,44 @@ internal fun trialSites(x: Float = 0f, y: Float = 0f, policy: SitePolicy = SiteP
 internal val WindowSiteKinds: List<SiteKind> = SiteKind.entries.filter {
     it.family in setOf(SiteFamily.ANOMALY, SiteFamily.RACE, SiteFamily.CHALLENGE, SiteFamily.BOUNTY, SiteFamily.PORTAL)
 }
+
+/**
+ * The world drawn the way the site rendering tests sweep it, sharing one draw scope, a 1 px canvas and an English
+ * measurer per text scale (draw-thread confined: a test JVM runs its classes one at a time).
+ */
+internal object WorldRenderHarness {
+    val scope = CanvasDrawScope()
+
+    // The size passed to draw sets the screen; a 1 px bitmap keeps the sweep fast.
+    val canvas = Canvas(ImageBitmap(1, 1))
+
+    private val measurers = HashMap<Float, CanvasTextMeasurer>()
+
+    fun measurer(textScale: Float): CanvasTextMeasurer = measurers.getOrPut(textScale) {
+        CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64), textScale,
+            AppLanguage.English, HudTestFonts.typography)
+    }
+
+    /** The 1440 x 810 frame of [model]'s world over the ink backdrop. */
+    fun render(model: GameplayRenderModel): IntArray {
+        val bitmap = ImageBitmap(1_440, 810)
+        CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(1_440f, 810f)) {
+            drawRect(Kk.Ink)
+            drawWorld(model, VisualFxProjection.EMPTY, 0f, 0f, measurer(1f))
+        }
+        val pixels = IntArray(1_440 * 810)
+        bitmap.readPixels(pixels, 0, 0, 1_440, 810)
+        return pixels
+    }
+
+    /** Draws the world with the world origin at screen ([x], [y]), the camera moved there. */
+    fun drawAt(width: Int, height: Int, textScale: Float, model: GameplayRenderModel, x: Float, y: Float) {
+        scope.draw(Density(1f), LayoutDirection.Ltr, canvas, Size(width.toFloat(), height.toFloat())) {
+            drawWorld(model.with("cameraX" to width * 0.5f - x, "cameraY" to height * 0.5f - y), VisualFxProjection.EMPTY,
+                0f, 0f, measurer(textScale))
+        }
+    }
+}
+
+/** Whether this box lies wholly inside a [width] x [height] screen. */
+internal fun Rect.onScreen(width: Int, height: Int) = left >= 0f && top >= 0f && right <= width && bottom <= height

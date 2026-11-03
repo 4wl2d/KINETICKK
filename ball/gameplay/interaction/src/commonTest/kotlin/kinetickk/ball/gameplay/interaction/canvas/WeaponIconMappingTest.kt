@@ -9,9 +9,7 @@ import kotlin.test.assertEquals
 
 class WeaponIconMappingTest {
     @Test fun everyWeaponRetainsItsDistinctNamedGlyph() {
-        val icons = WeaponId.entries.map { weapon ->
-            weapon.overlayIcon().also { assertEquals("WEAPONS_${weapon.name}", it.name) }
-        }
-        assertEquals(WeaponId.entries.size, icons.toSet().size)
+        // Distinct weapon names give distinct icons.
+        for (weapon in WeaponId.entries) assertEquals("WEAPONS_${weapon.name}", weapon.overlayIcon().name)
     }
 }

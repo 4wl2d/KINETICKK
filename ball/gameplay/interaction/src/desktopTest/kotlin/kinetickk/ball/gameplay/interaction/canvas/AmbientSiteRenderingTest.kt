@@ -3,25 +3,15 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Canvas
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.SiteKind
-import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
+import kinetickk.ball.gameplay.interaction.canvas.WorldRenderHarness.drawAt
+import kinetickk.ball.gameplay.interaction.canvas.WorldRenderHarness.render
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.foundation.collections.immutableListOf
-import kinetickk.foundation.common.localization.AppLanguage
-import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
 import kotlin.math.abs
 import kotlin.test.Test
@@ -159,36 +149,6 @@ class AmbientSiteRenderingTest {
             alongY.flatMap { y -> across.flatMap { d -> listOf(d to y, width - d to y) } }
     }
 
-    private fun render(model: GameplayRenderModel): IntArray {
-        val bitmap = ImageBitmap(1_440, 810)
-        CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(1_440f, 810f)) {
-            drawRect(Kk.Ink)
-            drawWorld(model, VisualFxProjection.EMPTY, 0f, 0f, measurer(1f))
-        }
-        val pixels = IntArray(1_440 * 810)
-        bitmap.readPixels(pixels, 0, 0, 1_440, 810)
-        return pixels
-    }
-
-    /** Draws the world with the world origin at screen ([x], [y]), the camera moved there. */
-    private fun drawAt(width: Int, height: Int, textScale: Float, model: GameplayRenderModel, x: Float, y: Float) {
-        scope.draw(Density(1f), LayoutDirection.Ltr, canvas, Size(width.toFloat(), height.toFloat())) {
-            drawWorld(model.with("cameraX" to width * 0.5f - x, "cameraY" to height * 0.5f - y), VisualFxProjection.EMPTY,
-                0f, 0f, measurer(textScale))
-        }
-    }
-
-    private fun measurer(textScale: Float): CanvasTextMeasurer = measurers.getOrPut(textScale) {
-        CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64), textScale,
-            AppLanguage.English, HudTestFonts.typography)
-    }
-
-    private val measurers = HashMap<Float, CanvasTextMeasurer>()
-    private val scope = CanvasDrawScope()
-
-    // The size passed to draw sets the screen; a 1 px bitmap keeps the sweep fast.
-    private val canvas = Canvas(ImageBitmap(1, 1))
-
     /** A quiet world (no enemies, totem or sites) with the Core at ([coreX], 0) and [ambient] sites. */
     private fun model(width: Int, height: Int, coreX: Float, vararg ambient: SiteProjection): GameplayRenderModel =
         hudTestModel(width.toFloat(), height.toFloat()).with(
@@ -196,8 +156,6 @@ class AmbientSiteRenderingTest {
             "enemies" to immutableListOf<EnemyProjection>(), "sites" to immutableListOf<SiteProjection>(), "trial" to null,
             "ambientSites" to immutableListOf(*ambient),
         )
-
-    private fun Rect.onScreen(width: Int, height: Int) = left >= 0f && top >= 0f && right <= width && bottom <= height
 
     private companion object {
         /** The render model's Lost Cursor bit (the nucleus pins it to the run's secret flag). */

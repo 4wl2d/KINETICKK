@@ -347,7 +347,6 @@ class CosmicPresentationTest {
         assertEquals(KkIcon.SYSTEM_ANOMALY, SiteGlyph.ANOMALY.icon)
         assertTrue(SiteGlyph.ANOMALY.parts.isEmpty(), "the anomaly glyph is the 0.5.0 icon, unchanged")
         assertEquals(setOf(SiteGlyph.ANOMALY), (0 until 3).map { siteGlyph(SiteKind.entries[it]) }.toSet())
-        assertEquals(SiteKind.entries.size, SiteKind.entries.map(::siteGlyph).size)
         assertEquals(SiteFamily.entries.size, SiteFamily.entries.map(::siteFamilyGlyph).toSet().size, "each family its own glyph")
     }
 

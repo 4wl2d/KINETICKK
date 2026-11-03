@@ -612,9 +612,9 @@ class InteractionFxReducerTest {
             listOf(ribbonSample(0f, speed = 0f), ribbonSample(10f, speed = RIBBON_MIN_SPEED), VisualFxCue.EffectsAdvanced(1f / 120f)),
         )
         assertSame(empty, reducer.snapshot(), "a Core at or below the speed floor changes nothing")
-        // The first speed above the floor stores a sample.
+        // The first speed above the floor stores a sample (one bit pattern up: the floor is a positive float).
         val moving = InteractionFxReducer(seed = 84)
-        moving.apply(listOf(ribbonSample(0f, speed = RIBBON_MIN_SPEED.nextAbove())))
+        moving.apply(listOf(ribbonSample(0f, speed = Float.fromBits(RIBBON_MIN_SPEED.toRawBits() + 1))))
         assertEquals(1, moving.snapshot().coreRibbon.size)
         // A Dash stores even a still Core.
         reducer.apply(listOf(ribbonSample(20f, speed = 0f, dash = 0.1f)))

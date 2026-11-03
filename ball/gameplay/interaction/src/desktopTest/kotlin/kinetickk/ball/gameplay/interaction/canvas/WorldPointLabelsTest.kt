@@ -15,6 +15,9 @@ import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
+import kinetickk.ball.gameplay.interaction.canvas.WorldRenderHarness.canvas
+import kinetickk.ball.gameplay.interaction.canvas.WorldRenderHarness.drawAt
+import kinetickk.ball.gameplay.interaction.canvas.WorldRenderHarness.scope
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
@@ -228,29 +231,12 @@ class WorldPointLabelsTest {
         }
     }
 
-    /** Draws the world with the point's anchor (world origin) at screen ([x], [y]), the camera moved there. */
-    private fun drawAt(width: Int, height: Int, textScale: Float, model: GameplayRenderModel, x: Float, y: Float) {
-        val measurer = measurers.getOrPut(textScale) {
-            CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64), textScale,
-                AppLanguage.English, HudTestFonts.typography)
-        }
-        scope.draw(Density(1f), LayoutDirection.Ltr, canvas, Size(width.toFloat(), height.toFloat())) {
-            drawWorld(model.lookingAt(width, height, x, y), VisualFxProjection.EMPTY, 0f, 0f, measurer)
-        }
-    }
-
     /**
      * [this] model with the camera placed so the world origin draws at screen ([x], [y]) (not via
      * the shake offset: marks and edge markers are decided in the unshaken view).
      */
     private fun GameplayRenderModel.lookingAt(width: Int, height: Int, x: Float, y: Float): GameplayRenderModel =
         with("cameraX" to width * 0.5f - x, "cameraY" to height * 0.5f - y)
-
-    private val measurers = HashMap<Float, CanvasTextMeasurer>()
-    private val scope = CanvasDrawScope()
-
-    // The size passed to draw sets the screen; a 1 px bitmap keeps the sweep fast.
-    private val canvas = Canvas(ImageBitmap(1, 1))
 
     private fun model(width: Int, height: Int, points: List<SiteProjection>): GameplayRenderModel =
         hudTestModel(width.toFloat(), height.toFloat()).with(
@@ -262,8 +248,6 @@ class WorldPointLabelsTest {
 
     private fun point(kind: SiteKind, x: Float, y: Float, active: Boolean) =
         SiteProjection(kind, kind.name, x, y, active, 14f, 0, 0.4f, immutableListOf(), 0f, 0f)
-
-    private fun Rect.onScreen(width: Int, height: Int) = left >= 0f && top >= 0f && right <= width && bottom <= height
 
     private fun Rect.encloses(other: Rect) = left <= other.left && top <= other.top && right >= other.right && bottom >= other.bottom
 
