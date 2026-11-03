@@ -27,7 +27,7 @@ and Core Stasis changed the reward stream on purpose again: the open-world
 Totem left, each Elite-class kill amplifies the current weapon, dungeons hold
 Totem chests and collapse, a still Core freezes (Core Stasis), and the
 population bots load out their first owned preferred weapon. So the base is
-now that tree, LEAD_SHA (the Elite-resonance base the gates cite), and every
+now that tree, e33bfb67 (the Elite-resonance base the gates cite), and every
 population threshold was restated once against it. When the probability read
 on `PopulationSeeds` and the one read on the calibration windows disagree, the
 runs of both, pooled, decide (this made the Apex Prism a population gate in

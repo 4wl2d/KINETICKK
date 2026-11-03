@@ -1684,7 +1684,7 @@ probability 0.98, as recorded for the 0.6.0 tree.
 The open-world Totem is gone and its power moved to Elite kills; dungeons hold
 Totem chests and collapse once spent; a Core that stays still freezes. These
 changes alter the reward stream on purpose, so the population gates were
-restated once against the tree that landed them, LEAD_SHA, the
+restated once against the tree that landed them, e33bfb67, the
 Elite-resonance base the gate KDocs cite (policy, balance gate populations).
 Historical entries above describe their own builds and remain unchanged.
 
