@@ -73,6 +73,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.nucleus.simulation.pendingActiveItemId
+import kinetickk.ball.gameplay.nucleus.simulation.pendingActiveReborn
 
 class GameplayPerformanceBenchmarkTest {
     @Test

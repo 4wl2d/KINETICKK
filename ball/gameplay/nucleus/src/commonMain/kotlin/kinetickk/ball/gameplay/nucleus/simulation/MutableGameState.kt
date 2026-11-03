@@ -101,6 +101,8 @@ internal class MutableGameState(
 
     /** Per-step combat and elements scratch. */
     internal val scratch: StepScratch = StepScratch(copySource?.scratch)
+    /** Choices waiting to open. */
+    internal val pendingChoice: PendingChoiceState = PendingChoiceState(copySource?.pendingChoice)
 
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
@@ -526,16 +528,6 @@ internal class MutableGameState(
     internal var trailDistanceCarry: Float = copySource?.trailDistanceCarry ?: 0f
     internal var weaponClock: Float = copySource?.weaponClock ?: 0f
     internal var weaponSecondaryClock: Float = copySource?.weaponSecondaryClock ?: 0f
-    internal var pendingLevelChoices: Int = copySource?.pendingLevelChoices ?: 0
-    internal var pendingRelicChoices: Int = copySource?.pendingRelicChoices ?: 0
-    internal var pendingBindingRelic: RelicId? = copySource?.pendingBindingRelic
-    internal var pendingRelicBindAction: RelicChoiceAction? = copySource?.pendingRelicBindAction
-    /**
-     * The unowned active item taken while every slot held an active: it waits, with its Reborn roll, for the
-     * [ChoiceType.ACTIVE_SLOT] prompt to replace a slot or salvage it; null otherwise.
-     */
-    internal var pendingActiveItemId: Int? = copySource?.pendingActiveItemId
-    internal var pendingActiveReborn: Boolean = copySource?.pendingActiveReborn ?: false
     internal val relicRanks: RunIntArray = copySource?.relicRanks?.copy()
         ?: RunIntArray(IntArray(content.relics.size))
     internal val relicCooldowns: RunFloatArray = copySource?.relicCooldowns?.copy()

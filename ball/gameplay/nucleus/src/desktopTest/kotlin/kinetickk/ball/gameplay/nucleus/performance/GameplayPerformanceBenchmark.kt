@@ -89,6 +89,8 @@ import java.lang.reflect.Modifier
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+import kinetickk.ball.gameplay.nucleus.simulation.pendingActiveItemId
+import kinetickk.ball.gameplay.nucleus.simulation.pendingActiveReborn
 
 internal const val GAMEPLAY_BENCHMARK_SUITE_VERSION = "gameplay-core-v6"
 private const val DEFAULT_SEED = 731_991
