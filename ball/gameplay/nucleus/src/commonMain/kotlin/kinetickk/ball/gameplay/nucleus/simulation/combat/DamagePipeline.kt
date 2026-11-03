@@ -385,6 +385,17 @@ internal fun MutableGameState.dealCharacterDamage(enemy: Enemy, amount: Float, e
     return result
 }
 
+/**
+ * A character mechanic's damage that rides the proc pipeline (Hive drones, the Echo ghost): Refit applies to it as to
+ * every character damage ([dealCharacterDamage]), and the dealt amount counts as the run's ability output.
+ */
+internal fun MutableGameState.dealCharacterProcDamage(enemy: Enemy, amount: Float): DamageResult {
+    val integrity = enemy.hp
+    val result = dealProcDamage(enemy, amount * characterUpgradePower)
+    recordAbilityDamage(integrity, result)
+    return result
+}
+
 /** Counts a character ability's damage as run output, up to the integrity the target had left. */
 internal fun MutableGameState.recordAbilityDamage(integrityBefore: Float, result: DamageResult) {
     characterRuntime.abilityDamage += min(result.amount, integrityBefore.coerceAtLeast(0f)).toDouble()

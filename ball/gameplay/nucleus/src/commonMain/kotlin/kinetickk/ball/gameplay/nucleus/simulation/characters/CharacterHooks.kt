@@ -404,7 +404,7 @@ internal fun MutableGameState.tryCharacterParry(
         }
     } else if (projectile) {
         nearestOtherEnemy(coreX, coreY, -1, PARRY_RETURN_RANGE)?.let { enemy ->
-            fireRelicProjectile(coreX, coreY, enemy, PARRY_SHOT_DAMAGE * abilityPower() * characterDamageMultiplier())
+            fireRelicProjectile(coreX, coreY, enemy, PARRY_SHOT_DAMAGE * abilityPower() * characterDamageMultiplier() * characterUpgradePower)
         }
     }
     shockwave(coreX, coreY, 0.25f, 110f, 2)

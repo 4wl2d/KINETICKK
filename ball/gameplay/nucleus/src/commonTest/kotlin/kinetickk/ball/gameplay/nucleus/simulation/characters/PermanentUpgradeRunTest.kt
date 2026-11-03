@@ -91,6 +91,34 @@ class PermanentUpgradeRunTest {
         assertEquals(1f, otherRefit.characterUpgradePower)
     }
 
+    /**
+     * Refit reaches every character damage, also what rides the proc pipeline or a projectile (map-numbers §1c): the
+     * Hive's drones (and the Echo ghost through the same call) and the Diamond's parry shot used to skip it.
+     */
+    @Test fun refitRaisesCharacterDamageOutsideTheAbilityApplicator() {
+        val power = canonicalGameplayContent.upgrades.characterPower(10)
+        fun droneDamage(refit: Int): Float {
+            val hive = run(shape = CoreShape.HEXAGON, refit = refit)
+            hive.characterRuntime.droneCount = 2
+            val target = hive.addEnemyForTesting(300f, 0f, hp = 100_000f)
+            val ability = hive.characterRuntime.abilityDamage
+            hive.dronesDartAt(target)
+            assertEquals(100_000.0 - target.hp, hive.characterRuntime.abilityDamage - ability, 1e-2, "drones count as ability output")
+            return 100_000f - target.hp
+        }
+        assertTrue(droneDamage(0) > 0f)
+        assertEquals(droneDamage(0) * power, droneDamage(10), droneDamage(10) * 1e-4f)
+
+        fun parryShot(refit: Int): Float {
+            val diamond = run(shape = CoreShape.DIAMOND, refit = refit)
+            diamond.characterRuntime.parryWindow = PARRY_WINDOW_SECONDS
+            diamond.addEnemyForTesting(diamond.coreX + 300f, diamond.coreY)
+            assertTrue(diamond.tryCharacterParry(diamond.coreX + 60f, diamond.coreY, -600f, 0f, damage = 10f, projectile = true))
+            return diamond.projectiles.single { !it.hostile }.damage
+        }
+        assertEquals(parryShot(0) * power, parryShot(10), parryShot(10) * 1e-4f)
+    }
+
     @Test fun honingScalesTheCurrentWeaponOnlyAndFollowsAMidRunSwitch() {
         val plain = run()
         val honed = run(honing = mapOf(WeaponId.FLUX_WAKE to 10, WeaponId.MORNINGSTAR to 5))

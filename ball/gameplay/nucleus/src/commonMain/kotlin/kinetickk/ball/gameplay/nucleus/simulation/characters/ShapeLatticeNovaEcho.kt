@@ -173,8 +173,7 @@ internal fun MutableGameState.updateEcho(ability: CharacterRuntime, delta: Float
                 reach + enemy.radius)
         ) {
             enemy.characterMarkTime = GHOST_HIT_INTERVAL
-            val integrity = enemy.hp
-            recordAbilityDamage(integrity, dealProcDamage(enemy, damage))
+            dealCharacterProcDamage(enemy, damage)
             directionalBurst(enemy.x, enemy.y, 5, 2, x - fromX, y - fromY)
         }
     }
@@ -240,8 +239,7 @@ internal fun MutableGameState.updateSecondGhost() {
         ) continue
         if (enemy.characterMarkTime > 0f) continue
         enemy.characterMarkTime = GHOST_HIT_INTERVAL
-        val integrity = enemy.hp
-        recordAbilityDamage(integrity, dealProcDamage(enemy, damage))
+        dealCharacterProcDamage(enemy, damage)
         directionalBurst(enemy.x, enemy.y, 5, FxColorCode.APEX_GOLD, x - fromX, y - fromY)
     }
 }
