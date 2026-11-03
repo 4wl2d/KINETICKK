@@ -180,6 +180,9 @@ internal class MutableGameState(
     /** Character shape, runtime and Refit. */
     internal val characterRun: CharacterRunState = CharacterRunState(copySource?.characterRun, bootstrapProgress)
 
+    /** Frame admission, viewport and display feedback. */
+    internal val frameState: FrameState = FrameState(copySource?.frameState)
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -240,24 +243,10 @@ internal class MutableGameState(
     internal var keyboardBrakeActive: Boolean = copySource?.keyboardBrakeActive ?: false
     internal var secondaryBrakeActive: Boolean = copySource?.secondaryBrakeActive ?: false
     internal var touchBrakeActive: Boolean = copySource?.touchBrakeActive ?: false
-    internal var uiScale: Float = copySource?.uiScale ?: 1f
-    /** Device px per dp of the accepted viewport; the simulation itself runs in dp. */
-    internal var viewportDensity: Float = copySource?.viewportDensity ?: 1f
-    internal var accumulator: Float = copySource?.accumulator ?: 0f
-    internal var lastTransitionSteps: Int = copySource?.lastTransitionSteps ?: 0
-        internal set
     internal var previousCoreX: Float = copySource?.previousCoreX ?: 0f
     internal var previousCoreY: Float = copySource?.previousCoreY ?: 0f
     internal var previousSingularityX: Float = copySource?.previousSingularityX ?: 0f
     internal var previousSingularityY: Float = copySource?.previousSingularityY ?: 0f
-    /** Camera at the start of the last fixed step; renderers interpolate toward [cameraX]. */
-    internal var previousCameraX: Float = copySource?.previousCameraX ?: 0f
-    internal var previousCameraY: Float = copySource?.previousCameraY ?: 0f
-    /**
-     * Whether a fixed step has run since the simulation last entered RUNNING, so every previous
-     * position is that step's start. Until then renderers present the exact state (render only).
-     */
-    internal var interpolationPrimed: Boolean = copySource?.interpolationPrimed ?: false
     internal var shieldRechargeDelay: Float = copySource?.shieldRechargeDelay ?: 0f
     internal var overheatHoldTime: Float = copySource?.overheatHoldTime ?: 0f
     internal var saturationHeadingX: Float = copySource?.saturationHeadingX ?: 1f
@@ -337,19 +326,7 @@ internal class MutableGameState(
         internal set
     var comboTime: Float = copySource?.comboTime ?: 0f
         internal set
-    var lastImpact: Float = copySource?.lastImpact ?: 0f
-        internal set
-    var lastImpactTime: Float = copySource?.lastImpactTime ?: 0f
-        internal set
-    var damageFlash: Float = copySource?.damageFlash ?: 0f
-        internal set
     var runGrace: Float = copySource?.runGrace ?: 0f
-        internal set
-    var screenShake: Float = copySource?.screenShake ?: 0f
-        internal set
-    var message: String = copySource?.message ?: ""
-        internal set
-    var messageTime: Float = copySource?.messageTime ?: 0f
         internal set
 
     var polarityStability: Float = copySource?.polarityStability ?: 1f

@@ -18,6 +18,8 @@ import kinetickk.ball.gameplay.nucleus.simulation.startRun
 import kinetickk.ball.gameplay.nucleus.simulation.triggerWeaponContactForTesting
 import kinetickk.ball.gameplay.nucleus.simulation.update
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kinetickk.ball.gameplay.nucleus.simulation.accumulator
+import kinetickk.ball.gameplay.nucleus.simulation.lastTransitionSteps
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

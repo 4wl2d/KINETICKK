@@ -42,6 +42,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.updatePointer
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.ball.gameplay.nucleus.simulation.trailLastX
 import kinetickk.ball.gameplay.nucleus.simulation.trailLastY
+import kinetickk.ball.gameplay.nucleus.simulation.lastTransitionSteps
 import kotlin.math.roundToInt
 import kotlin.test.Test
 import kotlin.test.assertEquals
