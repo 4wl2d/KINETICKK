@@ -285,12 +285,15 @@ class ClauseSystemTest {
         assertEquals(50f, necrotic.hp, "Regeneration no longer heals")
         assertTrue(near.stacksOf(StatusElement.ENTROPY) >= 1, "It rots the enemies around you instead")
 
-        val deadeye = buildTestState().apply { own("Deadeye Reticle") }
+        val deadeye = buildTestState()
+        val reticle = deadeye.own("Deadeye Reticle")
+        val rate = reticle.rules.filterIsInstance<kinetickk.ball.content.api.ItemRule.Convert>().single().amount
         deadeye.critChance = 0.5f
         val marked = deadeye.dummy().apply { status[StatusCell.MARKED_UNTIL] = 10f }
         val hit = deadeye.dealHit(marked, 100f, HitSource.WEAPON)
         assertTrue(hit.critical)
-        assertEquals(100f * (1.5f + 0.2f * 2.5f), hit.amount, 0.01f)
+        // Chance above 30 % becomes critical damage: (0.5 - 0.3) x the conversion rate on top of the base x1.5.
+        assertEquals(100f * (1.5f + 0.2f * rate), hit.amount, 0.01f)
     }
 
     @Test

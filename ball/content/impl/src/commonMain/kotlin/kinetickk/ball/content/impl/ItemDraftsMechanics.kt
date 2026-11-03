@@ -416,7 +416,7 @@ internal val MechanicDrafts: List<ItemDraft> = listOf(
         rebirth = 2),
     ItemDraft("Summit Crown", "Worn only at the top, and only by those who climbed.", LEGENDARY, listOf(OVERCLOCK),
         clauses = listOf(on(EffectTrigger.APEX, EffectAction.EraseShots(400f, 12), EffectAction.Shield(60f)), on(EffectTrigger.LEVEL_UP, EffectAction.ChargeApex(5f))),
-        rules = listOf(ItemRule.ApexCooldown(0.2f)),
+        rules = listOf(ItemRule.ApexCooldown(0.2f), ItemRule.WhileModifier(EffectCondition.ApexActive, BuffStat.DAMAGE, 0.35f)),
         rebirth = 10),
     ItemDraft("Meridian Engine", "Cross into a field and the engine turns over.", LEGENDARY, listOf(ANCHOR),
         clauses = listOf(on(EffectTrigger.FIELD_ENTER, EffectAction.RefundSkills(1f, SkillPick.ALL), EffectAction.Vent(20f), cooldown = 2f)),

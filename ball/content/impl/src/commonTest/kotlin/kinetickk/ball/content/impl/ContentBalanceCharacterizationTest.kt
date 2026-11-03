@@ -32,10 +32,12 @@ class ContentBalanceCharacterizationTest {
         assertEquals(TERRAIN_060_END, items.size)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
         // The items shipped through 0.4.0 keep their own pin: a release only appends to the catalog. The pin also hashes
-        // every ItemEffect, so it moved once when 0.6.0 appended GRIP and SLING (68d4572118b9586d -> 25c0be545c5a2647).
+        // every ItemEffect, so it moved once when 0.6.0 appended GRIP and SLING (68d4572118b9586d -> 25c0be545c5a2647), and
+        // when the rarity rework raised the weakest Legendary (Resonance Fork) and risk Epics (Deadeye Reticle, Redline
+        // Reactor) to their rarity's power (25c0be545c5a2647 -> 68604d187aa260af).
         val shipped = items.subList(0, ITEMS_THROUGH_040)
         assertEquals(
-            "25c0be545c5a2647",
+            "68604d187aa260af",
             goldenFingerprint {
                 add("item-effects")
                 ItemEffect.entries.forEach { effect ->
@@ -59,10 +61,11 @@ class ContentBalanceCharacterizationTest {
         // (6ae3869a3317ee94 -> 17777e466f80fc29), and again when Empty Chamber's damage rose 20 -> 25 % after the
         // Solar Flare retune (17777e466f80fc29 -> bfc80fdf55b64617), and when Loader Sigil's refresh rose 0.5 -> 0.6 s
         // after the Orbit retune (bfc80fdf55b64617 -> ef1306c885aae256), and when Field Marshal forced three reactions
-        // instead of two under the slower flight law (ef1306c885aae256 -> d9c6c8717293226d).
+        // instead of two under the slower flight law (ef1306c885aae256 -> d9c6c8717293226d), and when the rarity rework
+        // gave Summit Crown an Apex damage rule to match its rarity (d9c6c8717293226d -> c6a18cdc8a9ef3a7).
         val appended = items.subList(ITEMS_THROUGH_040, EXPANSION_050_END)
         assertEquals(
-            "d9c6c8717293226d",
+            "c6a18cdc8a9ef3a7",
             goldenFingerprint {
                 add("items-0.5.0")
                 add(appended.size)
