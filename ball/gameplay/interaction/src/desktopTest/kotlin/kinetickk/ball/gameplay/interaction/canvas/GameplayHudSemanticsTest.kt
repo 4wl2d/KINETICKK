@@ -23,6 +23,7 @@ import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
@@ -88,6 +89,15 @@ class GameplayHudSemanticsTest {
         return count
     }
 
+    /** The host composes the run's controls only after its reward UI preparation; drive frames until it has. */
+    private fun awaitRunningControls() {
+        val deadline = compose.mainClock.currentTime + 1000L
+        while (compose.onAllNodesWithTag(PAUSE_TAG).fetchSemanticsNodes().isEmpty() && compose.mainClock.currentTime < deadline) {
+            compose.mainClock.advanceTimeByFrame()
+        }
+        compose.onNodeWithTag(PAUSE_TAG).assertExists("The gameplay host must finish preparation before semantics assertions")
+    }
+
     private fun startTrial(pulses: MutableList<GameplayInteractionPulse>) {
         val snapshot = hudTestSnapshot()
         val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, -1, 0.4f,
@@ -109,7 +119,7 @@ class GameplayHudSemanticsTest {
                 Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
             }
         }
-        compose.mainClock.advanceTimeByFrame()
+        awaitRunningControls()
     }
 
     @Test
@@ -189,7 +199,7 @@ class GameplayHudSemanticsTest {
                 Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
             }
         }
-        compose.mainClock.advanceTimeByFrame()
+        awaitRunningControls()
         val info = compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG)
         info.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         info.assertIsFocused()
@@ -232,6 +242,7 @@ class GameplayHudSemanticsTest {
                 Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
             }
         }
+        awaitRunningControls()
         val rules = model.content.sites.definition(SiteKind.COLLAPSING_ORBIT).instruction
         val info = compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG)
         info.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf(rules)))
@@ -295,7 +306,7 @@ class GameplayHudSemanticsTest {
                 Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
             }
         }
-        compose.mainClock.advanceTimeByFrame()
+        awaitRunningControls()
         val host = compose.onNodeWithTag(HOST_TAG).getUnclippedBoundsInRoot()
         val target = HudTrialPanelLayout().update(1_440f, 810f, 1f, base.settings.textScale).infoTarget(1f)
         sites.forEach { site ->
@@ -347,7 +358,7 @@ class GameplayHudSemanticsTest {
                 Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
             }
         }
-        compose.mainClock.advanceTimeByFrame()
+        awaitRunningControls()
         val content = model.content
         fun name(id: SkillId) = content.skill(id).name.localizedContent(language)
         fun expect(tag: String, description: String, state: String?) {
@@ -416,7 +427,7 @@ class GameplayHudSemanticsTest {
                 Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
             }
         }
-        compose.mainClock.advanceTimeByFrame()
+        awaitRunningControls()
         compose.onNodeWithTag("kinetickk.gameplay.dash").assertExists()
         listOf("kinetickk.gameplay.skill.0", "kinetickk.gameplay.skill.1", "kinetickk.gameplay.skill.2", "kinetickk.gameplay.apex")
             .forEach { compose.onNodeWithTag(it).assertDoesNotExist() }
@@ -457,7 +468,7 @@ class GameplayHudSemanticsTest {
                 Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
             }
         }
-        compose.mainClock.advanceTimeByFrame()
+        awaitRunningControls()
         val host = compose.onNodeWithTag(HOST_TAG).getUnclippedBoundsInRoot()
         val target = HudTrialPanelLayout().update(1_440f, 810f, 1f, base.settings.textScale).infoTarget(1f)
         listOf(AppLanguage.English, AppLanguage.Russian).forEach { shown ->
@@ -511,7 +522,7 @@ class GameplayHudSemanticsTest {
                 Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
             }
         }
-        compose.mainClock.advanceTimeByFrame()
+        awaitRunningControls()
         val host = compose.onNodeWithTag(HOST_TAG).getUnclippedBoundsInRoot()
         val target = HudTrialPanelLayout().update(1_440f, 810f, 1f, base.settings.textScale).infoTarget(1f)
         val instruction = checkNotNull(visit.objective).instruction
@@ -533,6 +544,7 @@ class GameplayHudSemanticsTest {
 
 private const val HOST_TAG = "hud-host"
 private const val GAMEPLAY_ROOT_TAG = "kinetickk.gameplay"
+private const val PAUSE_TAG = "kinetickk.gameplay.pause"
 
 private fun assertRect(expected: Rect, actual: Rect) {
     assertEquals(expected.left, actual.left, 0.5f, "left of $actual")
