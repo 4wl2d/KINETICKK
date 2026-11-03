@@ -50,6 +50,7 @@ Calibration windows (seeds `i × 7,919 + 13`):
 | 2,801..3,400 | the base of the D and H floors, never tuned on |
 | 3,401..4,400 | item rarity: the full-run rarity probe and the offer-only runs (`RarityDistributionProbeTest`, `KK_RARITY_SYNTH`) |
 | 4,401..6,400 | the offer-only rarity design gate (`RarityDistributionGateTest`), never tuned on |
+| 6,401..16,400 | the offer-only rarity tails (10,000 runs per arm, `KK_RARITY_SYNTH`), a report, never tuned on |
 
 | Rule | Selection |
 |---|---|
