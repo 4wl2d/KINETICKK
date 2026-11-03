@@ -10,6 +10,14 @@ import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
 import kinetickk.ball.gameplay.nucleus.simulation.enemies.EncounterState
 import kinetickk.foundation.collections.ImmutableList
 
+/*
+ * Legacy forwarders; new code uses the holder; never add a forwarder for a new field.
+ *
+ * Each property forwards one field that moved from [MutableGameState] into a state holder, so the call sites, tests,
+ * fingerprints and benchmark adapters written against the flat state read it unchanged. This list may only shrink:
+ * a call site moved to `state.<holder>.<field>` lets its forwarder go, and a new field goes straight into its holder.
+ */
+
 // StepScratch
 
 internal var MutableGameState.statusCuesThisStep: Int

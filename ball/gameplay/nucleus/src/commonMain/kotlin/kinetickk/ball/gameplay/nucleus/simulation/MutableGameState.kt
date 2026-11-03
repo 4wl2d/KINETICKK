@@ -49,13 +49,16 @@ import kinetickk.ball.gameplay.nucleus.simulation.skills.SkillCastState
 import kinetickk.ball.gameplay.nucleus.simulation.elements.CoreReactionState
 import kinetickk.ball.gameplay.nucleus.simulation.director.SpawnDirectorState
 
-
 /**
  * Reducer-owned simulation state. Each field declares its initial value and its copy from [copySource] together,
  * so extending owned State requires no second field-copy list in the render mapper.
  *
  * The production tick mutates one instance in place. [deepCopy] isolates every mutable storage, random stream and
  * pending output buffer of its source; immutable values are shared.
+ *
+ * Cohesive groups with a single writing domain live in state holders, declared first so every later initializer sees
+ * them; each holder copies itself from its [copySource] counterpart. New fields go into a holder, read as
+ * `state.<holder>.<field>`; the forwarders in MutableGameStateForwarders.kt only keep older call sites unchanged.
  */
 internal class MutableGameState(
     internal val content: GameplayContentSnapshot,
