@@ -30,6 +30,8 @@ enum class SiteNotice(val english: String) {
     BOUNTY_CLAIMED("BOUNTY CLAIMED"),
     /** The Core left the arena (or the boss left without a kill): the boss is gone and nothing is granted. */
     BOUNTY_ABANDONED("BOUNTY ABANDONED"),
+    /** The bounty's time limit ran out with its boss standing: the boss leaves and nothing is granted. */
+    BOUNTY_ESCAPED("TARGET ESCAPED"),
     /** The Core flew through a drift cache: its contents are granted. */
     CACHE_OPENED("CACHE OPENED"),
     /** The Core flew through the Lost Cursor: it follows the Core for the rest of the run. */

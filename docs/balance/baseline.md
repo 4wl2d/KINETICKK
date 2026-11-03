@@ -1150,6 +1150,8 @@ Balance decisions and accepted trade-offs:
   items), the Shard's mass x0.8, Mirror Stance's single parry, a 60 s Nadir
   visit, the dimension objective bosses' integrity share and Still Water's
   -15 % weapon power.
+- A bounty pays only when its boss falls within 65 s: with every kill credited
+  an untimed bounty failed only by dying (2026-11-03 repairs below).
 - Accepted as shipped: a far sigil spawn counts as engagement; bounty guards
   stay as ordinary enemies after a claim; the Sigil panel's reward reads
   UNKNOWN; an objective boss abandoned past 6,000 u ends that visit's
@@ -1622,18 +1624,35 @@ i = 2,201..2,300 at `bossIntegrityShare` 0.55, every ABANDONED bounty had
 been this case (fresh 10 of 142, tier-6 veteran 26 of 156); none was a Core
 leaving the arena.
 
-| S-G2 on `PopulationSeeds` (first 150) | Before | After |
-|---|---:|---:|
-| Fresh clear | 0.866 (200/231) | 0.948 (219/231) |
-| Veteran clear | 0.855 (213/249) | 0.984 (245/249) |
-| Fresh / veteran median fight, s | 52.53 / 48.83 | 52.11 / 50.27 |
+| S-G2 on `PopulationSeeds` (first 150) | Before | Kills credited | 65 s limit |
+|---|---:|---:|---:|
+| Fresh clear | 0.866 (200/231) | 0.948 (219/231) | 0.722 (169/234) |
+| Veteran clear | 0.855 (213/249) | 0.984 (245/249) | 0.747 (189/253) |
+| Fresh / veteran median fight, s | 52.53 / 48.83 | 52.11 / 50.27 | 44.77 / 43.13 |
 
 The bands [0.40, 0.85] and [0.40, 0.90] were met only through the dropped
 kills; with kills credited, an arm fails only by dying. On the SITES window,
 `bossIntegrityShare` 0.55 to 1.0 gives fresh 0.909 to 0.833 (median fight
 48.7 to 72.5 s) and veteran 0.974 to 0.987 at every share, so no share meets
-the veteran band. The share stays 0.55 and S-G2 is left to the owner. S-G4
-still passes (bounty value ratio 2.084 against 1.0-2.2).
+the veteran band. The bands stay, since a bounty is meant to carry risk, and
+the share stays 0.55. Instead a bounty now has a time limit, shown as its
+trial clock and stated in its English and Russian instruction: when it runs
+out with the boss standing, the boss and its guards leave and nothing is paid
+(TARGET ESCAPED); a boss already at zero integrity is still claimed by the
+kill sweep. Untimed fights spread widely and alike in both arms (window
+quartiles 35 to 38 s and 60 to 61 s), so a limit cuts both. On the SITES
+window (bootstrap SE 0.031 to 0.048):
+
+| `bountyTimeLimit` | 55 s | 60 s | 65 s | 70 s | 75 s |
+|---|---:|---:|---:|---:|---:|
+| Fresh clear | 0.524 | 0.662 | 0.685 | 0.740 | 0.767 |
+| Veteran clear | 0.595 | 0.709 | 0.779 | 0.823 | 0.873 |
+
+65 s is the longest limit whose clears stay two SEs of window and gate
+together (the gate's binomial SE at about 240 bounties) under both ceilings;
+70 s leaves the veteran 1.8 SEs under 0.90. The gate confirms it (table
+above). S-G4's bounty value ratio is 1.421 (SE 0.173, was 2.084) against
+1.0-2.2, and the engaging win share 0.765 against the no-POI 0.720.
 
 `farSigilRunChance` 0.25 reveals the far sigil in a quarter of the seeds, so
 the sigil arm summoned in 0.220 of its runs against its 0.5 pilot check. Like

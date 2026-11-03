@@ -17,8 +17,8 @@ import kotlin.test.Test
  * SIGIL; all by default), `KK_SITE_KNOBS` overrides the site knobs (`name=value`, comma-separated: goldFactor,
  * silverFactor, bronzeFactor, parReach, limitFactor, turnAllowanceSeconds, brakelessRequired, ramRequired, ramFoes,
  * ramFoeHealthShare, ramRingRadius, ramDuration, untouchedRequired, velocityRequired, velocityMinSpeed, slalomDuration,
- * bossIntegrityShare) and `KK_SITE_PILOT` the pilot's gains by their [SitePilotTuning] names (raceDashAngle in radians);
- * several sets separated by `;` run one after the other.
+ * bossIntegrityShare, bountyTimeLimit) and `KK_SITE_PILOT` the pilot's gains by their [SitePilotTuning] names
+ * (raceDashAngle in radians); several sets separated by `;` run one after the other.
  */
 class SiteCalibrationProbeTest {
     @Test
@@ -114,6 +114,7 @@ class SiteCalibrationProbeTest {
                 "velocityMinSpeed" -> sites.copy(challenges = sites.challenges.copy(velocityMinSpeed = value))
                 "slalomDuration" -> sites.withDuration(SiteKind.SLALOM_TRIAL, value)
                 "bossIntegrityShare" -> sites.copy(bounty = sites.bounty.copy(bossIntegrityShare = value))
+                "bountyTimeLimit" -> sites.copy(bounty = sites.bounty.copy(timeLimit = value))
                 else -> error("unknown site knob $name")
             }
         }

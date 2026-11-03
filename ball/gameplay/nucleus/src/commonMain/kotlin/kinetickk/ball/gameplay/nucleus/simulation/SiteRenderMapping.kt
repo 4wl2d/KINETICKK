@@ -155,8 +155,8 @@ internal fun MutableGameState.siteTrialProjection(site: SiteState): TrialProject
             site.count.toFloat(), challenges.ramRequired.toFloat(), reward)
         SiteKind.SLALOM_TRIAL -> siteTrial(site, TrialClock.COUNTDOWN, challenges.slalomPoles, TrialValue.COUNT,
             site.step.toFloat(), challenges.slalomPoles.toFloat(), reward)
-        // The bounty's own payout is its mini-boss's Key and Relic drops; the site adds Matter.
-        SiteKind.BOUNTY_ARENA -> siteTrial(site, TrialClock.NONE, DUEL_SEGMENTS, TrialValue.NONE, 0f, 0f, TrialReward.KEY_AND_RELIC)
+        // The bounty's own payout is its mini-boss's Key and Relic drops; the site adds Matter. Its clock is the time limit.
+        SiteKind.BOUNTY_ARENA -> siteTrial(site, TrialClock.COUNTDOWN, DUEL_SEGMENTS, TrialValue.NONE, 0f, 0f, TrialReward.KEY_AND_RELIC)
         SiteKind.FAR_SIGIL -> siteTrial(site, TrialClock.NONE, DUEL_SEGMENTS, TrialValue.NONE, 0f, 0f, TrialReward.UNKNOWN)
         SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL, SiteKind.ZENITH_RIFT,
         SiteKind.NADIR_RIFT,
@@ -242,10 +242,10 @@ private fun MutableGameState.siteProjection(site: SiteState): SiteProjection {
     )
 }
 
-/** An offer counts down to its close; a timed trial its seconds left; an untimed duel shows none. */
+/** An offer counts down to its close; a timed trial (the bounty by its time limit) its seconds left; an untimed duel none. */
 private fun MutableGameState.siteRemaining(site: SiteState): Float = when {
     !site.active -> (site.expiresAt - elapsed).coerceAtLeast(0f)
-    content.sites.definition(site.kind).duration > 0f -> site.remaining
+    site.kind == SiteKind.BOUNTY_ARENA || content.sites.definition(site.kind).duration > 0f -> site.remaining
     else -> 0f
 }
 

@@ -27,9 +27,10 @@ import kotlin.test.assertTrue
 
 /**
  * The bounty arena: entering it releases the policy's mini-boss ahead of the Core as an encounter the site owns, drawn
- * from no run stream; the bounty runs untimed until the boss falls (claimed: 30 Matter and the bounty's discovery on top
- * of the boss's own drops) or the Core leaves the arena past 1,300 u from its centre (abandoned: the boss leaves without
- * a kill and nothing is granted). The Architect's arrival removes the boss the same way.
+ * from no run stream; the bounty runs until the boss falls (claimed: 30 Matter and the bounty's discovery on top of the
+ * boss's own drops), the Core leaves the arena past 1,300 u from its centre (abandoned: the boss leaves without a kill
+ * and nothing is granted) or its 65 s time limit runs out with the boss standing (escaped, as abandoned). The
+ * Architect's arrival removes the boss the same way.
  */
 class BountySiteTest {
     private val policy = canonicalGameplayContent.sites.bounty
@@ -88,7 +89,7 @@ class BountySiteTest {
 
         val bounty = game.sites.single()
         assertTrue(bounty.active)
-        assertEquals(0f, bounty.remaining, "the bounty is untimed")
+        assertEquals(policy.timeLimit, bounty.remaining, "the bounty runs on its time limit")
         assertEquals(0f, bounty.clock)
         assertEquals(0, bounty.count)
         assertEquals(game.content.sites.definition(SiteKind.BOUNTY_ARENA).instruction, game.message)
@@ -196,7 +197,8 @@ class BountySiteTest {
     }
 
     @Test
-    fun theBountyIsUntimedAndItsClockCountsUp() {
+    fun theBountysClockCountsUpAndItsTimeLimitDown() {
+        assertEquals(65f, policy.timeLimit, "the shipped limit (calibrated on the SITES window, BountyGateTest)")
         val game = game()
         game.enterBounty()
         game.hold(400f, 300f, delta = 60f)
@@ -204,7 +206,45 @@ class BountySiteTest {
         val bounty = game.sites.single()
         assertTrue(bounty.active)
         assertEquals(60.5f, bounty.clock, 1e-4f)
-        assertEquals(0f, bounty.remaining)
+        assertEquals(policy.timeLimit - 60.5f, bounty.remaining, 1e-4f)
+    }
+
+    @Test
+    fun theTimeLimitRunOutLetsTheStandingBossEscapeAndGrantsNothing() {
+        val game = game()
+        game.enterBounty(x = 400f, y = 300f)
+        val boss = game.boss()
+        game.spawnBossAdds(boss, EnemyType.WARDEN, 2, 0.5f, 2)
+        val kills = game.kills
+        val matter = game.matter()
+
+        game.hold(400f, 300f, delta = policy.timeLimit - 0.5f)
+        assertTrue(game.sites.single().active, "the boss can still be brought down before the limit")
+        game.hold(400f, 300f, delta = 0.5f)
+        assertTrue(game.sites.isEmpty())
+        assertEquals(SiteNotice.BOUNTY_ESCAPED.english, game.message)
+        assertTrue(game.enemies.isEmpty(), "the boss and its guards leave")
+        assertEquals(kills, game.kills, "without a kill")
+        assertTrue(game.pickups.isEmpty())
+        assertEquals(matter, game.matter(), 1e-6)
+        assertFalse(game.discoveredBounty())
+        assertNull(game.encounter(boss.ownerTag))
+        assertFalse(game.engagementActive())
+    }
+
+    @Test
+    fun aBossAtZeroIntegrityWhenTheTimeLimitRunsOutIsStillClaimed() {
+        // The strike that drained it landed in time; the step's kill sweep counts it after the site step.
+        val game = game()
+        game.enterBounty()
+        game.hold(400f, 300f, delta = policy.timeLimit - 0.5f)
+        game.boss().hp = 0f
+        game.hold(400f, 300f, delta = 0.5f)
+        assertTrue(game.sites.singleOrNull()?.active == true, "the bounty waits for the kill sweep")
+        game.sweepKills()
+        game.hold(400f, 300f)
+        assertEquals(SiteNotice.BOUNTY_CLAIMED.english, game.message)
+        assertTrue(game.discoveredBounty())
     }
 
     @Test

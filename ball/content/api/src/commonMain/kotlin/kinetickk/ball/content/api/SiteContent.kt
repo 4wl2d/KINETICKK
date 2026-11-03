@@ -110,8 +110,9 @@ data class SiteDefinition(
     /** Fly-through radius (window sites keep 65 so positions and the bots' clearance stay exact). */
     val activationRadius: Float = 65f,
     /**
-     * Trial seconds once active; 0 = untimed (bounty, secret duels, instant sites). Challenges count this down; an
-     * anomaly runs the window policy's trial duration and a race its course's limit, so for them only `> 0` matters.
+     * Trial seconds once active; 0 = untimed (secret duels, instant sites) or timed by its own policy (the bounty's
+     * limit). Challenges count this down; an anomaly runs the window policy's trial duration and a race its course's
+     * limit, so for them only `> 0` matters.
      */
     val duration: Float = 25f,
 ) {
@@ -264,12 +265,15 @@ data class BountyPolicy(
     /** The duel's mini-boss; it must be a MINI_BOSS rank enemy (checked at bootstrap). */
     val bossType: EnemyType = EnemyType.WARDEN_PRIME,
     val bossIntegrityShare: Float = 0.55f,
+    /** Seconds the Core has to bring the boss down once the bounty starts; then the target escapes and pays nothing. */
+    val timeLimit: Float = 65f,
     val arenaRadius: Float = 900f,
     val exitMargin: Float = 400f,
     val bossSpawnOffset: Float = 300f,
 ) {
     init {
         require(bossIntegrityShare in 0.1f..1f) { "Bounty integrity share must be in 0.1..1" }
+        require(timeLimit in 10f..120f) { "Bounty time limit must be in 10..120 s" }
         require(arenaRadius in 400f..1_400f) { "Bounty arena radius must be in 400..1400" }
         require(exitMargin in 100f..1_000f) { "Bounty exit margin must be in 100..1000" }
         require(bossSpawnOffset.isFinite() && bossSpawnOffset >= 0f)
@@ -450,6 +454,9 @@ data class SitePolicy(
                 challenges.untouchedRequired <= definition(SiteKind.UNTOUCHED_TRIAL).duration &&
                 challenges.velocityRequired <= definition(SiteKind.VELOCITY_TRIAL).duration,
         ) { "A challenge never asks for more seconds than it lasts" }
+        require(bounty.timeLimit <= definition(SiteKind.BOUNTY_ARENA).reserveSeconds) {
+            "The bounty's time limit fits inside the seconds its window reserves before the Architect"
+        }
         // A Golden Drifter released within its trigger radius must not count as escaped at once.
         require(ambient.rules.none { it.kind == SiteKind.GOLDEN_DRIFTER && it.triggerRadius >= secrets.goldenEscapeDistance }) {
             "The Golden Drifter escapes farther away than its trigger reaches"
@@ -512,7 +519,8 @@ fun defaultSiteDefinitions(): ImmutableList<SiteDefinition> = immutableListOf(
         SiteReward(directed = DirectedReward.WEAPON, matter = 15), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 10f,
     ),
     SiteDefinition(
-        SiteKind.BOUNTY_ARENA, "Bounty", "Defeat the marked target. Leaving the arena forfeits the bounty.",
+        SiteKind.BOUNTY_ARENA, "Bounty",
+        "Defeat the marked target within sixty-five seconds. Leaving the arena forfeits the bounty.",
         SiteReward(matter = 30), windowWeight = 1f, minimumOfferAt = 160f, reserveSeconds = 90f, duration = 0f,
     ),
     SiteDefinition(SiteKind.DRIFT_CACHE, "Drift cache", "Fly through to open.", SiteReward.NONE, activationRadius = 70f, duration = 0f),

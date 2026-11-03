@@ -99,6 +99,7 @@ internal enum class SiteOutcome(val notice: SiteNotice?) {
     FAILED(SiteNotice.CHALLENGE_FAILED),
     CLAIMED(SiteNotice.BOUNTY_CLAIMED),
     ABANDONED(SiteNotice.BOUNTY_ABANDONED),
+    ESCAPED(SiteNotice.BOUNTY_ESCAPED),
     RESOLVED(SiteNotice.ANOMALY_RESOLVED),
     ANOMALY_LOST(SiteNotice.ANOMALY_LOST),
     BROKEN(SiteNotice.SIGIL_BROKEN),
@@ -213,8 +214,8 @@ private class FrameBefore(val trial: SiteState, val at: Float, val holdings: Int
 /**
  * The outcome of the engagement [before] showed, ended in the frame just played: the site's own notice (the sigil:
  * its defeat flag). When a later notice of the same frame covered it, what the site paid decides: a directed reward
- * for an anomaly or a challenge, the boss's fall for a bounty, and for a race its last gate in time with the medal
- * its clock earned ([raceMedal]).
+ * for an anomaly or a challenge, the boss's fall for a bounty (else its time limit run out, an escape), and for a race
+ * its last gate in time with the medal its clock earned ([raceMedal]).
  */
 private fun MutableGameState.endedOutcome(before: FrameBefore): Pair<SiteOutcome, Boolean> {
     val kind = before.trial.kind
@@ -227,7 +228,11 @@ private fun MutableGameState.endedOutcome(before: FrameBefore): Pair<SiteOutcome
     val outcome = when (kind.family) {
         SiteFamily.ANOMALY -> if (paidDirected) SiteOutcome.RESOLVED else SiteOutcome.ANOMALY_LOST
         SiteFamily.CHALLENGE -> if (paidDirected) SiteOutcome.COMPLETED else SiteOutcome.FAILED
-        SiteFamily.BOUNTY -> if (before.trial.count >= 1 || eliteKills > before.eliteKills) SiteOutcome.CLAIMED else SiteOutcome.ABANDONED
+        SiteFamily.BOUNTY -> when {
+            before.trial.count >= 1 || eliteKills > before.eliteKills -> SiteOutcome.CLAIMED
+            before.trial.remaining <= elapsed - before.at + 1e-4f -> SiteOutcome.ESCAPED
+            else -> SiteOutcome.ABANDONED
+        }
         SiteFamily.RACE -> {
             val trial = before.trial
             val last = trial.course.size - 1

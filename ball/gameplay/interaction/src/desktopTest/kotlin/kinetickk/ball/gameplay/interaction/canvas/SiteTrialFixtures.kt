@@ -78,7 +78,7 @@ internal fun siteTrial(site: SiteProjection, policy: SitePolicy = SitePolicy()):
         SiteKind.VELOCITY_TRIAL -> seconds(challenges.velocityRequired)
         SiteKind.RAM_TRIAL -> trial(TrialClock.COUNTDOWN, challenges.ramRequired, TrialValue.COUNT, challenges.ramRequired.toFloat(), directed)
         SiteKind.SLALOM_TRIAL -> trial(TrialClock.COUNTDOWN, challenges.slalomPoles, TrialValue.COUNT, challenges.slalomPoles.toFloat(), directed)
-        SiteKind.BOUNTY_ARENA -> trial(TrialClock.NONE, 3, TrialValue.NONE, 0f, TrialReward.KEY_AND_RELIC)
+        SiteKind.BOUNTY_ARENA -> trial(TrialClock.COUNTDOWN, 3, TrialValue.NONE, 0f, TrialReward.KEY_AND_RELIC)
         SiteKind.FAR_SIGIL -> trial(TrialClock.NONE, 3, TrialValue.NONE, 0f, TrialReward.UNKNOWN)
         SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL, SiteKind.ZENITH_RIFT,
         SiteKind.NADIR_RIFT,
@@ -115,7 +115,7 @@ internal fun trialSites(x: Float = 0f, y: Float = 0f, policy: SitePolicy = SiteP
         site(SiteKind.UNTOUCHED_TRIAL, 16f, 0, 0.25f, radius = 650f),
         site(SiteKind.VELOCITY_TRIAL, 19f, 0, 0.6f, radius = 1_800f),
         site(SiteKind.SLALOM_TRIAL, 11f, 3, 0.5f, course = courseOf(6, 900f)),
-        site(SiteKind.BOUNTY_ARENA, 0f, 0, 0.3f, immutableListOf(40), radius = 900f, clock = 21f),
+        site(SiteKind.BOUNTY_ARENA, 44f, 0, 0.3f, immutableListOf(40), radius = 900f, clock = 21f),
         site(SiteKind.FAR_SIGIL, 0f, 0, 0f, immutableListOf(41)),
     )
 }

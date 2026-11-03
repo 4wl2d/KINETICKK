@@ -21,8 +21,8 @@ internal val SitePhrasesInRussian: List<Pair<String, String>> = listOf(
     "Slalom" to "Слалом",
     "Pass each pole on its flagged side, in order." to "Обогните каждую стойку с отмеченной стороны по порядку.",
     "Bounty" to "Охота за головой",
-    "Defeat the marked target. Leaving the arena forfeits the bounty." to
-        "Победите отмеченную цель. Покинув арену, вы теряете награду.",
+    "Defeat the marked target within sixty-five seconds. Leaving the arena forfeits the bounty." to
+        "Победите отмеченную цель за шестьдесят пять секунд. Покинув арену, вы теряете награду.",
     "Drift cache" to "Дрейфующий тайник",
     "Fly through to open." to "Пролетите сквозь него, чтобы вскрыть.",
     "Lost cursor" to "Потерянный курсор",
@@ -45,6 +45,7 @@ internal val SitePhrasesInRussian: List<Pair<String, String>> = listOf(
     "CHALLENGE FAILED" to "ВЫЗОВ ПРОВАЛЕН",
     "BOUNTY CLAIMED" to "ОХОТА ЗАВЕРШЕНА",
     "BOUNTY ABANDONED" to "ОХОТА БРОШЕНА",
+    "TARGET ESCAPED" to "ЦЕЛЬ УСКОЛЬЗНУЛА",
     "CACHE OPENED" to "ТАЙНИК ВСКРЫТ",
     // GOLDEN DRIFTER, SPIN CYCLE and THE ARCHITECT'S DOODLE read through the uppercase forms of their names below.
     "LOST CURSOR FOUND" to "ПОТЕРЯННЫЙ КУРСОР НАЙДЕН",

@@ -40,6 +40,9 @@ class WorldContractBoundsTest {
         // Three optional windows leave long stretches for ordinary movement and exploration.
         assertEquals(SiteWindowPolicy(45f, 180f, 405f, 40f, 25f, 8f), sites.windows)
         assertEquals(EnemyType.WARDEN_PRIME, sites.bounty.bossType)
+        // The bounty's instruction states its time limit.
+        assertEquals(65f, sites.bounty.timeLimit)
+        assertTrue(sites.definition(SiteKind.BOUNTY_ARENA).instruction.startsWith("Defeat the marked target within sixty-five seconds."))
         assertEquals(SiteReward(itemOfferFloor = ItemRarity.EPIC, matter = 60), sites.secrets.secretReward)
     }
 
@@ -78,6 +81,13 @@ class WorldContractBoundsTest {
         SecretPolicy(spinReward = SiteReward(matter = SPIN_REWARD_MAX_MATTER))
         assertFailsWith<IllegalArgumentException> { SecretPolicy(spinReward = SiteReward(matter = SPIN_REWARD_MAX_MATTER + 1)) }
         assertFailsWith<IllegalArgumentException> { SecretPolicy(spinReward = SiteReward(overdrive = 1f)) }
+        // The bounty's time limit stays inside the seconds its window reserves before the Architect (90).
+        BountyPolicy(timeLimit = 10f)
+        SitePolicy(bounty = BountyPolicy(timeLimit = 90f))
+        assertFailsWith<IllegalArgumentException> { BountyPolicy(timeLimit = 9.9f) }
+        assertFailsWith<IllegalArgumentException> { BountyPolicy(timeLimit = 120.1f) }
+        assertFailsWith<IllegalArgumentException> { BountyPolicy(timeLimit = Float.NaN) }
+        assertFailsWith<IllegalArgumentException> { SitePolicy(bounty = BountyPolicy(timeLimit = 90.1f)) }
         // A released Golden Drifter must not count as escaped at once.
         SitePolicy(secrets = SecretPolicy(goldenEscapeDistance = 1_300.001f))
         assertFailsWith<IllegalArgumentException> { SitePolicy(secrets = SecretPolicy(goldenEscapeDistance = 1_300f)) }

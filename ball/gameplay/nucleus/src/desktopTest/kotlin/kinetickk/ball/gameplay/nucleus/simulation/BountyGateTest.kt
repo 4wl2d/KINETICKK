@@ -8,17 +8,23 @@ import kotlin.test.assertTrue
 
 /**
  * Opt-in site gate S-G2 (spec §14.3): the bounty arena's duel against its mini-boss (Warden Prime at the bounty policy's
- * integrity share). The [SitePilot]'s bounty arm takes every bounty the windows offer (at 225 and 405 s) and fights
- * the boss as the NoPoi bot fights the Architect, pulled back toward the arena's centre past 800 u; on the first
- * [GATE_RUNS] [PopulationSeeds] at 1280×800, once as the fresh tier-0 Orb and once as a tier-6 profile with the full
- * Core Matrix. A run is flown until its last window can no longer run; every bounty counts, a death during one as a
- * failure.
+ * integrity share, within its time limit). The [SitePilot]'s bounty arm takes every bounty the windows offer (at 225
+ * and 405 s) and fights the boss as the NoPoi bot fights the Architect, pulled back toward the arena's centre past
+ * 800 u; on the first [GATE_RUNS] [PopulationSeeds] at 1280×800, once as the fresh tier-0 Orb and once as a tier-6
+ * profile with the full Core Matrix. A run is flown until its last window can no longer run; every bounty counts, a
+ * death or an escape during one as a failure.
  *
  * Thresholds are the design targets; the records step restates them by the population rule on the final tree. Base
  * measurements with bootstrap standard errors (20,000 resamples of whole runs, RNG seed 20261027) are printed on the
- * gate lines and recorded in the SITES notes. The integrity share is calibrated on the SITES window only
- * (i = 2,201..2,300, [SiteCalibrationProbeTest]), never on these seeds. The class also flies the pilot's other duel,
- * the Cartographer's sigil, on the same seeds and records it.
+ * gate lines and recorded in the SITES notes. The integrity share and the time limit are calibrated on the SITES
+ * window only (i = 2,201..2,300, [SiteCalibrationProbeTest]), never on these seeds. With boss kills credited (a boss at
+ * zero integrity before the site step used to be booked as abandoned) an untimed bounty failed only by dying: window
+ * clear 0.909 fresh and 0.987 veteran, and no integrity share in 0.55..1.0 brought the veteran under 0.90. A 65 s
+ * limit (window `bountyTimeLimit` 55/60/65/70/75 s: fresh 0.524/0.662/0.685/0.740/0.767, veteran
+ * 0.595/0.709/0.779/0.823/0.873, bootstrap SE 0.03-0.05) is the longest whose clears stay two SEs of window and gate
+ * together under both ceilings; on the gate it gives fresh 0.722 (SE 0.035) and veteran 0.747 (SE 0.032), median
+ * claimed fights 44.8 and 43.1 s. The class also flies the pilot's other duel, the Cartographer's sigil, on the same
+ * seeds and records it.
  */
 class BountyGateTest {
     /**

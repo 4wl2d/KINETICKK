@@ -143,19 +143,19 @@ class SiteRenderMappingTest {
     }
 
     @Test
-    fun duelsShowTheirFoesIntegrityWithoutAClockOrValue() {
+    fun duelsShowTheirFoesIntegrityWithoutAValueAndOnlyTheBountyAClock() {
         val game = game()
         val boss = game.spawnedEnemy(EnemyType.WARDEN, 600f, -200f).also { game.enemies += it }
         boss.hp = boss.maxHp * 0.7f
         val bounty = game.running(active(SiteKind.BOUNTY_ARENA, remaining = 25f).copy(foeIds = immutableListOf(boss.id), clock = 31f))
         assertEquals(SiteFamily.BOUNTY, bounty.family)
-        assertEquals(TrialClock.NONE to 0f, bounty.clock to bounty.seconds)
+        assertEquals(TrialClock.COUNTDOWN to 25f, bounty.clock to bounty.seconds, "the bounty counts its time limit down")
         assertEquals(TrialValue.NONE, bounty.value)
         assertEquals(3, bounty.segments)
         assertEquals(0.3f, bounty.progress, 1e-5f)
         assertEquals(TrialReward.KEY_AND_RELIC, bounty.reward)
         val projected = game.toRenderModel().sites.single()
-        assertEquals(0f, projected.remaining, "an untimed duel shows no countdown")
+        assertEquals(25f, projected.remaining)
         assertEquals(game.content.sites.bounty.arenaRadius, projected.radius)
         // The kill hook's count completes it on the next step; the panel is full meanwhile.
         assertEquals(1f, game.running(game.sites.single().copy(count = 1)).progress)
@@ -166,6 +166,7 @@ class SiteRenderMappingTest {
         val sigil = assertNotNull(game.toRenderModel().trial)
         assertEquals(SiteFamily.SECRET to SiteKind.FAR_SIGIL, sigil.family to sigil.kind)
         assertEquals(TrialReward.UNKNOWN, sigil.reward)
+        assertEquals(TrialClock.NONE to 0f, sigil.clock to sigil.seconds, "the untimed sigil duel shows no countdown")
         assertEquals(0.3f, sigil.progress, 1e-5f)
     }
 
