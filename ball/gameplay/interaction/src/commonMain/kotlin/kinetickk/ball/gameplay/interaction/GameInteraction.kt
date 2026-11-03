@@ -4,7 +4,6 @@
 package kinetickk.ball.gameplay.interaction
 
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
-import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
@@ -13,27 +12,16 @@ import kinetickk.foundation.design.KkFramePacer
 import kinetickk.foundation.design.LocalKkFrameRateCap
 import kinetickk.foundation.design.LocalKkInterfaceScale
 import kinetickk.foundation.design.Kk
-import kinetickk.foundation.design.drawKkSlab
-import kinetickk.foundation.design.kkStroke
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
-import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.IntState
-import androidx.compose.runtime.NonRestartableComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -48,10 +36,6 @@ import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -69,20 +53,14 @@ import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.TextMeasurer as ComposeTextMeasurer
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.IntOffset
-import kinetickk.ball.content.api.SkillId
-import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayAcceptance
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
@@ -96,7 +74,6 @@ import kinetickk.foundation.diagnostics.DiagnosticPhase
 import kinetickk.foundation.diagnostics.PerformanceDiagnostics
 import kinetickk.foundation.diagnostics.diagnosticFrameBudgetNanos
 import kinetickk.ball.gameplay.interaction.canvas.hud.HudPresentationMemory
-import kinetickk.ball.gameplay.interaction.layout.HudTrialPanelLayout
 import kinetickk.ball.gameplay.interaction.layout.activeTrial
 import kinetickk.ball.gameplay.interaction.canvas.look.badgeState
 import kinetickk.ball.gameplay.interaction.canvas.hud.drawCompactFpsReadout
@@ -116,15 +93,12 @@ import kinetickk.ball.gameplay.interaction.input.isTrialInfoPosition
 import kinetickk.ball.gameplay.interaction.input.resolveGameplayPress
 import kinetickk.ball.gameplay.interaction.input.runningControlInput
 import kinetickk.ball.gameplay.interaction.input.runningControlTargetAt
-import kinetickk.ball.gameplay.interaction.layout.PauseTarget
-import kinetickk.ball.gameplay.interaction.layout.PauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
 import kinetickk.ball.gameplay.interaction.layout.compactFpsReadoutBounds
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
 import kinetickk.ball.gameplay.interaction.layout.skillSlot
 import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
-import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.regularHudUnit
@@ -134,12 +108,9 @@ import kinetickk.ball.gameplay.interaction.rewards.RewardUiPreparation
 import kinetickk.ball.gameplay.interaction.canvas.hud.GameplayFpsCounter
 import kinetickk.ball.gameplay.interaction.overlay.TerminalContent
 import kinetickk.ball.gameplay.interaction.overlay.terminalActionsReady
-import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kotlin.time.TimeSource
-import kotlin.math.roundToInt
 
 internal const val MAX_GAMEPLAY_PRESENTATION_DELTA_SECONDS: Float = 0.1f
 
@@ -834,401 +805,10 @@ private fun Modifier.fpsReadoutSemantics(language: AppLanguage, fps: IntState): 
     }
 
 /** The Show FPS readout's spoken text: the measured value, or a dash until the first window closes. */
-private fun fpsReadoutText(language: AppLanguage, fps: Int): AnnotatedString =
+internal fun fpsReadoutText(language: AppLanguage, fps: Int): AnnotatedString =
     AnnotatedString(language.text(GameplayText.FpsReadout, if (fps < 0) "–" else fps))
 
-@Composable
-private fun GameplaySemanticControls(
-    facts: GameplayCompositionFacts,
-    content: GameplayContentSnapshot,
-    trialDescription: String?,
-    density: Density,
-    hudScale: Float,
-    performanceEnabled: Boolean,
-    fps: IntState,
-    pauseLayout: PauseLayoutGeometry?,
-    onTrialInfoFocusChanged: (Boolean) -> Unit,
-    onTrialInfoToggle: () -> Unit,
-    onInput: (GameplayInput) -> Unit,
-    onControl: (RunningControlTarget) -> Unit,
-    onBrakeChanged: (Boolean) -> Unit,
-) {
-    val language = LocalAppLanguage.current
-    if (facts.phase == GamePhase.RUNNING && trialDescription != null) {
-        TrialInfoSemanticNode(
-            facts = facts,
-            density = density,
-            hudScale = hudScale,
-            description = trialDescription,
-            onFocusChanged = onTrialInfoFocusChanged,
-            onToggle = onTrialInfoToggle,
-        )
-    }
-    when (facts.phase) {
-        GamePhase.RUNNING -> forEachRunningControlBounds(
-            width = facts.hudWidth,
-            height = facts.hudHeight,
-            scale = hudScale,
-            mask = facts.controlMask,
-        ) { target, left, top, right, bottom ->
-            val bounds = Rect(left, top, right, bottom)
-            when (target) {
-                RunningControlTarget.BRAKE -> BrakeSemanticControl(
-                    bounds = bounds,
-                    density = density,
-                    active = facts.braking,
-                    onPressedChange = onBrakeChanged,
-                )
-                RunningControlTarget.DASH -> GameplaySemanticAction(
-                    bounds = bounds,
-                    density = density,
-                    tag = "kinetickk.gameplay.dash",
-                    description = language.text(GameplayText.DashDescription),
-                    state = when {
-                        facts.overheated -> language.text(GameplayText.OfflineState)
-                        facts.dashReady -> language.text(GameplayText.ReadyState)
-                        else -> language.text(GameplayText.CoolingState)
-                    },
-                    onClick = {
-                        onInput(GameplayInput.Action(GameplayInteractionPulse.DashRequested))
-                    },
-                )
-                RunningControlTarget.PERFORMANCE -> PerformanceSemanticAction(
-                    bounds = bounds,
-                    density = density,
-                    enabled = performanceEnabled,
-                    fps = fps,
-                    onClick = { onInput(GameplayInput.TogglePerformance) },
-                )
-                RunningControlTarget.PAUSE -> GameplaySemanticAction(
-                    bounds = bounds,
-                    density = density,
-                    tag = "kinetickk.gameplay.pause",
-                    description = language.text(GameplayText.PauseDescription),
-                    onClick = {
-                        onInput(GameplayInput.Action(GameplayInteractionPulse.PauseToggled))
-                    },
-                )
-                RunningControlTarget.SKILL_1,
-                RunningControlTarget.SKILL_2,
-                RunningControlTarget.SKILL_3,
-                -> {
-                    val slot = target.skillSlot
-                    val skill = facts.skill(slot)
-                    val name = SkillId.entries.getOrNull(skill)?.let { content.skill(it).name.localizedContent(language) }
-                    GameplaySemanticAction(
-                        bounds = bounds,
-                        density = density,
-                        tag = "kinetickk.gameplay.skill.$slot",
-                        description = if (name == null) {
-                            language.text(GameplayText.SkillSlotEmpty, slot + 1)
-                        } else {
-                            language.text(GameplayText.SkillSlotDescription, slot + 1, name)
-                        },
-                        state = if (name == null) null else actionState(facts.skillActive(slot), facts.skillReady(slot), language),
-                        onClick = { onControl(target) },
-                    )
-                }
-                RunningControlTarget.APEX -> GameplaySemanticAction(
-                    bounds = bounds,
-                    density = density,
-                    tag = "kinetickk.gameplay.apex",
-                    description = language.text(
-                        GameplayText.ApexDescription,
-                        content.coreShape(facts.coreShape).apex.name.localizedContent(language),
-                    ),
-                    state = actionState(facts.apexActive, facts.apexReady, language),
-                    onClick = { onControl(target) },
-                )
-            }
-        }
-        GamePhase.PAUSED -> requireNotNull(pauseLayout).actions.forEach { action ->
-            when (action.target) {
-                PauseTarget.RESUME -> GameplaySemanticAction(
-                    bounds = action.bounds,
-                    density = density,
-                    tag = "kinetickk.gameplay.resume",
-                    description = language.text(GameplayText.ResumeDescription),
-                    onClick = {
-                        onInput(GameplayInput.Action(GameplayInteractionPulse.PauseToggled))
-                    },
-                )
-                PauseTarget.SETTINGS -> GameplaySemanticAction(
-                    bounds = action.bounds,
-                    density = density,
-                    tag = "kinetickk.gameplay.settings",
-                    description = language.text(GameplayText.SettingsDescription),
-                    onClick = { onInput(GameplayInput.OpenSettings) },
-                )
-                PauseTarget.WORKSHOP -> GameplaySemanticAction(
-                    bounds = action.bounds,
-                    density = density,
-                    tag = "kinetickk.gameplay.workshop",
-                    description = language.text(GameplayText.WorkshopDescription),
-                    onClick = { onInput(GameplayInput.OpenWorkshop) },
-                )
-                PauseTarget.CODEX -> GameplaySemanticAction(
-                    bounds = action.bounds,
-                    density = density,
-                    tag = "kinetickk.gameplay.codex",
-                    description = language.text(OverlayRedesignText.Codex),
-                    onClick = { onInput(GameplayInput.OpenCodex) },
-                )
-                PauseTarget.EXIT -> GameplaySemanticAction(
-                    bounds = action.bounds,
-                    density = density,
-                    tag = "kinetickk.gameplay.exit",
-                    description = language.text(GameplayText.ExitDescription),
-                    onClick = { onInput(GameplayInput.ExitToHome) },
-                )
-            }
-        }
-        GamePhase.CHOICE -> Unit // RewardContent owns the visible Compose actions.
-        GamePhase.GAME_OVER, GamePhase.VICTORY -> Unit // TerminalContent owns native buttons.
-
-    }
-}
-
-/**
- * The trial panel's (!) is drawn on the Canvas, where the pointer steers the singularity; its rules
- * are exposed as a focusable node whose description is the rule text. Focus shows the tooltip.
- */
-@Composable
-private fun TrialInfoSemanticNode(
-    facts: GameplayCompositionFacts,
-    density: Density,
-    hudScale: Float,
-    description: String,
-    onFocusChanged: (Boolean) -> Unit,
-    onToggle: () -> Unit,
-) {
-    val bounds = remember(facts.hudWidth, facts.hudHeight, hudScale, facts.textScale) {
-        HudTrialPanelLayout()
-            .update(facts.hudWidth, facts.hudHeight, hudScale, facts.textScale)
-            .infoTarget(hudScale)
-    }
-    val currentOnFocusChanged = rememberUpdatedState(onFocusChanged)
-    DisposableEffect(Unit) {
-        onDispose { currentOnFocusChanged.value(false) }
-    }
-    Box(
-        Modifier
-            .placeInGameplayBounds(bounds, density)
-            .testTag(GAMEPLAY_TRIAL_INFO_TAG)
-            .onFocusChanged { currentOnFocusChanged.value(it.isFocused) }
-            .onKeyEvent { event -> activateSemanticButtonFromKey(event.key, event.type, onToggle) }
-            .semantics(mergeDescendants = true) {
-                role = Role.Button
-                contentDescription = description
-                onClick(label = description) {
-                    onToggle()
-                    true
-                }
-            }
-            .focusable(),
-    )
-}
-
-/** A skill's or the Apex's state: active while it runs, ready, else recharging. */
-private fun actionState(active: Boolean, ready: Boolean, language: AppLanguage): String = language.text(
-    when {
-        active -> GameplayText.ActiveState
-        ready -> GameplayText.ReadyState
-        else -> GameplayText.RechargingState
-    },
-)
-
-@Composable
-@NonRestartableComposable
-private fun PerformanceSemanticAction(
-    bounds: Rect,
-    density: Density,
-    enabled: Boolean,
-    fps: IntState,
-    onClick: () -> Unit,
-) {
-    val language = LocalAppLanguage.current
-    val description = language.text(GameplayText.PerformanceDescription)
-    Box(
-        Modifier.placeInGameplayBounds(bounds, density)
-            .testTag("kinetickk.gameplay.performance")
-            .then(if (DIAGNOSTICS_ENABLED) Modifier.onKeyEvent { event ->
-                activateSemanticButtonFromKey(event.key, event.type, onClick)
-            }.focusable() else Modifier)
-            .semantics(mergeDescendants = true) {
-                contentDescription = description
-                // Observe the half-second readout in semantics; changing it need not recompose the host.
-                text = fpsReadoutText(language, fps.intValue)
-                if (DIAGNOSTICS_ENABLED) {
-                    role = Role.Button
-                    stateDescription = if (enabled) language.text(GameplayText.OnState) else language.text(GameplayText.OffState)
-                    onClick(label = description) { onClick(); true }
-                }
-            },
-    )
-}
-
-@Composable
-private fun GameplaySemanticAction(
-    bounds: Rect,
-    density: Density,
-    tag: String,
-    description: String,
-    state: String? = null,
-    onClick: () -> Unit,
-) {
-    Box(
-        Modifier
-            .placeInGameplayBounds(bounds, density)
-            .testTag(tag)
-            .onKeyEvent { event ->
-                activateSemanticButtonFromKey(event.key, event.type, onClick)
-            }
-            .semantics(mergeDescendants = true) {
-                role = Role.Button
-                contentDescription = description
-                state?.let { stateDescription = it }
-                onClick(label = description) {
-                    onClick()
-                    true
-                }
-            }
-            .focusable(),
-    )
-}
-
-@Composable
-private fun BrakeSemanticControl(
-    bounds: Rect,
-    density: Density,
-    active: Boolean,
-    onPressedChange: (Boolean) -> Unit,
-) {
-    val language = LocalAppLanguage.current
-    Box(
-        Modifier
-            .placeInGameplayBounds(bounds, density)
-            .testTag("kinetickk.gameplay.brake")
-            .onKeyEvent { event ->
-                activateSemanticButtonFromKey(event.key, event.type) {
-                    onPressedChange(gameplayBrakeSemanticToggleState(active))
-                }
-            }
-            .semantics(mergeDescendants = true) {
-                role = Role.Button
-                contentDescription = language.text(GameplayText.BrakeDescription)
-                stateDescription = gameplayBrakeStateDescription(active, language)
-                onClick(label = language.text(GameplayText.BrakeAction)) {
-                    onPressedChange(gameplayBrakeSemanticToggleState(active))
-                    true
-                }
-            }
-            .focusable(),
-    )
-}
-
-private fun Modifier.placeInGameplayBounds(bounds: Rect, density: Density): Modifier =
-    this
-        .offset {
-            IntOffset(bounds.left.roundToInt(), bounds.top.roundToInt())
-        }
-        .requiredSize(
-            width = with(density) { bounds.width.toDp() },
-            height = with(density) { bounds.height.toDp() },
-        )
-
 private const val GAMEPLAY_ROOT_TAG = "kinetickk.gameplay"
-internal const val GAMEPLAY_TRIAL_INFO_TAG = "kinetickk.gameplay.trial-info"
-internal val GAMEPLAY_BRAKE_DESCRIPTION = GameplayText.BrakeDescription.english
-internal val GAMEPLAY_BRAKE_SEMANTIC_ACTION_LABEL = GameplayText.BrakeAction.english
-
-internal fun gameplayBrakeStateDescription(active: Boolean, language: AppLanguage = AppLanguage.English): String =
-    if (active) language.text(GameplayText.PressedState) else language.text(GameplayText.ReleasedState)
-
-/** Accessibility activation is a latch: only another explicit action releases it. */
-internal fun gameplayBrakeSemanticToggleState(active: Boolean): Boolean = !active
-
-/**
- * What the composed gameplay host depends on. A running frame changes positions every frame but
- * these facts rarely, so the host recomposes only when one of them changes.
- */
-private data class GameplayCompositionFacts(
-    val phase: GamePhase,
-    val hudWidth: Float,
-    val hudHeight: Float,
-    val uiScale: Float,
-    /** The viewport's raw density (the HUD scale at another interface scale, [hudScale]). */
-    val viewportDensity: Float,
-    val textScale: Float,
-    val choiceCount: Int,
-    val choicesCanReroll: Boolean,
-    val braking: Boolean,
-    val overheated: Boolean,
-    val dashReady: Boolean,
-    /** [RunningControlMask]: whether the skill row and the Apex control are placed. */
-    val controlMask: Int,
-    val coreShape: CoreShape,
-    /** Per skill slot: the skill ordinal (−1 empty), ready, active. */
-    val skill0: Int,
-    val skill0Ready: Boolean,
-    val skill0Active: Boolean,
-    val skill1: Int,
-    val skill1Ready: Boolean,
-    val skill1Active: Boolean,
-    val skill2: Int,
-    val skill2Ready: Boolean,
-    val skill2Active: Boolean,
-    val apexReady: Boolean,
-    val apexActive: Boolean,
-) {
-    fun skill(slot: Int): Int = when (slot) {
-        0 -> skill0
-        1 -> skill1
-        else -> skill2
-    }
-
-    fun skillReady(slot: Int): Boolean = when (slot) {
-        0 -> skill0Ready
-        1 -> skill1Ready
-        else -> skill2Ready
-    }
-
-    fun skillActive(slot: Int): Boolean = when (slot) {
-        0 -> skill0Active
-        1 -> skill1Active
-        else -> skill2Active
-    }
-}
-
-private fun GameplayRenderModel.compositionFacts(): GameplayCompositionFacts {
-    val slots = skillBar.slots
-    return GameplayCompositionFacts(
-        phase = phase,
-        hudWidth = hudWidth,
-        hudHeight = hudHeight,
-        uiScale = uiScale,
-        viewportDensity = viewportDensity,
-        textScale = settings.textScale,
-        choiceCount = choices.size,
-        choicesCanReroll = choicesCanReroll,
-        braking = braking,
-        overheated = overheated,
-        dashReady = dashReady,
-        controlMask = RunningControlMask.of(this),
-        coreShape = coreShape,
-        skill0 = slots[0].skill,
-        skill0Ready = slots[0].ready,
-        skill0Active = slots[0].active01 > 0f,
-        skill1 = slots[1].skill,
-        skill1Ready = slots[1].ready,
-        skill1Active = slots[1].active01 > 0f,
-        skill2 = slots[2].skill,
-        skill2Ready = slots[2].ready,
-        skill2Active = slots[2].active01 > 0f,
-        apexReady = apex.ready,
-        apexActive = apex.active01 > 0f,
-    )
-}
 
 /** The last laid-out gameplay size in device pixels and the density it was sent with. */
 private class GameplayViewportPixels {
@@ -1243,69 +823,7 @@ private class GameplayLayoutDimensions(
     val scale: Float,
 )
 
-private inline fun activateSemanticButtonFromKey(
-    key: Key,
-    type: KeyEventType,
-    onClick: () -> Unit,
-): Boolean {
-    if (key != Key.Enter && key != Key.NumPadEnter && key != Key.Spacebar) return false
-    return when (type) {
-        KeyEventType.KeyDown -> true
-        KeyEventType.KeyUp -> {
-            onClick()
-            true
-        }
-        else -> false
-    }
-}
-
 private inline fun keyDown(type: KeyEventType, action: () -> Unit): Boolean {
     if (type == KeyEventType.KeyDown) action()
     return true
-}
-
-/** Ghost icon button (`.ibtn`) opening the build overview (Codex) during a run; no key letter. */
-@Composable
-private fun BuildButton(modifier: Modifier, regularUnit: Float, onClick: () -> Unit) {
-    val label = LocalAppLanguage.current.text(GameplayText.Build)
-    val interactions = remember { MutableInteractionSource() }
-    val focused by interactions.collectIsFocusedAsState()
-    val hovered by interactions.collectIsHoveredAsState()
-    Box(
-        modifier
-            .testTag("kinetickk.gameplay.build")
-            .semantics { contentDescription = label }
-            .hoverable(interactions)
-            .clickable(interactionSource = interactions, indication = null, role = Role.Button, onClick = onClick),
-    ) {
-        Canvas(Modifier.fillMaxSize()) {
-            val unit = if (regularUnit > 0f) regularUnit else density
-            val width = (if (regularUnit > 0f) 40f else 44f) * unit
-            val height = (if (regularUnit > 0f) 36f else 40f) * unit
-            val left = center.x - width * 0.5f
-            val top = center.y - height * 0.5f
-            val active = focused || hovered
-            drawBuildButton(Rect(left, top, left + width, top + height), active, focused, unit)
-        }
-    }
-}
-
-/** Ink-3 slab (bone when hovered/focused) with a stacked-plates mark; focus adds the bone outline. */
-private fun DrawScope.drawBuildButton(bounds: Rect, active: Boolean, focused: Boolean, unit: Float) {
-    val cut = 8f * density
-    drawKkSlab(bounds, if (active) Kk.Bone else Kk.Ink3, cut)
-    val ink = if (active) Kk.Ink else Kk.Bone
-    val plateWidth = 16f * unit
-    val plateHeight = 3f * unit
-    for (index in 0 until 3) {
-        val y = bounds.center.y - 7f * unit + index * 6f * unit
-        val x = bounds.center.x - plateWidth * 0.5f + (1 - index) * 2f * unit
-        drawRect(ink, Offset(x, y), androidx.compose.ui.geometry.Size(plateWidth, plateHeight))
-    }
-    if (focused) {
-        val gap = 4f * density
-        drawRect(Kk.Bone, Offset(bounds.left - gap, bounds.top - gap),
-            androidx.compose.ui.geometry.Size(bounds.width + gap * 2f, bounds.height + gap * 2f),
-            style = kkStroke(2f * density))
-    }
 }
