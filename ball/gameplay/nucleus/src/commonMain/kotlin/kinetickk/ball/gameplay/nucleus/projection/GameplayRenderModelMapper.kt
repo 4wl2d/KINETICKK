@@ -30,10 +30,26 @@ import kinetickk.ball.gameplay.nucleus.simulation.weapons.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
 
 
+/**
+ * Projects this state. [reusableCollections] is the previous model: a list, value or sub-projection whose content
+ * equals the current one keeps its previous instance.
+ *
+ * Two reuse rules, one per path:
+ * - The pure path passes the previous, never-mutated state as [identitySource]: a field holding the same reference
+ *   as there proves an unchanged value.
+ * - The tick path mutates one state in place, so it passes no [identitySource]: a reference compared against the
+ *   same mutated object would hand out a stale projection. Only values that are replaced, never mutated, may be
+ *   captured instead ([ProjectionSources], given as [sources]); every other value (mutable lists, runtimes, storage
+ *   arrays) reuses by content equality only.
+ */
 internal fun MutableGameState.toRenderModel(
     reusableCollections: GameplayRenderModel? = null,
     identitySource: MutableGameState? = null,
+    sources: ProjectionSources? = null,
 ): GameplayRenderModel {
+    require(identitySource == null || sources == null) {
+        "A projection reuses by identity source or by captured sources, never both"
+    }
     require(identitySource == null || identitySource.content === content) {
         "Identity-based Gameplay projection reuse requires matching content"
     }
@@ -91,14 +107,7 @@ internal fun MutableGameState.toRenderModel(
         damageMultiplier = damageMultiplier,
         weaponPower = weaponPower,
         effectiveWeaponPower = effectiveWeaponPower(),
-        rewardPreviews = if (phase == GamePhase.CHOICE && identitySource?.phase == GamePhase.CHOICE &&
-            choices === identitySource.choices && reusableCollections != null &&
-            equippedRelics === identitySource.equippedRelics && weapon == identitySource.weapon && elapsed == identitySource.elapsed &&
-            itemStacks.reuseIfContentEqual(reusableCollections.itemStacks) != null && build === identitySource.build &&
-            discoveredPairingMask == identitySource.discoveredPairingMask &&
-            discoveredReactionMask == identitySource.discoveredReactionMask &&
-            buildStats(withContributions = false) == identitySource.buildStats(withContributions = false)
-        ) reusableCollections.rewardPreviews else rewardPreviews(),
+        rewardPreviews = reusableRewardPreviews(reusableCollections, identitySource, sources) ?: rewardPreviews(),
         coolingRate = coolingRate,
         magnetStrength = magnetStrength,
         dashImpulse = dashImpulse,
@@ -337,7 +346,12 @@ internal fun MutableGameState.toRenderModel(
             ?: discoveredItemIds.toImmutableSet(),
         relicRanks = relicRanks.reuseIfContentEqual(reusableCollections?.relicRanks)
             ?: relicRanks.toImmutableList(),
-        build = buildProjection(reusableCollections?.build, identitySource, reusableCollections?.itemStacks),
+        build = buildProjection(
+            previous = reusableCollections?.build,
+            previousBuild = identitySource?.build ?: sources?.build,
+            previousPairingMask = reusableCollections?.discoveredPairingMask,
+            previousItemStacks = reusableCollections?.itemStacks,
+        ),
         discoveredReactionMask = discoveredReactionMask,
         discoveredPairingMask = discoveredPairingMask,
         coreRadius = coreRadius,
@@ -641,16 +655,45 @@ private fun MutableGameState.remainingShare(until: Float, seconds: Float): Float
 }
 
 /**
- * Relic gauges change during combat; the compiled build's immutable collections do not. The same build and pairing
- * mask with equal item stacks ([previousItemStacks]) and Reborn flags keep everything but the gauges.
+ * The previous reward previews while the same choice is open over an unchanged build: the same offered cards, relics
+ * and compiled build (by reference: replaced, never mutated), the same weapon, time, discoveries, item stacks and
+ * compared stat rows. Null when the previews must be built.
+ */
+private fun MutableGameState.reusableRewardPreviews(
+    previous: GameplayRenderModel?,
+    identitySource: MutableGameState?,
+    sources: ProjectionSources?,
+): ImmutableList<RewardPreview>? {
+    if (phase != GamePhase.CHOICE || previous == null || previous.phase != GamePhase.CHOICE) return null
+    if (weapon != previous.weapon || elapsed != previous.elapsed ||
+        discoveredPairingMask != previous.discoveredPairingMask ||
+        discoveredReactionMask != previous.discoveredReactionMask ||
+        itemStacks.reuseIfContentEqual(previous.itemStacks) == null
+    ) return null
+    val sameValues = when {
+        identitySource != null -> choices === identitySource.choices && equippedRelics === identitySource.equippedRelics &&
+            build === identitySource.build &&
+            buildStats(withContributions = false) == identitySource.buildStats(withContributions = false)
+        sources != null -> choices === sources.choices && equippedRelics === sources.equippedRelics &&
+            build === sources.build && sources.previewStats != null &&
+            buildStats(withContributions = false) == sources.previewStats
+        else -> false
+    }
+    return previous.rewardPreviews.takeIf { sameValues }
+}
+
+/**
+ * Relic gauges change during combat; the compiled build's immutable collections do not. The same build
+ * ([previousBuild], replaced and never mutated) and pairing mask with equal item stacks ([previousItemStacks]) and
+ * Reborn flags keep everything but the gauges.
  */
 private fun MutableGameState.buildProjection(
     previous: BuildProjection?,
-    identitySource: MutableGameState?,
+    previousBuild: CompiledBuild?,
+    previousPairingMask: Int?,
     previousItemStacks: ImmutableList<Int>?,
 ): BuildProjection {
-    if (previous == null || identitySource == null || build !== identitySource.build ||
-        discoveredPairingMask != identitySource.discoveredPairingMask ||
+    if (previous == null || build !== previousBuild || discoveredPairingMask != previousPairingMask ||
         itemStacks.reuseIfContentEqual(previousItemStacks) == null ||
         !rebornItemsMatch(previous.rebornItemIds)
     ) return buildProjection()

@@ -39,6 +39,9 @@ import kinetickk.ball.gameplay.nucleus.simulation.startRun
 import kinetickk.ball.gameplay.nucleus.simulation.progression.takeProgressUpdate
 import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
 import kinetickk.ball.gameplay.nucleus.simulation.takeVisualFxCues
+import kinetickk.ball.gameplay.nucleus.projection.ProjectionSources
+import kinetickk.ball.gameplay.nucleus.projection.captureProjectionSources
+import kinetickk.ball.gameplay.nucleus.projection.projectionProvenance
 import kinetickk.ball.gameplay.nucleus.projection.toRenderModel
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
@@ -158,14 +161,18 @@ object GameplayNucleus {
         require(reusableModel == null || reusableModel.content === state.content) {
             "Previous Gameplay render model belongs to different content"
         }
+        val engine = state.engine ?: return GameplayRenderSnapshot(state.instanceId, state.revision, null, null)
+        val model = engine.model
+        val previousSources = (previous.projectionSourceIdentity as? ProjectionSources)?.takeIf { reusableModel != null }
         return GameplayRenderSnapshot(
             instanceId = state.instanceId,
             revision = state.revision,
-            renderModel = state.engine?.model?.toRenderModel(
+            renderModel = model.toRenderModel(
                 reusableCollections = reusableModel,
                 identitySource = null,
+                sources = previousSources,
             ),
-            projectionSourceIdentity = state.engine?.renderProjectionIdentity,
+            projectionSourceIdentity = model.captureProjectionSources(engine.renderProjectionIdentity, previousSources),
         )
     }
 
@@ -179,11 +186,15 @@ object GameplayNucleus {
         require((state.engine == null) == (reusableSnapshot.renderModel == null)) {
             "Render-neutral transition changed Gameplay engine availability"
         }
+        val engineIdentity = state.engine?.renderProjectionIdentity
         return GameplayRenderSnapshot(
             instanceId = state.instanceId,
             revision = state.revision,
             renderModel = reusableSnapshot.renderModel,
-            projectionSourceIdentity = state.engine?.renderProjectionIdentity,
+            // The same engine keeps the tick path's capture: a render-neutral transition replaced none of its values.
+            projectionSourceIdentity = reusableSnapshot.projectionSourceIdentity.takeIf {
+                engineIdentity != null && projectionProvenance(it) === engineIdentity
+            } ?: engineIdentity,
         )
     }
 
@@ -217,7 +228,7 @@ object GameplayNucleus {
             "Reusable Gameplay render source/model nullability mismatch"
         }
         require(
-            reusableSnapshot.projectionSourceIdentity ===
+            projectionProvenance(reusableSnapshot.projectionSourceIdentity) ===
                 reusableState.engine?.renderProjectionIdentity,
         ) {
             "Reusable Gameplay render snapshot was not projected from its claimed source"
