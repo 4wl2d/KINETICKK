@@ -36,12 +36,11 @@ import kotlin.math.sin
  * once they are built.
  */
 
-/** Ambient occlusion where floor meets wall: two ink strokes on the room outlines (half under the slabs). */
-private const val OCCLUSION_WIDE = 150f
-private const val OCCLUSION_NEAR = 64f
+/** Ambient occlusion where floor meets wall: an ink stroke on the room outlines (half under the slabs). */
+private const val OCCLUSION = 110f
 
 /** The room light pool spans this share of the room's shorter side. */
-private const val ROOM_POOL_SHARE = 0.72f
+private const val ROOM_POOL_SHARE = 0.62f
 
 /** Runes sit this far inside a wall line, this far apart, and are this large (world units). */
 internal const val RUNE_INSET = 50f
@@ -73,9 +72,7 @@ internal fun DrawScope.drawDungeonFloor(
         } else {
             drawPath(inlay, accent, alpha = 0.20f, style = kkStroke(2f))
         }
-        val rooms = StructurePaths.floor(template, rotation)
-        drawPath(rooms, Kk.Ink, alpha = 0.22f, style = kkStroke(OCCLUSION_WIDE))
-        drawPath(rooms, Kk.Ink, alpha = 0.30f, style = kkStroke(OCCLUSION_NEAR))
+        drawPath(StructurePaths.floor(template, rotation), Kk.Ink, alpha = 0.36f, style = kkStroke(OCCLUSION))
     }
     for (room in template.rooms.indices) {
         val spec = template.rooms[room]
@@ -104,13 +101,11 @@ private fun DrawScope.drawRoomAlarm(spec: StructureRoom, center: Offset, rotatio
     val left = center.x + roomLeft(spec, rotation)
     val top = center.y + roomTop(spec, rotation)
     val size = Size(center.x + roomRight(spec, rotation) - left, center.y + roomBottom(spec, rotation) - top)
-    drawRect(light, Offset(left, top), size, alpha = 0.05f + 0.07f * beat, style = kkStroke(ALARM_WIDE))
-    drawRect(light, Offset(left, top), size, alpha = 0.08f + 0.12f * beat, style = kkStroke(ALARM_NEAR))
+    drawRect(light, Offset(left, top), size, alpha = 0.10f + 0.14f * beat, style = kkStroke(ALARM))
 }
 
-/** The alarm's two glow strokes on a sealed room's outline (world units). */
-private const val ALARM_WIDE = 120f
-private const val ALARM_NEAR = 44f
+/** The alarm's glow stroke on a sealed room's outline (world units; half of it reaches into the room). */
+private const val ALARM = 96f
 
 /** The three rune groups: each room's runes in its mood, a group's phase a third of a turn from the next. */
 private fun DrawScope.drawRunes(

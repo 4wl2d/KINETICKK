@@ -33,7 +33,7 @@ import kotlin.math.min
 import kotlin.math.sin
 
 /*
- * A dungeon's walls with depth: every slab casts a two-step shadow down and right onto the floor, shows its lit top and
+ * A dungeon's walls with depth: every slab casts a shadow down and right onto the floor, shows its lit top and
  * a darker face along its lower edge (both inside the collision outline, so nothing drawn reaches past a wall), keeps
  * a bone rim with a light top edge and a seam along its crest. Sconces burn at the rooms' corners and wall middles in
  * the room's mood. Doors: an open doorway is a lit threshold (volt for the player's next way); a sealed one slams its
@@ -41,23 +41,22 @@ import kotlin.math.sin
  * garrison lives; a locked one is hatched bone. Allocation-free: shapes are the cached slab paths and per-wall rects.
  */
 
-/** The slab's face band (inside its outline) and its shadow's two steps (world units). */
+/** The slab's face band (inside its outline) and its shadow's offset (world units). */
 private const val FACE_DEPTH = 14f
-private const val SHADOW_X = 9f
-private const val SHADOW_Y = 15f
+private const val SHADOW_X = 11f
+private const val SHADOW_Y = 18f
 
 /** A sconce sits this far inside a wall line; its pool spans this far. */
 private const val SCONCE_INSET = 34f
-private const val SCONCE_POOL = 175f
+private const val SCONCE_POOL = 140f
 
 /** Doors slam shut over this long after the seal, then flash for [SLAM_FLASH_SECONDS]. */
 private const val SLAM_SECONDS = 0.22f
 private const val SLAM_FLASH_SECONDS = 0.35f
 
-/** Slabs of [template] at [center] with shadow, face, top, rim and crest highlight. */
+/** The cached [slabs] of a structure at [center] with shadow, face, lit top, rim and top highlight. */
 internal fun DrawScope.drawDungeonSlabs(slabs: Path, center: Offset, accent: Color) {
-    translate(center.x + SHADOW_X * 2f, center.y + SHADOW_Y * 2f) { drawPath(slabs, Kk.Ink, alpha = 0.2f) }
-    translate(center.x + SHADOW_X, center.y + SHADOW_Y) { drawPath(slabs, Kk.Ink, alpha = 0.42f) }
+    translate(center.x + SHADOW_X, center.y + SHADOW_Y) { drawPath(slabs, Kk.Ink, alpha = 0.5f) }
     translate(center.x, center.y) {
         // The rim's outer half shows; the face fills the outline and the lit top covers all but its lower band.
         drawPath(slabs, kkMix(Kk.Bone, accent, 0.3f), style = kkStroke(KkStrokeWidth.Icon))
@@ -170,7 +169,7 @@ private fun sconceAt(template: StructureTemplate, room: StructureRoom, slot: Int
 }
 
 /** Sides shorter than this keep their corners' sconces only. */
-private const val MIDDLE_SCONCE_SIDE = 700f
+private const val MIDDLE_SCONCE_SIDE = 900f
 
 /**
  * An open doorway from [a] to [b]: a threshold light spilling both ways and two dashes across its gap, at 20–42 % and

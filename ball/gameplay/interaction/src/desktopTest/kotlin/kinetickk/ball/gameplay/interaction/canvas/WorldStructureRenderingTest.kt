@@ -130,7 +130,7 @@ class WorldStructureRenderingTest {
             assertTrue(luminance(crest) > luminance(top) + 0.01f, "fin crest $where: $crest over $top")
             assertTrue(luminance(face) < luminance(top), "fin face $where: $face under $top")
             assertTrue((322 until 330).maxOf { luminance(sealed.at(0f, it.toFloat(), density)) } > 0.6f, "fin rim $where")
-            assertTrue(luminance(sealed.at(0f, 345f, density)) < luminance(sealed.at(0f, 420f, density)), "fin shadow $where")
+            assertTrue(luminance(sealed.at(0f, 334f, density)) < luminance(sealed.at(0f, 420f, density)), "fin shadow $where")
             // The sealed hall's lower door: a hatched barrier glowing in threat, edged in threat.
             val hatch = (-400 until -100 step 2).flatMap { x -> (582 until 619 step 2).map { y -> sealed.at(x.toFloat(), y.toFloat(), density) } }
             assertTrue(hatch.count { luminance(it) > luminance(Kk.Ink3) + 0.15f } > 20, "hatch lines $where")
