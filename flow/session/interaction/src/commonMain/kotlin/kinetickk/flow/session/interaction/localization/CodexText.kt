@@ -187,7 +187,6 @@ internal enum class CodexText(
     HABITAT_ZENITH("Zenith", "Зенит"),
     HABITAT_NADIR("Nadir", "Надир"),
     HABITAT_ARCHIVE("Archive", "Архив"),
-    UNKNOWN_ENEMY("???", "???"),
     UNDISCOVERED("Undiscovered", "Не обнаружен"),
     UNKNOWN_ENEMY_HELP("Defeat it to reveal its record.", "Победите его, чтобы открыть запись."),
     THREAT("Threat", "Угроза"),

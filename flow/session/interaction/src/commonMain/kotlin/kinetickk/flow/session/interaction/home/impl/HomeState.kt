@@ -124,10 +124,6 @@ internal fun resolveHomePress(viewport: HomeViewport, x: Float, y: Float, runMod
     return hit?.target?.toHomeAction()
 }
 
-/** True for a press inside the Baby mode toggle's touch rect. */
-internal fun resolveHomeRunModePress(viewport: HomeViewport, x: Float, y: Float): Boolean =
-    homeLayoutGeometry(viewport.width, viewport.height, viewport.density, viewport.quitAvailable).runModeToggle.touch.holds(x, y)
-
 private fun Rect.holds(x: Float, y: Float): Boolean = x in left..right && y in top..bottom
 
 /** Resolves a press on a drawn (!) info button (its expanded touch rect), if any. */

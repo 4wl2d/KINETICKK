@@ -138,7 +138,6 @@ object AppSessionNucleus {
             pendingWorkflow = PendingWorkflow.StartingRun(
                 reason = reason,
                 runId = reservation.runId,
-                mode = state.runMode,
             ),
             rebirthConfirmation = RebirthConfirmation.Disarmed,
             lastFailure = null,
@@ -494,7 +493,6 @@ object AppSessionNucleus {
             gameplayPhase = GameplayRunPhase.CREATED,
             pendingWorkflow = PendingWorkflow.StartingRebirthRun(
                 reservation.runId,
-                state.runMode,
             ),
             rebirthConfirmation = RebirthConfirmation.Disarmed,
             lastFailure = null,

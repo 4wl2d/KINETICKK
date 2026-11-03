@@ -157,25 +157,25 @@ class DefaultHomeFeature(
 
         val currentTapHandlerValue by rememberUpdatedState<(Offset) -> Unit> { position ->
             if (inputEnabled) {
+                val press = resolveHomePress(viewportValue, position.x, position.y, runMode)
                 // A tap on the toggle asks Session for the other mode and leaves its tooltip open; any other tap closes it.
-                val toggle = resolveHomeRunModePress(viewportValue, position.x, position.y)
+                val toggle = press as? HomeAction.SelectRunMode
                 // The slip covers menu rows: a tap on it only closes it and presses nothing hidden under it.
-                val onTip = !toggle &&
+                val onTip = toggle == null &&
                     homeShowsRunModeTip(layout, openInfoValue, activeInfoValue, runModeActiveValue, runModeTipValue) &&
                     position in homeRunModeTipRect(textMeasurer, layout, viewportValue)
-                runModeTipValue = toggle
-                val info = if (toggle || onTip) null else resolveHomeInfoPress(viewportValue, position.x, position.y)
+                runModeTipValue = toggle != null
+                val info = if (toggle != null || onTip) null else resolveHomeInfoPress(viewportValue, position.x, position.y)
                 when {
-                    toggle -> {
+                    toggle != null -> {
                         openInfoValue = null
-                        dispatch(HomeAction.SelectRunMode(runMode.toggled()))
+                        dispatch(toggle)
                     }
                     onTip -> Unit
                     info != null -> openInfoValue = if (openInfoValue == info) null else info
                     else -> {
                         openInfoValue = null
-                        val action = resolveHomePress(viewportValue, position.x, position.y, runMode)
-                        if (action != null) dispatch(action)
+                        press?.let(::dispatch)
                     }
                 }
             }

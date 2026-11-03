@@ -168,13 +168,13 @@ internal class DefaultAppSessionComponent private constructor(
                     check(pending.shape == output.shape)
                 }
                 is AppSessionOutput.StartRun -> {
-                    val (runId, mode) = when (val pending = next.pendingWorkflow) {
-                        is PendingWorkflow.StartingRun -> pending.runId to pending.mode
-                        is PendingWorkflow.StartingRebirthRun -> pending.runId to pending.mode
+                    val runId = when (val pending = next.pendingWorkflow) {
+                        is PendingWorkflow.StartingRun -> pending.runId
+                        is PendingWorkflow.StartingRebirthRun -> pending.runId
                         else -> error("Session start command has no matching workflow")
                     }
                     check(runId == output.runId && runId == next.activeRunId)
-                    check(mode == output.mode && mode == next.runMode) { "Session start command carries another run mode" }
+                    check(output.mode == next.runMode) { "Session start command carries another run mode" }
                     if (ensureOutputs.isEmpty()) boundRun(runId)
                 }
                 is AppSessionOutput.PauseForOverlay -> {

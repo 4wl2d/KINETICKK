@@ -1013,14 +1013,7 @@ private fun DrawScope.drawHeader(
  * ink-2 while off (a mute pacifier, bone when hovered or focused); hovered or focused it is outlined.
  */
 private fun DrawScope.drawRunModeToggle(text: CanvasTextMeasurer, bounds: Rect, easy: Boolean, active: Boolean) {
-    val cut = 8f * density
-    val path = runModePlatePath
-    path.rewind()
-    path.moveTo(bounds.left + cut, bounds.top)
-    path.lineTo(bounds.right, bounds.top)
-    path.lineTo(bounds.right - cut, bounds.bottom)
-    path.lineTo(bounds.left, bounds.bottom)
-    path.close()
+    val path = chipPlate(bounds.left, bounds.top, bounds.right, bounds.bottom, 8f * density)
     drawPath(path, if (easy) text.roles.soft else Kk.Ink2)
     if (active) drawPath(path, if (easy) Kk.Ink else Kk.Bone, style = kkStroke(1.5f * density))
     val pacifier = KkPacifierSigilPaths.of(bounds.height * 0.34f)
@@ -1028,8 +1021,6 @@ private fun DrawScope.drawRunModeToggle(text: CanvasTextMeasurer, bounds: Rect, 
         drawPath(pacifier, if (easy) Kk.Ink else if (active) Kk.Bone else Kk.Mute)
     }
 }
-
-private val runModePlatePath = Path()
 
 /** The stamp's size (px before the measurer's scale): 17 at the reference hero, never under 11. */
 internal fun homeBabyStampSize(scene: HomeScene, density: Float): Float = (17f * scene.heroRadius / density / 260f).coerceIn(11f, 17f)
@@ -1095,15 +1086,7 @@ private fun DrawScope.drawChip(text: CanvasTextMeasurer, right: Float, scene: Ho
     val left = right - width
     val top = scene.chipsTop
     val bottom = top + scene.chipHeight
-    val cut = 8f * density
-    val path = chipPath
-    path.rewind()
-    path.moveTo(left + cut, top)
-    path.lineTo(right, top)
-    path.lineTo(right - cut, bottom)
-    path.lineTo(left, bottom)
-    path.close()
-    drawPath(path, Kk.Ink2)
+    drawPath(chipPlate(left, top, right, bottom, 8f * density), Kk.Ink2)
     var x = left + 10f * density
     val cy = (top + bottom) * 0.5f
     if (chip.gem) {
@@ -1125,6 +1108,18 @@ private fun DrawScope.drawChip(text: CanvasTextMeasurer, right: Float, scene: Ho
         if (labelLayout != null) drawKkText(labelLayout, x, cy, Kk.Mute, valign = KkVAlign.CENTER)
     }
     return width
+}
+
+/** The header chip's slanted plate (one reused path), drawn by every chip and the Baby mode toggle. */
+private fun chipPlate(left: Float, top: Float, right: Float, bottom: Float, cut: Float): Path {
+    val path = chipPath
+    path.rewind()
+    path.moveTo(left + cut, top)
+    path.lineTo(right, top)
+    path.lineTo(right - cut, bottom)
+    path.lineTo(left, bottom)
+    path.close()
+    return path
 }
 
 private val chipPath = Path()

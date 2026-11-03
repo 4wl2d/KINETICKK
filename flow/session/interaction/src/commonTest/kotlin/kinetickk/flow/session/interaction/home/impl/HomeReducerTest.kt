@@ -245,12 +245,13 @@ class HomeReducerTest {
                         resolveHomePress(viewport, action.bounds.center.x, action.bounds.center.y, current), "$where ${action.target}")
                 }
             }
-            assertTrue(resolveHomeRunModePress(viewport, toggle.bounds.center.x, toggle.bounds.center.y), where)
+            assertTrue(resolveHomePress(viewport, toggle.bounds.center.x, toggle.bounds.center.y) is HomeAction.SelectRunMode, where)
             // Just outside the press area nothing toggles, and the (!) buttons stay the (!) buttons.
-            assertFalse(resolveHomeRunModePress(viewport, toggle.touch.left - 1f, toggle.bounds.center.y), where)
-            assertFalse(resolveHomeRunModePress(viewport, toggle.bounds.center.x, toggle.touch.bottom + 1f), where)
             assertFalse(resolveHomePress(viewport, toggle.touch.left - 1f, toggle.bounds.center.y) is HomeAction.SelectRunMode, where)
-            layout.infos.forEach { info -> assertFalse(resolveHomeRunModePress(viewport, info.bounds.center.x, info.bounds.center.y), where) }
+            assertFalse(resolveHomePress(viewport, toggle.bounds.center.x, toggle.touch.bottom + 1f) is HomeAction.SelectRunMode, where)
+            layout.infos.forEach { info ->
+                assertFalse(resolveHomePress(viewport, info.bounds.center.x, info.bounds.center.y) is HomeAction.SelectRunMode, where)
+            }
         }
     }
 }

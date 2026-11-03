@@ -19,7 +19,6 @@ import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkShutter
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.LocalCrashDiagnostics
-import kinetickk.foundation.diagnostics.CrashDiagnostics
 import kinetickk.foundation.design.LocalKkFrameRateCap
 import kinetickk.foundation.design.LocalKkInterfaceScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -111,6 +110,7 @@ fun AppSessionContent(
     onQuit: () -> Unit = {},
 ) {
     val diagnostics = LocalCrashDiagnostics.current
+    val traced = diagnostics.enabled
     var languageValue by remember(sessionPort, profileReadPort) {
         mutableStateOf(profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences?.language ?: initialLanguage)
     }
@@ -145,19 +145,19 @@ fun AppSessionContent(
     }
     val observedShell = shellValue
     SideEffect(observedShell) {
-        if (diagnostics !== CrashDiagnostics.None) diagnostics.context("session.committed") { observedShell.toString() }
+        if (traced) diagnostics.context("session.committed") { observedShell.toString() }
     }
 
     fun dispatch(pulse: SessionInteractionPulse): Boolean {
         val before = shellValue
-        if (diagnostics !== CrashDiagnostics.None) {
+        if (traced) {
             diagnostics.context("session.before-input") { before.toString() }
             diagnostics.event("session.input", pulse.toString())
         }
         val accepted = sessionPort.accept(pulse) is SessionAcceptance.Accepted
         shellValue = sessionPort.query(AppSessionQuery.GetShell)
         val after = shellValue
-        if (diagnostics !== CrashDiagnostics.None) diagnostics.context("session.committed") { after.toString() }
+        if (traced) diagnostics.context("session.committed") { after.toString() }
         return accepted
     }
 

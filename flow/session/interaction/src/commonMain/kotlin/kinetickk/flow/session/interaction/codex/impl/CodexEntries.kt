@@ -491,7 +491,7 @@ internal fun codexEnemyEntry(
     language: AppLanguage = AppLanguage.English,
 ): CodexEntry {
     if (!codexEnemyVisible(enemy, model)) {
-        return CodexEntry("enemy/${enemy.type}", language.text(CodexText.UNKNOWN_ENEMY), "", language.text(CodexText.SECRET_BOSS_KIND),
+        return CodexEntry("enemy/${enemy.type}", language.text(CodexText.UNKNOWN_TITLE), "", language.text(CodexText.SECRET_BOSS_KIND),
             "?/$MAX_CODEX_THREAT", listOf(codexStatus(language, language.text(CodexText.UNDISCOVERED))),
             CodexIcon.Enemy(enemy.type, locked = true, hidden = true), Kk.Mute, discovered = false,
             help = language.text(CodexText.UNKNOWN_ENEMY_HELP))

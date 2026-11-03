@@ -502,16 +502,17 @@ class AppSessionNucleusTest {
             assertEquals(RunMode.STANDARD, running.toShell().runMode)
         }
 
-        val pending = decide(
+        val start = decide(
             easy.nextState,
             SessionInteractionPulse.StartRunRequested,
             AppSessionContext(runBootstrap = runBootstrap()),
-        ).accepted().nextState
+        ).accepted()
+        val pending = start.nextState
         assertEquals(
             SessionRejection.ParticipantCommandPending,
             decide(pending, SessionInteractionPulse.SelectRunModeRequested(RunMode.STANDARD)).rejection(),
         )
-        assertEquals(RunMode.EASY, assertIs<PendingWorkflow.StartingRun>(pending.pendingWorkflow).mode)
+        assertEquals(RunMode.EASY, assertIs<AppSessionOutput.StartRun>(start.outputs.last()).mode)
         assertEquals(
             SessionRejection.BootstrapUnavailable,
             decide(
@@ -537,7 +538,7 @@ class AppSessionNucleusTest {
             started.outputs.toList(),
         )
         assertEquals(
-            PendingWorkflow.StartingRun(RunStartReason.START, RunId(0L), RunMode.EASY),
+            PendingWorkflow.StartingRun(RunStartReason.START, RunId(0L)),
             started.nextState.pendingWorkflow,
         )
 
@@ -565,7 +566,7 @@ class AppSessionNucleusTest {
         ).accepted()
         assertEquals(AppSessionOutput.StartRun(RunId(1L), RunMode.EASY), restarted.outputs.last())
         assertEquals(
-            PendingWorkflow.StartingRun(RunStartReason.RESTART, RunId(1L), RunMode.EASY),
+            PendingWorkflow.StartingRun(RunStartReason.RESTART, RunId(1L)),
             restarted.nextState.pendingWorkflow,
         )
 
@@ -584,7 +585,7 @@ class AppSessionNucleusTest {
             profileRebirthTierSelected(ProfileRebirthTierSelected(ProfileRevision(4), selected)),
             AppSessionContext(runBootstrap = runBootstrap(rebirthProgress = selected)),
         ).accepted()
-        assertEquals(PendingWorkflow.StartingRebirthRun(RunId(0L), RunMode.EASY), homeRebirth.nextState.pendingWorkflow)
+        assertEquals(PendingWorkflow.StartingRebirthRun(RunId(0L)), homeRebirth.nextState.pendingWorkflow)
         assertEquals(AppSessionOutput.StartRun(RunId(0L), RunMode.EASY), homeRebirth.outputs[1])
 
         // A Rebirth from a VICTORY reuses it too, for the next RunId.
@@ -603,7 +604,7 @@ class AppSessionNucleusTest {
             profileRebirthTierSelected(ProfileRebirthTierSelected(ProfileRevision(4), selected)),
             AppSessionContext(runBootstrap = runBootstrap(rebirthProgress = selected)),
         ).accepted()
-        assertEquals(PendingWorkflow.StartingRebirthRun(RunId(1L), RunMode.EASY), victoryStart.nextState.pendingWorkflow)
+        assertEquals(PendingWorkflow.StartingRebirthRun(RunId(1L)), victoryStart.nextState.pendingWorkflow)
         assertEquals(
             listOf(
                 AppSessionOutput.EnsureGameplayRun(RunId(1L)),
@@ -641,7 +642,7 @@ class AppSessionNucleusTest {
         ).accepted()
         assertEquals(listOf(AppSessionOutput.StartRun(RunId(0L), RunMode.STANDARD)), reused.outputs.toList())
         assertEquals(
-            PendingWorkflow.StartingRun(RunStartReason.START, RunId(0L), RunMode.STANDARD),
+            PendingWorkflow.StartingRun(RunStartReason.START, RunId(0L)),
             reused.nextState.pendingWorkflow,
         )
     }

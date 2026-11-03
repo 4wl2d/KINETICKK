@@ -20,13 +20,13 @@ private val CodexWorldKinds = listOf(WorldDiscoveryKind.SITE, WorldDiscoveryKind
 internal fun codexWorldKey(id: WorldDiscovery): String = "world/$id"
 
 /** The kind label of a world entry. */
-internal val WorldDiscoveryKind.codexLabel: CodexText
+private val WorldDiscoveryKind.codexLabel: CodexText
     get() = when (this) {
         WorldDiscoveryKind.SITE -> CodexText.SITE_KIND
         WorldDiscoveryKind.DIMENSION -> CodexText.DIMENSION_KIND
         WorldDiscoveryKind.STRUCTURE -> CodexText.STRUCTURE_KIND
         WorldDiscoveryKind.SECRET -> CodexText.SECRET_KIND
-        WorldDiscoveryKind.SECRET_BOSS -> CodexText.BOSS_KIND
+        WorldDiscoveryKind.SECRET_BOSS -> CodexText.SECRET_BOSS_KIND
     }
 
 /**

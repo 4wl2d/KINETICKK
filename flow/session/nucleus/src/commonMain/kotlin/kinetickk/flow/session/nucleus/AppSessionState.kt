@@ -37,7 +37,6 @@ sealed interface PendingWorkflow {
     data class StartingRun(
         val reason: RunStartReason,
         val runId: RunId,
-        val mode: RunMode,
     ) : PendingWorkflow
 
     data class PausingForOverlay(
@@ -66,7 +65,6 @@ sealed interface PendingWorkflow {
 
     data class StartingRebirthRun(
         val runId: RunId,
-        val mode: RunMode,
     ) : PendingWorkflow
 
     data class ExitingRun(val runId: RunId) : PendingWorkflow
