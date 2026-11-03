@@ -53,8 +53,10 @@ import kinetickk.ball.gameplay.nucleus.simulation.characters.CharacterRunState
  * pending output buffer of its source; immutable values are shared.
  *
  * Cohesive groups with a single writing domain live in state holders, declared first so every later initializer sees
- * them; each holder copies itself from its [copySource] counterpart. New fields go into a holder, read as
- * `state.<holder>.<field>`; the forwarders in MutableGameStateForwarders.kt only keep older call sites unchanged.
+ * them; each holder copies itself from its [copySource] counterpart and resets its own group when a run starts. The
+ * root keeps the random streams, the Core's motion, vitals and timers, the weapon, the compiled build and skills, the
+ * live entity lists and the open choices. New fields go into a holder, read as `state.<holder>.<field>`; the
+ * forwarders in the `*Forwarders.kt` files of this package only keep older call sites unchanged.
  */
 internal class MutableGameState(
     internal val content: GameplayContentSnapshot,
