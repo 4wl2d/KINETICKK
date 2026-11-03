@@ -70,7 +70,7 @@ internal class HudPresentationMemory {
     private var lastMessage: String? = null
     private var lastMessageTime = 0f
     private var messageShownAt = Float.NEGATIVE_INFINITY
-    val dimensionShutter = DimensionShutterMemory() // the world layer's edges, for the dimension shutter
+    val dimensionTransition = DimensionTransitionMemory() // the world layer's edges, for the dimension portal
 
     /** Records [engine] as shown at [renderTime]; repeated draws of one frame change nothing. */
     fun observe(engine: GameplayRenderModel, renderTime: Float, boss: BossTarget) {
@@ -88,7 +88,7 @@ internal class HudPresentationMemory {
         if (restarted) forgetOneShots()
         observeLevelTier(engine, renderTime, armed)
         observeSkills(engine, renderTime, armed)
-        dimensionShutter.observe(engine.dimension.layer, renderTime, armed)
+        dimensionTransition.observe(engine.dimension.layer, renderTime, armed)
 
         val integrity = engine.hp / engine.maxHp.coerceAtLeast(1f)
         if (!first && !lastIntegrity.isNaN() && integrity < lastIntegrity) {
@@ -189,7 +189,7 @@ internal class HudPresentationMemory {
         readyAt.fill(Float.NEGATIVE_INFINITY)
         refundAt.fill(Float.NEGATIVE_INFINITY)
         skillRowShownAt = Float.NEGATIVE_INFINITY
-        dimensionShutter.forget()
+        dimensionTransition.forget()
     }
 
     /** Level-badge slam progress 0..1 (1 = settled) at [renderTime]. */

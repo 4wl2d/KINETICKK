@@ -522,8 +522,38 @@ class HudHotPathAllocationTest {
                 val where = "$layer ${remaining}s at $width x $height"
                 kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.REBIRTH), "$where: no plate")
                 kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.TRIAL_PANEL), "$where: no objective panel")
-                if (!lastSeconds) assertTrue(memory.dimensionShutter.progress(10f + FRAMES * 0.0001f) in 0f..1f, "$where: the shutter plays")
+                if (!lastSeconds) assertTrue(memory.dimensionTransition.progress(10f + FRAMES * 0.0001f) in 0f..1f, "$where: the portal plays")
                 assertTrue(perFrame <= 64, "A dimension visit's HUD ($where) allocates $perFrame bytes above an empty frame")
+            }
+        }
+    }
+
+    /**
+     * The dimension HUD's other states on steady frames: a broken Ascent (its pips struck, its gauge naming the break), the
+     * Archive's Desync swinging over its whole range (its label stepping through its cached factors) and the portal of the
+     * layer change at every phase, implosion and explosion, over the measured frames: once warm, nothing is allocated.
+     */
+    @Test
+    fun aBrokenCourseTheDesyncAndThePortalAllocateNothingOnSteadyFrames() {
+        listOf(1_440 to 810, 390 to 844).forEach { (width, height) ->
+            for (layer in listOf(WorldLayer.ZENITH, WorldLayer.ARCHIVE)) {
+                val base = hudTestModel(width.toFloat(), height.toFloat())
+                val visit = dimensionVisit(layer, base.coreX, base.coreY, progress = 4, failed = layer == WorldLayer.ZENITH)
+                val frames = List(FRAMES) { frame ->
+                    base.inVisit(visit.copy(timeScale = 0.25f + (frame % 21) * 0.05f)).with("elapsed" to 100.3f, "velocityX" to frame * 3f)
+                }
+                val realspace = base.with("elapsed" to 100f)
+                val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
+                    AppLanguage.Russian)
+                val memory = HudPresentationMemory()
+                memory.observe(realspace, 9.9f, BossTarget().select(realspace))
+                // The layer changed on the first drawn frame; the frames walk the portal's whole 900 ms again and again.
+                val perFrame = steadyFrameBytes(width, height) { frame ->
+                    drawHud(frames[frame % FRAMES], measurer, 10f + (frame % FRAMES) * 0.9f / FRAMES, 0f, 0f, memory)
+                }
+                val where = "$layer at $width x $height"
+                kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.REBIRTH), "$where: no plate")
+                assertTrue(perFrame <= 64, "A broken course, the Desync and the portal ($where) allocate $perFrame bytes above an empty frame")
             }
         }
     }

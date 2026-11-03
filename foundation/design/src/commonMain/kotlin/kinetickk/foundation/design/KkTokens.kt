@@ -222,6 +222,33 @@ enum class KkHomePalette(val accent: Color) {
 }
 
 /**
+ * The dimensions' atmosphere: light, ground and weather of the three layers, never a role (marks inside a layer keep
+ * the role palette, so an enemy reads the same everywhere). The Zenith is heaven (warm white light over a dusk-gold
+ * ground, gold halos, pale clouds and feathers), the Nadir hell (crimson over soot, magma in its cracks), the Archive a
+ * corrupted signal (cyan and magenta over blue-black). Grounds stay dark enough for every role colour to read on them.
+ */
+object KkLayerHues {
+    // Zenith
+    val ZenithGround = Color(0xFF1E1910)
+    val Dawn = Color(0xFFFFC160)
+    val Radiance = Color(0xFFFFF3D2)
+    val HaloGold = Color(0xFFFFD067)
+    val Haze = Color(0xFFFFE2C6)
+
+    // Nadir
+    val NadirGround = Color(0xFF0C0405)
+    val Crimson = Color(0xFF6B0A1A)
+    val Magma = Color(0xFFFF5A14)
+    val MagmaCore = Color(0xFFFFD27A)
+    val Soot = Color(0xFF050202)
+
+    // Archive
+    val ArchiveGround = Color(0xFF03060C)
+    val Signal = Color(0xFF2EF2FF)
+    val Glitch = Color(0xFFFF38D2)
+}
+
+/**
  * The eleven Rebirth tier themes (`tokens.json rebirthTiers`, index = target tier 0..10).
  * Tier names in the handoff are placeholders; screens use the game's tier data for words.
  */

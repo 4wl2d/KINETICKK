@@ -50,6 +50,8 @@ internal enum class FxPool(val ops: Int) {
     CORE_STATES(100),
     /** The shards of shattering structures (one line each; floors and the slabs' flash draw regardless). */
     RUBBLE(360),
+    /** A dimension's weather: feathers, ember rain, glyph shards and datamosh (thinned first in a crowd). */
+    ATMOSPHERE(260),
 }
 
 /**

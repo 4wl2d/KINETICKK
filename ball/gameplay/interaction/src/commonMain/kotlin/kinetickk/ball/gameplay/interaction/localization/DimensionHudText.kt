@@ -19,6 +19,17 @@ internal enum class DimensionHudText(
     RewardBlessing("Blessing", "Благословение"),
     RewardPact("Pact", "Сделка"),
     RewardLegendaryItem("Legendary item", "Легендарный предмет"),
+    CourseBroken("Course broken", "Маршрут сорван"),
+
+    // The plate's layer gauge: what the Core's speed does in the layer.
+    Grace("Grace", "Благодать"),
+    Heat("Heat", "Жар"),
+    Desync("Desync", "Рассинхрон"),
+
+    // Why a rift cannot be entered now (under the rift).
+    LockedEngagement("Locked until the trial ends", "Закрыт до конца испытания"),
+    LockedBoss("Locked while a boss lives", "Закрыт, пока жив босс"),
+    LockedArchitect("Locked, the Architect is near", "Закрыт, близится Архитектор"),
 
     // The dimension reward overlay.
     BlessingHeading("Choose a blessing", "Выберите благословение"),

@@ -173,6 +173,11 @@ class RedesignShotsHudTest {
         // edge) and an ember just thrown from its kill, the Archive's duel with the Antecedent; then the shutter 150 ms
         // into the Zenith.
         DIMENSION_ZENITH, DIMENSION_NADIR, DIMENSION_ARCHIVE, DIMENSION_SHUTTER,
+        // More of each layer: the Zenith's sky before its Judgement (ambient halos only), a broken Ascent (its exit rift
+        // open, the course struck through), the Nadir's Harvest done with its exit rift and Imp fire traps beside the
+        // embers, the Archive at a still Core (Desync at its floor, fire traps burning slow); then the portal into the
+        // Nadir 230 ms in (imploding) and into the Archive 420 ms in (exploding).
+        DIMENSION_IDLE, DIMENSION_FAILED, DIMENSION_EXIT, DIMENSION_DESYNC, DIMENSION_PORTAL_IN, DIMENSION_PORTAL_OUT,
     }
 
     private fun level(shot: Shot, values: Values): Int = when (shot) {
@@ -327,11 +332,16 @@ class RedesignShotsHudTest {
                 memory.observe(lower, time - lead - 0.1f, boss.select(lower))
                 memory.observe(model, time - lead, boss.select(model))
             }
-            // The layer changed 150 ms before the drawn frame: the shutter is a third of the way across.
-            Shot.DIMENSION_SHUTTER -> {
+            // The layer changed 150, 230 or 420 ms before the drawn frame: the portal closing or opening.
+            Shot.DIMENSION_SHUTTER, Shot.DIMENSION_PORTAL_IN, Shot.DIMENSION_PORTAL_OUT -> {
                 val realspace = model.with("dimension" to kinetickk.ball.gameplay.nucleus.render.DimensionProjection.REALSPACE, "trial" to null)
-                memory.observe(realspace, time - 0.3f, boss.select(realspace))
-                memory.observe(model, time - 0.15f, boss.select(model))
+                val lead = when (shot) {
+                    Shot.DIMENSION_PORTAL_IN -> 0.23f
+                    Shot.DIMENSION_PORTAL_OUT -> 0.42f
+                    else -> 0.15f
+                }
+                memory.observe(realspace, time - lead - 0.15f, boss.select(realspace))
+                memory.observe(model, time - lead, boss.select(model))
             }
             else -> memory.observe(pre, time - 0.2f, boss.select(pre))
         }
@@ -372,9 +382,9 @@ class RedesignShotsHudTest {
     /** The dimension shots' models: [model] inside the shot's visit with the layer's natives (null for every other shot). */
     private fun dimensionShot(shot: Shot, model: GameplayRenderModel): GameplayRenderModel? {
         val layer = when (shot) {
-            Shot.DIMENSION_ZENITH, Shot.DIMENSION_SHUTTER -> kinetickk.ball.content.api.WorldLayer.ZENITH
-            Shot.DIMENSION_NADIR -> kinetickk.ball.content.api.WorldLayer.NADIR
-            Shot.DIMENSION_ARCHIVE -> kinetickk.ball.content.api.WorldLayer.ARCHIVE
+            Shot.DIMENSION_ZENITH, Shot.DIMENSION_SHUTTER, Shot.DIMENSION_IDLE, Shot.DIMENSION_FAILED -> kinetickk.ball.content.api.WorldLayer.ZENITH
+            Shot.DIMENSION_NADIR, Shot.DIMENSION_EXIT, Shot.DIMENSION_PORTAL_IN -> kinetickk.ball.content.api.WorldLayer.NADIR
+            Shot.DIMENSION_ARCHIVE, Shot.DIMENSION_DESYNC, Shot.DIMENSION_PORTAL_OUT -> kinetickk.ball.content.api.WorldLayer.ARCHIVE
             else -> return null
         }
         val x = model.coreX
@@ -392,9 +402,35 @@ class RedesignShotsHudTest {
             kinetickk.ball.content.api.WorldLayer.NADIR -> listOf(native(43, EnemyType.IMP, 260f, -200f, 18f), native(44, EnemyType.HOUND, -260f, 60f, 16f))
             else -> listOf(rankBoss(Shot.SECRET_BOSS, x + 360f, y - 160f, 0.62f), native(45, EnemyType.CIPHER, -300f, 180f, 18f))
         }
-        val speed = if (layer == kinetickk.ball.content.api.WorldLayer.NADIR) 520f else 1_150f
-        return model.inVisit(visit, bossShare = 0.38f).with(
-            "enemies" to natives.toImmutableList(),
+        val speed = when {
+            shot == Shot.DIMENSION_DESYNC -> 160f
+            layer == kinetickk.ball.content.api.WorldLayer.NADIR -> 520f
+            else -> 1_150f
+        }
+        val variant = when (shot) {
+            Shot.DIMENSION_IDLE -> dimensionVisit(layer, x, y, ambient = listOf(-380f to 260f, 560f to -230f, 140f to 330f))
+                .copy(objective = kinetickk.ball.content.api.DimensionObjective.JUDGEMENT, goal = 1, remaining = 70f)
+            Shot.DIMENSION_FAILED -> dimensionVisit(layer, x, y, ambient = listOf(-380f to 260f), exit = 420f to -150f, completed = false,
+                progress = 4, failed = true).copy(remaining = 38f)
+            Shot.DIMENSION_EXIT -> dimensionVisit(layer, x, y, embers = listOf(-220f to 140f), exit = 380f to -120f, progress = 20)
+                .copy(goal = 20, remaining = 21f)
+            Shot.DIMENSION_DESYNC -> dimensionVisit(layer, x, y, timeScale = 0.31f, localClock = 11.4f).copy(remaining = 64f, hostileLag = 6f)
+            else -> visit
+        }
+        // Fire traps (Imp bursts, the Antecedent's rings): armed on the hostile clock, a third and two thirds burnt.
+        val traps = if (shot == Shot.DIMENSION_EXIT || shot == Shot.DIMENSION_DESYNC) {
+            val now = model.elapsed - variant.hostileLag
+            immutableListOf(
+                kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection(x + 180f, y + 90f, 46f, now - 0.3f, now + 0.6f),
+                kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection(x - 120f, y - 150f, 46f, now - 0.6f, now + 0.3f),
+            )
+        } else {
+            immutableListOf()
+        }
+        val trial = if (variant === visit) visit else variant
+        return model.inVisit(trial, bossShare = 0.38f).with(
+            "enemies" to (if (shot == Shot.DIMENSION_IDLE) natives.take(1) else natives).toImmutableList(),
+            "volatileBursts" to traps,
             "velocityX" to speed, "velocityY" to 0f,
             "rebirthLevel" to 4,
         )
