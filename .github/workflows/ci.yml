@@ -286,7 +286,6 @@ jobs:
           ./gradlew \
             :app:android:assembleDebug \
             :app:android:assembleDebugAndroidTest \
-            :app:shared:assembleAndroidDeviceTest \
             -Pkinetickk.variant=debug \
             -Pkinetickk.gradle.isolatedProfile=true \
             --isolated-projects \
@@ -317,6 +316,15 @@ jobs:
               "$resource_tasks" >&2
             exit 1
           fi
+
+          # The shared library's device-test APK needs its own resources, so it builds after the scan.
+          ./gradlew \
+            :app:shared:assembleAndroidDeviceTest \
+            -Pkinetickk.variant=debug \
+            -Pkinetickk.gradle.isolatedProfile=true \
+            --isolated-projects \
+            --console=plain \
+            --stacktrace
 
           ./gradlew \
             :app:android:assembleBenchmark \
