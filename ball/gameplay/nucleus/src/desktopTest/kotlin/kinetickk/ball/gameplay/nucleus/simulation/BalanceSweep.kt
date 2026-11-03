@@ -8,6 +8,7 @@ import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.rebirthTierPower
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
@@ -22,18 +23,17 @@ import kotlin.math.sqrt
  * gate harness (the input-only NoPoi bot on [playGateRun]) for every tier × arm cell over a calibration window and prints
  * one table row per cell; `-Psweep.mode=campaign` instead plays whole profiles from a fresh start (see
  * BalanceCampaign.kt). It is a tool, never a gate: it runs outside `desktopTest`, so no shard, CI job or `check` sees it.
- * Inputs are system properties (the Gradle task forwards `-Psweep.*`):
- * - `sweep.tiers`: `0..10` or a list `0,2,4` (default `0..10`);
- * - `sweep.arms`: arm names of [SweepArm] (default all);
- * - `sweep.window`: probe indices `first..last` (policy.md's progression window, default `3401..3500`; never the gate
- *   population);
+ * Inputs are system properties (the Gradle task forwards `-Psweep.*`; docs/project/DEVELOPMENT.md has the table):
+ * - `sweep.tiers`: `0..10` or a list `0,2,4` (default `0..10`), and `sweep.arms`: arm names of [SweepArm] (default all);
+ * - `sweep.cells`: explicit `arm:tier` pairs (`fresh:2,half:5`) in place of tiers × arms;
+ * - `sweep.window`: probe indices `first..last` (policy.md's progression window 3,401..4,000; default `3401..3500`;
+ *   never the gate population);
  * - `sweep.threads`: worker threads (default every core);
- * - `sweep.knobs`: content overrides, `name=value` pairs separated by commas ([sweepContent]);
- * - `sweep.out`: an optional file for one tab-separated line per run.
+ * - `sweep.knobs`: content overrides, `name=value` pairs separated by commas ([sweepContent]); `;` separates sets, each
+ *   played and printed in turn;
+ * - `sweep.out`: an optional file for one tab-separated line per run;
+ * - `sweep.mode` (`cells` or `campaign`) and `sweep.campaigns` (default 12).
  */
-
-/** The progression window of policy.md: Rebirth curves, permanent progression and this sweep. */
-internal val ProgressionWindow: IntRange = 3_401..4_000
 
 /** The profiles the sweep plays: the design targets' arms of docs/balance/progression.md. */
 internal enum class SweepArm(val label: String) {
@@ -112,8 +112,8 @@ internal fun sweepRun(seed: Int, profile: GameplayProfileSnapshot, relics: List<
 /**
  * The content a sweep plays: the canonical catalog with [knobs] applied. Knobs are the calibration constants of
  * docs/balance/progression.md: `health`, `damage`, `matter` (the per-tier bases of H, D and the Matter reward),
- * `honing`, `refit` (per-level damage growth), `refitIntegrity` (integrity per Refit level), `weaponCap` and
- * `bossCapShrink` (the boss hit cap's shrink per tier).
+ * `honing`, `refit` (per-level damage growth), `refitIntegrity` (integrity per Refit level), `weaponCap`, `costScale`
+ * (every Matrix price and Refit/Honing base) and `bossCapShrink` (the boss hit cap's shrink per tier).
  */
 internal fun sweepContent(knobs: Map<String, String>): GameplayContentSnapshot {
     var content = canonicalGameplayContent
@@ -121,7 +121,7 @@ internal fun sweepContent(knobs: Map<String, String>): GameplayContentSnapshot {
         val value = raw.toFloat()
         content = when (name) {
             "health", "damage", "matter" -> content.copy(rebirth = content.rebirth.copy(profiles = content.rebirth.profiles.map { profile ->
-                val scale = Math.pow(value.toDouble(), profile.tier.toDouble()).toFloat()
+                val scale = rebirthTierPower(value, profile.tier)
                 when (name) {
                     "health" -> profile.copy(enemyHealthMultiplier = scale)
                     "damage" -> profile.copy(incomingDamageMultiplier = scale)
