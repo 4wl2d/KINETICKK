@@ -40,6 +40,7 @@ internal enum class HudRedesignText(
     PairingDiscovered("Pairing discovered", "Сочетание открыто"),
     IncompatibilityDiscovered("Incompatibility found", "Найдена несовместимость"),
     BreakNotice("Break", "Пробой"),
+    LegendaryAcquired("Legendary", "Легендарный"),
 
     // Pause build view sections.
     Resonance("Resonance", "Резонанс"),

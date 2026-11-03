@@ -131,7 +131,8 @@ class InteractionFxReducer(seed: Int) {
     /** Returns whether the externally visible projection changed. */
     private fun applyCue(cue: VisualFxCue): Boolean =
         when (cue) {
-            is VisualFxCue.BuildChanged -> addNotice(cue.title, cue.details, BuildNoticeTitles.kind(cue.title)) != NOTICE_DROPPED
+            is VisualFxCue.BuildChanged -> addNotice(cue.title, cue.details,
+                if (cue.legendary) BuildNoticeKind.LEGENDARY else BuildNoticeTitles.kind(cue.title)) != NOTICE_DROPPED
             VisualFxCue.ClearAll -> clearAll()
             VisualFxCue.ClearWeaponArcs -> if (weaponArcs.isEmpty()) {
                 false

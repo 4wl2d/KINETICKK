@@ -24,4 +24,6 @@ enum class GameplayAudioCue {
     APEX,
     /** A spent structure leaves the world and shatters. */
     STRUCTURE_COLLAPSE,
+    /** A Legendary item joins the build. */
+    LEGENDARY_ACQUIRED,
 }

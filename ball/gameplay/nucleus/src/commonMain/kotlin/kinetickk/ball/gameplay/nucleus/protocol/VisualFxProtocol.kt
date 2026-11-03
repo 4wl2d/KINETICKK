@@ -78,8 +78,11 @@ object FxColorCode {
  * into gameplay reductions and carry no behavior-authoritative random result.
  */
 sealed interface VisualFxCue {
-    /** A grouped acquisition result, produced only by an accepted build transition. */
-    data class BuildChanged(val title: String, val details: ImmutableList<String>) : VisualFxCue
+    /**
+     * A grouped acquisition result, produced only by an accepted build transition; [legendary] marks a Legendary item's
+     * first acquisition, which the feed announces as one.
+     */
+    data class BuildChanged(val title: String, val details: ImmutableList<String>, val legendary: Boolean = false) : VisualFxCue
 
     data object ClearAll : VisualFxCue
     data object ClearWeaponArcs : VisualFxCue
