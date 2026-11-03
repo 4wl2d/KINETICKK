@@ -66,8 +66,9 @@ a real layering problem; package moves inside a module need no visibility change
   (`ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/simulation/MutableGameState.kt`) is the
   one run state, with plain eagerly copied storage. Cohesive groups live in state holders, each written by exactly one
   domain: `StepScratch` (`simulation`, per step), `PendingChoiceState` (`progression`), `SkillCastState` (`skills`),
-  `CoreReactionState` (`elements`), `RelicMechanicState` (`build`), `SpawnDirectorState` (`director`) and
-  `StructureRunState` (`structures`). The other root fields move into holders one domain at a time (§12).
+  `CoreReactionState` (`elements`), `RelicMechanicState` (`build`), `SpawnDirectorState` (`director`),
+  `StructureRunState` (`structures`) and `CoreStasisState` (`flight`). The other root fields move into holders one
+  domain at a time (§12).
 - **Forwarders**: `MutableGameStateForwarders.kt` holds extension properties that forward the old root field names to
   their holder, so older call sites, tests and fingerprints stay source-identical. They are legacy: new code uses
   `state.<holder>.<field>`, the forwarder list may only shrink, and a new field never gets a forwarder.
@@ -195,9 +196,9 @@ Homes for planned mechanics. None of these mechanics exists yet; when one lands,
 inventing new ones:
 - Run-long state of dungeon structures and their rewards (for example a bounded list of claimable chests) goes into
   `StructureRunState`, written only by the `structures` domain.
-- State that tracks how the Core moves over a run (for example a meter for standing still) goes into a new holder
-  `CoreStasisState` in `simulation.flight`. It is reset next to the Core motion resets in `startRun` and rebased in
-  `WorldRebaseSystem.kt`.
+- State that tracks how the Core moves over a run goes into `CoreStasisState` in `simulation.flight`, where Core
+  Stasis (the freeze of a Core that stands still) already keeps its clocks. It is reset with the Core motion memory
+  (`resetCoreMotionMemory`, called from `startRun`) and rebased in `WorldRebaseSystem.kt`.
 - Values the player sees become top-level fields of `GameplayRenderModel`
   (`ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/render/GameplayRenderProjection.kt`),
   always constructed with named arguments; a list replaces a single projection in the same position.
