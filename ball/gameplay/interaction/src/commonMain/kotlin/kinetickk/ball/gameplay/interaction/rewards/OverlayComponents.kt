@@ -51,7 +51,6 @@ import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkButtonSize
 import kinetickk.foundation.design.KkButtonVariant
 import kinetickk.foundation.design.KkIcon
-import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.KkStampVariant
 import kinetickk.foundation.design.KkTagVariant
 import kinetickk.foundation.design.KkVAlign
@@ -304,14 +303,6 @@ internal fun OverlayFitTextOrNothing(
             BasicText(shown, style = fitted, maxLines = maxLines)
         }
     }
-}
-
-/** Resolves a reward tone to its color; [fixed] is used for [RewardTone.FIXED]. */
-internal fun RewardTone.color(roles: KkRolePalette, fixed: Color): Color = when (this) {
-    RewardTone.FIXED -> fixed
-    RewardTone.YOU -> roles.you
-    RewardTone.THREAT -> roles.threat
-    RewardTone.MUTE -> Kk.Mute
 }
 
 /** Tag plate (`.tag`) sized to its label. [leading] draws a small colored mark before the text. */

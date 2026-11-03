@@ -5,10 +5,8 @@ package kinetickk.ball.gameplay.interaction.rewards
 
 import androidx.compose.ui.graphics.Color
 import kinetickk.ball.content.api.DimensionRewardKind
-import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.RunBoonKind
 import kinetickk.ball.content.api.RunModifierEffect
-import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.canvas.overlayGrouped
 import kinetickk.ball.gameplay.interaction.canvas.elementFill
@@ -95,10 +93,6 @@ internal fun GameplayRenderModel.rewardBoonCard(choice: ChoiceOption, index: Int
         boonKind = boon.kind,
     )
 }
-
-/** The element of the dungeon whose reward grants the Aspect [boonId], or null. */
-internal fun GameplayContentSnapshot.aspectElement(boonId: Int): StatusElement? =
-    structures.templates.firstOrNull { template -> template.rewards.any { it.boonId == boonId } }?.element
 
 /**
  * A Pact's price as cost lines: a lowered stat ("Max integrity −20"), and each hostile scale above 1 as its own line

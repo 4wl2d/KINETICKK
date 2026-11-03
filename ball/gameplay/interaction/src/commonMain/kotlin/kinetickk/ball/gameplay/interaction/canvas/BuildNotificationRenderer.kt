@@ -914,18 +914,6 @@ private fun measureFeedText(measurer: TextMeasurer, text: String, mono: Boolean,
         uppercase, maxWidth = width, maxLines = lines,
     )
 
-/** Whether every character shows, without an ellipsis and without a line break inside a word. */
-internal fun TextLayoutResult.fitsWithoutCuts(): Boolean {
-    if (didOverflowWidth || didOverflowHeight || isLineEllipsized(lineCount - 1)) return false
-    val shown = layoutInput.text.text
-    for (line in 0 until lineCount - 1) {
-        val end = getLineEnd(line)
-        if (end <= 0 || end >= shown.length) continue
-        if (!shown[end - 1].isWhitespace() && !shown[end].isWhitespace() && shown[end - 1] != '-') return false
-    }
-    return true
-}
-
 /**
  * Where the feed drew its plates and lines in the last frame (px, screen space), for layout tests:
  * plain slots rewritten every frame, no allocation. [begin] clears the frame's marks.

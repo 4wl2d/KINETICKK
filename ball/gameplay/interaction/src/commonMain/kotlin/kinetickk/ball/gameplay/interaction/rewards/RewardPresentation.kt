@@ -64,7 +64,6 @@ import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
 import kinetickk.ball.gameplay.nucleus.render.RelicLinkKind
 import kinetickk.ball.gameplay.nucleus.render.RewardStatChange
 import kinetickk.ball.gameplay.nucleus.render.TotemAction
-import kinetickk.ball.profile.api.GameAction
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
@@ -913,15 +912,6 @@ private val SpaceBeforeNumber = Regex(" (?=[−+]?\\d)")
 
 /** The active slot prompt's keep card: every held active stays and the incoming active item is salvaged. */
 internal val ChoiceOption.keepsActiveLoadout: Boolean get() = type == ChoiceType.ACTIVE_SLOT && activeSlot == null
-
-/** The key bound to skill slot [slot] (0 Z, 1 X, 2 C) in the player's bindings. */
-internal fun GameplayRenderModel.activeSlotKey(slot: Int, language: AppLanguage): String = settings.keyBindings.key(
-    when (slot) {
-        0 -> GameAction.SKILL_1
-        1 -> GameAction.SKILL_2
-        else -> GameAction.SKILL_3
-    },
-).label(language)
 
 /** The damage of one weapon unit; mirrors the nucleus damage pipeline. */
 private const val WeaponUnitDamage = 40f

@@ -44,7 +44,6 @@ import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
 import kinetickk.ball.gameplay.interaction.performance.GameplayFpsCounter
 import kinetickk.ball.profile.api.GameAction
 import kinetickk.ball.gameplay.nucleus.render.formatRunTime
-import kinetickk.ball.gameplay.nucleus.render.ApexProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -252,14 +251,6 @@ internal class HudFrame {
 
 /** The level badge's tier this frame: the decade, or APEX at the content's level cap. */
 internal fun GameplayRenderModel.levelTier(): KkLevelTier = KkLevelTier.of(level.coerceAtLeast(0), maxLevel)
-
-/** The run's Apex as the level badge shows it (NONE until it unlocks at the cap). */
-internal fun ApexProjection.badgeState(): KkApexState = when {
-    !unlocked -> KkApexState.NONE
-    active01 > 0f -> KkApexState.ACTIVE
-    ready -> KkApexState.READY
-    else -> KkApexState.COOLING
-}
 
 /**
  * The Data meters' fill 0..1: the level's Data share below the cap; at the cap they show the Apex

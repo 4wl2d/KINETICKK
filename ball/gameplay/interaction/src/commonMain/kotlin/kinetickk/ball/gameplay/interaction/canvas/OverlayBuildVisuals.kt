@@ -26,6 +26,8 @@ import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.formatCompact
 import kotlin.math.abs
 import kotlin.math.roundToLong
+import kinetickk.ball.content.api.RelicDefinition
+import kinetickk.foundation.design.*
 
 // Presentation mappings shared by the reward, pause and run-report overlays. They only map
 // committed render data to visuals; no rule here decides an outcome.
@@ -277,3 +279,6 @@ internal fun overlayCompact(value: Long, language: AppLanguage): String =
 /** The localized "Lvl" label followed by [level] ("Lvl 7" / "Ур. 7"). */
 internal fun overlayLevel(level: Int, language: AppLanguage): String =
     language.text(OverlayRedesignText.LevelLabel) + " " + level
+
+/** The element's hue of a relic (the preset's volt for Kinetic, gold for Sovereign) in this color vision palette. */
+internal fun relicHue(definition: RelicDefinition, roles: KkRolePalette): Color = definition.aspect.overlayColor(roles)

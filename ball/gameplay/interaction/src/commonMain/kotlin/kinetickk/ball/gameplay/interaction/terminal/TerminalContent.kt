@@ -314,22 +314,6 @@ private class ReportScene(
     val shatter: ReportShatterArt,
 )
 
-/** Seeded shatter shape and its paths, built once per outcome. */
-internal class ReportShatterArt(victory: Boolean) {
-    val victory: Boolean = victory
-    val shape: ReportShatterShape = reportShatterShape(victory)
-    val paths: List<Path> by lazy { shape.shards.map { it.path() } }
-}
-
-/** Two deterministic shapes shared by all reports and the in-world defeat; paths are draw-only. */
-private object ReportShatterResources {
-    val defeat by lazy { ReportShatterArt(victory = false) }
-    val victory by lazy { ReportShatterArt(victory = true) }
-}
-
-internal fun reportShatterArt(victory: Boolean): ReportShatterArt =
-    if (victory) ReportShatterResources.victory else ReportShatterResources.defeat
-
 internal fun prepareTerminalVisualResources() {
     reportShatterArt(false).paths
     reportShatterArt(true).paths
@@ -1142,4 +1126,3 @@ private fun Modifier.reveal(progress: Float): Modifier = (if (progress == 0f) cl
     alpha = progress
     translationY = -14.dp.toPx() * (1f - progress)
 }
-
