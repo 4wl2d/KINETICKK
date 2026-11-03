@@ -173,6 +173,28 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
 }
 
 internal fun MutableGameState.resolveProjectileHits() {
+    val needsLiveEnemyIds = resolveHostileProjectileHits()
+    var liveEnemyIds: IntArray? = null
+    var liveEnemyCount = 0
+    if (needsLiveEnemyIds) {
+        val ids = IntArray(enemies.size)
+        var idsAreSorted = true
+        for (enemyIndex in enemies.indices) {
+            val enemy = enemies[enemyIndex]
+            if (enemy.dead) continue
+            if (liveEnemyCount > 0 && ids[liveEnemyCount - 1] > enemy.id) {
+                idsAreSorted = false
+            }
+            ids[liveEnemyCount++] = enemy.id
+        }
+        if (!idsAreSorted) ids.sort(0, liveEnemyCount)
+        liveEnemyIds = ids
+    }
+    resolveFriendlyProjectileHits(liveEnemyIds, liveEnemyCount)
+}
+
+/** Hostile shots against the Core (parry, damage or a Dash phase); returns whether a friendly shot keeps enemy hits to prune. */
+private fun MutableGameState.resolveHostileProjectileHits(): Boolean {
     var needsLiveEnemyIds = false
     var hostileIndex = 0
     var hostileRemaining = projectiles.size
@@ -235,23 +257,11 @@ internal fun MutableGameState.resolveProjectileHits() {
             hostileIndex++
         }
     }
+    return needsLiveEnemyIds
+}
 
-    var liveEnemyIds: IntArray? = null
-    var liveEnemyCount = 0
-    if (needsLiveEnemyIds) {
-        val ids = IntArray(enemies.size)
-        var idsAreSorted = true
-        for (enemyIndex in enemies.indices) {
-            val enemy = enemies[enemyIndex]
-            if (enemy.dead) continue
-            if (liveEnemyCount > 0 && ids[liveEnemyCount - 1] > enemy.id) {
-                idsAreSorted = false
-            }
-            ids[liveEnemyCount++] = enemy.id
-        }
-        if (!idsAreSorted) ids.sort(0, liveEnemyCount)
-        liveEnemyIds = ids
-    }
+/** Friendly shots against enemies, pruning hit histories to [liveEnemyIds] (the first [liveEnemyCount], sorted) when given. */
+private fun MutableGameState.resolveFriendlyProjectileHits(liveEnemyIds: IntArray?, liveEnemyCount: Int) {
     var friendlyIndex = 0
     var friendlyRemaining = projectiles.size
     while (friendlyRemaining > 0) {
