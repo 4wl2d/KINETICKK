@@ -73,13 +73,13 @@ package-files	foundation/design/src/commonMain/kotlin/kinetickk/foundation/desig
 test-file-lines	ball/gameplay/impl/src/commonTest/kotlin/kinetickk/ball/gameplay/impl/GameComponentTest.kt	1183
 test-file-lines	ball/gameplay/interaction/src/desktopTest/kotlin/kinetickk/ball/gameplay/interaction/canvas/RedesignShotsWorldTest.kt	1224
 test-file-lines	ball/gameplay/interaction/src/desktopTest/kotlin/kinetickk/ball/gameplay/interaction/canvas/WorldHotPathAllocationTest.kt	1081
-test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/DungeonSystemTest.kt	1082
-test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/ObstacleKindSystemTest.kt	1480
-test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/ObstacleSystemTest.kt	1223
 test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/SimulationWitnessFixtures.kt	1208
+test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/structures/DungeonSystemTest.kt	1082
+test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/world/ObstacleKindSystemTest.kt	1480
+test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/world/ObstacleSystemTest.kt	1223
 test-file-lines	ball/gameplay/nucleus/src/desktopTest/kotlin/kinetickk/ball/gameplay/nucleus/performance/GameplayPerformanceBenchmark.kt	1816
 test-file-lines	ball/gameplay/nucleus/src/desktopTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/InvariantFuzzHarness.kt	1550
-test-file-lines	ball/gameplay/nucleus/src/desktopTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/PerceptibleItemImpactTest.kt	1520
+test-file-lines	ball/gameplay/nucleus/src/desktopTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/builds/PerceptibleItemImpactTest.kt	1520
 test-file-lines	ball/profile/impl/src/commonTest/kotlin/kinetickk/ball/profile/impl/storage/ProfileCodecTest.kt	1613
 test-file-lines	ball/profile/nucleus/src/commonTest/kotlin/kinetickk/ball/profile/nucleus/ProfileNucleusTest.kt	1083
 test-file-lines	flow/session/nucleus/src/commonTest/kotlin/kinetickk/flow/session/nucleus/AppSessionNucleusTest.kt	1131
