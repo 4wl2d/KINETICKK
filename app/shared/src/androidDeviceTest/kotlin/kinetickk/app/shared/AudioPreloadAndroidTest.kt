@@ -6,6 +6,7 @@ package kinetickk.app.shared
 import android.media.AudioTrack
 import android.os.Handler
 import android.os.Looper
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -41,6 +42,32 @@ class AudioPreloadAndroidTest {
             assertEquals(1, created.get())
         } finally {
             player.close()
+        }
+    }
+
+    @Test
+    fun aTrackThatDiesAfterPreparationIsReplacedWithoutAnUncaughtWorkerFailure() = runBlocking {
+        val tracks = CopyOnWriteArrayList<AudioTrack>()
+        val replaced = CountDownLatch(2)
+        val player = AndroidTonePlaybackCapability {
+            createAndroidToneTrack().also { tracks += it; replaced.countDown() }
+        }
+        val tone = ToneRequest(520f, 0.035f, 0f, ToneWave.SINE)
+        val failures = CopyOnWriteArrayList<Throwable>()
+        val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { _, failure -> failures += failure }
+        try {
+            player.prepare(listOf(tone))
+            // A released track fails like one whose audioserver died: write is refused and stop throws.
+            tracks.single().release()
+            player.play(tone)
+            player.play(tone)
+            assertTrue("The next tone must open a fresh track", replaced.await(3, TimeUnit.SECONDS))
+            assertEquals(2, tracks.size)
+            assertTrue("The audio worker must contain the dead track: $failures", failures.isEmpty())
+        } finally {
+            player.close()
+            Thread.setDefaultUncaughtExceptionHandler(previousHandler)
         }
     }
 }

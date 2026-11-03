@@ -185,6 +185,10 @@ internal class AndroidTonePlaybackCapability(
         } catch (_: SecurityException) {
             outputUnavailable = true
             null
+        } catch (_: IllegalStateException) {
+            // The silent priming write failed on a track that never became usable.
+            outputUnavailable = true
+            null
         }
     }
 
@@ -210,21 +214,29 @@ internal class AndroidTonePlaybackCapability(
         if (waveform.size < previousSampleCount) samples.fill(0, waveform.size, previousSampleCount)
         previousSampleCount = waveform.size
         try {
-            // Some OEM AudioTrack implementations transiently report STATE_UNINITIALIZED after
-            // native setup has succeeded. The blocking write is the authoritative capability
-            // operation and still returns a negative error code for a genuinely unusable track.
-            val written = output.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
-            check(written == samples.size) { "Android tone AudioTrack accepted $written samples" }
-            check(output.reloadStaticData() == AudioTrack.SUCCESS) { "Android tone AudioTrack could not rewind" }
-            output.play()
-            Thread.sleep((request.durationSeconds * 1_000f).toLong().coerceAtLeast(1L))
+            try {
+                // Some OEM AudioTrack implementations transiently report STATE_UNINITIALIZED after
+                // native setup has succeeded. The blocking write is the authoritative capability
+                // operation and still returns a negative error code for a genuinely unusable track.
+                val written = output.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
+                check(written == samples.size) { "Android tone AudioTrack accepted $written samples" }
+                check(output.reloadStaticData() == AudioTrack.SUCCESS) { "Android tone AudioTrack could not rewind" }
+                output.play()
+                Thread.sleep((request.durationSeconds * 1_000f).toLong().coerceAtLeast(1L))
+            } finally {
+                output.stop()
+            }
         } catch (failure: InterruptedException) {
             // Closing the app cancels an in-flight tone through shutdownNow().
             // Preserve cancellation without allowing the audio worker to crash the process.
             Thread.currentThread().interrupt()
             if (!executor.isShutdown) throw failure
-        } finally {
-            output.stop()
+        } catch (_: RuntimeException) {
+            // A dead track (audioserver restart, route change) fails write, rewind, play or stop.
+            // An uncaught worker exception would kill the process: drop this track and open a
+            // fresh one for the next tone, as desktop does for a line that stops accepting samples.
+            output.release()
+            track = null
         }
     }
 }
