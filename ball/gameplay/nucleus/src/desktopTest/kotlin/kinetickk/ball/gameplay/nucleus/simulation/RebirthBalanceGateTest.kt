@@ -71,18 +71,19 @@ import kotlin.test.assertTrue
  * With active items (0.5.0) A and the survival bounds of D and H became population gates over [PopulationSeeds]
  * (policy.md, "Balance gate populations"): on the 05885fa9 tree their five gate seeds passed with probability 0.49, 0.82
  * and 0.78, so they re-rolled with every change to the reward stream; Gate I's 31 seeds kept its ratio with probability
- * 0.78. Their thresholds are restated on the 0.6.0 base (tree 15b23096): A's and I's floors are the lower of the design
- * or seeded threshold and the base minus two standard errors; D's and H's are min(480 s, M - 2 SE), with M the median
- * survival over the window runs i = 2,801..3,400, which no tuning touched, and SE the bootstrap SE of a 300-run median
- * drawn from them (see their constants). B, C, E, F, G and the win bounds of D and H keep their seeds and thresholds:
- * on the 0.6.0 tree their seeds pass with probability at least 0.9996 (read from 300 population runs of each arm).
+ * 0.78. Their thresholds are restated on the Elite-resonance base (policy.md): A's and I's floors are the lower of the
+ * design or seeded threshold and the base minus two standard errors; D's and H's are min(480 s, M - 2 SE), with M the
+ * median survival over the window runs i = 2,801..3,400, which no tuning touched, and SE the bootstrap SE of a 300-run
+ * median drawn from them (see their constants). B, C, E, F, G and the win bounds of D and H keep their seeds and
+ * thresholds: on the Elite-resonance base and on the tree before it their seeds pass with probability at least 0.9996
+ * (read from 300 population runs of each arm).
  */
 class RebirthBalanceGateTest {
     /**
      * Gate A over the population: five seeds reached four wins with probability 0.49 on the 05885fa9 tree, so the gate
-     * reads all 300 [PopulationSeeds] runs. On the 0.6.0 base a fresh tier-0 run wins 206 of them (0.687, SE 0.027). At
-     * least [A_MIN_WIN_SHARE] of the population must win: by the population threshold rule the lower of the design's
-     * 0.62 and the base share minus two standard errors (0.633).
+     * reads all 300 [PopulationSeeds] runs. On the Elite-resonance base a fresh tier-0 run wins 251 of them (0.837, SE
+     * 0.021; 0.737 on the tree before it). At least [A_MIN_WIN_SHARE] of the population must win: by the population
+     * threshold rule the lower of the design's 0.62 and the base share minus two standard errors (0.794).
      */
     @Test fun aFreshNoPoiBotStillWinsTierZero() {
         val outcomes = populationOf(PopulationSeeds) { seed -> play(seed, tier = 0, setup = Fresh) }
@@ -100,10 +101,10 @@ class RebirthBalanceGateTest {
      * A population gate over [PopulationSeeds]. A five-seed median lands on whichever arm lost two seeds,
      * since about a quarter of fresh runs die with or without skills, so the gate once read 31 seeds of the NoPoi probe
      * sequence (i = 1..31); they still kept the ratio at 0.8 with probability only 0.78 on the 05885fa9 base and 0.84
-     * with the shipped active items. On the 0.6.0 base the population's median clear is 82.73 s with active items
-     * against 91.49 s without (ratio 0.904, bootstrap SE 0.035 paired by seed, n 300 per arm). The ratio must be at
-     * least [I_MIN_CLEAR_RATIO]: by the population threshold rule the lower of the seeded 0.8 and the base minus two
-     * standard errors (0.834).
+     * with the shipped active items. On the Elite-resonance base the population's median clear is 94.48 s with active
+     * items against 114.57 s without (ratio 0.825, bootstrap SE 0.024 paired by seed, n 300 per arm; 0.852 on the tree
+     * before it and 0.904 on the 0.6.0 base). The ratio must be at least [I_MIN_CLEAR_RATIO]: by the population
+     * threshold rule the lower of the seeded 0.8 and the base minus two standard errors (0.777), rounded down.
      */
     @Test fun skillsHelpAFreshTierZeroRunWithoutTrivialisingIt() {
         val withSkills = populationOf(PopulationSeeds) { seed -> play(seed, tier = 0, setup = Fresh) }
@@ -154,10 +155,10 @@ class RebirthBalanceGateTest {
 
     /**
      * D's survival bound is a population gate: on the 05885fa9 tree five seeds reached a median of 480 s with
-     * probability 0.82. On the 0.6.0 base the strong build's median survival over the 300 [PopulationSeeds] runs is
-     * 704.23 s (bootstrap SE 72.06 s; mean 632.91 s, 0.42 of the runs alive at the 900 s cap). The population's median
-     * survival must be at least [D_MIN_MEDIAN_SURVIVAL] s (see the constant). The win bound stays on the five gate seeds
-     * (9 of the 300 population runs win).
+     * probability 0.82. On the Elite-resonance base the strong build's median survival over the 300 [PopulationSeeds]
+     * runs is 900.01 s (bootstrap SE 20.69 s; mean 659.00 s, 0.52 of the runs alive at the 900 s cap; 704.23 s on the
+     * 0.6.0 base). The population's median survival must be at least [D_MIN_MEDIAN_SURVIVAL] s (see the constant). The
+     * win bound stays on the five gate seeds (7 of the 300 population runs win).
      */
     @Test fun aStrongBuildSurvivesSevenMinutesOfTierTenButRarelyClearsIt() {
         val outcomes = GateSeeds.map { seed -> play(seed, tier = 10, setup = Strong) }
@@ -181,10 +182,10 @@ class RebirthBalanceGateTest {
      * most three seeds of five.
      *
      * The survival bound is a population gate: on the 05885fa9 tree five seeds reached 480 s with probability 0.78.
-     * On the 0.6.0 base the median survival over the 300 [PopulationSeeds] runs is 900.01 s (bootstrap SE 1.34 s; mean
-     * 707.53 s, 0.61 of the runs alive at the 900 s cap). The population's median must be at least
-     * [H_MIN_MEDIAN_SURVIVAL] s (see the constant). The win bound stays on the five gate seeds (1 of the 300 population
-     * runs wins).
+     * On the Elite-resonance base the median survival over the 300 [PopulationSeeds] runs is 900.01 s (bootstrap SE
+     * 3.20 s; mean 685.99 s, 0.58 of the runs alive at the 900 s cap; 900.01 s on the 0.6.0 base). The population's
+     * median must be at least [H_MIN_MEDIAN_SURVIVAL] s (see the constant). The win bound stays on the five gate seeds
+     * (none of the 300 population runs wins).
      */
     @Test fun aStrongBuildSeekingDataWithTheApexStillFindsTierTenHard() {
         val outcomes = GateSeeds.map { seed -> play(seed, tier = 10, setup = Strong, seekData = true) }
@@ -306,35 +307,41 @@ class RebirthBalanceGateTest {
     private companion object {
         val GateSeeds: List<Int> = (6..10).map { it * 7_919 + 13 }
 
-        /** Gate A: the least share of fresh tier-0 runs over [PopulationSeeds] that win (design 0.62; 0.6.0 base 0.687, SE 0.027). */
+        /**
+         * Gate A: the least share of fresh tier-0 runs over [PopulationSeeds] that win (design 0.62; Elite-resonance
+         * base 0.837, SE 0.021).
+         */
         const val A_MIN_WIN_SHARE = 0.62
 
         /**
          * Gate D: the least median survival over [PopulationSeeds] of the strong build at tier 10, min(480 s, M - 2 SE)
-         * rounded down: M = 877.852 s is the median survival over the 600 window runs (`i * 7_919 + 13` for
-         * i = 2,801..3,400, never tuned on and never the gate population) and SE = 75.275 s the bootstrap SE of a
-         * 300-run median drawn from them (20,000 resamples, RNG seed 20261027), so M - 2 SE = 727.301 s and the floor is
-         * the design's 480 s (a 300-run median drawn from the window clears it with probability 1.00). About half of the
-         * window's runs reach the harness's 900 s cap, so the median sits near the cap; the mean is 655.30 s. In 0.5.0,
-         * when active items took the Pentagon's free lane skills away, the floor was 427.87 s (M = 471.08 s,
-         * SE = 21.60 s on i = 1,301..1,900).
+         * rounded down: on the Elite-resonance base M = 900.010 s is the median survival over the 600 window runs
+         * (`i * 7_919 + 13` for i = 2,801..3,400, never tuned on and never the gate population) and SE = 56.123 s the
+         * bootstrap SE of a 300-run median drawn from them (20,000 resamples, RNG seed 20261027), so
+         * M - 2 SE = 787.764 s and the floor is the design's 480 s (a 300-run median drawn from the window clears it
+         * with probability 1.00). Half of the window's runs (300 of 600) reach the harness's 900 s cap, so the median
+         * sits at the cap; the mean is 664.41 s, and 164 runs end before 420 s. The 0.6.0 base read M = 877.852 s (SE
+         * 75.275 s). In 0.5.0, when active items took the Pentagon's free lane skills away, the floor was 427.87 s
+         * (M = 471.08 s, SE = 21.60 s on i = 1,301..1,900).
          */
         const val D_MIN_MEDIAN_SURVIVAL = 480f
 
         /**
          * Gate H: the least median survival over [PopulationSeeds] of the Data-seeking strong build, min(480 s,
-         * M - 2 SE) rounded down: M = 900.010 s over the 600 window runs (i = 2,801..3,400) and SE = 39.919 s for a
-         * 300-run median drawn from them (20,000 resamples, RNG seed 20261027), so M - 2 SE = 820.172 s and the floor is
-         * the design's 480 s (probability 1.00 for a 300-run median drawn from the window; the window's mean is
-         * 656.93 s). In 0.5.0 the floor was 431.46 s (M = 481.61 s, SE = 25.07 s on i = 1,301..1,900).
+         * M - 2 SE) rounded down: on the Elite-resonance base M = 900.010 s over the 600 window runs (i = 2,801..3,400)
+         * and SE = 14.449 s for a 300-run median drawn from them (20,000 resamples, RNG seed 20261027), so
+         * M - 2 SE = 871.113 s and the floor is the design's 480 s (probability 1.00 for a 300-run median drawn from
+         * the window; 332 of the 600 runs reach the cap, 163 end before 420 s and the mean is 673.28 s). The 0.6.0 base
+         * read M = 900.010 s (SE 39.919 s). In 0.5.0 the floor was 431.46 s (M = 481.61 s, SE = 25.07 s on
+         * i = 1,301..1,900).
          */
         const val H_MIN_MEDIAN_SURVIVAL = 480f
 
         /**
          * Gate I: the least ratio of the population's median clear with active items to the median clear without them
-         * (seeded 0.8; 0.6.0 base 0.904, paired SE 0.035, n 300; the population threshold rule).
+         * (seeded 0.8; Elite-resonance base 0.825, paired SE 0.024, n 300; the population threshold rule).
          */
-        const val I_MIN_CLEAR_RATIO = 0.80f
+        const val I_MIN_CLEAR_RATIO = 0.77f
 
         /** The shipped content without its active items: no run here owns one, and its deck and offers are the 0.5.0 ones. */
         val NoActives: GameplayContentSnapshot = withoutActiveItemCatalog()

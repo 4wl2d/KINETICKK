@@ -21,9 +21,9 @@ class ApexArchitectCastTest {
      * once required a cast in every Apex arm of its 72 fights, and the 05885fa9 base left 3 of 1,816 fights without a
      * cast (the first 50 to 128 runs per character and tier along [PopulationSeeds]; Orb tier 10 once, Dipole tier 10
      * twice), so the 72 fights passed with probability 0.83, and 0.5.0 bounded the share at 0.99 (that base's 0.9983
-     * minus two standard errors at 312 fights). On the 0.6.0 base the bot casts in all 312 fights (binomial SE 0), so by
-     * the population threshold rule the bound is the lower of the seeded "every fight" and the base share minus two
-     * standard errors: every fight casts.
+     * minus two standard errors at 312 fights). On the Elite-resonance base, as on the 0.6.0 base, the bot casts in all
+     * 312 fights (binomial SE 0), so by the population threshold rule the bound is the lower of the seeded "every
+     * fight" and the base share minus two standard errors: every fight casts.
      */
     @Test
     fun theBotCastsItsApexInNearlyEveryArchitectFight() {
@@ -45,7 +45,10 @@ class ApexArchitectCastTest {
     private companion object {
         /** The cast rule's runs per character and tier along [PopulationSeeds]. */
         const val CAST_FIGHTS_PER_CASE = 13
-        /** The least share of those fights in which the bot casts its Apex (0.6.0 base 1.0000, SE 0 at 312 fights). */
+        /**
+         * The least share of those fights in which the bot casts its Apex (Elite-resonance base 1.0000, SE 0 at 312
+         * fights).
+         */
         const val MIN_CAST_SHARE = 1.0
     }
 }
