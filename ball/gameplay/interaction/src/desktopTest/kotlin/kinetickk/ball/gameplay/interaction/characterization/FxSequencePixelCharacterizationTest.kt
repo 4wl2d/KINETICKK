@@ -18,10 +18,10 @@ import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.interaction.canvas.FxTestScenes
 import kinetickk.ball.gameplay.interaction.canvas.HudTestFonts
-import kinetickk.ball.gameplay.interaction.canvas.drawApexBursts
-import kinetickk.ball.gameplay.interaction.canvas.drawElementBursts
-import kinetickk.ball.gameplay.interaction.canvas.drawGameplay
-import kinetickk.ball.gameplay.interaction.canvas.drawSkillBursts
+import kinetickk.ball.gameplay.interaction.canvas.fx.drawApexBursts
+import kinetickk.ball.gameplay.interaction.canvas.fx.drawElementBursts
+import kinetickk.ball.gameplay.interaction.drawGameplay
+import kinetickk.ball.gameplay.interaction.canvas.fx.drawSkillBursts
 import kinetickk.ball.gameplay.interaction.fx.InteractionFxReducer
 import kinetickk.ball.gameplay.interaction.fx.SkillFxSpecs
 import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
