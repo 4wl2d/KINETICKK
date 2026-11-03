@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package kinetickk.ball.profile.interaction.armory.impl
+package kinetickk.ball.profile.interaction.workshop.armory
 
 import androidx.compose.foundation.ScrollState
 import androidx.compose.runtime.Composable

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package kinetickk.ball.profile.interaction.hangar.impl
+package kinetickk.ball.profile.interaction.workshop.hangar
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
@@ -12,10 +12,6 @@ import kinetickk.ball.profile.api.HangarProjection
 import kinetickk.ball.profile.api.LoadoutProfileSnapshot
 import kinetickk.ball.profile.api.PermanentUpgrades
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
-import kinetickk.ball.profile.interaction.hangar.api.HangarOutput
-import kinetickk.ball.profile.interaction.hangar.api.HangarRenderModel
-import kinetickk.ball.profile.interaction.hangar.api.HangarShapeRenderModel
-import kinetickk.ball.profile.interaction.hangar.api.HangarWeaponRenderModel
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
 

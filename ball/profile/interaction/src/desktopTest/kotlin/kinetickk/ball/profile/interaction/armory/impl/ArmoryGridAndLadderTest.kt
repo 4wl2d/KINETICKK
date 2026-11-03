@@ -11,7 +11,7 @@ import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.profile.interaction.CatalogWeapons
 import kinetickk.ball.profile.interaction.ProbedFrame
 import kinetickk.ball.profile.interaction.ProfileDrawnText
-import kinetickk.ball.profile.interaction.armory.api.ArmoryRenderModel
+import kinetickk.ball.profile.interaction.workshop.armory.ArmoryRenderModel
 import kinetickk.ball.profile.interaction.profileFrame
 import kinetickk.ball.profile.interaction.renderProbed
 import kinetickk.foundation.collections.toImmutableSet
@@ -24,6 +24,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegment
+import kinetickk.ball.profile.interaction.workshop.armory.*
 
 /**
  * The Armory's grid and detail panel drawn with the bundled fonts and the game's copy, in English

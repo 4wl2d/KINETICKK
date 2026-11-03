@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package kinetickk.ball.profile.interaction.hangar.impl
+package kinetickk.ball.profile.interaction.workshop.hangar
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect

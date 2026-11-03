@@ -1,14 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package kinetickk.ball.profile.interaction.matrix.impl
+package kinetickk.ball.profile.interaction.workshop.matrix
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import kinetickk.ball.content.api.MatrixBranch
 import kinetickk.ball.profile.interaction.ProfileFrame
 import kinetickk.ball.profile.interaction.ProfileLayoutMode
-import kinetickk.ball.profile.interaction.matrix.api.MatrixRenderModel
 import kinetickk.ball.profile.interaction.profileHeaderBackRect
 import kinetickk.ball.profile.interaction.profileLayoutGrow
 import kotlin.math.ceil

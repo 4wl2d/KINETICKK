@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package kinetickk.ball.profile.interaction.matrix.impl
+package kinetickk.ball.profile.interaction.workshop.matrix
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -64,9 +64,6 @@ import kinetickk.ball.profile.interaction.fitsWhole
 import kinetickk.ball.profile.interaction.formatMatter
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
 import kinetickk.ball.profile.interaction.localization.ProfileText
-import kinetickk.ball.profile.interaction.matrix.api.MatrixNodeRenderModel
-import kinetickk.ball.profile.interaction.matrix.api.MatrixNodeStatus
-import kinetickk.ball.profile.interaction.matrix.api.MatrixRenderModel
 import kinetickk.ball.profile.interaction.profileButtonNaturalWidth
 import kinetickk.ball.profile.interaction.profileHeaderBackWidth
 import kinetickk.ball.profile.interaction.profileScrollBar

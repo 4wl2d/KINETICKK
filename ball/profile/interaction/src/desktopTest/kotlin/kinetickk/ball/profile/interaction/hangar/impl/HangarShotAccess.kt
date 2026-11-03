@@ -17,7 +17,7 @@ import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.interaction.CatalogHeirlooms
 import kinetickk.ball.profile.interaction.CatalogRebirthRelics
 import kinetickk.ball.profile.interaction.CatalogWeapons
-import kinetickk.ball.profile.interaction.hangar.api.HangarRenderModel
+import kinetickk.ball.profile.interaction.workshop.hangar.HangarRenderModel
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
 import kinetickk.ball.profile.interaction.profileTextScale
 import kinetickk.ball.profile.interaction.workshop.api.WorkshopTab
@@ -25,6 +25,7 @@ import kinetickk.ball.profile.interaction.workshop.impl.WorkshopPanel
 import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegment
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.ball.profile.interaction.workshop.hangar.*
 
 /** Screenshot access to the Hangar's internal content for the profile shot suite. */
 internal object HangarShotAccess {

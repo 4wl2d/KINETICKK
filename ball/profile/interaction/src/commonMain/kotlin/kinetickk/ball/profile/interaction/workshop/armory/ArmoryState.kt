@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package kinetickk.ball.profile.interaction.armory.impl
+package kinetickk.ball.profile.interaction.workshop.armory
 
 import androidx.compose.ui.geometry.Rect
 import kinetickk.ball.content.api.CoreShapeDefinition
@@ -14,8 +14,6 @@ import kinetickk.ball.profile.api.LoadoutProfileSnapshot
 import kinetickk.ball.profile.api.ProfileRejection
 import kinetickk.ball.profile.interaction.ProfileFrame
 import kinetickk.ball.profile.interaction.ProfileLayoutMode
-import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
-import kinetickk.ball.profile.interaction.armory.api.ArmoryRenderModel
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.profileHeaderBackRect
 import kinetickk.ball.profile.interaction.profileLayoutGrow

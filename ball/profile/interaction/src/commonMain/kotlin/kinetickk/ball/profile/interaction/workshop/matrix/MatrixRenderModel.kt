@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package kinetickk.ball.profile.interaction.matrix.api
+package kinetickk.ball.profile.interaction.workshop.matrix
 
 import kinetickk.ball.content.api.MatrixBranch
 import kinetickk.ball.content.api.MatrixNodeId

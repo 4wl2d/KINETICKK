@@ -1,17 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package kinetickk.ball.profile.interaction.matrix.impl
+package kinetickk.ball.profile.interaction.workshop.matrix
 
 import kinetickk.ball.content.api.MatrixBranch
 import kinetickk.ball.content.api.MatrixNodeDefinition
 import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.profile.api.MatrixProfileSnapshot
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
-import kinetickk.ball.profile.interaction.matrix.api.MatrixNodeRenderModel
-import kinetickk.ball.profile.interaction.matrix.api.MatrixNodeStatus
-import kinetickk.ball.profile.interaction.matrix.api.MatrixOutput
-import kinetickk.ball.profile.interaction.matrix.api.MatrixRenderModel
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
 

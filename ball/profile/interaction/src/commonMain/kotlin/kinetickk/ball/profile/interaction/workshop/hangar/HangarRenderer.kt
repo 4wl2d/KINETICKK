@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package kinetickk.ball.profile.interaction.hangar.impl
+package kinetickk.ball.profile.interaction.workshop.hangar
 
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
@@ -61,11 +61,8 @@ import kinetickk.ball.profile.interaction.drawProfileGrid
 import kinetickk.ball.profile.interaction.drawProfileSidePanel
 import kinetickk.ball.profile.interaction.drawProfileText
 import kinetickk.ball.profile.interaction.fitKkText
-import kinetickk.ball.profile.interaction.hangar.api.HangarRenderModel
-import kinetickk.ball.profile.interaction.hangar.api.HangarShapeRenderModel
-import kinetickk.ball.profile.interaction.hangar.api.HangarWeaponRenderModel
 import kinetickk.ball.profile.interaction.formatMatter
-import kinetickk.ball.profile.interaction.armory.impl.armoryWeaponIcon
+import kinetickk.ball.profile.interaction.workshop.armory.armoryWeaponIcon
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
 import kinetickk.ball.profile.interaction.profileHeaderBackWidth
 import kinetickk.ball.profile.interaction.profileLoopTime

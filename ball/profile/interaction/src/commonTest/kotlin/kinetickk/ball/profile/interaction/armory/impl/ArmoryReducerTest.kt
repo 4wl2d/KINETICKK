@@ -17,8 +17,8 @@ import kinetickk.ball.profile.api.LoadoutProfileSnapshot
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.interaction.TestWeapons
-import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
-import kinetickk.ball.profile.interaction.armory.api.ArmoryRenderModel
+import kinetickk.ball.profile.interaction.workshop.armory.ArmoryOutput
+import kinetickk.ball.profile.interaction.workshop.armory.ArmoryRenderModel
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableSetOf
@@ -28,6 +28,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kinetickk.ball.profile.interaction.workshop.armory.*
 
 class ArmoryReducerTest {
     private val reducer = ArmoryReducer(TestWeapons)

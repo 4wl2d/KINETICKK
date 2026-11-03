@@ -10,8 +10,9 @@ import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.interaction.TestMatrixNodes
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
-import kinetickk.ball.profile.interaction.matrix.api.MatrixNodeStatus
-import kinetickk.ball.profile.interaction.matrix.api.MatrixOutput
+import kinetickk.ball.profile.interaction.workshop.matrix.*
+import kinetickk.ball.profile.interaction.workshop.matrix.MatrixNodeStatus
+import kinetickk.ball.profile.interaction.workshop.matrix.MatrixOutput
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

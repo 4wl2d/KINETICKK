@@ -10,10 +10,10 @@ import androidx.compose.ui.test.v2.runSkikoComposeUiTest
 import androidx.compose.ui.unit.Density
 import kinetickk.ball.profile.interaction.ProfileLayoutMode
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
-import kinetickk.ball.profile.interaction.matrix.impl.matrixResetWidth
 import kinetickk.ball.profile.interaction.profileFrame
 import kinetickk.ball.profile.interaction.profileTextScale
 import kinetickk.ball.profile.interaction.workshop.api.WorkshopTab
+import kinetickk.ball.profile.interaction.workshop.matrix.matrixResetWidth
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.LocalAppLanguage
