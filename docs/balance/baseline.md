@@ -1320,7 +1320,8 @@ centre (designed as half speed in 1.84 s instead of 0.69 s); `scrapeShare` 0.3; 
 Golden Drifter's gold glint, an easter-egg exception to gold meaning Rebirth;
 the Baby mode look; the dimension themes; the Core ribbon; the Dipole's
 unlock pace at 40 ricochets now that every ricochet hurts; Mirror Stance's
-single parry; the 1.1 s ember life of the Harvest (1.25 s before the pace recalibration); the 60 s Nadir visit.
+single parry; the 1.1 s ember life of the Harvest (1.25 s before the pace
+recalibration); the 60 s Nadir visit.
 
 ## 2026-10-29 movement and exploration adjustment
 
