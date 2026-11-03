@@ -31,7 +31,6 @@ import kinetickk.ball.gameplay.interaction.canvas.*
 import kinetickk.ball.gameplay.interaction.canvas.fx.*
 
 private const val TAU = (2.0 * PI).toFloat()
-private const val RAD_TO_DEG = 57.29578f
 
 private const val THERMAL = 0
 private const val CRYO = 1
