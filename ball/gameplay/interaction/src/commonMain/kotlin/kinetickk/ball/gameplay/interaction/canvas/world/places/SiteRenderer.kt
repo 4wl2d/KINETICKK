@@ -4,12 +4,10 @@
 package kinetickk.ball.gameplay.interaction.canvas.world.places
 
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.text.TextStyle
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WorldLayer
@@ -80,56 +78,8 @@ private val POINT_NAME_SP = worldLabelSp(15f)
 /** Space between an offer's name and its timer (the board's 4 px column gap). */
 private const val POINT_NAME_GAP_DP = 4f
 
-/** Edge-marker distances: mono 11 px. */
-private val EDGE_DISTANCE_SP = worldLabelSp(11f)
-
 /** Distance from the collapsing-orbit center to its label (just outside the progress arc). */
 internal const val ORBIT_LABEL_OFFSET = 212f
-
-/** HUD regions, the edge-marker table and the frame's off-screen targets (draw-thread confined). */
-internal object WorldOverlayScratch {
-    val keepOut = WorldHudKeepOut()
-    val planner = EdgeMarkerPlanner()
-    val markers = EdgeMarkerBatch()
-}
-
-/**
- * Boxes of the point marks, names and timers, the orbit label and the edge markers drawn in the
- * current world frame, for tests (fixed arrays; recording allocates nothing). Draw-thread confined.
- */
-internal object WorldDrawProbe {
-    private const val CAPACITY = 32
-    private val kinds = IntArray(CAPACITY)
-    private val values = FloatArray(CAPACITY * 4)
-    private var count = 0
-
-    fun begin() {
-        count = 0
-    }
-
-    fun record(kind: WorldDrawn, left: Float, top: Float, right: Float, bottom: Float) {
-        if (count >= CAPACITY) return
-        kinds[count] = kind.ordinal
-        val base = count * 4
-        values[base] = left
-        values[base + 1] = top
-        values[base + 2] = right
-        values[base + 3] = bottom
-        count++
-    }
-
-    /** The boxes of [kind] drawn since [begin] (tests only). */
-    fun rects(kind: WorldDrawn): List<Rect> = (0 until count).filter { kinds[it] == kind.ordinal }.map {
-        Rect(values[it * 4], values[it * 4 + 1], values[it * 4 + 2], values[it * 4 + 3])
-    }
-}
-
-/**
- * What [WorldDrawProbe] records: a point's mark (offer, vault, target beacon, a race's next gate), a
- * point timer, an edge marker, the place pips of the target beacon or the next gate as drawn, an
- * offer's name, the collapsing orbit's seconds-in-ring label.
- */
-internal enum class WorldDrawn { POINT_MARK, POINT_TIMER, EDGE_MARKER, BEACON_PIPS, POINT_NAME, ORBIT_LABEL }
 
 /**
  * Updates the HUD keep-out for this frame: trial panel while a trial runs, boss bar while a boss lives;
@@ -523,7 +473,7 @@ private fun DrawScope.drawActivePoint(
 }
 
 /** The secret sigil's hue: the void element's. */
-private fun sigilColor(roles: KkRolePalette): Color = roles.element(StatusElement.VOID.ordinal)
+internal fun sigilColor(roles: KkRolePalette): Color = roles.element(StatusElement.VOID.ordinal)
 
 /**
  * The collapsing orbit's seconds in the ring ("5.2S", the trial panel's progress value) above the
@@ -761,126 +711,6 @@ internal fun pointLabelSide(
     if (rightEdge <= width - edge && !keepOut.intersects(x + gap, top, rightEdge, bottom)) return rightEdge - boxWidth * 0.5f
     return Float.NaN
 }
-
-/** Kinds of off-screen targets; each draws a small mark (no arrow shapes). */
-internal enum class EdgeMarkerIcon {
-    TOTEM, SEALED_ANOMALY, COLLAPSING_ORBIT, RESONANT_CIRCUIT, RACE, CHALLENGE, BOUNTY, CACHE, QUIET, SIGIL, PORTAL, SIGNAL,
-    STRUCTURE, HALO,
-}
-
-/** The widest distance an edge marker is laid out for (world units; four digits). */
-private const val EDGE_DISTANCE_LAYOUT_VALUE = 8_880L
-
-/**
- * The frame's off-screen targets ([batch]) at the screen edge along their directions from the
- * screen center: each a small mark and the world distance from the Core (`HUD-Elite.png`), placed
- * together by [EdgeMarkerPlanner.place] so each hugs the edge, stays clear of the HUD and keeps
- * [EDGE_MARKER_SPACING_DP] from the others. The distances are drawn from cached digit layouts.
- */
-internal fun DrawScope.drawEdgeMarkers(batch: EdgeMarkerBatch, textMeasurer: TextMeasurer) {
-    if (batch.count == 0) {
-        WorldOverlayScratch.planner.forget() // markers that come back later are placed afresh
-        return
-    }
-    val roles = textMeasurer.roles
-    val typography = textMeasurer.typography
-    val suffix = WorldStrings.distanceSuffix(textMeasurer.language)
-    // The marker styles differ only in color and a hair of line height, so one laid-out width
-    // (the widest distance) sizes every marker box.
-    var textWidth = 0f
-    for (index in 0 until batch.count) {
-        val style = edgeMarkerStyle(typography, batch.icon[index] ?: EdgeMarkerIcon.TOTEM, roles)
-        textWidth = max(textWidth, kkTabularNumberWidth(textMeasurer, EDGE_DISTANCE_LAYOUT_VALUE, style, suffix = suffix))
-    }
-    WorldOverlayScratch.planner.prepare(WorldOverlayScratch.keepOut, size.width, size.height, density, textWidth).place(batch)
-    for (index in 0 until batch.count) {
-        drawEdgeMarker(batch.markerX[index], batch.markerY[index], batch.distance[index], batch.icon[index] ?: EdgeMarkerIcon.TOTEM,
-            textMeasurer, suffix)
-    }
-}
-
-/** One edge marker centered at ([x], [y]): the kind's mark, and the distance toward the screen center. */
-private fun DrawScope.drawEdgeMarker(x: Float, y: Float, distance: Float, icon: EdgeMarkerIcon, textMeasurer: TextMeasurer, suffix: String) {
-    val roles = textMeasurer.roles
-    val color = edgeMarkerColor(icon, roles)
-    val style = edgeMarkerStyle(textMeasurer.typography, icon, roles)
-    val marker = Offset(x, y)
-    val iconSize = d(EDGE_ICON_DP)
-    when (icon) {
-        EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.RESONANT_CIRCUIT -> drawTotemIcon(marker, iconSize, color)
-        EdgeMarkerIcon.SEALED_ANOMALY -> drawKkIcon(KkIcon.SYSTEM_ANOMALY, marker, iconSize, color)
-        EdgeMarkerIcon.COLLAPSING_ORBIT -> {
-            drawCircle(color, iconSize * 0.36f, marker, style = kkStroke(d(1.5f)))
-            drawArc(roles.you, -90f, 200f, false, Offset(marker.x - iconSize * 0.48f, marker.y - iconSize * 0.48f),
-                Size(iconSize * 0.96f, iconSize * 0.96f), style = kkStroke(d(2f)))
-        }
-        EdgeMarkerIcon.RACE -> drawSiteGlyph(SiteGlyph.RACE, marker, iconSize, color)
-        EdgeMarkerIcon.CHALLENGE -> drawSiteGlyph(SiteGlyph.CHALLENGE, marker, iconSize, color)
-        EdgeMarkerIcon.BOUNTY -> drawSiteGlyph(SiteGlyph.BOUNTY, marker, iconSize, color)
-        EdgeMarkerIcon.CACHE -> drawSiteGlyph(SiteGlyph.CACHE, marker, iconSize, color)
-        EdgeMarkerIcon.QUIET -> drawSiteGlyph(SiteGlyph.QUIET, marker, iconSize, color)
-        EdgeMarkerIcon.SIGIL -> drawSiteGlyph(SiteGlyph.SIGIL, marker, iconSize, color)
-        EdgeMarkerIcon.PORTAL -> drawSiteGlyph(SiteGlyph.PORTAL, marker, iconSize, color)
-        EdgeMarkerIcon.SIGNAL -> drawSiteGlyph(SiteGlyph.SIGNAL, marker, iconSize, color)
-        EdgeMarkerIcon.STRUCTURE -> drawSiteGlyph(SiteGlyph.STRUCTURE, marker, iconSize, color)
-        EdgeMarkerIcon.HALO -> drawHaloEdgeGlyph(marker, iconSize, color)
-    }
-    val onRight = marker.x > size.width * 0.5f
-    val textX = if (onRight) marker.x - iconSize * 0.5f - d(EDGE_TEXT_GAP_DP) else marker.x + iconSize * 0.5f + d(EDGE_TEXT_GAP_DP)
-    val drawn = drawKkTabularNumber(textMeasurer, roundedDistance(distance), style, textX, marker.y, color,
-        if (onRight) KkAlign.END else KkAlign.START, KkVAlign.CENTER, suffix = suffix)
-    val half = d(EDGE_HALF_HEIGHT_DP)
-    if (onRight) {
-        WorldDrawProbe.record(WorldDrawn.EDGE_MARKER, textX - drawn, marker.y - half, marker.x + iconSize * 0.5f, marker.y + half)
-    } else {
-        WorldDrawProbe.record(WorldDrawn.EDGE_MARKER, marker.x - iconSize * 0.5f, marker.y - half, textX + drawn, marker.y + half)
-    }
-}
-
-/**
- * An edge marker's color: volt for the player's own course (totem, circuit, race, the next halo ring), threat only for a bounty, the void
- * hue for the sigil, mute for the quiet ambient sites, bone for rules, rifts, event signals and structure entrances.
- */
-internal fun edgeMarkerColor(icon: EdgeMarkerIcon, roles: KkRolePalette): Color = when (icon) {
-    EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.RESONANT_CIRCUIT, EdgeMarkerIcon.RACE, EdgeMarkerIcon.HALO -> roles.you
-    EdgeMarkerIcon.SEALED_ANOMALY -> Kk.AGravitic
-    EdgeMarkerIcon.COLLAPSING_ORBIT, EdgeMarkerIcon.CHALLENGE, EdgeMarkerIcon.PORTAL -> Kk.Bone
-    EdgeMarkerIcon.BOUNTY -> roles.threat
-    EdgeMarkerIcon.CACHE, EdgeMarkerIcon.QUIET -> Kk.Mute
-    EdgeMarkerIcon.SIGIL -> sigilColor(roles)
-    // A signal and a structure entrance are bone by their lanes' specs.
-    EdgeMarkerIcon.SIGNAL, EdgeMarkerIcon.STRUCTURE -> Kk.Bone
-}
-
-/** Line height of the edge-marker digits; the HUD's mono digits keep the builder's 1.35. */
-private const val EDGE_LINE_HEIGHT_EM = 1.351f
-
-/**
- * The edge-marker distance style for [icon] (mono, drawn in the marker's color). Layouts whose
- * styles differ only in color share one paragraph, and painting it in another color rebuilds it
- * every frame, so every marker color gets its own imperceptibly different line height, and none of
- * them equals the line height of the HUD's mono digits (trial clock), which are drawn in bone.
- */
-internal fun edgeMarkerStyle(typography: InterfaceTypography, icon: EdgeMarkerIcon, roles: KkRolePalette): TextStyle {
-    val colorGroup = edgeMarkerColorGroup(icon)
-    return typography.monoStyle(EDGE_DISTANCE_SP, lineHeightEm = EDGE_LINE_HEIGHT_EM + colorGroup * 0.001f, color = edgeMarkerColor(icon, roles))
-}
-
-/** The line-height group of [icon]'s color in [edgeMarkerStyle]: one group per marker color. */
-internal fun edgeMarkerColorGroup(icon: EdgeMarkerIcon): Int = when (icon) {
-    EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.RESONANT_CIRCUIT, EdgeMarkerIcon.RACE, EdgeMarkerIcon.HALO -> 0
-    EdgeMarkerIcon.SEALED_ANOMALY -> 1
-    EdgeMarkerIcon.COLLAPSING_ORBIT, EdgeMarkerIcon.CHALLENGE, EdgeMarkerIcon.PORTAL, EdgeMarkerIcon.SIGNAL,
-    EdgeMarkerIcon.STRUCTURE,
-    -> 2
-    EdgeMarkerIcon.BOUNTY -> 3
-    EdgeMarkerIcon.CACHE, EdgeMarkerIcon.QUIET -> 4
-    EdgeMarkerIcon.SIGIL -> 5
-}
-
-/** Edge-marker distance: world units rounded to tens, at most the laid-out four digits. */
-internal fun roundedDistance(distance: Float): Long =
-    (((distance / 10f) + 0.5f).toLong() * 10L).coerceIn(0L, 9_990L)
 
 /** World labels stay below the HUD's top row (level badge, timer, chips, trial panel). */
 internal fun hudSafeTop(height: Float, density: Float): Float = max(80f * density, height * 0.16f)
