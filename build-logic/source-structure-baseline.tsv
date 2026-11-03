@@ -37,7 +37,6 @@ function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/ga
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/rewards/art/EpicDeadeyeReticleArt.kt#drawDeadeyeReticleArt	104
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/rewards/art/LegendarySolarChoirArt.kt#drawChoir	145
 function-lines	ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/simulation/GameSession.kt#choose	109
-function-lines	ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/simulation/GameSession.kt#startRun	182
 function-lines	ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/simulation/builds/ClauseSystem.kt#runClause	114
 function-lines	ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/simulation/combat/CollisionSystem.kt#resolveProjectileHits	160
 function-lines	ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/simulation/elements/CombatFieldSystem.kt#updateCombatFields	109
@@ -74,7 +73,6 @@ main-file-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/g
 main-file-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/canvas/world/places/WorldStructureRenderer.kt	606
 main-file-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/fx/InteractionFxReducer.kt	784
 main-file-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/rewards/art/LegendaryGlacialHeartArt.kt	754
-main-file-lines	ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/simulation/MutableGameState.kt	867
 main-file-lines	ball/profile/interaction/src/commonMain/kotlin/kinetickk/ball/profile/interaction/rebirth/impl/RebirthRenderer.kt	688
 main-file-lines	ball/profile/interaction/src/commonMain/kotlin/kinetickk/ball/profile/interaction/settings/impl/SettingsLayout.kt	646
 main-file-lines	ball/profile/interaction/src/commonMain/kotlin/kinetickk/ball/profile/interaction/workshop/armory/ArmoryState.kt	641
@@ -95,7 +93,7 @@ test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gamep
 test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/ObstacleKindSystemTest.kt	1480
 test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/ObstacleSystemTest.kt	1223
 test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/SimulationWitnessFixtures.kt	1208
-test-file-lines	ball/gameplay/nucleus/src/desktopTest/kotlin/kinetickk/ball/gameplay/nucleus/performance/GameplayPerformanceBenchmark.kt	1873
+test-file-lines	ball/gameplay/nucleus/src/desktopTest/kotlin/kinetickk/ball/gameplay/nucleus/performance/GameplayPerformanceBenchmark.kt	1816
 test-file-lines	ball/gameplay/nucleus/src/desktopTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/InvariantFuzzHarness.kt	1550
 test-file-lines	ball/gameplay/nucleus/src/desktopTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/PerceptibleItemImpactTest.kt	1520
 test-file-lines	ball/profile/impl/src/commonTest/kotlin/kinetickk/ball/profile/impl/storage/ProfileCodecTest.kt	1613
