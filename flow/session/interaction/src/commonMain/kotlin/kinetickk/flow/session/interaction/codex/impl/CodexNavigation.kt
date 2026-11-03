@@ -34,6 +34,10 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kinetickk.foundation.design.*
+import kinetickk.flow.session.interaction.localization.SessionRedesignText
+import androidx.compose.foundation.text.BasicText
+import kinetickk.ball.content.api.UiCatalogSnapshot
+import kinetickk.flow.session.interaction.codex.api.*
 
 /** Full title, short label and glyph of each Codex tab. */
 private val CodexTab.title: TextResource
@@ -227,4 +231,57 @@ internal fun codexNavFocusRing(size: Size, selection: Float, density: Float): Re
     val shift = KK_LIST_ROW_SELECTED_SHIFT_DP * density * selection.coerceIn(0f, 1.2f)
     val out = 3f * density
     return Rect(shift - out, -out, size.width + shift + out, size.height + out)
+}
+
+/** Wide screens' left nav: section rows with counts, Search, the game's filters, rarity legend. */
+@Composable
+internal fun CodexCatalogNav(
+    catalog: UiCatalogSnapshot,
+    model: CodexRenderModel,
+    measurer: CanvasTextMeasurer,
+    ui: Float,
+    controlScale: Float,
+    navWidth: Dp,
+    categoryTitles: List<String>,
+    categoryCounts: (Int) -> Pair<Int, Int>,
+    category: Int,
+    onCategory: (Int) -> Unit,
+    search: String,
+    sheetVisible: Boolean,
+    searchFocus: FocusRequester,
+    onSearch: (String) -> Unit,
+    filterTitles: List<Pair<Int, SessionText>>,
+    filter: CodexItemFilter,
+    hasBuild: Boolean,
+    onFilter: (Int) -> Unit,
+) {
+    val language = LocalAppLanguage.current
+    val typography = measurer.typography
+    val navScroll = rememberScrollState()
+    val navCounts = categoryTitles.indices.map { index -> categoryCounts(index).let { (found, total) -> "$found/$total" } }
+    val density = LocalDensity.current.density
+    // One title size for all section rows: the largest at which every title fits beside its count.
+    val navTitleSize = remember(measurer, categoryTitles, navCounts, navWidth, density) {
+        codexNavTitleSize(measurer, categoryTitles, navCounts, navWidth.value * density, density)
+    }
+    Box(Modifier.width(navWidth).fillMaxHeight()) {
+        Column(Modifier.fillMaxSize().verticalScroll(navScroll).testTag("codex-nav"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            categoryTitles.forEachIndexed { index, title ->
+                CodexNavRow(title, navCounts[index], navTitleSize, category == index, "codex-category-$index", controlScale) { onCategory(index) }
+            }
+            Spacer(Modifier.height(18.dp))
+            BasicText(language.text(SessionRedesignText.SEARCH).uppercase(), style = typography.labelStyle(13f * ui, color = Kk.Mute))
+            Spacer(Modifier.height(4.dp))
+            CodexSearchField(search, !sheetVisible, ui, inlineLabel = false, searchFocus) { onSearch(it) }
+            if (category == 0) {
+                Spacer(Modifier.height(10.dp))
+                CodexFilters(filterTitles, filter, hasBuild, controlScale, available = navWidth) { onFilter(it) }
+                Spacer(Modifier.height(18.dp))
+                BasicText(language.text(SessionRedesignText.RARITY).uppercase(), style = typography.labelStyle(13f * ui, color = Kk.Mute))
+                CodexRarityLegend(catalog, model, ui)
+            }
+        }
+        // Where the nav is taller than the screen, its cut edge fades out beside a scroll bar.
+        CodexScrollCue(navScroll, Kk.Ink, Kk.Bone, Modifier.matchParentSize().testTag("codex-nav-scroll-cue"))
+    }
 }

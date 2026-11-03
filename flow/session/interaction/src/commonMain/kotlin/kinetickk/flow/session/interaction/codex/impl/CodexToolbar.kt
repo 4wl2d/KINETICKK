@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kinetickk.foundation.design.*
+import kinetickk.flow.session.interaction.codex.api.*
 
 /** Natural width of the filter segments (plus their 3 dp gaps). */
 @Composable
@@ -186,4 +187,67 @@ internal fun CodexSearchField(value: String, enabled: Boolean, ui: Float, inline
                 inner()
             }
         })
+}
+
+/** Phones: the collection sections as tabs, the search and (Items) the filters and the sort above the grid. */
+@Composable
+internal fun CodexPhoneControls(
+    categoryTitles: List<String>,
+    category: Int,
+    onCategory: (Int) -> Unit,
+    filterTitles: List<Pair<Int, SessionText>>,
+    filter: CodexItemFilter,
+    hasBuild: Boolean,
+    onFilter: (Int) -> Unit,
+    search: String,
+    sheetVisible: Boolean,
+    searchFocus: FocusRequester,
+    onSearch: (String) -> Unit,
+    sort: CodexItemSort,
+    onSort: (CodexItemSort) -> Unit,
+    controlScale: Float,
+    ui: Float,
+    compactHeader: Boolean,
+) {
+    val language = LocalAppLanguage.current
+    val trailingFilters = compactHeader && category == 0
+    // The filters, their 8 dp spacer and the tab row's two 6 dp gaps around that spacer.
+    val filtersWidth = if (trailingFilters) codexFiltersWidth(filterTitles.map { language.text(it.second) }) + 20.dp else 0.dp
+    CodexTabRow(categoryTitles, category, "codex-category-", controlScale, Modifier.fillMaxWidth(), reserved = filtersWidth,
+        trailing = {
+            if (trailingFilters) {
+                Spacer(Modifier.width(8.dp))
+                CodexFilters(filterTitles, filter, hasBuild, controlScale) { onFilter(it) }
+            }
+        }) { onCategory(it) }
+    Spacer(Modifier.height(if (compactHeader) 4.dp else 8.dp))
+    // Landscape phones keep the search line dense: the sort (and its label, where it fits) sits beside
+    // the search, which keeps 200 dp.
+    if (compactHeader && category == 0) BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val sortWidth = maxWidth - 208.dp
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) {
+                CodexSearchField(search, !sheetVisible, ui, inlineLabel = true, searchFocus, dense = true) {
+                    onSearch(it)
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            CodexSortSegments(sort, controlScale, ui, sortWidth, withLabel = true, onSort)
+        }
+    } else CodexSearchField(search, !sheetVisible, ui, inlineLabel = true, searchFocus, dense = compactHeader) {
+        onSearch(it)
+    }
+    if (category == 0 && !compactHeader) {
+        Spacer(Modifier.height(8.dp))
+        // The filters, then the sort, wrapping to a second line where both do not fit. The sort's
+        // label (where it fits) tells its segments from the filters' look-alike pills.
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val rowWidth = maxWidth
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                CodexFilters(filterTitles, filter, hasBuild, controlScale, available = rowWidth) { onFilter(it) }
+                CodexSortSegments(sort, controlScale, ui, rowWidth, withLabel = true, onSort)
+            }
+        }
+    }
+    Spacer(Modifier.height(if (compactHeader) 4.dp else 10.dp))
 }

@@ -23,6 +23,15 @@ import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.foundation.design.*
+import kinetickk.flow.session.interaction.localization.SessionRedesignText
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import kinetickk.flow.session.interaction.codex.api.*
+import androidx.compose.runtime.saveable.SaveableStateHolder
 
 @Composable
 internal fun CodexDetails(entry: CodexEntry?, catalog: UiCatalogSnapshot, ui: Float, modifier: Modifier, panel: Color = Kk.Ink2, face: Color = Kk.Ink1,
@@ -167,5 +176,49 @@ internal fun rememberCodexPairFit(rows: List<Pair<String, String>>, width: Dp, g
         codexPairFit(rows, with(density) { width.toPx() }, with(density) { gap.toPx() }, labelSize, labelSize * 0.6f,
             { word, size -> textMeasurer.measure(word, labelStyle(size), softWrap = false).size.width.toFloat() },
             { value -> textMeasurer.measure(value, valueStyle, softWrap = false).size.width.toFloat() })
+    }
+}
+
+/** Phones: the selected entry's details in a bottom sheet over a scrim; Escape, the scrim and Close restore focus. */
+@Composable
+internal fun CodexDetailSheet(
+    selected: CodexEntry,
+    catalog: UiCatalogSnapshot,
+    ui: Float,
+    availableWidth: Dp,
+    availableHeight: Dp,
+    detailsScrollHolder: SaveableStateHolder,
+    residue: StatusElement?,
+    setResidue: (StatusElement?, String?) -> Unit,
+    restoreFocus: () -> Unit,
+    onOpen: (String) -> Unit,
+) {
+    val language = LocalAppLanguage.current
+    val roles = LocalKkRolePalette.current
+    val sheetFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { sheetFocus.requestFocus() }
+    Box(Modifier.width(availableWidth).height(availableHeight).testTag("codex-sheet-modal")
+        .focusProperties { onExit = { cancelFocusChange() } }.focusGroup()
+        .focusRequester(sheetFocus).onPreviewKeyEvent {
+        if (it.key == Key.Escape) { if (it.type == KeyEventType.KeyDown) restoreFocus(); true } else false
+    }.focusable()) {
+        Box(Modifier.fillMaxSize().background(Kk.Ink.copy(alpha = 0.82f)).testTag("codex-scrim")
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = restoreFocus))
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(availableHeight * 0.85f).background(Kk.Ink2)
+            .drawBehind { drawRect(selected.tone(roles), Offset.Zero, Size(size.width, 3.dp.toPx())) }.testTag("codex-sheet")
+            .pointerInput(Unit) { detectTapGestures { } }) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), horizontalArrangement = Arrangement.End) {
+                KkButton(language.text(SessionRedesignText.CLOSE), onClick = restoreFocus, modifier = Modifier.testTag("codex-sheet-close"),
+                    variant = KkButtonVariant.GHOST, size = KkButtonSize.SM, textScale = ui)
+            }
+            detailsScrollHolder.SaveableStateProvider(selected.key) {
+                // Reading a residue closes the sheet, so the chain it lights in the matrix is in view.
+                CodexDetails(selected, catalog, ui, Modifier.fillMaxWidth().weight(1f), panel = Kk.Ink3, face = Kk.Ink2,
+                    residue = residue, onResidue = { element ->
+                        setResidue(element, selected.key)
+                        if (element != null) restoreFocus()
+                    }, onOpen = onOpen)
+            }
+        }
     }
 }
