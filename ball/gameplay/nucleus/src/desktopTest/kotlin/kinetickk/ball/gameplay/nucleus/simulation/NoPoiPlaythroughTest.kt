@@ -61,6 +61,35 @@ class NoPoiPlaythroughTest {
             "only ${"%.3f".format(share)} of ${population.size} fresh runs won without a POI; expected at least $MIN_NO_POI_WIN_SHARE")
     }
 
+    /**
+     * An avoiding bot offered two Data cards and Decay Spores (which it ranks below Data) rerolls the offer, and with no
+     * reroll left takes the Data card as a counted breach.
+     */
+    @Test fun anAvoidingBotCountsDecaySporesAsDataInAForcedOffer() {
+        fun offered(rerolls: Int): MutableGameState = MutableGameState(canonicalGameplayContent, seed = REFERENCE_SEED).apply {
+            startRun()
+            val data = content.items.filter { it.minimumRebirth == 0 && it.isDataEconomy && it.active == null }.take(2)
+            val spores = checkNotNull(content.activeItem(SkillId.DECAY_SPORES))
+            activeChoiceType = ChoiceType.ITEM
+            choices = (data + spores).map { itemCard(it, it.rarity.displayLabel.uppercase(), reborn = false) }
+            phase = GamePhase.CHOICE
+            rerollsRemaining = rerolls
+        }
+        val rerolling = offered(rerolls = 1)
+        val rerollingBot = NoPoiBot(dataPolicy = DataPolicy.AVOID)
+        rerollingBot.choose(rerolling)
+        assertEquals(0, rerolling.rerollsRemaining, "it rerolls the offer")
+        assertEquals(0, rerollingBot.avoidBreaches)
+
+        val forced = offered(rerolls = 0)
+        val data = forced.choices.take(2).map { checkNotNull(it.itemId) }
+        val bot = NoPoiBot(dataPolicy = DataPolicy.AVOID)
+        bot.choose(forced)
+        assertEquals(1, bot.avoidBreaches, "taking Data is a counted breach")
+        assertTrue(data.any { forced.itemStacks[it] > 0 }, "it takes a Data card")
+        assertTrue(!forced.skillLoadout.owns(SkillId.DECAY_SPORES), "never Decay Spores")
+    }
+
     private companion object {
         const val REFERENCE_SEED = 2026
 
@@ -263,7 +292,10 @@ internal class NoPoiBot(
         copy.avoidBreaches = avoidBreaches
     }
 
-    /** [DataPolicy.AVOID] only: offers of nothing but Data-gain cards with no reroll left, so one had to be taken. */
+    /**
+     * [DataPolicy.AVOID] only: offers of nothing but Data-gain cards (and Decay Spores, which ranks below them) with no
+     * reroll left, so a Data card had to be taken.
+     */
     var avoidBreaches = 0
         private set
 
@@ -650,14 +682,15 @@ internal class NoPoiBot(
                     s.rerollChoices()
                     return
                 }
-                DataPolicy.AVOID -> if (choices.isNotEmpty() && choices.all { isDataGainCard(s, it) }) {
+                // Decay Spores ranks below every Data card, so an offer of nothing else forces Data as well.
+                DataPolicy.AVOID -> if (choices.isNotEmpty() && choices.all { isDataGainCard(s, it) || activeEffect(s, it) == SkillId.DECAY_SPORES }) {
                     if (s.choicesCanReroll) {
                         s.rerollChoices()
                         return
                     }
-                    // Every card gains Data: take the one that gains the least.
+                    // Every card gains Data or is Decay Spores: take the Data card that gains the least.
                     avoidBreaches++
-                    val least = choices.indices.minBy { dataWeight(s, choices[it]) }
+                    val least = choices.indices.minBy { if (isDataGainCard(s, choices[it])) dataWeight(s, choices[it]) else Float.MAX_VALUE }
                     decisions++
                     s.choose(least)
                     return
