@@ -462,7 +462,7 @@ private fun activeSlotModel(language: AppLanguage, width: Float, height: Float, 
 private fun laneOf(effect: SkillId): CoreShape = CoreShape.entries.first { effect in rewardActiveFixtureContent.coreShape(it).activeLane }
 
 @Composable
-private fun WorldShot(model: GameplayRenderModel) {
+internal fun WorldShot(model: GameplayRenderModel) {
     val typography = rememberInterfaceTypography()
     val measurer = CanvasTextMeasurer(rememberTextMeasurer(), model.settings.textScale, LocalAppLanguage.current, typography, LocalKkRolePalette.current)
     Canvas(Modifier.fillMaxSize()) {
@@ -472,7 +472,7 @@ private fun WorldShot(model: GameplayRenderModel) {
 }
 
 @Composable
-private fun RewardShot(model: GameplayRenderModel, touch: Boolean = false) {
+internal fun RewardShot(model: GameplayRenderModel, touch: Boolean = false) {
     WorldShot(model)
     RewardContent(
         model,
@@ -482,7 +482,7 @@ private fun RewardShot(model: GameplayRenderModel, touch: Boolean = false) {
 }
 
 @Composable
-private fun TerminalShot(model: GameplayRenderModel) {
+internal fun TerminalShot(model: GameplayRenderModel) {
     WorldShot(model)
     TerminalContent(model, 4f, true) {}
 }
