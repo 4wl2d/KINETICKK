@@ -24,4 +24,6 @@ enum class GameplayAudioCue {
     APEX,
     /** A spent structure leaves the world and shatters. */
     STRUCTURE_COLLAPSE,
+    /** Core Freeze froze the Core solid (the run ends, or Easy mode's ice shatters). */
+    CORE_FROZEN,
 }

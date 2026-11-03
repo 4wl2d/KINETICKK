@@ -4,36 +4,28 @@
 package kinetickk.ball.gameplay.nucleus.simulation.flight
 
 /**
- * How still the Core has been (Core Stasis): its leash anchor, its speed average and the stillness, full-stasis and
- * fracture clocks. Written only by [updateCoreStasis]; read through the accessors next to it. Every field is a plain
- * scalar, so a deep copy is a field copy.
+ * Core Freeze (Core Stasis): the Core's filtered speed, the freeze it has gathered, the hold window that keeps the
+ * freeze where it is and whether the host takes input. Written only by the functions in `CoreStasisSystem.kt`; read
+ * through the accessors there. Every field is a plain scalar and none is a world position, so a deep copy is a field
+ * copy and a rebase leaves it alone.
  */
 internal class CoreStasisState(source: CoreStasisState?) {
-    /** The leash point (world units): dragged to the anchor radius behind a Core that leaves it. */
-    internal var anchorX: Float = source?.anchorX ?: 0f
-    internal var anchorY: Float = source?.anchorY ?: 0f
-    /** Exponential moving average of the Core's scalar speed (u/s). */
-    internal var speedEma: Float = source?.speedEma ?: 0f
-    /** The still clock (s), 0..[kinetickk.ball.content.api.CoreStasisTuning.fullStasisSeconds]. */
-    internal var stillSeconds: Float = source?.stillSeconds ?: 0f
-    /** Time held at full stasis (s), 0..the fracture delay; 0 whenever the Core is below full stasis or in Easy mode. */
-    internal var frozenSeconds: Float = source?.frozenSeconds ?: 0f
-    /** Time since the last fracture tick (s), 0..the tick period; 0 while not fracturing. */
-    internal var fractureClock: Float = source?.fractureClock ?: 0f
+    /** Exponential average of the Core's scalar speed (u/s, the HUD's speed unit). */
+    internal var speedFilter: Float = source?.speedFilter ?: 0f
+    /** The freeze, 0..1; 1 froze the Core solid. */
+    internal var freeze: Float = source?.freeze ?: 0f
+    /** Simulation seconds left in the current hold window (run start, a closed choice, a layer switch). */
+    internal var holdSeconds: Float = source?.holdSeconds ?: 0f
+    /**
+     * The host takes no input (a session workflow is landing). A fact of the host, not of the run, so a run start
+     * keeps it; the host reports every change.
+     */
+    internal var inputHeld: Boolean = source?.inputHeld ?: false
 
-    /** A new run: the anchor sits on the Core at ([coreX], [coreY]) and every clock is 0. */
-    fun reset(coreX: Float, coreY: Float) {
-        anchorX = coreX
-        anchorY = coreY
-        speedEma = 0f
-        stillSeconds = 0f
-        frozenSeconds = 0f
-        fractureClock = 0f
-    }
-
-    /** The world origin moved by ([shiftX], [shiftY]); the anchor moves with it. */
-    fun rebase(shiftX: Float, shiftY: Float) {
-        anchorX -= shiftX
-        anchorY -= shiftY
+    /** A new run: at rest, no freeze, holding for [holdSeconds]. */
+    fun reset(holdSeconds: Float) {
+        speedFilter = 0f
+        freeze = 0f
+        this.holdSeconds = holdSeconds
     }
 }

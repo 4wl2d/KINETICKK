@@ -168,6 +168,18 @@ class GameplayNucleusTest {
         assertEquals(renderFacts(first), renderFacts(second))
     }
 
+    /** The host reports a session workflow that takes the player's input: the run holds Core Freeze until it comes back. */
+    @Test
+    fun inputAvailabilityHoldsCoreFreezeUntilInputComesBack() {
+        val started = start(initial(31)).nextState
+        val held = interaction(started, GameplayInteractionPulse.InputAvailabilityChanged(available = false)).nextState
+        assertTrue(held.engine!!.model.coreStasis.inputHeld)
+        val repeated = interaction(held, GameplayInteractionPulse.InputAvailabilityChanged(available = false)).nextState
+        assertTrue(repeated.engine!!.model.coreStasis.inputHeld, "a repeat keeps it")
+        val back = interaction(held, GameplayInteractionPulse.InputAvailabilityChanged(available = true)).nextState
+        assertFalse(back.engine!!.model.coreStasis.inputHeld)
+    }
+
     @Test
     fun configurationValidatorCoversEveryClosedBoundaryReason() {
         val valid = validStartInputs()

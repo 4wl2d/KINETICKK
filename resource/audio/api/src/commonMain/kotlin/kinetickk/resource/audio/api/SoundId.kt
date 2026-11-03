@@ -26,4 +26,6 @@ enum class SoundId {
     APEX,
     /** A spent structure shatters (a finish, a fought abandon or the Architect's collapse). */
     STRUCTURE_COLLAPSE,
+    /** The Core freezes solid: a glassy crack over the defeat (or Easy mode's shattering ice). */
+    CORE_FROZEN,
 }

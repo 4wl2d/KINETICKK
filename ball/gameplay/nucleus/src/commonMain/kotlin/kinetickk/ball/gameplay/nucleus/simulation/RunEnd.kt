@@ -7,7 +7,8 @@ import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 
-internal fun MutableGameState.endRun(reason: String) {
+/** Ends a running run as [reason]: the Core bursts in [burstColor] (an FxColorCode index; threat by default). */
+internal fun MutableGameState.endRun(reason: String, burstColor: Int = 4) {
     if (phase != GamePhase.RUNNING) return
     phase = GamePhase.GAME_OVER
     message = reason
@@ -17,7 +18,7 @@ internal fun MutableGameState.endRun(reason: String) {
     touchBrakeActive = false
     updateBraking()
     dashBufferTime = 0f
-    burst(coreX, coreY, 45, 4)
+    burst(coreX, coreY, 45, burstColor)
     bankRunMatter()
     emitSound(GameplayAudioCue.GAME_OVER)
 }

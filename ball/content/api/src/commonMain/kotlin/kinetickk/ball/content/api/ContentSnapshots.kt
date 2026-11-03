@@ -95,7 +95,7 @@ data class GameplayContentSnapshot(
     val variety: RunVarietyContent = RunVarietyContent(),
     /** Baby mode rules; STANDARD runs never read them. */
     val easyMode: EasyModeTuning = EasyModeTuning(),
-    /** Core Stasis (anti-AFK); harnesses that script slow hovers set [CoreStasisTuning.DISABLED]. */
+    /** Core Freeze (anti-AFK); harnesses that script slow movement set [CoreStasisTuning.DISABLED]. */
     val coreStasis: CoreStasisTuning = CoreStasisTuning(),
 ) {
     init {
@@ -103,6 +103,9 @@ data class GameplayContentSnapshot(
             "Enemy definitions must follow the EnemyType order"
         }
         require(skills.hasOneDefinitionPerSkillIdInOrder()) { "Skill definitions must follow the SkillId order" }
+        require(!coreStasis.enabled || sites.windows.orbitMinimumSpeed > coreStasis.thawSpeed) {
+            "The collapsing orbit must never ask for a pace at which the Core cannot thaw"
+        }
     }
 
     fun enemy(type: EnemyType): EnemyDefinition = enemies[type.ordinal]

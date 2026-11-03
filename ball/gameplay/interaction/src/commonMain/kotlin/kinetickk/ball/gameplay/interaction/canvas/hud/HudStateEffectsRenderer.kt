@@ -24,7 +24,7 @@ import kinetickk.foundation.design.*
 import kotlin.math.abs
 import kotlin.math.sqrt
 
-// World-anchored HUD (halos, tether, overheat and Core Stasis stamps) and screen-space state
+// World-anchored HUD (halos, tether, the Core Freeze ring, overheat and Core Freeze stamps) and screen-space state
 // effects (critical vignette, polarity edge glow, overdrive border). World-anchored
 // geometry uses world units like the Core it hugs; UI text and screen effects use dp.
 
@@ -58,6 +58,7 @@ internal fun DrawScope.drawHudWorldAnchors(
         drawTether(engine, roles, worldCore, worldCursor, renderTime, critical, draining)
         if (engine.overdriveTime > 0f) drawOverdriveCore(roles, worldCore, renderTime)
         drawCoreHalo(engine, roles, worldCore, haloRadius)
+        drawCoreStasisRing(engine, roles, worldCore, haloRadius)
         if (critical) drawCriticalRing(roles, worldCore, renderTime)
         drawCursorHaloArc(engine, roles, worldCursor, renderTime, draining)
         drawSkillReachRings(engine, worldCore)
@@ -293,7 +294,7 @@ private fun DrawScope.drawOverheatStamp(measurer: TextMeasurer, core: Offset, ha
 
 /**
  * Screen-space state effects: critical vignette, polarity edge glow, overdrive border, then the world event's edge,
- * the Nadir scorch edge, the Core Stasis frost and the dungeon vignette.
+ * the Nadir scorch edge, the Core Freeze frost and the dungeon vignette.
  */
 internal fun DrawScope.drawHudScreenStates(
     engine: GameplayRenderModel,

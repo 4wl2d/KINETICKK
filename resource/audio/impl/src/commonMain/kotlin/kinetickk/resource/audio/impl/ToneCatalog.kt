@@ -19,6 +19,7 @@ internal object ToneCatalog {
 
     fun priority(sound: SoundId): Int = when (sound) {
         SoundId.GAME_OVER, SoundId.VICTORY -> 100
+        SoundId.CORE_FROZEN -> 95
         SoundId.HURT, SoundId.OVERHEAT -> 90
         SoundId.APEX -> 85
         SoundId.DASH, SoundId.OVERDRIVE -> 80
@@ -55,4 +56,5 @@ private fun createToneRequest(sound: SoundId): ToneRequest = when (sound) {
     SoundId.SKILL -> ToneRequest(480f, 0.09f, 0.16f, ToneWave.TRIANGLE)
     SoundId.APEX -> ToneRequest(988f, 0.3f, 0.22f, ToneWave.SAW)
     SoundId.STRUCTURE_COLLAPSE -> ToneRequest(58f, 0.40f, 0.22f, ToneWave.SAW)
+    SoundId.CORE_FROZEN -> ToneRequest(1_320f, 0.26f, 0.18f, ToneWave.TRIANGLE)
 }

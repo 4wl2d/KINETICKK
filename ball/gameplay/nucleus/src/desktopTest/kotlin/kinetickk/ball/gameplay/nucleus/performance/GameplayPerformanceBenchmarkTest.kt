@@ -337,13 +337,11 @@ class GameplayPerformanceBenchmarkTest {
             { dimensionScorchClock = 0.25f },
             { dimensionLocalClock = 3f },
             { dimensionRewardLayer = WorldLayer.NADIR },
-            // Core Stasis.
-            { coreStasis.anchorX = 12f },
-            { coreStasis.anchorY = -8f },
-            { coreStasis.speedEma = 90f },
-            { coreStasis.stillSeconds = 1f },
-            { coreStasis.frozenSeconds = 0.5f },
-            { coreStasis.fractureClock = 0.25f },
+            // Core Freeze.
+            { coreStasis.speedFilter = 90f },
+            { coreStasis.freeze = 0.5f },
+            { coreStasis.holdSeconds = 0.25f },
+            { coreStasis.inputHeld = true },
             { enemies.first().ownerTag = 5L },
             { enemies.first().charges = 1 },
             { enemies.first().phaseStartPending = true },

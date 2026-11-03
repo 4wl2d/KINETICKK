@@ -23,6 +23,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.*
 import kotlin.math.max
 import kinetickk.ball.gameplay.nucleus.projection.*
 import kinetickk.ball.gameplay.nucleus.simulation.characters.*
+import kinetickk.ball.gameplay.nucleus.simulation.flight.setCoreStasisInputHeld
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 
 class EngineState internal constructor(
@@ -259,6 +260,7 @@ internal class GameReducer {
             GameplayInteractionPulse.UserGestureObserved -> error("handled before state cloning")
             is GameplayInteractionPulse.SkillRequested -> state.requestSkill(intent.slot)
             GameplayInteractionPulse.ApexRequested -> state.requestApex()
+            is GameplayInteractionPulse.InputAvailabilityChanged -> state.setCoreStasisInputHeld(!intent.available)
         }
     }
 
@@ -301,6 +303,7 @@ internal class GameReducer {
                 state.phase != GamePhase.RUNNING ||
                     !state.apexUnlocked ||
                     state.apexBufferTime.sameBitsAs(MutableGameState.SKILL_INPUT_BUFFER_SECONDS)
+            is GameplayInteractionPulse.InputAvailabilityChanged -> state.coreStasis.inputHeld == !available
             is GameplayInteractionPulse.FrameElapsed,
             GameplayInteractionPulse.PauseToggled,
             is GameplayInteractionPulse.ChoiceSelected,

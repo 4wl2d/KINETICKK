@@ -109,6 +109,12 @@ sealed interface GameplayInteractionPulse {
     data object UserGestureObserved : GameplayInteractionPulse
 
     /**
+     * Whether the host takes the player's input: false while a session workflow lands (an overlay's pause on its
+     * way). The host reports every change from the default (available); Core Freeze holds while input is unavailable.
+     */
+    data class InputAvailabilityChanged(val available: Boolean) : GameplayInteractionPulse
+
+    /**
      * Asks to cast the skill in [slot] (0 = Z, 1 = X, 2 = C). A running run buffers the request briefly and
      * casts it once the slot can; an empty slot or a run that is not running accepts it without a change.
      */

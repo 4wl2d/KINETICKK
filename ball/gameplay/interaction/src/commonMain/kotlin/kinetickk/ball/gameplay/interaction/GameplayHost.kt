@@ -69,6 +69,9 @@ internal class GameplayHostState(component: GameplayInteractionPort) {
         derivedStateOf(structuralEqualityPolicy()) { renderModel.value.compositionFacts() }
     val windowFocus = GameplayWindowFocus()
     val viewport = GameplayViewportPixels()
+
+    /** The run was last told that the host takes no input (see the input availability effect). */
+    var inputHeldReported = false
 }
 
 /**

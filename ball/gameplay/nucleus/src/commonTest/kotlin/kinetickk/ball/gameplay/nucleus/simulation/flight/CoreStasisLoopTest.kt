@@ -11,9 +11,10 @@ import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.nucleus.projection.toRenderModel
+import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
+import kinetickk.ball.gameplay.nucleus.render.CoreStasisMotion
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.foundation.common.localization.AppLanguage
 import kotlin.math.roundToInt
@@ -23,127 +24,113 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Core Stasis through the whole step ([simulateStep]): a Core pinned on a rock or stalled by a pointer parked at the
- * screen edge freezes, the frozen Core fractures on the scorch path and dies with its own cause, invulnerability and a
- * revival answer the fracture, and Easy mode freezes but never fractures. Quiet arenas with no generated obstacles.
+ * Core Freeze through the whole step ([simulateStep]): a Core pinned on a rock, stalled by a pointer parked at the screen
+ * edge or crawling under the Brake freezes solid and the run ends as CORE FROZEN past invulnerability and revivals, a
+ * Dash out of the pin breaks the freeze, a closed choice holds it, and Easy mode shatters the ice instead. Quiet arenas
+ * with no generated obstacles; every run is short enough for the browser test runner.
  */
 class CoreStasisLoopTest {
     @Test
-    fun aWallPinnedCoreFreezesThroughTheStep() {
+    fun aRockPinnedCoreFreezesSolidPastInvulnerability() {
         val state = pinnedState(invulnerable = true)
-        val base = state.deepCopy().cooldown(1f)
-        var crossed = Float.NaN
-        state.stepFor(30f) { t -> if (crossed.isNaN() && state.coreStasisLevel() > 0f) crossed = t }
-        assertTrue(state.speed < 5f, "the rock holds the Core (speed ${state.speed})")
-        assertEquals(1f, state.coreStasisLevel())
-        assertEquals(10f, crossed, 0.1f, "the grace runs out about 10 s after the pin")
-        assertEquals(base / 0.35f, state.cooldown(1f), base * 1e-4f, "weapon clocks run at 0.35")
+        var pinnedAt = Float.NaN
+        val endedAt = state.stepUntilEnd(12f) { t -> if (pinnedAt.isNaN() && state.speed < 5f) pinnedAt = t }
+        assertTrue(pinnedAt < 1f, "the rock holds the Core (at $pinnedAt s)")
+        // The filtered speed falls below 100 u/s within a fraction of a second, then 4.2 s of freeze.
+        assertTrue(endedAt - pinnedAt in 4.1f..5f, "froze ${endedAt - pinnedAt} s after the pin")
+        assertEquals(GamePhase.GAME_OVER, state.phase)
+        assertEquals(CoreStasisNotices.FROZEN, state.message)
+        assertEquals("ЯДРО ЗАМЁРЗЛО", state.message.localizedContent(AppLanguage.Russian))
+        val render = state.toRenderModel()
+        assertEquals(1f, render.coreStasis, "the death frame shows the Core frozen solid")
+        assertEquals(CoreStasisMotion.FROZEN, render.coreStasisMotion)
     }
 
     /**
-     * A pointer parked at the screen edge drains the polarity field until the Core stalls into a crawl of a few u/s
-     * (measured: below 20 u/s after 14.05 s, full stasis at 36.6 s, 1.5 u/s at 150 s); the crawl drags the leash below
-     * the travel speed, so the Core stays frozen even after it has crawled out of the radius.
+     * A pointer parked at the screen edge drains the polarity field until the Core stalls into a crawl (measured from
+     * full polarity: below 20 u/s after 14 s); from a drained field the stall comes at once and the Core freezes solid.
      */
     @Test
     fun anEdgePinnedPointerStallsAndFreezes() {
         val state = quietState(invulnerable = true).apply {
             pointerX = screenWidth
             pointerY = screenHeight * 0.5f
+            polarityStability = 0.15f
+            velocityX = 200f
         }
         var stalledAt = Float.NaN
-        var frozenAt = Float.NaN
-        state.stepFor(150f) { t ->
-            if (stalledAt.isNaN() && t > 1f && state.speed < 20f) stalledAt = t
-            if (frozenAt.isNaN() && state.coreStasisLevel() >= 1f) frozenAt = t
-        }
-        assertTrue(stalledAt < 20f, "the Core stalls (at $stalledAt s)")
-        assertTrue(frozenAt < 40f, "and freezes fully (at $frozenAt s)")
-        assertEquals(1f, state.coreStasisLevel(), "still frozen at 150 s")
-        assertEquals(GamePhase.RUNNING, state.phase)
-    }
-
-    @Test
-    fun aFrozenCoreFracturesAndDiesWithTheFrozenReason() {
-        val state = pinnedState(invulnerable = false)
-        val maxHp = state.maxHp
-        val integrity = state.hp + state.shield
-        val ticks = kotlin.math.ceil(integrity / (maxHp * 0.05f) - 1e-4f).toInt()
-        var fracturingAt = Float.NaN
-        var firstLossAt = Float.NaN
-        var endedAt = Float.NaN
-        var previous = integrity
-        state.stepFor(120f) { t ->
-            if (fracturingAt.isNaN() && state.coreStasisFracturing()) fracturingAt = t
-            val now = state.hp + state.shield
-            if (now < previous) {
-                if (firstLossAt.isNaN()) firstLossAt = t
-                if (state.phase == GamePhase.RUNNING) assertEquals(maxHp * 0.05f, previous - now, maxHp * 1e-4f, "one tick at $t")
-            }
-            previous = now
-            if (endedAt.isNaN() && state.phase != GamePhase.RUNNING) endedAt = t
-        }
-        assertEquals(28f, fracturingAt, 0.1f)
-        assertEquals(29.5f, firstLossAt, 0.1f)
-        assertEquals(GamePhase.GAME_OVER, state.phase)
+        val endedAt = state.stepUntilEnd(12f) { t -> if (stalledAt.isNaN() && state.speed < 100f) stalledAt = t }
+        assertTrue(stalledAt in 0.5f..4f, "the Core stalls (at $stalledAt s)")
+        assertTrue(endedAt - stalledAt in 4.2f..5f, "and freezes solid (at $endedAt s)")
         assertEquals(CoreStasisNotices.FROZEN, state.message)
-        assertEquals(firstLossAt + (ticks - 1) * 1.5f, endedAt, 0.05f, "$ticks ticks from full integrity")
-        assertEquals("ЯДРО ЗАМЁРЗЛО", state.message.localizedContent(AppLanguage.Russian))
     }
 
+    /** The Brake held with the pointer near the screen centre settles under 100 u/s (about 78 at 60 dp) and freezes. */
     @Test
-    fun invulnerabilityBlocksTheFracture() {
-        val state = pinnedState(invulnerable = true)
-        val integrity = state.hp + state.shield
-        var clockWrapped = false
-        var lastClock = 0f
-        state.stepFor(60f) {
-            if (state.coreStasis.fractureClock < lastClock) clockWrapped = true
-            lastClock = state.coreStasis.fractureClock
+    fun aBrakeHeldCrawlFreezes() {
+        val state = quietState(invulnerable = false).apply {
+            pointerX = screenWidth * 0.5f + 60f
+            pointerY = screenHeight * 0.5f
+            setBrake(true)
         }
-        assertEquals(integrity, state.hp + state.shield)
-        assertTrue(state.coreStasisFracturing())
-        assertTrue(clockWrapped, "the tick clock keeps cycling; blocked ticks are lost")
-        assertEquals(GamePhase.RUNNING, state.phase)
+        var settled = 0f
+        val endedAt = state.stepUntilEnd(12f) { t -> if (t > 2f) settled = maxOf(settled, state.speed) }
+        assertTrue(settled < 100f, "the brake holds the Core under 100 u/s (peak $settled after 2 s)")
+        assertTrue(endedAt < 7f, "froze at $endedAt s")
+        assertEquals(CoreStasisNotices.FROZEN, state.message)
     }
 
     @Test
-    fun aRevivalAnswersALethalFracture() {
+    fun aRevivalNeverAnswersAFreeze() {
         val state = pinnedState(invulnerable = false).apply {
             matrix = matrix.copy(secondWind = MatrixEffect.SecondWind(0.3f, 2f))
         }
-        var revivedAt = Float.NaN
-        var lossAfterRevival = false
-        var previous = state.hp
-        state.stepFor(120f) { t ->
-            if (revivedAt.isNaN() && state.secondWindSpent) {
-                revivedAt = t
-                assertEquals(GamePhase.RUNNING, state.phase)
-                assertEquals(22f, state.coreStasis.stillSeconds, "a revival does not thaw the Core")
-            }
-            if (!revivedAt.isNaN() && state.hp < previous && state.phase == GamePhase.RUNNING) lossAfterRevival = true
-            previous = state.hp
-        }
-        assertFalse(revivedAt.isNaN(), "Second Wind answered the lethal tick")
-        assertTrue(lossAfterRevival, "the revived Core keeps fracturing")
+        state.stepUntilEnd(12f)
         assertEquals(CoreStasisNotices.FROZEN, state.message)
+        assertFalse(state.secondWindSpent)
+    }
+
+    /** A Dash out of the pin carries the Core well above the thaw speed: the freeze recedes instead of finishing. */
+    @Test
+    fun aDashOutOfThePinThawsTheFreeze() {
+        val state = pinnedState(invulnerable = true)
+        state.stepUntil { state.coreStasis.freeze >= 0.5f }
+        val peak = state.coreStasis.freeze
+        // Up and away from the rock, never across the Core (a pointer swept over the Core is a singularity contact).
+        state.pointerX = state.screenWidth * 0.5f
+        state.pointerY = state.screenHeight * 0.5f - 250f
+        state.requestDash()
+        state.stepFor(2.5f)
+        assertEquals(GamePhase.RUNNING, state.phase, state.message)
+        assertTrue(state.coreStasis.freeze < peak - 0.3f, "the freeze fell from $peak to ${state.coreStasis.freeze}")
+    }
+
+    /** A choice opened mid-freeze stops every clock; closing it holds the freeze for 0.6 s before it counts again. */
+    @Test
+    fun aClosedChoiceHoldsTheFreeze() {
+        val state = pinnedState(invulnerable = true)
+        state.stepUntil { state.coreStasis.freeze >= 0.5f }
+        val frozen = state.coreStasis.freeze
+        state.phase = GamePhase.CHOICE
+        repeat(50) { state.update(0.1f) }
+        assertEquals(frozen, state.coreStasis.freeze, "frozen while choosing")
+        state.finishChoice(GameplayAudioCue.UI_CLICK)
+        state.stepFor(0.6f)
+        assertEquals(frozen, state.coreStasis.freeze, "held for 0.6 s after the choice closes")
+        state.stepFor(0.1f)
+        assertTrue(state.coreStasis.freeze > frozen, "then it counts again")
     }
 
     @Test
-    fun easyModeFreezesButNeverFractures() {
+    fun easyModeShattersTheIceAndPlaysOn() {
         val state = pinnedState(invulnerable = false, runMode = RunMode.EASY)
         val integrity = state.hp + state.shield
-        state.stepFor(120f) {
-            assertFalse(state.coreStasisFracturing())
-            assertEquals(0f, state.coreStasis.frozenSeconds)
-            assertEquals(0f, state.coreStasis.fractureClock)
-        }
-        assertEquals(1f, state.coreStasisLevel())
-        assertEquals(integrity, state.hp + state.shield)
+        var shatters = 0
+        state.stepFor(11f) { if (state.takeSoundCues().contains(GameplayAudioCue.CORE_FROZEN)) shatters++ }
+        assertEquals(2, shatters, "a pinned Easy Core shatters its ice every 4.2 s")
         assertEquals(GamePhase.RUNNING, state.phase)
-        val render = state.toRenderModel()
-        assertEquals(1f, render.coreStasis)
-        assertFalse(render.coreStasisFracturing)
+        assertEquals(integrity, state.hp + state.shield, "the shatter costs nothing")
+        assertTrue(state.coreStasis.freeze < 1f)
     }
 }
 
@@ -153,7 +140,7 @@ private const val STEP = MutableGameState.FIXED_STEP
 private val emptyWorld: GameplayContentSnapshot =
     structuresDisabledContent.copy(obstacles = structuresDisabledContent.obstacles.copy(meanPerChunk = 0f))
 
-/** A quiet started run in [emptyWorld] (no enemies, spawns, sites or obstacles), tier 0, no relics or items. */
+/** A quiet started run in [emptyWorld] (no enemies, spawns, sites or obstacles), tier 0, past the run-start hold. */
 private fun quietState(invulnerable: Boolean, runMode: RunMode = RunMode.STANDARD): MutableGameState =
     MutableGameState(emptyWorld, seed = 5_150, initialMatter = 0, runMode = runMode).apply {
         coreShape = CoreShape.ORB
@@ -167,6 +154,7 @@ private fun quietState(invulnerable: Boolean, runMode: RunMode = RunMode.STANDAR
         spawnClock = Float.MAX_VALUE
         nextEliteAt = Float.MAX_VALUE
         runGrace = 0f
+        coreStasis.holdSeconds = 0f
         quietArenaForTesting()
         clearObstaclesForTesting()
         if (invulnerable) invulnerableUntil = Float.MAX_VALUE
@@ -178,19 +166,37 @@ private fun quietState(invulnerable: Boolean, runMode: RunMode = RunMode.STANDAR
 /** The Core one unit from a rock on its right, with the pointer 120 dp right of the screen centre pressing into it. */
 private fun pinnedState(invulnerable: Boolean, runMode: RunMode = RunMode.STANDARD): MutableGameState =
     quietState(invulnerable, runMode).apply {
-        placeObstaclesForTesting(testObstacle(coreX + CORE_RADIUS_FOR_PIN + 80f + 1f, coreY, radius = 80f))
+        placeObstaclesForTesting(testObstacle(coreX + MutableGameState.CORE_RADIUS + 80f + 1f, coreY, radius = 80f))
         pointerX = screenWidth * 0.5f + 120f
         pointerY = screenHeight * 0.5f
     }
 
-private const val CORE_RADIUS_FOR_PIN = MutableGameState.CORE_RADIUS
-
 /** Runs whole steps for [seconds] (stopping when the run ends), calling [onStep] with the time after each step. */
-private fun MutableGameState.stepFor(seconds: Float, onStep: (Float) -> Unit) {
+private fun MutableGameState.stepFor(seconds: Float, onStep: (Float) -> Unit = {}) {
     val steps = (seconds / STEP).roundToInt()
     for (index in 1..steps) {
         if (phase != GamePhase.RUNNING) return
         simulateStep(STEP)
         onStep(index * STEP)
     }
+}
+
+/** [stepFor] at most [seconds]; the time the run ended, or NaN when it still runs. */
+private fun MutableGameState.stepUntilEnd(seconds: Float, onStep: (Float) -> Unit = {}): Float {
+    var endedAt = Float.NaN
+    stepFor(seconds) { t ->
+        onStep(t)
+        if (endedAt.isNaN() && phase != GamePhase.RUNNING) endedAt = t
+    }
+    return endedAt
+}
+
+/** Steps until [done] holds (at most 10 s). */
+private fun MutableGameState.stepUntil(done: () -> Boolean) {
+    var steps = 0
+    while (!done() && phase == GamePhase.RUNNING && steps < (10f / STEP).toInt()) {
+        simulateStep(STEP)
+        steps++
+    }
+    check(done()) { "the condition never held" }
 }

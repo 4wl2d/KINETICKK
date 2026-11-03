@@ -11,22 +11,18 @@ import kotlin.test.assertTrue
 
 class CoreStasisTuningTest {
     @Test
-    fun coreStasisTuningShipsTheDecidedValues() {
+    fun coreFreezeShipsTheDecidedValues() {
         val shipped = CoreStasisTuning()
         assertTrue(shipped.enabled)
         assertTrue(shipped.applyEffects)
-        assertEquals(240f, shipped.anchorRadius)
-        assertEquals(120f, shipped.stillSpeed)
-        assertEquals(30f, shipped.travelSpeed)
-        assertEquals(1.5f, shipped.speedEmaSeconds)
-        assertEquals(4f, shipped.decayRate)
-        assertEquals(10f, shipped.graceSeconds)
-        assertEquals(12f, shipped.rampSeconds)
-        assertEquals(22f, shipped.fullStasisSeconds)
-        assertEquals(0.65f, shipped.maxWeaponSlow)
-        assertEquals(6f, shipped.fractureDelaySeconds)
-        assertEquals(0.05f, shipped.fractureShare)
-        assertEquals(1.5f, shipped.fractureTickSeconds)
+        assertEquals(100f, shipped.freezeSpeed, "the HUD's 100")
+        assertEquals(125f, shipped.thawSpeed)
+        assertEquals(0.30f, shipped.speedFilterSeconds)
+        assertEquals(4.2f, shipped.freezeSeconds)
+        assertEquals(3f, shipped.thawSeconds)
+        assertEquals(1.5f, shipped.runStartHoldSeconds)
+        assertEquals(0.6f, shipped.choiceHoldSeconds)
+        assertEquals(1f, shipped.layerSwitchHoldSeconds)
         assertFalse(CoreStasisTuning.DISABLED.enabled)
         assertEquals(shipped.copy(enabled = false), CoreStasisTuning.DISABLED)
         assertTrue(CoreStasisTuning.MEASURE_ONLY.enabled)
@@ -36,20 +32,17 @@ class CoreStasisTuningTest {
     }
 
     @Test
-    fun coreStasisTuningAcceptsItsBoundsAndRejectsTheNextValue() {
+    fun coreFreezeTuningAcceptsItsBoundsAndRejectsTheNextValue() {
         // field to (accepted bounds, rejected next values)
         val cases: List<Triple<String, List<Float>, (Float) -> CoreStasisTuning>> = listOf(
-            Triple("anchorRadius", listOf(60f, 1_200f, 59.9f, 1_200.1f)) { CoreStasisTuning(anchorRadius = it) },
-            Triple("stillSpeed", listOf(20f, 1_000f, 19.9f, 1_000.1f)) { CoreStasisTuning(stillSpeed = it, travelSpeed = 0f) },
-            Triple("travelSpeed", listOf(0f, 119.9f, -0.01f, 120f)) { CoreStasisTuning(travelSpeed = it) },
-            Triple("speedEmaSeconds", listOf(0.1f, 10f, 0.099f, 10.01f)) { CoreStasisTuning(speedEmaSeconds = it) },
-            Triple("decayRate", listOf(1f, 20f, 0.99f, 20.01f)) { CoreStasisTuning(decayRate = it) },
-            Triple("graceSeconds", listOf(1f, 120f, 0.99f, 120.01f)) { CoreStasisTuning(graceSeconds = it) },
-            Triple("rampSeconds", listOf(0.5f, 120f, 0.49f, 120.01f)) { CoreStasisTuning(rampSeconds = it) },
-            Triple("maxWeaponSlow", listOf(0f, 0.9f, -0.01f, 0.91f)) { CoreStasisTuning(maxWeaponSlow = it) },
-            Triple("fractureDelaySeconds", listOf(0f, 60f, -0.01f, 60.01f)) { CoreStasisTuning(fractureDelaySeconds = it) },
-            Triple("fractureShare", listOf(0f, 0.5f, -0.01f, 0.51f)) { CoreStasisTuning(fractureShare = it) },
-            Triple("fractureTickSeconds", listOf(0.1f, 10f, 0.099f, 10.01f)) { CoreStasisTuning(fractureTickSeconds = it) },
+            Triple("freezeSpeed", listOf(20f, 1_000f, 19.9f, 1_000.1f)) { CoreStasisTuning(freezeSpeed = it, thawSpeed = 1_000f) },
+            Triple("thawSpeed", listOf(100f, 1_500f, 99.9f, 1_500.1f)) { CoreStasisTuning(thawSpeed = it) },
+            Triple("speedFilterSeconds", listOf(0.02f, 5f, 0.019f, 5.01f)) { CoreStasisTuning(speedFilterSeconds = it) },
+            Triple("freezeSeconds", listOf(0.5f, 60f, 0.49f, 60.01f)) { CoreStasisTuning(freezeSeconds = it) },
+            Triple("thawSeconds", listOf(0.5f, 60f, 0.49f, 60.01f)) { CoreStasisTuning(thawSeconds = it) },
+            Triple("runStartHoldSeconds", listOf(0f, 10f, -0.01f, 10.01f)) { CoreStasisTuning(runStartHoldSeconds = it) },
+            Triple("choiceHoldSeconds", listOf(0f, 10f, -0.01f, 10.01f)) { CoreStasisTuning(choiceHoldSeconds = it) },
+            Triple("layerSwitchHoldSeconds", listOf(0f, 10f, -0.01f, 10.01f)) { CoreStasisTuning(layerSwitchHoldSeconds = it) },
         )
         cases.forEach { (name, values, build) ->
             build(values[0])
@@ -59,8 +52,18 @@ class CoreStasisTuningTest {
             assertFailsWith<IllegalArgumentException>("$name NaN") { build(Float.NaN) }
             assertFailsWith<IllegalArgumentException>("$name infinity") { build(Float.POSITIVE_INFINITY) }
         }
-        // The travel floor must stay below the still speed it qualifies.
-        assertFailsWith<IllegalArgumentException> { CoreStasisTuning(stillSpeed = 40f, travelSpeed = 40f) }
-        CoreStasisTuning(stillSpeed = 20f, travelSpeed = 19.9f)
+        // The thaw speed is the top of the hold band, never below the freeze speed it releases.
+        assertFailsWith<IllegalArgumentException> { CoreStasisTuning(freezeSpeed = 130f, thawSpeed = 125f) }
+        CoreStasisTuning(freezeSpeed = 125f, thawSpeed = 125f)
+    }
+
+    /** The collapsing orbit never asks for a pace at which the Core cannot thaw (the snapshot refuses it). */
+    @Test
+    fun theCollapsingOrbitPaceStaysAboveTheThawSpeed() {
+        val windows = SiteWindowPolicy()
+        assertEquals(140f, windows.orbitMinimumSpeed)
+        assertTrue(windows.orbitMinimumSpeed > CoreStasisTuning().thawSpeed)
+        assertFailsWith<IllegalArgumentException> { SiteWindowPolicy(orbitMinimumSpeed = -1f) }
+        assertFailsWith<IllegalArgumentException> { SiteWindowPolicy(orbitMinimumSpeed = Float.NaN) }
     }
 }

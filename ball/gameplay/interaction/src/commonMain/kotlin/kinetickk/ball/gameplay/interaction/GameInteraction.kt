@@ -259,6 +259,13 @@ private fun GameplayHostEffects(
     SideEffect(component, inputEnabled, phase) {
         if (inputEnabled) host.focusRequester.requestFocus()
     }
+    // A session workflow landing takes the player's input while frames still run: the run is told, so Core Freeze
+    // holds. Nothing is sent while input stays available (the run's default); a held state is resent on each phase.
+    LaunchedEffect(component, inputEnabled, phase) {
+        if (inputEnabled && !host.inputHeldReported) return@LaunchedEffect
+        host.inputHeldReported = !inputEnabled
+        pulses.dispatch(GameplayInteractionPulse.InputAvailabilityChanged(available = inputEnabled))
+    }
 
     // The frame limit paces the loop; the fixed-step simulation plays the same at any frame rate.
     val frameRateCap = LocalKkFrameRateCap.current

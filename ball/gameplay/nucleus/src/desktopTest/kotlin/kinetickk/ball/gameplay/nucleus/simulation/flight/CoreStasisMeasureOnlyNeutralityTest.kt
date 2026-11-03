@@ -16,9 +16,9 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /**
- * Measure-only Core Stasis cannot bias a probe: the reference NoPoi run (seed 2026) flown for 300 s with the system
- * off and in measure-only mode ends in the same state and the same render facts once the measured run's four detector
- * fields are copied over (its frozen and fracture clocks never move).
+ * Measure-only Core Freeze cannot bias a probe: the reference NoPoi run (seed 2026) flown for 300 s with the system off
+ * and in measure-only mode ends in the same state and the same render facts once the measured run's filtered speed and
+ * freeze are copied over (its hold has run out and the host input never changed).
  */
 class CoreStasisMeasureOnlyNeutralityTest {
     @Test
@@ -26,14 +26,11 @@ class CoreStasisMeasureOnlyNeutralityTest {
         val disabled = fly(canonicalGameplayContent.copy(coreStasis = CoreStasisTuning.DISABLED))
         val measured = fly(canonicalGameplayContent.copy(coreStasis = CoreStasisTuning.MEASURE_ONLY))
         assertEquals(GamePhase.RUNNING, measured.phase)
-        assertTrue(measured.coreStasis.speedEma > 0f, "the detector measured the flight")
-        assertEquals(0f, measured.coreStasis.frozenSeconds)
-        assertEquals(0f, measured.coreStasis.fractureClock)
+        assertTrue(measured.coreStasis.speedFilter > 0f, "the detector measured the flight")
+        assertEquals(0f, measured.coreStasis.holdSeconds)
         assertNotEquals(canonicalStateFingerprint(measured), canonicalStateFingerprint(disabled), "the detector fields are witnessed")
-        disabled.coreStasis.anchorX = measured.coreStasis.anchorX
-        disabled.coreStasis.anchorY = measured.coreStasis.anchorY
-        disabled.coreStasis.speedEma = measured.coreStasis.speedEma
-        disabled.coreStasis.stillSeconds = measured.coreStasis.stillSeconds
+        disabled.coreStasis.speedFilter = measured.coreStasis.speedFilter
+        disabled.coreStasis.freeze = measured.coreStasis.freeze
         assertEquals(canonicalStateFingerprint(measured), canonicalStateFingerprint(disabled))
         // The render facts minus the content snapshot itself (its Core Stasis tuning is what differs).
         fun facts(state: MutableGameState) = exactRenderValueFacts(state.toRenderModel()).filter { it.first != "content" }

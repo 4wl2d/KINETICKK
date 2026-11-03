@@ -110,7 +110,7 @@ internal fun MutableGameState.toRenderModel(
         combatFields = combatFieldProjection(reusableCollections?.combatFields, identitySource?.combatFieldTable),
         coreState = coreStateProjection(reusableCollections?.coreState),
         coreStraightness = coreStraightness, easyMode = easyMode,
-        coreStasis = coreStasisLevel(), coreStasisFracturing = coreStasisFracturing(),
+        coreStasis = coreStasisLevel(), coreStasisMotion = coreStasisMotion(),
         ambientSites = ambientSiteProjections(reusableCollections?.ambientSites, identitySource),
         trial = trialProjection(reusableCollections?.trial),
         secretFlags = runSecretFlags, goldenDrifterId = goldenDrifterId,

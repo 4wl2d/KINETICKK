@@ -3,6 +3,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation.flight
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.CoreStasisNotices
 import kinetickk.ball.content.api.CoreStasisTuning
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
@@ -13,6 +14,7 @@ import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import java.util.concurrent.Callable
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.ceil
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -21,22 +23,23 @@ import kinetickk.ball.gameplay.nucleus.simulation.characters.*
 import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
 
 /**
- * The Core Stasis bot probe (decision G5, spec §13): plays the reference bots in measure-only mode (gameplay identical
- * to Core Stasis off) and prints the largest still clock each run reaches, so the lead can confirm that no gate run
- * comes near the grace. Runs only when `KK_STASIS_PROBE` is set:
+ * The Core Freeze bot probe (decision D5): plays the reference bots and prints, per run, the peak freeze, the longest
+ * spell under the freeze speed (raw and filtered) and whether the run ended frozen, so the lead can confirm that normal
+ * bot play never freezes. Runs only when `KK_STASIS_PROBE` is set:
  * - `KK_STASIS_PROBE=gates` mirrors the gate populations exactly (confirmation only, never tuned on);
- *   `KK_STASIS_PROBE=first..last` flies the same arms on calibration window seeds `i * 7_919 + 13` (thresholds are
+ *   `KK_STASIS_PROBE=first..last` flies the same arms on calibration window seeds `i * 7_919 + 13` (bot rules are
  *   chosen on 2,501..2,800).
  * - `KK_STASIS_BOTS` picks populations (comma list of NOPOI, SITE, DUNGEON, DIMENSION, APEX; all by default).
  * - `KK_STASIS_RUNS` caps the seeds per population (quick looks).
- * - `KK_STASIS_KNOBS` overrides detector knobs (`anchorRadius=…,stillSpeed=…,travelSpeed=…,speedEmaSeconds=…,
- *   decayRate=…,graceSeconds=…`); `;` separates sets that run one after another.
+ * - `KK_STASIS_LETHAL=1` plays the shipped rule (a full freeze ends the run); by default the probe measures only, so
+ *   the gameplay is identical to Core Freeze off and a peak of 1 marks a run that would have frozen.
+ * - `KK_STASIS_KNOBS` overrides knobs (`freezeSpeed=…,thawSpeed=…,speedFilterSeconds=…,freezeSeconds=…,
+ *   thawSeconds=…`); `;` separates sets that run one after another.
  * - `KK_STASIS_APEX_BENEFIT=1` also plays the Apex benefit population (heavy).
- * - `KK_STASIS_PROBE_ASSERT=1` fails a `gates` run in which any run crosses the grace.
+ * - `KK_STASIS_PROBE_ASSERT=1` fails a `gates` run in which any run froze (or would have).
  *
- * The ramp is raised to 120 s so stills far past the shipped full stasis stay visible. Sampling is per input frame
- * (0.02 s). One command per mode; `--rerun` makes Gradle run the test again with new variables, and the lines land in
- * the suite's JUnit XML (`build/test-results/desktopTest/TEST-…CoreStasisBotProbeTest.xml`):
+ * Sampling is per input frame (0.02 s). One command per mode; `--rerun` makes Gradle run the test again with new
+ * variables, and the lines land in the suite's JUnit XML (`build/test-results/desktopTest/TEST-…CoreStasisBotProbeTest.xml`):
  *
  * `KK_STASIS_PROBE=2501..2800 ./gradlew -Pkinetickk.variant=release :ball:gameplay:nucleus:desktopTest --tests
  * 'kinetickk.ball.gameplay.nucleus.simulation.flight.CoreStasisBotProbeTest' --rerun`, then the same with
@@ -44,7 +47,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
  */
 class CoreStasisBotProbeTest {
     @Test
-    fun printsTheLargestStillClockOfEveryBotRun() {
+    fun printsThePeakFreezeOfEveryBotRun() {
         val mode = env("KK_STASIS_PROBE") ?: return
         val gates = mode == "gates"
         val window = if (gates) null else probeWindow(mode, defaultLength = 300)
@@ -52,10 +55,12 @@ class CoreStasisBotProbeTest {
             ?: listOf("NOPOI", "SITE", "DUNGEON", "DIMENSION", "APEX")
         val cap = env("KK_STASIS_RUNS")?.toInt()
         val benefit = env("KK_STASIS_APEX_BENEFIT") == "1"
+        val lethal = env("KK_STASIS_LETHAL") == "1"
         for (knobs in env("KK_STASIS_KNOBS").orEmpty().split(';')) {
-            val tuning = probeTuning(knobs)
-            val probe = StasisProbe(canonicalGameplayContent.copy(coreStasis = tuning), tuning.graceSeconds, window, cap)
-            println("STASIS-PROBE mode=${window ?: "gates"} knobs='$knobs' grace=${tuning.graceSeconds} cap=${tuning.fullStasisSeconds}")
+            val tuning = probeTuning(knobs, lethal)
+            val probe = StasisProbe(canonicalGameplayContent.copy(coreStasis = tuning), tuning.freezeSpeed, window, cap)
+            println("STASIS-PROBE mode=${window ?: "gates"} knobs='$knobs' lethal=$lethal freezeSpeed=${tuning.freezeSpeed} " +
+                "thawSpeed=${tuning.thawSpeed} freezeSeconds=${tuning.freezeSeconds}")
             for (bot in bots) when (bot) {
                 "NOPOI" -> probe.noPoi()
                 "SITE" -> probe.sites()
@@ -64,41 +69,40 @@ class CoreStasisBotProbeTest {
                 "APEX" -> probe.apex(benefit)
                 else -> error("unknown bot $bot")
             }
-            println("STASIS-PROBE VERDICT knobs='$knobs' overGrace=${probe.overGrace} (pass when 0)")
-            if (gates && env("KK_STASIS_PROBE_ASSERT") == "1") assertEquals(0, probe.overGrace, "gate runs crossed the grace")
+            println("STASIS-PROBE VERDICT knobs='$knobs' lethal=$lethal frozen=${probe.frozen} (pass when 0)")
+            if (gates && env("KK_STASIS_PROBE_ASSERT") == "1") assertEquals(0, probe.frozen, "gate runs froze")
         }
     }
 }
 
 private fun env(name: String): String? = System.getenv(name)?.trim()?.takeIf { it.isNotEmpty() }
 
-/** Measure-only shipped thresholds with a 120 s ramp, overridden by [knobs] (`name=value`, comma-separated). */
-private fun probeTuning(knobs: String): CoreStasisTuning {
-    var tuning = CoreStasisTuning(applyEffects = false, rampSeconds = 120f)
+/** The shipped rule, measure-only unless [lethal], overridden by [knobs] (`name=value`, comma-separated). */
+private fun probeTuning(knobs: String, lethal: Boolean): CoreStasisTuning {
+    var tuning = CoreStasisTuning(applyEffects = lethal)
     for (pair in knobs.split(',').map { it.trim() }.filter { it.isNotEmpty() }) {
         val (name, text) = pair.split('=').map { it.trim() }
         val value = text.toFloat()
         tuning = when (name) {
-            "anchorRadius" -> tuning.copy(anchorRadius = value)
-            "stillSpeed" -> tuning.copy(stillSpeed = value)
-            "travelSpeed" -> tuning.copy(travelSpeed = value)
-            "speedEmaSeconds" -> tuning.copy(speedEmaSeconds = value)
-            "decayRate" -> tuning.copy(decayRate = value)
-            "graceSeconds" -> tuning.copy(graceSeconds = value)
-            else -> error("unknown Core Stasis knob $name")
+            "freezeSpeed" -> tuning.copy(freezeSpeed = value)
+            "thawSpeed" -> tuning.copy(thawSpeed = value)
+            "speedFilterSeconds" -> tuning.copy(speedFilterSeconds = value)
+            "freezeSeconds" -> tuning.copy(freezeSeconds = value)
+            "thawSeconds" -> tuning.copy(thawSeconds = value)
+            else -> error("unknown Core Freeze knob $name")
         }
     }
     return tuning
 }
 
-/** The populations of one knob set: each run gets its own [StasisTrack]; [overGrace] counts runs past the grace. */
+/** The populations of one knob set: each run gets its own [StasisTrack]; [frozen] counts runs that froze (or would). */
 private class StasisProbe(
     val content: GameplayContentSnapshot,
-    val grace: Float,
+    val freezeSpeed: Float,
     val window: IntRange?,
     val cap: Int?,
 ) {
-    var overGrace = 0
+    var frozen = 0
         private set
 
     private fun seeds(gateSeeds: List<Int>): List<Int> {
@@ -106,18 +110,25 @@ private class StasisProbe(
         return if (cap != null) all.take(cap) else all
     }
 
-    private fun track(population: String, seed: Int, case: String = ""): StasisTrack = StasisTrack(population, seed, grace, case)
+    private fun track(population: String, seed: Int, case: String = ""): StasisTrack = StasisTrack(population, seed, freezeSpeed, case)
 
     private fun report(population: String, tracks: List<StasisTrack>) {
         tracks.forEach { println(it.line()) }
-        val sorted = tracks.map { it.maxStill }.sorted()
-        fun quantile(q: Double): Float = if (sorted.isEmpty()) 0f else sorted[min(sorted.lastIndex, ceil(q * sorted.size).toInt() - 1).coerceAtLeast(0)]
-        val over = tracks.count { it.maxStill >= grace }
-        overGrace += over
-        val worst = tracks.sortedByDescending { it.maxStill }.take(5).joinToString(",") { "${it.seed}${it.caseTag}:${"%.2f".format(it.maxStill)}" }
-        println("STASIS-PROBE SUMMARY $population runs=${tracks.size} max=${"%.2f".format(sorted.lastOrNull() ?: 0f)} " +
-            "p99=${"%.2f".format(quantile(0.99))} p95=${"%.2f".format(quantile(0.95))} median=${"%.2f".format(quantile(0.5))} " +
-            "overGrace=$over/${tracks.size} overHalfGrace=${tracks.count { it.maxStill >= grace * 0.5f }}/${tracks.size} worst=$worst")
+        fun quantile(values: List<Float>, q: Double): Float {
+            val sorted = values.sorted()
+            return if (sorted.isEmpty()) 0f else sorted[min(sorted.lastIndex, ceil(q * sorted.size).toInt() - 1).coerceAtLeast(0)]
+        }
+        val peaks = tracks.map { it.peakFreeze }
+        val slow = tracks.map { it.longestSlow }
+        val froze = tracks.count { it.froze }
+        frozen += froze
+        val worst = tracks.sortedByDescending { it.peakFreeze }.take(5).joinToString(",") { "${it.seed}${it.caseTag}:${"%.2f".format(it.peakFreeze)}" }
+        println("STASIS-PROBE SUMMARY $population runs=${tracks.size} frozen=$froze/${tracks.size} " +
+            "peak max=${"%.2f".format(peaks.maxOrNull() ?: 0f)} p99=${"%.2f".format(quantile(peaks, 0.99))} " +
+            "p95=${"%.2f".format(quantile(peaks, 0.95))} median=${"%.2f".format(quantile(peaks, 0.5))} " +
+            "over0.5=${peaks.count { it >= 0.5f }} slow max=${"%.2f".format(slow.maxOrNull() ?: 0f)}s " +
+            "p99=${"%.2f".format(quantile(slow, 0.99))}s median=${"%.2f".format(quantile(slow, 0.5))}s " +
+            "filteredSlow max=${"%.2f".format(tracks.maxOfOrNull { it.longestFilteredSlow } ?: 0f)}s worst=$worst")
     }
 
     /** NoPoiPlaythroughTest's population: the reference seed and [PopulationSeeds]. */
@@ -246,40 +257,58 @@ private class StasisProbe(
     }
 }
 
-/** One run's still clock: its largest value and when, time above 5 s, grace crossings and where the peak happened. */
-private class StasisTrack(val population: String, val seed: Int, private val grace: Float, private val case: String) {
-    var maxStill = 0f
+/**
+ * One run under Core Freeze: its peak freeze and where it happened, the longest spells with the raw and the filtered
+ * speed under the freeze speed, and whether it ended frozen (lethal) or reached a full freeze (measure-only).
+ */
+private class StasisTrack(val population: String, val seed: Int, private val freezeSpeed: Float, private val case: String) {
+    var peakFreeze = 0f
+        private set
+    var longestSlow = 0f
+        private set
+    var longestFilteredSlow = 0f
+        private set
+    var froze = false
         private set
     /** The case compactly (`/RING/10`), for the summary's worst list. */
     val caseTag: String get() = case.split(' ').filter { it.startsWith("shape=") || it.startsWith("tier=") }
         .joinToString("") { "/" + it.substringAfter('=') }
-    private var maxAt = 0f
-    private var above5 = 0f
-    private var crossings = 0
+    private var peakAt = 0f
+    private var slowSince = Float.NaN
+    private var filteredSince = Float.NaN
     private var context = ""
-    private var lastElapsed = Float.NaN
-    private var wasOverGrace = false
     private var endPhase = GamePhase.RUNNING
     private var endAt = 0f
 
     fun observe(s: MutableGameState) {
-        val still = s.coreStasis.stillSeconds
-        if (!lastElapsed.isNaN() && still > 5f) above5 += s.elapsed - lastElapsed
-        lastElapsed = s.elapsed
-        if (still >= grace && !wasOverGrace) crossings++
-        wasOverGrace = still >= grace
         endPhase = s.phase
         endAt = s.elapsed
-        if (still > maxStill) {
-            maxStill = still
-            maxAt = s.elapsed
+        val stasis = s.coreStasis
+        if (s.phase == GamePhase.GAME_OVER && s.message == CoreStasisNotices.FROZEN) froze = true
+        if (s.phase == GamePhase.RUNNING) {
+            slowSince = spell(s.speed < freezeSpeed, slowSince, s.elapsed) { longestSlow = max(longestSlow, it) }
+            filteredSince = spell(stasis.speedFilter < freezeSpeed, filteredSince, s.elapsed) { longestFilteredSlow = max(longestFilteredSlow, it) }
+        }
+        if (stasis.freeze >= 1f) froze = true
+        if (stasis.freeze > peakFreeze) {
+            peakFreeze = stasis.freeze
+            peakAt = s.elapsed
             context = "layer=${s.worldLayer} sealed=${s.structureEngagementActive()} site=${s.activeWindowSite()?.kind} " +
                 "boss=${s.enemies.any { it.alive && it.isBossClass }} architect=${s.liveArchitect() != null} " +
-                "braking=${s.braking} speed=${s.speed.toInt()} ema=${s.coreStasis.speedEma.toInt()} " +
+                "braking=${s.braking} speed=${s.speed.toInt()} filtered=${stasis.speedFilter.toInt()} " +
                 "core=${s.coreX.toInt()},${s.coreY.toInt()}"
         }
     }
 
-    fun line(): String = "STASIS-PROBE $population seed=$seed$case end=$endPhase@${"%.1f".format(endAt)}s maxStill=${"%.2f".format(maxStill)} " +
-        "at=${"%.1f".format(maxAt)}s above5=${"%.1f".format(above5)} crossings=$crossings $context"
+    /** The start of the running spell after this frame ([slow] or not), reporting each spell's length so far. */
+    private inline fun spell(slow: Boolean, since: Float, now: Float, report: (Float) -> Unit): Float {
+        if (!slow) return Float.NaN
+        val start = if (since.isNaN()) now else since
+        report(now - start)
+        return start
+    }
+
+    fun line(): String = "STASIS-PROBE $population seed=$seed$case end=$endPhase@${"%.1f".format(endAt)}s froze=$froze " +
+        "peak=${"%.2f".format(peakFreeze)} at=${"%.1f".format(peakAt)}s slow=${"%.2f".format(longestSlow)}s " +
+        "filteredSlow=${"%.2f".format(longestFilteredSlow)}s $context"
 }

@@ -8,6 +8,7 @@ import kinetickk.ball.content.api.ObstacleMix
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kinetickk.ball.gameplay.nucleus.simulation.*
+import kinetickk.ball.gameplay.nucleus.simulation.flight.holdCoreStasis
 import kinetickk.ball.gameplay.nucleus.simulation.sites.*
 import kinetickk.ball.gameplay.nucleus.simulation.structures.*
 import kinetickk.ball.gameplay.nucleus.simulation.variety.*
@@ -76,6 +77,7 @@ internal fun MutableGameState.inBaseLayer(): Boolean = worldLayer == WorldLayer.
 
 /** Clears layer-bound sites, structures and world events after a layer switch. */
 internal fun MutableGameState.onWorldLayerChanged() {
+    holdCoreStasis(content.coreStasis.layerSwitchHoldSeconds)
     clearSitesForLayerChange()
     collapseDungeonForLayerChange()
     endWorldEventForLayerChange()
