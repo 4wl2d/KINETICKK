@@ -53,13 +53,19 @@ class TotemChestEconomyProbeTest {
             ?.map { Arm.valueOf(it.uppercase()) } ?: Arm.entries
         val reach = System.getenv("KK_CHEST_REACH")?.trim()?.takeIf { it.isNotEmpty() }?.toFloat()
             ?: canonicalGameplayContent.structures.signalRange
+        // Without chests the knobs change nothing a run reads, so each arm's no-chest runs fly once for every knob set.
+        val none = canonicalGameplayContent.copy(
+            structures = canonicalGameplayContent.structures.copy(totemChest = TotemChestPolicy(enabled = false)),
+        )
+        val withoutChests = arms.associateWith { arm ->
+            windows.map { window -> populationOf(windowSeeds(window)) { seed -> flyChestCampaign(seed, arm, none, reach) } }
+        }
         for (knobs in System.getenv("KK_CHEST_KNOBS").orEmpty().split(';')) {
             val chests = chestContent(knobs)
-            val none = chests.copy(structures = chests.structures.copy(totemChest = TotemChestPolicy(enabled = false)))
             println("CHEST PROBE windows=$windows knobs='$knobs' reach=$reach ${chestContentLine(chests)}")
             for (arm in arms) {
-                val byWindow = windows.map { window ->
-                    populationOf(windowSeeds(window)) { seed -> ChestPair(flyChestCampaign(seed, arm, chests, reach), flyChestCampaign(seed, arm, none, reach)) }
+                val byWindow = withoutChests.getValue(arm).map { offRuns ->
+                    populationOf(offRuns) { off -> ChestPair(flyChestCampaign(off.seed, arm, chests, reach), off) }
                 }
                 byWindow.flatten().forEach { println("CHEST PROBE $arm ON ${it.on.line()}\nCHEST PROBE $arm OFF ${it.off.line()}") }
                 windows.forEachIndexed { index, window -> printSummary("$arm window=$window", byWindow[index]) }
