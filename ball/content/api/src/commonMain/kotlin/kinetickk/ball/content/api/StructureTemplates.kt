@@ -46,7 +46,7 @@ private fun derelictStation() = StructureTemplate(
     element = StatusElement.ION,
     trialDescription = "Ion trial: shooters and lancers turn the station's long halls into firing lanes. Cross their aim to close the distance.",
     garrisonTypes = immutableListOf(SHOOTER, LANCER),
-    totemChestChance = 0.5f,
+    totemChestChance = 0.4f,
     rooms = immutableListOf(
         room(-1100, -300, -500, 300, habitat(3)), // 0 Airlock (entrance)
         room(-500, -700, 400, 700, habitat(4), fixed(SENTRY, 2, WALL)), // 1 Hall
@@ -76,7 +76,7 @@ private fun vault() = StructureTemplate(
     element = StatusElement.CRYO,
     trialDescription = "Cryo trial: weavers and snipers cover the galleries. Clear both wings before confronting the brood guardian.",
     garrisonTypes = immutableListOf(WEAVER, SNIPER),
-    totemChestChance = 0.8f,
+    totemChestChance = 0.7f,
     totemChestMinCharges = 2,
     rooms = immutableListOf(
         room(-400, 300, 400, 1100, habitat(3)), // 0 Antechamber (entrance)
@@ -105,7 +105,7 @@ private fun spire() = StructureTemplate(
     element = StatusElement.SONIC,
     trialDescription = "Sonic trial: choirs fill narrow halls with radial pulses and pushback. Use the fins to break their lines of fire.",
     garrisonTypes = immutableListOf(CHOIR),
-    totemChestChance = 0.5f,
+    totemChestChance = 0.4f,
     rooms = immutableListOf(
         room(-500, 600, 500, 1200, habitat(4)), // 0 Base (entrance)
         room(-500, 0, 500, 600, fixed(CHOIR, 2, WALL), habitat(2)), // 1 Lower hall
@@ -139,7 +139,7 @@ private fun labyrinth() = StructureTemplate(
     element = StatusElement.ENTROPY,
     trialDescription = "Entropy trial: crawlers pursue through the maze while minelayers deny corners. Leave room to turn before entering a side chamber.",
     garrisonTypes = immutableListOf(CRAWLER, MINELAYER),
-    totemChestChance = 0.6f,
+    totemChestChance = 0.5f,
     rooms = immutableListOf(
         room(-1050, -1050, -350, -350, habitat(2), fixed(SENTRY, 1, WALL)), // 0 NW
         room(-350, -1050, 350, -350, fixed(CRAWLER, 4)), // 1 N
@@ -176,7 +176,7 @@ private fun foundry() = StructureTemplate(
     element = StatusElement.THERMAL,
     trialDescription = "Thermal trial: sentry volleys and exploding bombers pressure the smelting halls. Pillars offer cover before the furnace fight.",
     garrisonTypes = immutableListOf(SENTRY, BOMBER),
-    totemChestChance = 0.6f,
+    totemChestChance = 0.5f,
     rooms = immutableListOf(
         room(-1200, -800, -100, 800, habitat(6)), // 0 West hall (entrance)
         room(-100, -800, 700, 800, habitat(4), fixed(SENTRY, 2, WALL)), // 1 East hall

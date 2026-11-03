@@ -21,11 +21,11 @@ class TotemChestContentTest {
         val chances = StructureTemplateId.entries.associateWith { id -> templates[id.ordinal].totemChestChance }
         assertEquals(
             mapOf(
-                StructureTemplateId.DERELICT_STATION to 0.5f,
-                StructureTemplateId.VAULT to 0.8f,
-                StructureTemplateId.SPIRE to 0.5f,
-                StructureTemplateId.LABYRINTH to 0.6f,
-                StructureTemplateId.FOUNDRY to 0.6f,
+                StructureTemplateId.DERELICT_STATION to 0.4f,
+                StructureTemplateId.VAULT to 0.7f,
+                StructureTemplateId.SPIRE to 0.4f,
+                StructureTemplateId.LABYRINTH to 0.5f,
+                StructureTemplateId.FOUNDRY to 0.5f,
                 StructureTemplateId.RELIQUARY to 1f,
                 StructureTemplateId.ARCHITECTS_DOODLE to 0f,
             ),
