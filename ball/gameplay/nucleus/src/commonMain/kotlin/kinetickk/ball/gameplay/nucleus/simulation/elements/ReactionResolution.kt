@@ -118,6 +118,20 @@ internal fun MutableGameState.resolveReaction(
     if (build.reactionRecoil > 0f && distanceSquared(x, y, coreX, coreY) <= square(build.reactionRecoilRadius)) {
         takeDamage(build.reactionRecoil * selfDamageScale(), ignoreReduction = false, kind = IncomingDamage.SELF)
     }
+    val announced = discoverReaction(reaction, definition, echo)
+    if (generation >= 1) flags = flags or ReactionCueFlags.CASCADE
+    if (echo) flags = flags or ReactionCueFlags.ECHO
+    recordStatusCue(VisualFxCue.ReactionTriggered(x, y, reaction.ordinal, max(radius, enemy.radius * 2f), announced,
+        direction = direction, flags = flags))
+    if (!echo) {
+        onReaction(enemy, reaction)
+        // Catalysis: the reaction recharges the skills of its elements.
+        catalyze(older, incoming)
+    }
+}
+
+/** Marks [reaction] discovered on its first resolution that is not an [echo]; returns true when that is announced. */
+private fun MutableGameState.discoverReaction(reaction: ReactionId, definition: ReactionDefinition, echo: Boolean): Boolean {
     val bit = 1 shl reaction.ordinal
     val first = !echo && discoveredReactionMask and bit == 0
     val announced = first && announcesDiscoveries
@@ -128,15 +142,7 @@ internal fun MutableGameState.resolveReaction(
     if (announced) {
         emitVisualFx(VisualFxCue.BuildChanged("REACTION DISCOVERED", kinetickk.foundation.collections.immutableListOf("+ " + definition.name)))
     }
-    if (generation >= 1) flags = flags or ReactionCueFlags.CASCADE
-    if (echo) flags = flags or ReactionCueFlags.ECHO
-    recordStatusCue(VisualFxCue.ReactionTriggered(x, y, reaction.ordinal, max(radius, enemy.radius * 2f), announced,
-        direction = direction, flags = flags))
-    if (!echo) {
-        onReaction(enemy, reaction)
-        // Catalysis: the reaction recharges the skills of its elements.
-        catalyze(older, incoming)
-    }
+    return announced
 }
 
 private fun MutableGameState.resolveThermalShock(
