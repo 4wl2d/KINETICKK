@@ -77,11 +77,12 @@ import kotlin.test.assertTrue
 class GameplayPerformanceBenchmarkTest {
     @Test
     fun releaseWorkloadRetainsAllScenariosAndValidatesDeterministicOutcomes() {
-        assertEquals("gameplay-core-v5", GAMEPLAY_BENCHMARK_SUITE_VERSION)
+        assertEquals("gameplay-core-v6", GAMEPLAY_BENCHMARK_SUITE_VERSION)
         val first = gameplayBenchmarkScenarios()
         val second = gameplayBenchmarkScenarios()
-        assertEquals(27, first.size)
+        assertEquals(30, first.size)
         assertTrue(first.any { it.name == "terrain_window" })
+        assertTrue(first.any { it.name == "tick_frame_60hz_idle" })
         assertEquals(first.map { it.name }.toSet().size, first.size)
         assertEquals(first.map { it.metadata }, second.map { it.metadata })
         first.forEach { validateBenchmarkScenario(it) }
