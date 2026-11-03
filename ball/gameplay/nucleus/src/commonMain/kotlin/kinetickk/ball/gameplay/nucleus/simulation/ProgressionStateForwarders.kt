@@ -303,3 +303,89 @@ internal var MutableGameState.totalMatter: Long
 internal var MutableGameState.lifetimeMatter: Long
     get() = runEconomy.lifetimeMatter
     set(value) { runEconomy.lifetimeMatter = value }
+
+// CoreStatsState
+
+internal var MutableGameState.mass: Float
+    get() = coreStats.mass
+    set(value) { coreStats.mass = value }
+
+internal var MutableGameState.damageMultiplier: Float
+    get() = coreStats.damageMultiplier
+    set(value) { coreStats.damageMultiplier = value }
+
+internal var MutableGameState.weaponPower: Float
+    get() = coreStats.weaponPower
+    set(value) { coreStats.weaponPower = value }
+
+internal var MutableGameState.coolingRate: Float
+    get() = coreStats.coolingRate
+    set(value) { coreStats.coolingRate = value }
+
+internal var MutableGameState.magnetStrength: Float
+    get() = coreStats.magnetStrength
+    set(value) { coreStats.magnetStrength = value }
+
+internal var MutableGameState.dashImpulse: Float
+    get() = coreStats.dashImpulse
+    set(value) { coreStats.dashImpulse = value }
+
+internal var MutableGameState.dashHeatCost: Float
+    get() = coreStats.dashHeatCost
+    set(value) { coreStats.dashHeatCost = value }
+
+internal var MutableGameState.regenPerSecond: Float
+    get() = coreStats.regenPerSecond
+    set(value) { coreStats.regenPerSecond = value }
+
+internal var MutableGameState.critChance: Float
+    get() = coreStats.critChance
+    set(value) { coreStats.critChance = value }
+
+internal var MutableGameState.critMultiplier: Float
+    get() = coreStats.critMultiplier
+    set(value) { coreStats.critMultiplier = value }
+
+internal var MutableGameState.pickupRadius: Float
+    get() = coreStats.pickupRadius
+    set(value) { coreStats.pickupRadius = value }
+
+internal var MutableGameState.luck: Float
+    get() = coreStats.luck
+    set(value) { coreStats.luck = value }
+
+internal var MutableGameState.dataGain: Float
+    get() = coreStats.dataGain
+    set(value) { coreStats.dataGain = value }
+
+internal var MutableGameState.matterGain: Float
+    get() = coreStats.matterGain
+    set(value) { coreStats.matterGain = value }
+
+internal var MutableGameState.attackSpeed: Float
+    get() = coreStats.attackSpeed
+    set(value) { coreStats.attackSpeed = value }
+
+internal var MutableGameState.damageReduction: Float
+    get() = coreStats.damageReduction
+    set(value) { coreStats.damageReduction = value }
+
+internal var MutableGameState.comboWindow: Float
+    get() = coreStats.comboWindow
+    set(value) { coreStats.comboWindow = value }
+
+internal var MutableGameState.overdriveGain: Float
+    get() = coreStats.overdriveGain
+    set(value) { coreStats.overdriveGain = value }
+
+internal var MutableGameState.dragCoefficient: Float
+    get() = coreStats.dragCoefficient
+    set(value) { coreStats.dragCoefficient = value }
+
+internal var MutableGameState.gripStrength: Float
+    get() = coreStats.gripStrength
+    set(value) { coreStats.gripStrength = value }
+
+internal var MutableGameState.slingStrength: Float
+    get() = coreStats.slingStrength
+    set(value) { coreStats.slingStrength = value }

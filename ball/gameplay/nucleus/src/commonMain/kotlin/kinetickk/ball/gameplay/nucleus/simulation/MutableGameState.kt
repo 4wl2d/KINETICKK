@@ -154,6 +154,9 @@ internal class MutableGameState(
         bootstrapProgress,
     )
 
+    /** Build stats. */
+    internal val coreStats: CoreStatsState = CoreStatsState(content, copySource?.coreStats)
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -460,47 +463,6 @@ internal class MutableGameState(
     var messageTime: Float = copySource?.messageTime ?: 0f
         internal set
 
-    var mass: Float = copySource?.mass ?: 1f
-        internal set
-    var damageMultiplier: Float = copySource?.damageMultiplier ?: 1f
-        internal set
-    var weaponPower: Float = copySource?.weaponPower ?: 1f
-        internal set
-    var coolingRate: Float = copySource?.coolingRate ?: 19f
-        internal set
-    var magnetStrength: Float = copySource?.magnetStrength ?: 4.65f
-        internal set
-    var dashImpulse: Float = copySource?.dashImpulse ?: 590f
-        internal set
-    var dashHeatCost: Float = copySource?.dashHeatCost ?: 36f
-        internal set
-    var regenPerSecond: Float = copySource?.regenPerSecond ?: 0f
-        internal set
-    var critChance: Float = copySource?.critChance ?: 0.05f
-        internal set
-    var critMultiplier: Float = copySource?.critMultiplier ?: 1.5f
-        internal set
-    var pickupRadius: Float = copySource?.pickupRadius ?: content.pickups.magnetRadius
-        internal set
-    var luck: Float = copySource?.luck ?: 0f
-        internal set
-    var dataGain: Float = copySource?.dataGain ?: 1f
-        internal set
-    var matterGain: Float = copySource?.matterGain ?: 1f
-        internal set
-    var attackSpeed: Float = copySource?.attackSpeed ?: 1f
-        internal set
-    var damageReduction: Float = copySource?.damageReduction ?: 0f
-        internal set
-    var comboWindow: Float = copySource?.comboWindow ?: 2.8f
-        internal set
-    var overdriveGain: Float = copySource?.overdriveGain ?: 1f
-        internal set
-    var dragCoefficient: Float = copySource?.dragCoefficient ?: 0.29f
-        internal set
-    /** The flight law's grip and sling build stats (raw; clamped where the law reads them). */
-    internal var gripStrength: Float = copySource?.gripStrength ?: 1f
-    internal var slingStrength: Float = copySource?.slingStrength ?: 1f
     var polarityStability: Float = copySource?.polarityStability ?: 1f
         internal set
 
