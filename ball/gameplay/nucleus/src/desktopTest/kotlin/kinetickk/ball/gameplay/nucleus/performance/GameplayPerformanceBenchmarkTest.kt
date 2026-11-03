@@ -30,6 +30,7 @@ import kinetickk.ball.gameplay.nucleus.model.AmbientSiteWindow
 import kinetickk.ball.gameplay.nucleus.model.DimensionRunState
 import kinetickk.ball.gameplay.nucleus.model.DimensionVisit
 import kinetickk.ball.gameplay.nucleus.model.DungeonState
+import kinetickk.ball.gameplay.nucleus.model.RoomFight
 import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
 import kinetickk.ball.gameplay.nucleus.model.SignalPrompt
 import kinetickk.ball.gameplay.nucleus.model.SiteState
@@ -326,6 +327,7 @@ class GameplayPerformanceBenchmarkTest {
                 emptyList(),
             ) },
             { dungeon = DungeonState(1L shl 63, StructureTemplateId.VAULT, 0, 900f, 0f) },
+            { dungeon = DungeonState(1L shl 63, StructureTemplateId.VAULT, 0, 900f, 0f, engagedRoom = 1, fight = RoomFight(1f, 2, landedMembers = 3)) },
             { spentStructureIds = listOf(1L) },
             { lastAnnouncedStructureId = 1L },
             { structures.totemChests = listOf(kinetickk.ball.gameplay.nucleus.model.TotemChest(1L, 1f, 2f, 2, 0f, 0f)) },

@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.StructurePolicy
 import kinetickk.ball.content.api.StructureTemplate
@@ -164,15 +165,35 @@ internal fun wallGapForTesting(x: Float, y: Float, wall: Wall): Float {
 
 /**
  * Kills every live enemy the dungeon's sealed room owns, as if the Core had destroyed them (kills, rewards and clauses
- * run); the next dungeon step clears the room.
+ * run); with [laterWaves] the room's waves still to come count as fought too, so the next dungeon step clears the room.
  */
-internal fun MutableGameState.killGarrisonForTesting() {
-    val dungeon = requireNotNull(dungeon) { "No dungeon" }
-    require(dungeon.engagedRoom >= 0) { "No sealed room" }
-    val tag = roomEncounterTag(dungeon.structureId, dungeon.engagedRoom)
+internal fun MutableGameState.killGarrisonForTesting(laterWaves: Boolean = true) {
+    val held = requireNotNull(dungeon) { "No dungeon" }
+    require(held.engagedRoom >= 0) { "No sealed room" }
+    val tag = roomEncounterTag(held.structureId, held.engagedRoom)
     enemies.filter { it.ownerTag == tag && it.alive }.forEach { enemy ->
         onEnemyKilled(enemy)
         enemies.remove(enemy)
+    }
+    val fight = held.fight ?: return
+    if (!laterWaves) return
+    dungeon = held.copy(
+        fight = fight.copy(landed = fight.waves, incomingAt = -1f, incoming = emptyList(), incomingPoints = emptyList(), incomingGuardian = -1),
+    )
+}
+
+/**
+ * Fights the sealed room up to its last wave (a final room's guardian wave): each time kills the landed wave as the Core
+ * would, lets the next one's telegraph run out (the run clock jumps to its landing) and lands it.
+ */
+internal fun MutableGameState.fightToLastWaveForTesting() {
+    repeat(ContentBounds.MAX_DUNGEON_WAVES) {
+        val fight = dungeon?.fight ?: return
+        if (fight.landed >= fight.waves) return
+        killGarrisonForTesting(laterWaves = false)
+        updateStructures(MutableGameState.FIXED_STEP)
+        elapsed = dungeon?.fight?.incomingAt?.takeIf { it >= 0f } ?: return
+        updateStructures(MutableGameState.FIXED_STEP)
     }
 }
 

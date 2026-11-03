@@ -83,8 +83,12 @@ object ContentBounds {
     const val MAX_STRUCTURE_DOORS: Int = 16
     /** Compiled capsule walls of one structure template. */
     const val MAX_STRUCTURE_TEMPLATE_WALLS: Int = 48
-    /** Enemies one structure room garrisons. */
+    /** Enemies one wave of a structure room garrisons. */
     const val MAX_STRUCTURE_GARRISON: Int = 12
+    /** Waves of one structure room's garrison. */
+    const val MAX_DUNGEON_WAVES: Int = 3
+    /** Hazards one sealed room telegraphs at once. */
+    const val MAX_DUNGEON_HAZARDS: Int = 4
     /** Largest side of a structure footprint. */
     const val MAX_STRUCTURE_FOOTPRINT: Float = 2_400f
     /** Thickest wall or free-standing capsule half thickness: how far a wall reaches past its footprint. */

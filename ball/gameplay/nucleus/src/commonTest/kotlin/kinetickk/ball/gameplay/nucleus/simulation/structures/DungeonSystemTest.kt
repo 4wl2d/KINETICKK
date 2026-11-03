@@ -96,14 +96,14 @@ class DungeonSystemTest {
         assertEquals(List(4) { open }, dungeon.doors())
         dungeon.enterRoom(1)
 
-        // The hall: its four habitat picks and two Sentries at the garrison scale 0.8 (three and two) on its walls; doors
-        // D1 (airlock) and D2 (bay) seal.
+        // The hall's first wave: its four habitat picks and two Sentries on its walls; doors D1 (airlock) and D2 (bay)
+        // seal.
         val held = assertNotNull(run.dungeon)
         assertEquals(1, held.engagedRoom)
         assertTrue(held.engaged)
         assertEquals(listOf(open, sealed, sealed, open), dungeon.doors())
         val garrison = dungeon.garrison(1)
-        assertEquals(5, garrison.size)
+        assertEquals(6, garrison.size)
         assertEquals(2, garrison.count { it.type == EnemyType.SENTRY })
         assertNotNull(run.encounter(dungeon.tag(1)))
         val s = dungeon.structure
@@ -117,9 +117,9 @@ class DungeonSystemTest {
         assertTrue(run.structureEngagementActive())
         assertTrue(run.engagementActive())
 
-        // While sealed nothing else engages and the room spawns nothing more.
+        // While sealed nothing else engages and, with the wave standing, the room spawns nothing more.
         run.updateStructures(step)
-        assertEquals(5, run.enemies.count { it.ownerTag != 0L })
+        assertEquals(6, run.enemies.count { it.ownerTag != 0L })
     }
 
     @Test
@@ -127,8 +127,8 @@ class DungeonSystemTest {
         val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         val cap = run.content.rebirth.maxActiveEnemies
-        // The hall garrisons five: with cap − 4 enemies alive it does not fit.
-        repeat(cap - 4) { run.addEnemyForTesting(dungeon.structure.x + 3_000f, dungeon.structure.y + it) }
+        // The hall's first wave is six: with cap − 5 enemies alive it does not fit.
+        repeat(cap - 5) { run.addEnemyForTesting(dungeon.structure.x + 3_000f, dungeon.structure.y + it) }
         dungeon.moveCore(dungeon.roomCentre(1))
         run.updateStructures(step)
         val entered = assertNotNull(run.dungeon)
@@ -137,12 +137,12 @@ class DungeonSystemTest {
         repeat(3) { run.updateStructures(step) }
         assertEquals(entered, run.dungeon, "the room stays dormant")
         assertSame(field, run.structureField, "no door seals")
-        assertEquals(cap - 4, run.enemies.size)
+        assertEquals(cap - 5, run.enemies.size)
         assertTrue(run.encounters.isEmpty())
         assertEquals(message, run.message)
         assertFalse(run.structureEngagementActive())
 
-        // At cap − 5 the garrison fits exactly and the room seals on the next step.
+        // At cap − 6 the wave fits exactly and the room seals on the next step.
         run.enemies.removeAt(run.enemies.lastIndex)
         run.updateStructures(step)
         assertEquals(1, run.dungeon?.engagedRoom)
@@ -205,8 +205,8 @@ class DungeonSystemTest {
         val garrison = dungeon.garrison(1)
         // Ordinary enemies shut in the room do not hold the clear; a tagged straggler (an add or a fragment) does.
         run.addEnemyForTesting(garrison[0].x, garrison[0].y)
+        run.killGarrisonForTesting()
         val straggler = run.addEnemyForTesting(garrison[0].x, garrison[0].y).apply { ownerTag = dungeon.tag(1) }
-        garrison.forEach { run.onEnemyKilled(it); run.enemies.remove(it) }
         run.updateStructures(step)
         assertEquals(1, run.dungeon!!.engagedRoom)
         assertEquals(listOf(straggler), dungeon.garrison(1), "only the tagged straggler holds the room")
@@ -249,7 +249,7 @@ class DungeonSystemTest {
             val run = vault.run
             vault.clear(1)
             vault.clear(2)
-            vault.enterRoom(3)
+            vault.enterRoom(3).also { run.fightToLastWaveForTesting() }
             assertEquals(3, run.dungeon?.engagedRoom)
             val centre = vault.roomCentre(3)
             repeat((10f / step).toInt()) {
@@ -275,7 +275,7 @@ class DungeonSystemTest {
             val reliquary = DungeonFixture(StructureTemplateId.RELIQUARY, seed)
             val run = reliquary.run
             for (chapel in listOf(0, 2, 6, 8)) reliquary.clear(chapel)
-            reliquary.enterRoom(4)
+            reliquary.enterRoom(4).also { run.fightToLastWaveForTesting() }
             assertEquals(4, run.dungeon?.engagedRoom)
             val centre = reliquary.roomCentre(4)
             repeat((3f / step).toInt()) {
@@ -306,7 +306,7 @@ class DungeonSystemTest {
         val run = vault.run
         vault.clear(1)
         vault.clear(2)
-        vault.enterRoom(3)
+        vault.enterRoom(3).also { run.fightToLastWaveForTesting() }
         val queen = vault.garrison(3).first { it.type == EnemyType.BROOD_QUEEN }
         val room = vault.template.rooms[3]
         val wall = vault.template.wallHalfThickness
@@ -388,8 +388,8 @@ class DungeonSystemTest {
         val run = dungeon.run
         dungeon.clear(1)
         dungeon.clear(2)
-        // The vault: a Brood Queen guards it.
-        dungeon.enterRoom(3)
+        // The vault: a Brood Queen leads its last wave.
+        dungeon.enterRoom(3).also { run.fightToLastWaveForTesting() }
         assertEquals(StructureNotice.GUARDIAN_AWAKENS.key, run.message)
         assertEquals(1, dungeon.garrison(3).count { it.type == EnemyType.BROOD_QUEEN })
         run.killGarrisonForTesting()
@@ -493,8 +493,7 @@ class DungeonSystemTest {
     fun roomIntegrityTuningPreservesTheWholeGarrisonIncludingItsGuardian() {
         val reference = DungeonFixture(StructureTemplateId.VAULT) { it.copy(garrisonHealthMultiplier = 1f) }
         val tuned = DungeonFixture(StructureTemplateId.VAULT) { it.copy(garrisonHealthMultiplier = 0.75f) }
-        reference.enterRoom(3)
-        tuned.enterRoom(3)
+        for (vault in listOf(reference, tuned)) vault.enterRoom(3).also { vault.run.fightToLastWaveForTesting() }
         val original = reference.garrison(3)
         val reduced = tuned.garrison(3)
         assertEquals(original.map { it.type }, reduced.map { it.type })
@@ -846,15 +845,15 @@ class DungeonSystemTest {
     }
 
     @Test
-    fun rebirthTiersAddMembersToTheFirstHabitatEntry() {
+    fun rebirthTiersGrowEveryOrdinaryEntryWithTheEnemyCap() {
         val fresh = DungeonFixture(StructureTemplateId.DERELICT_STATION, rebirth = 0)
         fresh.enterRoom(1)
-        val veteran = DungeonFixture(StructureTemplateId.DERELICT_STATION, rebirth = 8)
+        val veteran = DungeonFixture(StructureTemplateId.DERELICT_STATION, rebirth = 5)
         veteran.enterRoom(1)
-        // One extra per four tiers on the hall's habitat entry (three at the garrison scale 0.8); the Sentries stay two.
-        assertEquals(5, fresh.garrison(1).size)
-        assertEquals(7, veteran.garrison(1).size)
-        assertEquals(2, veteran.garrison(1).count { it.type == EnemyType.SENTRY })
+        // The hall's four habitat picks and two Sentries grow with the tier's enemy-cap multiplier (×1.5 at tier 5).
+        assertEquals(6, fresh.garrison(1).size)
+        assertEquals(9, veteran.garrison(1).size)
+        assertEquals(3, veteran.garrison(1).count { it.type == EnemyType.SENTRY })
     }
 
     @Test
@@ -880,11 +879,11 @@ class DungeonSystemTest {
 
     @Test
     fun garrisonScaleScalesOrdinaryEntriesButNeverAMiniBossAndStopsAtTwelve() {
-        // The vault: one Brood Queen and three Crawlers; at scale 2 the Crawlers double and the Queen stays one.
+        // The vault's last wave: one Brood Queen and three Crawlers; at scale 2 the Crawlers double, the Queen stays one.
         val doubled = DungeonFixture(StructureTemplateId.VAULT) { it.copy(garrisonScale = 2f) }
         doubled.clear(1)
         doubled.clear(2)
-        doubled.enterRoom(3)
+        doubled.enterRoom(3).also { doubled.run.fightToLastWaveForTesting() }
         val vault = doubled.garrison(3)
         assertEquals(1, vault.count { it.type == EnemyType.BROOD_QUEEN })
         assertEquals(6, vault.count { it.type == EnemyType.CRAWLER })

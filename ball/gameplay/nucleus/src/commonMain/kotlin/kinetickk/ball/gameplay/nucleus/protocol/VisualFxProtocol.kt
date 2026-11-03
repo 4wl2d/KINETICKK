@@ -71,6 +71,9 @@ object FxColorCode {
     fun quake(element: StatusElement): Int = QUAKE_BASE + element.ordinal
 }
 
+/** What a [VisualFxCue.DungeonMoment] marks. */
+enum class DungeonMomentKind { SEALED, WAVE, GUARDIAN, ROOM_CLEARED, STRUCTURE_CLEARED }
+
 /**
  * Closed, bounded visual notifications emitted by the authoritative reducer.
  *
@@ -202,6 +205,23 @@ sealed interface VisualFxCue {
         val y: Float,
     ) : VisualFxCue
 
+    /**
+     * A dungeon room's moment in [template]'s identity: the seal (its doors slam shut), a wave landing, the guardian's
+     * entrance at ([focusX], [focusY]), a room cleared and the whole structure cleared. The room is the run-local
+     * axis-aligned rect centred at ([x], [y]) with half extents [halfWidth] × [halfHeight]; the focus is the room's
+     * centre for every kind but the guardian's. Presentation only; never read back.
+     */
+    data class DungeonMoment(
+        val kind: DungeonMomentKind,
+        val template: StructureTemplateId,
+        val x: Float,
+        val y: Float,
+        val halfWidth: Float,
+        val halfHeight: Float,
+        val focusX: Float = x,
+        val focusY: Float = y,
+    ) : VisualFxCue
+
     /** Particles, damage text and Break and reaction flashes rebase; shockwaves stay in place. */
     data class WorldRebased(
         val shiftX: Float,
@@ -301,6 +321,7 @@ internal class BoundedVisualFxCueAccumulator private constructor(
         is VisualFxCue.SkillCast,
         is VisualFxCue.ApexActivated,
         is VisualFxCue.StructureDisintegrated,
+        is VisualFxCue.DungeonMoment,
         -> false
     }
 

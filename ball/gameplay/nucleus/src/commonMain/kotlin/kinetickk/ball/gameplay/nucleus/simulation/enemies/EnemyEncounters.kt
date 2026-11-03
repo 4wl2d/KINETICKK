@@ -44,6 +44,7 @@ private const val ENCOUNTER_NUDGE_ATTEMPTS: Int = 6
 private const val ENCOUNTER_NUDGE_TURN: Float = 0.35f
 private const val ENCOUNTER_NUDGE_DISTANCE: Float = 60f
 private const val BOSS_ADD_SPACING: Float = 50f
+private const val MAX_LEAD_SHARE: Float = 12f
 
 internal enum class EncounterOwner { SITE, ROOM, DIMENSION }
 
@@ -72,6 +73,9 @@ internal class EncounterRequest(
     val announce: Boolean = true,
     /** Run-local (x, y) per member in member order; when set it replaces the ring geometry. */
     val positions: FloatArray? = null,
+    /** The member at [leadIndex] (−1: none) spawns at [leadShare] instead (a dungeon room's guardian). */
+    val leadIndex: Int = -1,
+    val leadShare: Float = integrityShare,
 ) {
     init {
         require(tag != 0L && encounterOwner(tag) != null) { "Encounter tags come from encounterTag" }
@@ -81,6 +85,7 @@ internal class EncounterRequest(
         require(integrityShare in 0.1f..2f) { "Integrity share must be in 0.1..2" }
         require(abandonDistance in areaRadius..6_000f) { "Abandon distance must be in areaRadius..6000" }
         require(positions == null || positions.size == members.size * 2) { "Positions hold one (x, y) per member" }
+        require(leadIndex in -1 until members.size && leadShare in 0.1f..MAX_LEAD_SHARE) { "A lead is a member, at a share in 0.1..12" }
     }
 }
 
@@ -177,7 +182,8 @@ internal fun MutableGameState.spawnEncounter(request: EncounterRequest): Boolean
             x = request.centerX + dx / distance * limit
             y = request.centerY + dy / distance * limit
         }
-        val enemy = spawnedEnemy(type, x, y, ownerTag = request.tag, integrityShare = request.integrityShare)
+        val share = if (memberIndex == request.leadIndex) request.leadShare else request.integrityShare
+        val enemy = spawnedEnemy(type, x, y, ownerTag = request.tag, integrityShare = share)
         enemies += enemy
         if (memberIndex == bossIndex) bossId = enemy.id
     }
@@ -197,6 +203,43 @@ internal fun MutableGameState.spawnEncounter(request: EncounterRequest): Boolean
             messageTime = 2.5f
         }
     }
+    return true
+}
+
+/**
+ * Lands [members] at the run-local [points] (x, y per member, used as given) into the live encounter [tag], each at
+ * [integrityShare] (the one at [leadIndex] at [leadShare]), all or none: within the encounter reserve and the hard cap,
+ * evicting the oldest untagged ordinary enemies for room. A boss member becomes the encounter's boss (an encounter
+ * holds at most one). On success the members are the last [members] entries of the enemy list, in order. Returns
+ * false, changing nothing, on a refusal. Draws nothing.
+ */
+internal fun MutableGameState.reinforceEncounter(
+    tag: Long,
+    members: List<EnemyType>,
+    points: List<Float>,
+    integrityShare: Float,
+    leadIndex: Int = -1,
+    leadShare: Float = integrityShare,
+): Boolean {
+    val index = encounterIndex(tag)
+    if (index < 0 || members.isEmpty() || phase != GamePhase.RUNNING || bossSpawned) return false
+    val state = encounters[index]
+    val boss = members.indexOfFirst { it.profile.bossClass }
+    if (boss >= 0 && state.bossId >= 0) return false
+    if (liveTaggedEnemies() + members.size > MAX_ENCOUNTER_RESERVE) return false
+    val deficit = enemies.size + members.size - content.rebirth.maxActiveEnemies
+    if (deficit > 0) {
+        if (evictableOrdinaryCount() < deficit) return false
+        repeat(deficit) { evictOldestOrdinaryEnemy() }
+    }
+    var bossId = state.bossId
+    for (member in members.indices) {
+        val share = if (member == leadIndex) leadShare else integrityShare
+        val enemy = spawnedEnemy(members[member], points[member * 2], points[member * 2 + 1], ownerTag = tag, integrityShare = share)
+        enemies += enemy
+        if (member == boss) bossId = enemy.id
+    }
+    encounters = replacedEncounter(index, state.copy(spawned = state.spawned + members.size, bossId = bossId))
     return true
 }
 

@@ -67,17 +67,27 @@ internal fun MutableGameState.eliteAffixChance(): Float {
 }
 
 /**
- * True when an enemy of [type] with [id] arrives as a champion: an ordinary kind other than the Swarmling, spawned by
- * the ambient director ([ownerTag] 0, so an encounter's members, site defenders and fragments never are), from the
- * champion threat time on, with [championChance] by a stateless hash.
+ * True when an enemy of [type] with [id] arrives as a champion: an ordinary kind other than the Swarmling, from the
+ * champion threat time on, by a stateless hash: spawned by the ambient director ([ownerTag] 0) with [championChance],
+ * or as a dungeon room's member from the policy's Rebirth tier on with its room chance per tier. Other encounters'
+ * members, site defenders and fragments never are.
  */
 internal fun MutableGameState.rollsChampion(type: EnemyType, id: Int, ownerTag: Long): Boolean {
     val policy = content.variety.champions
-    if (!policy.enabled || ownerTag != 0L || type == EnemyType.SWARMLING || type.profile.rank != EnemyRank.ORDINARY) {
-        return false
+    if (!policy.enabled || type == EnemyType.SWARMLING || type.profile.rank != EnemyRank.ORDINARY) return false
+    val chance = when {
+        ownerTag == 0L -> championChance()
+        encounterOwner(ownerTag) == EncounterOwner.ROOM -> roomChampionChance()
+        else -> return false
     }
     if (threatElapsed < policy.fromThreatSeconds) return false
-    return hashUnit(runHash(runSeed, CHAMPION_SALT, id.toLong())) < championChance()
+    return hashUnit(runHash(runSeed, CHAMPION_SALT, id.toLong())) < chance
+}
+
+/** A dungeon room member's champion chance: none below the policy's tier, then `perTier × tier`. */
+internal fun MutableGameState.roomChampionChance(): Float {
+    val policy = content.structures
+    return if (rebirthLevel < policy.garrisonChampionFromTier) 0f else policy.garrisonChampionChancePerTier * rebirthLevel
 }
 
 /** The chance an eligible spawn is a champion at this run's Rebirth tier: `base + perTier × tier`. */

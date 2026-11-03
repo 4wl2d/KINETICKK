@@ -215,6 +215,16 @@ internal fun MutableGameState.populateAdditionalRetainedState() {
     dungeon = DungeonState(
         structureId = (1L shl 63) or (5L shl 34) or (6L shl 8), template = StructureTemplateId.VAULT, rotation = 1,
         x = 2_000f, y = 1_500f, clearedRooms = 0b1, engagedRoom = 2, engaged = true, chestCharges = 3,
+        fight = kinetickk.ball.gameplay.nucleus.model.RoomFight(
+            sealedAt = 4f, waves = 2, landedAt = 6f, landedMembers = 5, incomingAt = 7.2f,
+            incoming = listOf(kinetickk.ball.gameplay.nucleus.render.EnemyType.CRAWLER), incomingPoints = listOf(2_050f, 1_480f), incomingGuardian = 0, guardianId = 21,
+            hazardCycles = 1, hazardsStruck = true,
+            hazards = listOf(
+                kinetickk.ball.gameplay.nucleus.model.DungeonHazard(
+                    kinetickk.ball.content.api.DungeonHazardKind.VENT, 1_990f, 1_510f, 1_990f, 1_510f, 120f, 7f, 8.3f,
+                ),
+            ),
+        ),
     )
     spentStructureIds = listOf(11L, 12L)
     lastAnnouncedStructureId = 13L
