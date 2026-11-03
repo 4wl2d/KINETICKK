@@ -84,7 +84,6 @@ internal val SettingsContinuation.overlayAfterCompletion: AppDestination?
     }
 
 internal fun AppSessionState.toShellProjection(): AppShellProjection = AppShellProjection(
-    instanceId = instanceId,
     revision = revision,
     routeRevision = routeRevision,
     base = base,

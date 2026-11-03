@@ -40,7 +40,6 @@ import kinetickk.ball.profile.api.ProfileSettingsChanged
 import kinetickk.ball.profile.api.ProfileRefusal
 import kinetickk.ball.profile.api.ProfileCoreShapeSelected
 import kinetickk.flow.session.api.AppDestination
-import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.SessionInteractionPulse
 import kinetickk.flow.session.api.SessionLifecycle
 import kinetickk.flow.session.api.SessionRejection
@@ -105,7 +104,7 @@ class AppSessionNucleusTest {
         assertEquals(SessionRevision.ZERO, state.revision)
         assertEquals(RunId(0L), state.nextRunId)
         assertNull(state.pendingWorkflow)
-        val shell = AppSessionNucleus.query(state, AppSessionQuery.GetShell)
+        val shell = AppSessionNucleus.shell(state)
         assertEquals(AppDestination.Home, shell.base)
         assertEquals(immutableListOf(AppDestination.Home), shell.entries)
         assertTrue(shell.rebirthEligible)
@@ -1020,14 +1019,13 @@ private fun AppSessionDecision.accepted(): AppSessionAcceptedFrame =
     assertIs<AppSessionDecision.Accepted>(this).frame.also { frame ->
         assertTrue(frame.outputs.size <= MAX_SESSION_OUTPUTS_PER_DECISION)
         val shell = frame.nextState.toShell()
-        assertEquals(frame.nextState.instanceId, shell.instanceId)
         assertEquals(frame.nextState.revision, shell.revision)
     }
 
 private fun AppSessionDecision.rejection(): SessionRejection =
     assertIs<AppSessionDecision.Rejected>(this).reason
 
-private fun AppSessionState.toShell() = AppSessionNucleus.query(this, AppSessionQuery.GetShell)
+private fun AppSessionState.toShell() = AppSessionNucleus.shell(this)
 
 private fun startFrame(): AppSessionAcceptedFrame = decide(
     initialState(),

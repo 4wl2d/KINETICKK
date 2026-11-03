@@ -21,7 +21,6 @@ import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
 import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kinetickk.ball.profile.impl.createProfileComponent
 import kinetickk.flow.session.api.AppDestination
-import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.SessionAcceptance
 import kinetickk.flow.session.api.SessionInteractionPulse
 import kinetickk.flow.session.api.SessionWorkflowFailureCode
@@ -193,7 +192,7 @@ private class LifecycleFixture {
         assertEquals(GameplayRunPhase.RUNNING, runStatus().phase)
     }
 
-    fun shell() = session.query(AppSessionQuery.GetShell)
+    fun shell() = session.shell()
     fun runStatus() = gameplay.activeRun()!!.query(GameplayQuery.GetRunStatus)
     fun runView() = gameplay.activeRun() as GameplayInteractionPort
 

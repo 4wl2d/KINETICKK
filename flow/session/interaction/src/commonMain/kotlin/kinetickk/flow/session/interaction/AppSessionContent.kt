@@ -62,7 +62,6 @@ import kinetickk.ball.profile.interaction.workshop.api.WorkshopTabRequest
 import kinetickk.foundation.design.toBindableKey
 import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.AppSessionPort
-import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.AppShellProjection
 import kinetickk.flow.session.api.SessionAcceptance
 import kinetickk.flow.session.api.SessionInteractionPulse
@@ -141,7 +140,7 @@ fun AppSessionContent(
     val menuDensity = remember(rawDensity, interfaceScale) { Density(rawDensity.density * interfaceScale, rawDensity.fontScale) }
     val focusRequester = remember(sessionPort) { FocusRequester() }
     var shellValue by remember(sessionPort) {
-        mutableStateOf(sessionPort.query(AppSessionQuery.GetShell))
+        mutableStateOf(sessionPort.shell())
     }
     val observedShell = shellValue
     SideEffect(observedShell) {
@@ -155,7 +154,7 @@ fun AppSessionContent(
             diagnostics.event("session.input", pulse.toString())
         }
         val accepted = sessionPort.accept(pulse) is SessionAcceptance.Accepted
-        shellValue = sessionPort.query(AppSessionQuery.GetShell)
+        shellValue = sessionPort.shell()
         val after = shellValue
         if (traced) diagnostics.context("session.committed") { after.toString() }
         return accepted

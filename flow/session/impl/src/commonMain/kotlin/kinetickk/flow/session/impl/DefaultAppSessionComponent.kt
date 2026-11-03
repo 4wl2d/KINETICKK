@@ -19,8 +19,6 @@ import kinetickk.ball.profile.api.ProfileSettings
 import kinetickk.ball.profile.api.ProfileRebirth
 import kinetickk.ball.profile.api.ProfileLoadout
 import kinetickk.flow.session.api.AppDestination
-import kinetickk.flow.session.api.AppSessionInstanceId
-import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.AppShellProjection
 import kinetickk.flow.session.api.SessionAcceptance
 import kinetickk.flow.session.api.SessionInteractionPulse
@@ -55,14 +53,10 @@ internal class DefaultAppSessionComponent private constructor(
     private val acceptance = InlineAcceptance(sessionCompletionDeque<AppSessionNucleusPulse>())
     private var committedState: AppSessionState = initialState
 
-    override val instanceId: AppSessionInstanceId
-        get() = committedState.instanceId
-
     override fun accept(pulse: SessionInteractionPulse): SessionAcceptance =
         dispatchLocal(pulse)
 
-    override fun query(query: AppSessionQuery.GetShell): AppShellProjection =
-        AppSessionNucleus.query(committedState, query)
+    override fun shell(): AppShellProjection = AppSessionNucleus.shell(committedState)
 
     internal fun stateSnapshot(): AppSessionState = committedState
 
@@ -73,7 +67,6 @@ internal class DefaultAppSessionComponent private constructor(
             val context = readContext(before, pulse)
             when (val decision = AppSessionNucleus.decide(before, pulse, context)) {
                 is AppSessionDecision.Rejected -> SessionAcceptance.Rejected(
-                    instanceId = before.instanceId,
                     observedRevision = before.revision,
                     reason = decision.reason,
                 )
@@ -103,7 +96,6 @@ internal class DefaultAppSessionComponent private constructor(
                         execute = { output, _ -> execute(output) },
                     )
                     SessionAcceptance.Accepted(
-                        instanceId = decision.frame.nextState.instanceId,
                         revision = decision.frame.nextState.revision,
                     )
                 }
@@ -115,15 +107,13 @@ internal class DefaultAppSessionComponent private constructor(
         frame: AppSessionAcceptedFrame,
     ) {
         val next = frame.nextState
-        check(next.instanceId == before.instanceId) { "Session instance identity changed" }
         check(before.revision.value < Long.MAX_VALUE)
         check(next.revision.value == before.revision.value + 1L) {
             "Session revision must advance exactly once"
         }
-        val shellProjection = AppSessionNucleus.query(next, AppSessionQuery.GetShell)
+        val shellProjection = AppSessionNucleus.shell(next)
         check(
-            shellProjection.instanceId == next.instanceId &&
-                shellProjection.revision == next.revision &&
+            shellProjection.revision == next.revision &&
                 shellProjection.routeRevision == next.routeRevision,
         ) {
             "Session shell projection must derive from the accepted next State"

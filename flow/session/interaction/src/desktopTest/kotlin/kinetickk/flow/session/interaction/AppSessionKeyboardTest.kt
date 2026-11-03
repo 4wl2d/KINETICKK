@@ -460,7 +460,6 @@ private class KeyboardHangarProfilePort : ProfilePort {
  * selection runs [onSelect] inline as the participant command.
  */
 internal class KeyboardSessionPort : AppSessionPort {
-    override val instanceId = LOCAL_APP_SESSION_INSTANCE_ID
     val pulses = mutableListOf<SessionInteractionPulse>()
     var overlay: AppDestination? = AppDestination.Codex
     var base: AppDestination = AppDestination.Home
@@ -492,9 +491,9 @@ internal class KeyboardSessionPort : AppSessionPort {
             else -> true
         }
         return if (accepted) {
-            SessionAcceptance.Accepted(instanceId, SessionRevision(pulses.size.toLong()))
+            SessionAcceptance.Accepted(SessionRevision(pulses.size.toLong()))
         } else {
-            SessionAcceptance.Rejected(instanceId, SessionRevision(pulses.size.toLong()), SessionRejection.ShortcutUnavailable)
+            SessionAcceptance.Rejected(SessionRevision(pulses.size.toLong()), SessionRejection.ShortcutUnavailable)
         }
     }
 
@@ -511,8 +510,8 @@ internal class KeyboardSessionPort : AppSessionPort {
         open(destination)
     }
 
-    override fun query(query: AppSessionQuery.GetShell) = AppShellProjection(
-        instanceId, SessionRevision.ZERO, SessionRevision.ZERO, base, overlay,
+    override fun shell() = AppShellProjection(
+        SessionRevision.ZERO, SessionRevision.ZERO, base, overlay,
         if (base == AppDestination.Gameplay) kinetickk.ball.gameplay.api.RunId(1L) else null, false, null, SessionLifecycle.READY, false, null,
         runMode = runMode,
     )

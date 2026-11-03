@@ -8,12 +8,7 @@ import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 
-sealed interface AppSessionQuery {
-    data object GetShell : AppSessionQuery
-}
-
 data class AppShellProjection(
-    val instanceId: AppSessionInstanceId,
     val revision: SessionRevision,
     val routeRevision: SessionRevision,
     val base: AppDestination,
@@ -59,9 +54,7 @@ data class AppShellProjection(
 
 /** Local Interaction/query facade. Participant command authority is bound separately by Impl. */
 interface AppSessionPort {
-    val instanceId: AppSessionInstanceId
-
     fun accept(pulse: SessionInteractionPulse): SessionAcceptance
 
-    fun query(query: AppSessionQuery.GetShell): AppShellProjection
+    fun shell(): AppShellProjection
 }

@@ -67,7 +67,6 @@ class AppSessionTransitionComposeTest {
 }
 
 private class OverlaySessionPort : AppSessionPort {
-    override val instanceId = LOCAL_APP_SESSION_INSTANCE_ID
     val pulses = mutableListOf<SessionInteractionPulse>()
     private var overlay: AppDestination? = null
     override fun accept(pulse: SessionInteractionPulse): SessionAcceptance {
@@ -77,10 +76,10 @@ private class OverlaySessionPort : AppSessionPort {
             SessionInteractionPulse.CloseOverlay -> overlay = null
             else -> Unit
         }
-        return SessionAcceptance.Accepted(instanceId, SessionRevision(pulses.size.toLong()))
+        return SessionAcceptance.Accepted(SessionRevision(pulses.size.toLong()))
     }
-    override fun query(query: AppSessionQuery.GetShell) = AppShellProjection(
-        instanceId, SessionRevision(pulses.size.toLong()), SessionRevision.ZERO, AppDestination.Home, overlay,
+    override fun shell() = AppShellProjection(
+        SessionRevision(pulses.size.toLong()), SessionRevision.ZERO, AppDestination.Home, overlay,
         null, false, null, SessionLifecycle.READY, false, null,
     )
 }

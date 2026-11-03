@@ -26,7 +26,6 @@ import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
 import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kinetickk.ball.profile.impl.createProfileComponent
 import kinetickk.flow.session.api.AppDestination
-import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.api.ToneRequest
@@ -93,7 +92,7 @@ class DisplayApplicationComposeTest {
 
             onRoot().performKeyInput { pressKey(Key.S) }
             settle()
-            assertEquals(AppDestination.Settings, owner.sessionPort.query(AppSessionQuery.GetShell).active)
+            assertEquals(AppDestination.Settings, owner.sessionPort.shell().active)
             onNodeWithTag("kinetickk.settings.group.display").performClick()
             settle()
 
@@ -153,7 +152,7 @@ class DisplayApplicationComposeTest {
             owner.sessionPort.accept(SessionInteractionPulse.StartRunRequested)
             onRoot().performKeyInput { pressKey(Key.S) }
             settle()
-            val shell = owner.sessionPort.query(AppSessionQuery.GetShell)
+            val shell = owner.sessionPort.shell()
             assertEquals(AppDestination.Gameplay, shell.base)
             assertEquals(AppDestination.Settings, shell.overlay)
             val run = gameplay.activeRun()
@@ -163,7 +162,7 @@ class DisplayApplicationComposeTest {
 
             generation++
             settle()
-            assertEquals(shell, owner.sessionPort.query(AppSessionQuery.GetShell))
+            assertEquals(shell, owner.sessionPort.shell())
             assertSame(run, gameplay.activeRun())
             assertEquals(GameplayRunPhase.PAUSED, run?.query(GameplayQuery.GetRunStatus)?.phase)
             onNodeWithTag("kinetickk.settings.group.display").assertIsSelected()
@@ -197,7 +196,7 @@ class DisplayApplicationComposeTest {
                 mainClock.advanceTimeBy(260)
                 waitForIdle()
             }
-            fun workshop() = owner.sessionPort.query(AppSessionQuery.GetShell).overlay
+            fun workshop() = owner.sessionPort.shell().overlay
             settle()
             onRoot().performKeyInput { pressKey(Key.L) }
             settle()

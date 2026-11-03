@@ -3,7 +3,6 @@
 
 package kinetickk.flow.session.nucleus
 
-import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.AppShellProjection
 
 /** Pure coordinator for the singleton AppSession Flow. */
@@ -30,10 +29,5 @@ object AppSessionNucleus {
         is AppSessionNucleusPulse.Refusal.GameplayPauseRefused -> rejectPause(state, pulse)
     }
 
-    fun query(
-        state: AppSessionState,
-        query: AppSessionQuery.GetShell,
-    ): AppShellProjection = when (query) {
-        AppSessionQuery.GetShell -> state.toShellProjection()
-    }
+    fun shell(state: AppSessionState): AppShellProjection = state.toShellProjection()
 }
