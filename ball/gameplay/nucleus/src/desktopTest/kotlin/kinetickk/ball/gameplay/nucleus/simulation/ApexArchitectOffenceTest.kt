@@ -29,12 +29,12 @@ import kotlin.test.assertTrue
  * list (48 runs per character) it passed with probability 0.97 on the 05885fa9 base but 0.83 with the active items,
  * through its ±40 % clause (the median band passed every time, and the clause is measured against it). Its population
  * is the one the base was measured on, 96 runs per character with four forks each: fewer than 300 runs, since these
- * fights already set the suite's runtime. On the 0.6.0 base the offence median is 0.850 (bootstrap SE 0.005,
- * resampling whole runs with their forks) and each character's benefit 0.87 (Ring) to 1.39 (Crescent) of the median
- * benefit (SE 0.05-0.11). By the population threshold rule (the wider of the design's band and the base ± two standard
- * errors, rounded outward) the median band stays the design's. The ±40 % clause is the design's character band and
- * never weakens, although Crescent's and Shard's base + 2 SE reach 1.56 of the median benefit; Crescent passes by
- * 0.13 SE.
+ * fights already set the suite's runtime. On the Elite-resonance base the offence median is 0.792 (bootstrap SE
+ * 0.006, resampling whole runs with their forks; 0.826 on the tree before it and 0.850 on the 0.6.0 base) and each
+ * character's benefit 0.67 (Ring) to 1.24 (Hexagon) of the median benefit (SE 0.04-0.06). By the population threshold
+ * rule (the wider of the design's band and the base ± two standard errors, rounded outward) the median band stays the
+ * design's. The ±40 % clause is the design's character band and never weakens; Ring passes by 1.6 SE, and a resampled
+ * population passes the whole rule with probability 0.94.
  */
 class ApexArchitectOffenceTest {
     @Test

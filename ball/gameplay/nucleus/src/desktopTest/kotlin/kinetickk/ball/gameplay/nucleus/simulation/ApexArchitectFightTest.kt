@@ -25,8 +25,8 @@ import kotlin.test.assertTrue
  * shared projectile pool was at the volley budget only because of live Apex shots (a Silence and a pool full of other
  * shots hold volleys back with or without an Apex). In a scripted arena where the Architect is the only enemy, the
  * character's own damage to it during an activation (strikes included) is never below the same script's without the
- * Apex. The contract keeps its fixed seeds: on the 0.6.0 tree no clause broke in the 312 population fights of the
- * cast rule.
+ * Apex. The contract keeps its fixed seeds: on the Elite-resonance base, as on the tree before it, no clause broke in
+ * the 312 population fights of the cast rule, so the 72 contract fights pass with probability 1.00.
  */
 class ApexArchitectFightTest {
     @Test
