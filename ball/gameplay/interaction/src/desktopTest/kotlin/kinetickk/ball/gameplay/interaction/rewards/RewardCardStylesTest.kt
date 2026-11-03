@@ -361,8 +361,9 @@ class RewardCardStylesTest {
         val template = content.items.first { it.rarity == ItemRarity.EPIC }
         ItemRarity.entries.forEach { rarity ->
             BuildTag.entries.map { listOf(it) }.plus(listOf(emptyList())).forEach { tags ->
-                val unknown = template.copy(name = "Unlisted ${rarity.name} ${tags.firstOrNull()}", rarity = rarity,
-                    tags = tags.toImmutableList())
+                // An id and a name past the catalog: the art tables know neither.
+                val unknown = template.copy(id = content.items.size, name = "Unlisted ${rarity.name} ${tags.firstOrNull()}",
+                    rarity = rarity, tags = tags.toImmutableList())
                 val art = rewardCardArt(unknown)
                 if (rarity >= ItemRarity.EPIC) assertEquals(rarity == ItemRarity.LEGENDARY, assertNotNull(art).animated)
                 else assertNull(art)
