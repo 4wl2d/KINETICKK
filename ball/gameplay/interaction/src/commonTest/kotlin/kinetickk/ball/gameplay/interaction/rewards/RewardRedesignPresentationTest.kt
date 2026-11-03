@@ -561,12 +561,12 @@ class RewardRedesignPresentationTest {
         val english = model.rewardCardPresentation(meld, 0)
         assertEquals(OverlayRedesignText.Meld.english, english.title)
         assertEquals(english.title, english.action?.label)
-        assertEquals(listOf(AppLanguage.English.text(OverlayRedesignText.MeldEffect, "12", "10")), english.descriptions)
+        assertEquals(listOf(AppLanguage.English.text(OverlayRedesignText.MeldEffect, "4", "3")), english.descriptions)
         // The Meld seals the last open slot, and its preview names the lasting bonus it reaches.
         val preview = requireNotNull(english.relicPreview)
         assertTrue(preview.meld)
         assertEquals(3, preview.targetSlot)
-        assertEquals("Meld ×1: damage +12%, integrity +10%", preview.rows.first().title)
+        assertEquals("Meld ×1: damage +4%, integrity +3%", preview.rows.first().title)
         assertEquals("+", preview.rows.first().sign)
         // Russian pairs the noun and the verb of the same word (Слияние / Слить).
         val russian = model.rewardCardPresentation(meld, 0, AppLanguage.Russian)

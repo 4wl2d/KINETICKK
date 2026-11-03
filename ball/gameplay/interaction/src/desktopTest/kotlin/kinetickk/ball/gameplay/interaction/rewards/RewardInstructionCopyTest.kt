@@ -73,7 +73,7 @@ class RewardInstructionCopyTest {
             assertEquals(language.text(OverlayRedesignText.ChangeWeaponEffect),
                 totem.cards.single { it.choice.totemAction == TotemAction.CHANGE_WEAPON }.totemRow!!.description)
             val meld = scenes.getValue("relic-meld-offer").rewardPresentation(language)
-            assertEquals(listOf(language.text(OverlayRedesignText.MeldEffect, "12", "10")),
+            assertEquals(listOf(language.text(OverlayRedesignText.MeldEffect, "4", "3")),
                 meld.cards.single { it.choice.relicAction == RelicChoiceAction.MELD }.descriptions)
         }
     }

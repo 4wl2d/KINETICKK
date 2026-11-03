@@ -399,7 +399,7 @@ class ContentBalanceCharacterizationTest {
         // The Relic budget (one per slot, so a bind always finds an open slot), its Elite-drop schedule and the Meld.
         assertEquals(ui.relicPolicy.maxSlots, ui.relicPolicy.acquisitionsPerRun)
         assertEquals(listOf(30f, 165f), listOf(ui.relicPolicy.firstUnlockSeconds, ui.relicPolicy.unlockIntervalSeconds))
-        assertEquals(listOf(0.12f, 0.10f), listOf(ui.relicPolicy.meldDamage, ui.relicPolicy.meldIntegrity))
+        assertEquals(listOf(0.04f, 0.03f), listOf(ui.relicPolicy.meldDamage, ui.relicPolicy.meldIntegrity))
         // One weapon change a run, keeping 60 % of the weapon level.
         assertEquals(1, ui.tempo.weaponChangesPerRun)
         assertEquals(0.6f, ui.tempo.weaponChangeKeptLevelShare)

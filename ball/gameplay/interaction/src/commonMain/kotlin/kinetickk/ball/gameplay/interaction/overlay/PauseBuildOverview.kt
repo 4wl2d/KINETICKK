@@ -279,7 +279,7 @@ internal fun GameplayRenderModel.meldTotal(melds: Int, language: AppLanguage): S
         percent(policy.meldIntegrityMultiplier(melds)))
 }
 
-/** "Relics 2/4", then the Melds' lasting bonus once a slot is sealed ("Relics 2/4 · Meld ×1: damage +12%, integrity +10%"). */
+/** "Relics 2/4", then the Melds' lasting bonus once a slot is sealed ("Relics 2/4 · Meld ×1: damage +4%, integrity +3%"). */
 private fun GameplayRenderModel.pauseRelicsLabel(language: AppLanguage): String {
     val bound = language.text(OverlayRedesignText.Relics) + " " + equippedRelics.size + "/" + content.relicPolicy.maxSlots
     return if (build.meldedSlots > 0) bound + " · " + meldTotal(build.meldedSlots, language) else bound

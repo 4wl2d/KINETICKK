@@ -200,9 +200,9 @@ data class RelicPolicy(
     /** Seconds between the unlocks of the later Elite-drop opportunities (30, 195, 360, 525 s by default). */
     val unlockIntervalSeconds: Float = 165f,
     /** Each Meld multiplies all damage dealt by 1 + this share. */
-    val meldDamage: Float = 0.12f,
+    val meldDamage: Float = 0.04f,
     /** Each Meld raises maximum integrity by this share of its current value and heals the gain. */
-    val meldIntegrity: Float = 0.10f,
+    val meldIntegrity: Float = 0.03f,
 ) {
     init {
         require(maxSlots > 0) { "Relic maxSlots must be positive" }

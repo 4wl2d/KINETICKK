@@ -219,7 +219,7 @@ private fun GameplayRenderModel.rewardDescriptions(
     }
 }.filter(String::isNotBlank).distinct()
 
-/** What one Meld gives: "Seals the empty slot for this run: damage dealt +12%, max integrity +10%". */
+/** What one Meld gives: "Seals the empty slot for this run: damage dealt +4%, max integrity +3%". */
 private fun GameplayRenderModel.meldEffect(language: AppLanguage): String {
     val policy = content.relicPolicy
     fun percent(share: Float) = overlayDecimal((share * 100f).roundToLong().toFloat(), language)
