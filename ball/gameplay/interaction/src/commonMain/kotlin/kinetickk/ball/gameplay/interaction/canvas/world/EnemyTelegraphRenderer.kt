@@ -142,7 +142,7 @@ internal fun DrawScope.drawEnemyTelegraph(
             val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
             val charge = 1f - enemy.actionTimer / 0.42f
             drawLine(threat.copy(alpha = 0.12f + charge * 0.42f), center, core, 1f + charge * 1.2f, pathEffect = WorldStrokes.dashEffect)
-            drawCircle(threat.copy(alpha = 0.5f), enemy.radius + 15f * (1f - charge), center, style = kkStroke(1.5f))
+            drawCircle(threat.copy(alpha = 0.5f), enemy.radius + 15f * (1f - charge), center, style = kkStroke(KkStrokeWidth.Line2))
         }
         EnemyType.CHARGER -> if (enemy.actionTimer < 0f) drawWindup(engine, enemy, center, shakeX, shakeY, threat, 0.45f)
         EnemyType.INTERCEPTOR -> {
@@ -154,7 +154,7 @@ internal fun DrawScope.drawEnemyTelegraph(
                 shakeY,
             )
             drawLine(threat.copy(alpha = 0.3f), center, predicted, 1.4f, pathEffect = WorldStrokes.dashEffect)
-            drawCircle(threat.copy(alpha = 0.55f), 9f, predicted, style = kkStroke(1.5f))
+            drawCircle(threat.copy(alpha = 0.55f), 9f, predicted, style = kkStroke(KkStrokeWidth.Line2))
             drawCircle(threat.copy(alpha = 0.55f), 2f, predicted)
         }
         EnemyType.WEAVER -> {
@@ -173,14 +173,14 @@ internal fun DrawScope.drawEnemyTelegraph(
             val gravityPulse = (sin(engine.renderElapsed * 2.2f + enemy.id) + 1f) * 0.5f
             drawCircle(threat.copy(alpha = 0.12f + gravityPulse * 0.08f), 440f, center, style = WorldStrokes.dashedHair)
             if (enemy.actionTimer in 0f..0.38f) {
-                drawCircle(threat.copy(alpha = 0.52f), enemy.radius + 18f + enemy.actionTimer * 50f, center, style = kkStroke(2f))
+                drawCircle(threat.copy(alpha = 0.52f), enemy.radius + 18f + enemy.actionTimer * 50f, center, style = kkStroke(KkStrokeWidth.Icon))
             }
         }
         EnemyType.ELITE -> if (enemy.actionTimer in 0f..0.28f) {
-            drawCircle(threat.copy(alpha = 0.48f), enemy.radius + 20f + enemy.actionTimer * 38f, center, style = kkStroke(1.5f))
+            drawCircle(threat.copy(alpha = 0.48f), enemy.radius + 20f + enemy.actionTimer * 38f, center, style = kkStroke(KkStrokeWidth.Line2))
         }
         EnemyType.HERALD, EnemyType.PYRE_HERALD, EnemyType.ANTECEDENT -> if (enemy.actionTimer in 0f..0.3f) {
-            drawCircle(threat.copy(alpha = 0.5f), enemy.radius + 22f + enemy.actionTimer * 40f, center, style = kkStroke(2f))
+            drawCircle(threat.copy(alpha = 0.5f), enemy.radius + 22f + enemy.actionTimer * 40f, center, style = kkStroke(KkStrokeWidth.Icon))
         }
         EnemyType.BOMBER -> if (enemy.behavior == EnemyBehavior.PRIMED) drawFuse(engine, enemy, center, threat, BOMBER_BLAST_REACH, 0.6f)
         EnemyType.LANCER -> when (enemy.behavior) {
@@ -248,7 +248,7 @@ internal fun DrawScope.drawEnemyTelegraph(
         EnemyType.CHOIR -> if (enemy.behavior == EnemyBehavior.TELEGRAPH) {
             val charge = (1f - enemy.behaviorRemaining / CHOIR_SING_SECONDS).coerceIn(0f, 1f)
             val ring = CHOIR_WAVE_REACH + (enemy.radius + 12f - CHOIR_WAVE_REACH) * charge
-            drawCircle(threat.copy(alpha = 0.18f), CHOIR_WAVE_REACH, center, style = kkStroke(1f))
+            drawCircle(threat.copy(alpha = 0.18f), CHOIR_WAVE_REACH, center, style = kkStroke(KkStrokeWidth.Line))
             drawCircle(threat.copy(alpha = 0.3f + charge * 0.5f), ring, center, style = WorldStrokes.dashedThin)
             drawCircle(threat.copy(alpha = 0.3f + charge * 0.5f), ring * 0.6f, center, style = WorldStrokes.dashedThin)
         }
@@ -278,7 +278,7 @@ internal fun DrawScope.drawEnemyTelegraph(
             val doubled = EnemyAffinity.phase(enemy.affinityBits) == 1 && enemy.actionTimer > PRIME_PAIR_HALF
             val volley = if (doubled) enemy.actionTimer - PRIME_PAIR_HALF else enemy.actionTimer
             if (volley in 0f..PRIME_VOLLEY_LEAD) {
-                drawCircle(threat.copy(alpha = 0.52f), enemy.radius + 18f + volley * 50f, center, style = kkStroke(2f))
+                drawCircle(threat.copy(alpha = 0.52f), enemy.radius + 18f + volley * 50f, center, style = kkStroke(KkStrokeWidth.Icon))
             }
         }
         // Judgement: the four lanes its bolt trains will run down, firming while the arcs stand still.
@@ -339,7 +339,7 @@ private fun DrawScope.drawFuse(
     val blink = if (sin(engine.renderElapsed * (18f + (fuseSeconds - remaining).coerceAtLeast(0f) * 60f)) > 0f) 1f else 0.35f
     drawCircle(threat.copy(alpha = 0.10f * blink), reach, center)
     drawCircle(threat.copy(alpha = 0.75f * blink), reach, center, style = WorldStrokes.dashedMedium)
-    drawCircle(Kk.Bone.copy(alpha = 0.8f * blink), enemy.radius + 5f, center, style = kkStroke(2f))
+    drawCircle(Kk.Bone.copy(alpha = 0.8f * blink), enemy.radius + 5f, center, style = kkStroke(KkStrokeWidth.Icon))
 }
 
 /**
@@ -363,7 +363,7 @@ private fun DrawScope.drawSightLine(
     val end = polar(center, reach, enemy.facing)
     if (locked) drawLine(threat.copy(alpha = 0.95f), center, end, 2.5f)
     else drawLine(threat.copy(alpha = 0.25f + charge * 0.45f), center, end, 1.2f, pathEffect = WorldStrokes.dashEffect)
-    drawCircle(threat.copy(alpha = 0.6f), enemy.radius + 10f * (1f - charge), center, style = kkStroke(1.5f))
+    drawCircle(threat.copy(alpha = 0.6f), enemy.radius + 10f * (1f - charge), center, style = kkStroke(KkStrokeWidth.Line2))
 }
 
 /** The shield arcs of a Throne or the Antecedent: [EnemyProjection.charges] bone arcs of 80° spaced 120° from its facing. */
@@ -377,7 +377,7 @@ internal fun DrawScope.drawShieldArcs(enemy: EnemyProjection, center: Offset) {
 /** A bone arc of [radius] around [center] (a front shield, a mount, a shield arc). */
 internal fun DrawScope.drawBoneArc(center: Offset, radius: Float, startDegrees: Float, sweepDegrees: Float) {
     drawArc(Kk.Bone, startDegrees, sweepDegrees, false, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f),
-        style = kkStroke(3f))
+        style = kkStroke(KkStrokeWidth.Heavy))
 }
 
 /**
@@ -412,7 +412,7 @@ private fun DrawScope.drawAegisTether(engine: GameplayRenderModel, enemy: EnemyP
         if (aegis.id != enemy.linkedTo || aegis.dead) continue
         val from = world(engine, engine.interpolated(aegis.previousX, aegis.x), engine.interpolated(aegis.previousY, aegis.y), shakeX, shakeY)
         drawLine(Kk.Bone.copy(alpha = 0.45f), from, center, 1.5f, pathEffect = WorldStrokes.dashEffect)
-        drawCircle(Kk.Bone.copy(alpha = 0.7f), enemy.radius + 3f, center, style = kkStroke(1.5f))
+        drawCircle(Kk.Bone.copy(alpha = 0.7f), enemy.radius + 3f, center, style = kkStroke(KkStrokeWidth.Line2))
         return
     }
 }
@@ -427,10 +427,10 @@ internal fun DrawScope.drawImpactShield(engine: GameplayRenderModel, enemy: Enem
         EnemyRank.MINI_BOSS, EnemyRank.BOSS, EnemyRank.SECRET_BOSS -> {
             val shield = enemy.radius * (1.55f + 0.04f * pulse)
             drawCircle(Kk.Bone, shield, center, alpha = 0.05f + 0.05f * pulse)
-            drawCircle(Kk.Bone, shield, center, alpha = 0.45f + 0.4f * pulse, style = kkStroke(3f))
+            drawCircle(Kk.Bone, shield, center, alpha = 0.45f + 0.4f * pulse, style = kkStroke(KkStrokeWidth.Heavy))
         }
         EnemyRank.ORDINARY, EnemyRank.ELITE ->
-            drawCircle(Kk.Bone, enemy.radius * IMPACT_SHIELD_RING, center, alpha = 0.35f + 0.4f * pulse, style = kkStroke(2f))
+            drawCircle(Kk.Bone, enemy.radius * IMPACT_SHIELD_RING, center, alpha = 0.35f + 0.4f * pulse, style = kkStroke(KkStrokeWidth.Icon))
     }
 }
 
@@ -478,10 +478,10 @@ internal fun DrawScope.drawArchitect(
         drawCircle(threat.copy(alpha = 0.4f), radius * 2.57f, center, style = WorldStrokes.dashedHair)
     }
     rotate(engine.renderElapsed * spin(18f) + 12f, center) {
-        drawRect(frame, Offset(center.x - outer, center.y - outer), Size(outer * 2f, outer * 2f), style = kkStroke(2f))
+        drawRect(frame, Offset(center.x - outer, center.y - outer), Size(outer * 2f, outer * 2f), style = kkStroke(KkStrokeWidth.Icon))
     }
     rotate(-engine.renderElapsed * spin(12f) - 6f, center) {
-        drawRect(frame.copy(alpha = 0.6f), Offset(center.x - inner, center.y - inner), Size(inner * 2f, inner * 2f), style = kkStroke(2f))
+        drawRect(frame.copy(alpha = 0.6f), Offset(center.x - inner, center.y - inner), Size(inner * 2f, inner * 2f), style = kkStroke(KkStrokeWidth.Icon))
     }
     val triangle = WorldPaths.architectTriangle(radius)
     // The triangle's visual center sits below its box center (`M50 4 96 84H4Z`), as on the board.
@@ -490,14 +490,14 @@ internal fun DrawScope.drawArchitect(
         if (dominant >= 0) drawStatusFill(triangle, dominant, statusFill, patterned = true, roles = roles)
         drawKkThreatHatch(triangle, roles)
         drawPath(triangle, threat, style = kkStroke(2.5f))
-        drawPath(WorldPaths.architectInnerTriangle(radius), Kk.Bone, style = kkStroke(1.5f))
+        drawPath(WorldPaths.architectInnerTriangle(radius), Kk.Bone, style = kkStroke(KkStrokeWidth.Line2))
         drawCircle(threat, radius * 0.174f, Offset(0f, radius * 0.174f))
     }
     if (EnemyAffinity.shifting(enemy.affinityBits)) {
         val pulse = (sin(engine.renderElapsed * SHIELD_PULSE) + 1f) * 0.5f
         val shield = radius * (ARCHITECT_SHIELD + 0.04f * pulse)
         drawCircle(Kk.Bone, shield, center, alpha = 0.05f + 0.05f * pulse)
-        drawCircle(Kk.Bone, shield, center, alpha = 0.45f + 0.4f * pulse, style = kkStroke(3f))
+        drawCircle(Kk.Bone, shield, center, alpha = 0.45f + 0.4f * pulse, style = kkStroke(KkStrokeWidth.Heavy))
     }
 }
 

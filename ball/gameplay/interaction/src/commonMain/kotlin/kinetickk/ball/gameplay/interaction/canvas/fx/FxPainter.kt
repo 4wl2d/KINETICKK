@@ -501,7 +501,7 @@ internal fun DrawScope.drawFxLayer(layer: FxLayer, elements: Int) {
             val color = ctx.color(layer.color, 0)
             drawCircle(Kk.Ink, r, center, alpha = alpha * 0.85f)
             drawCircle(color, r, center, alpha = alpha, style = kkStroke(width))
-            drawCircle(color, max(0.5f, r * 0.6f), center, alpha = alpha, style = kkStroke(1.5f))
+            drawCircle(color, max(0.5f, r * 0.6f), center, alpha = alpha, style = kkStroke(KkStrokeWidth.Line2))
         }
         FxPrimitive.WIPE -> {
             val slab = layer.param * reach

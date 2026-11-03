@@ -43,7 +43,7 @@ internal fun DrawScope.drawSingularity(center: Offset, time: Float, danger: Bool
     }
     if (easy) drawPacifierWings(center, tone)
     // `.sing .r1` is a border with no background: whatever the cursor sits on stays visible inside it.
-    drawCircle(tone, 13.5f, center, style = kkStroke(3f))
+    drawCircle(tone, 13.5f, center, style = kkStroke(KkStrokeWidth.Heavy))
     drawCircle(Kk.Bone, 4f, center)
     drawRect(tone, Offset(center.x - 1f, center.y - 40f), Size(2f, 8f))
     drawRect(tone, Offset(center.x - 1f, center.y + 32f), Size(2f, 8f))
@@ -132,33 +132,33 @@ internal fun DrawScope.drawEnemy(
         if (dominant >= 0) drawStatusFill(path, dominant, statusFill, patterned, roles)
         drawKkThreatHatch(path, roles)
         drawPath(path, threat, style = kkStroke(outlineWidth(affinity) + championOutlineBonus(affinity)))
-        if (aspect >= 0) drawPath(WorldPaths.silhouette(silhouette, enemy.radius * ASPECT_CONTOUR), aspectHue, style = kkStroke(1.5f))
+        if (aspect >= 0) drawPath(WorldPaths.silhouette(silhouette, enemy.radius * ASPECT_CONTOUR), aspectHue, style = kkStroke(KkStrokeWidth.Line2))
         if (enemy.type == EnemyType.ELITE) {
             // The elite's own inner contour carries its aspect rather than a third one.
-            drawPath(WorldPaths.silhouette(silhouette, enemy.radius * 0.52f), aspectHue.copy(alpha = 0.6f), style = kkStroke(1.5f))
+            drawPath(WorldPaths.silhouette(silhouette, enemy.radius * 0.52f), aspectHue.copy(alpha = 0.6f), style = kkStroke(KkStrokeWidth.Line2))
         } else if (aspect >= 0 && EnemyAffinity.immune(affinity)) {
-            drawPath(WorldPaths.silhouette(silhouette, enemy.radius * IMMUNE_CONTOUR), aspectHue, style = kkStroke(1.5f))
+            drawPath(WorldPaths.silhouette(silhouette, enemy.radius * IMMUNE_CONTOUR), aspectHue, style = kkStroke(KkStrokeWidth.Line2))
         }
     }
     // Mini-bosses carry the Herald's glyph; the Brood Queen's egg sacs orbit it, the Throne's shield arcs ring it.
     if (rank == EnemyRank.MINI_BOSS) drawKkIcon(KkIcon.SYSTEM_ELITE, center, enemy.radius * 0.8f, threat)
     when (enemy.type) {
         EnemyType.SHOOTER -> drawCircle(threat, max(2.5f, enemy.radius * 0.2f), center)
-        EnemyType.WARDEN -> drawCircle(threat, enemy.radius * 0.24f, center, style = kkStroke(2f))
+        EnemyType.WARDEN -> drawCircle(threat, enemy.radius * 0.24f, center, style = kkStroke(KkStrokeWidth.Icon))
         EnemyType.ELITE -> drawKkIcon(KkIcon.SYSTEM_ELITE, center, enemy.radius * 1.05f, threat)
         // The front shield: a bone arc across the 120 degree face it turns toward the Core.
         EnemyType.REFLECTOR ->
             drawBoneArc(center, enemy.radius + 7f, enemy.facing * RAD_TO_DEG - REFLECTOR_ARC_DEGREES * 0.5f, REFLECTOR_ARC_DEGREES)
         EnemyType.AEGIS -> drawCircle(Kk.Bone, enemy.radius * 0.18f, center)
-        EnemyType.BROODMOTHER -> drawCircle(threat, enemy.radius * 0.3f, center, style = kkStroke(2f))
+        EnemyType.BROODMOTHER -> drawCircle(threat, enemy.radius * 0.3f, center, style = kkStroke(KkStrokeWidth.Icon))
         EnemyType.PYLON, EnemyType.SENTRY -> if (enemy.behavior == EnemyBehavior.ANCHORED || enemy.behavior == EnemyBehavior.TELEGRAPH) {
             // The mount: a bone arc behind it, opposite its aim.
             val start = (enemy.facing + PI.toFloat()) * RAD_TO_DEG - MOUNT_ARC_DEGREES * 0.5f
             drawBoneArc(center, enemy.radius + MOUNT_ARC_GAP, start, MOUNT_ARC_DEGREES)
         }
         // Secondary accents of ordinary kinds follow the crowd's level of detail.
-        EnemyType.SERAPH -> if (statusDetail) drawCircle(Kk.Bone, enemy.radius * SERAPH_RING, center, style = kkStroke(1.5f))
-        EnemyType.CHOIR -> if (statusDetail) drawCircle(Kk.Bone, enemy.radius * CHOIR_RING, center, style = kkStroke(1.5f))
+        EnemyType.SERAPH -> if (statusDetail) drawCircle(Kk.Bone, enemy.radius * SERAPH_RING, center, style = kkStroke(KkStrokeWidth.Line2))
+        EnemyType.CHOIR -> if (statusDetail) drawCircle(Kk.Bone, enemy.radius * CHOIR_RING, center, style = kkStroke(KkStrokeWidth.Line2))
         EnemyType.BROOD_QUEEN -> repeat(enemy.charges) { sac ->
             val angle = engine.renderElapsed * QUEEN_SAC_ORBIT_RATE + sac * QUEEN_SAC_SPACING
             drawCircle(Kk.Bone, QUEEN_SAC_RADIUS, polar(center, enemy.radius + QUEEN_SAC_GAP, angle))
@@ -285,7 +285,7 @@ private fun DrawScope.drawEnemyStatus(
         translate(center.x, center.y) {
             if (patterned) drawKkPattern(plate, KkFillKind.LATTICE, ice, 0.6f) else drawPath(plate, ice, alpha = 0.3f)
             drawPath(plate, ice.copy(alpha = 0.18f))
-            drawPath(plate, ice, alpha = 0.9f, style = kkStroke(1.5f))
+            drawPath(plate, ice, alpha = 0.9f, style = kkStroke(KkStrokeWidth.Line2))
         }
     }
     if (bits and EnemyStatusBits.BRITTLE != 0) {
@@ -305,10 +305,10 @@ private fun DrawScope.drawEnemyStatus(
         val wave = (sin(engine.renderElapsed * PRIMED_PULSE) + 1f) * 0.5f
         val topLeft = Offset(center.x - ring, center.y - ring)
         val box = Size(ring * 2f, ring * 2f)
-        drawCircle(color, ring, center, alpha = 0.16f, style = kkStroke(1f))
+        drawCircle(color, ring, center, alpha = 0.16f, style = kkStroke(KkStrokeWidth.Line))
         val arcPrimed = primed == dominant
         drawArc(color, -90f, 360f * fill.coerceAtLeast(0.04f), false, topLeft, box, alpha = if (arcPrimed) 0.55f + 0.45f * wave else 0.95f,
-            style = if (arcPrimed) kkStroke(3.5f) else kkStroke(2f))
+            style = if (arcPrimed) kkStroke(3.5f) else kkStroke(KkStrokeWidth.Icon))
         // Anchor III breaks a status on brake release once it is 60 % of the way.
         if (engine.build.tagTier(kinetickk.ball.content.api.BuildTag.ANCHOR) >= 3) {
             val angle = (-90f + 0.6f * 360f) / RAD_TO_DEG

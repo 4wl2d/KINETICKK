@@ -48,15 +48,15 @@ internal fun DrawScope.drawCore(engine: GameplayRenderModel, center: Offset, rol
     val ability = engine.characterAbility
     if (ability.charge > 0f && engine.coreShape != CoreShape.RING && engine.coreShape != CoreShape.PRISM) {
         drawArc(roles.you, -90f, 360f * ability.charge.coerceIn(0f, 1f), false,
-            Offset(center.x - 25f, center.y - 25f), Size(50f, 50f), style = kkStroke(2f))
+            Offset(center.x - 25f, center.y - 25f), Size(50f, 50f), style = kkStroke(KkStrokeWidth.Icon))
     }
     // Parry marks stay inside the HUD's Core halo (radius 38).
     if (ability.parryWindow > 0f) {
         rotate(45f, center) {
-            drawRect(Kk.Bone, Offset(center.x - 24f, center.y - 24f), Size(48f, 48f), style = kkStroke(2f))
+            drawRect(Kk.Bone, Offset(center.x - 24f, center.y - 24f), Size(48f, 48f), style = kkStroke(KkStrokeWidth.Icon))
         }
     }
-    if (engine.dashPhaseTime > 0f) drawCircle(roles.you.copy(alpha = 0.8f), 28f + engine.dashPhaseTime * 50f, center, style = kkStroke(2f))
+    if (engine.dashPhaseTime > 0f) drawCircle(roles.you.copy(alpha = 0.8f), 28f + engine.dashPhaseTime * 50f, center, style = kkStroke(KkStrokeWidth.Icon))
 }
 
 private val TesseractVertices = FloatArray(32)
@@ -68,7 +68,7 @@ internal fun DrawScope.drawTesseractCore(
     color: Color,
     radius: Float = GameplayRenderModel.CORE_RADIUS,
 ) {
-    drawCircle(color.copy(alpha = 0.22f), radius, center, style = kkStroke(1f))
+    drawCircle(color.copy(alpha = 0.22f), radius, center, style = kkStroke(KkStrokeWidth.Line))
     val scale = radius / GameplayRenderModel.CORE_RADIUS
     val angle = elapsed * 0.65f
     val c = cos(angle)

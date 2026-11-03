@@ -27,6 +27,7 @@ import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkFillKind
 import kinetickk.foundation.design.KkRebirthTiers
 import kinetickk.foundation.design.KkRolePalette
+import kinetickk.foundation.design.KkStrokeWidth
 import kinetickk.foundation.design.drawKkRadialHalftone
 import kinetickk.foundation.design.isOnScreen
 import kinetickk.foundation.design.kkFillBrush
@@ -268,8 +269,8 @@ private fun DrawScope.drawNadirCracks(engine: GameplayRenderModel, theme: Dimens
         val x = originX + (cx + 0.3f + 0.4f * obstacleSeedUnit(hash, CRACK_SALT + 2)) * DIMENSION_MOTE_CELL
         val y = originY + (cy + 0.3f + 0.4f * obstacleSeedUnit(hash, CRACK_SALT + 3)) * DIMENSION_MOTE_CELL
         translate(x, y) {
-            drawPath(crack, theme.crackRim, style = kkStroke(3f))
-            drawPath(crack, theme.crack, style = kkStroke(1.5f))
+            drawPath(crack, theme.crackRim, style = kkStroke(KkStrokeWidth.Heavy))
+            drawPath(crack, theme.crack, style = kkStroke(KkStrokeWidth.Line2))
         }
     }
 }
@@ -358,7 +359,7 @@ private fun DrawScope.drawDimensionMotes(engine: GameplayRenderModel, layer: Wor
                 // Each square blinks on its own phase of the local clock.
                 if (positiveModulo(time * 0.4f + obstacleSeedUnit(hash, 6), 1f) < 0.55f) {
                     drawRect(color.copy(alpha = (color.alpha + 0.1f * twinkle).coerceIn(0f, 1f)), Offset(at.x - 2f, at.y - 2f), Size(4f, 4f),
-                        style = kkStroke(1f))
+                        style = kkStroke(KkStrokeWidth.Line))
                 }
             }
             WorldLayer.BASE -> Unit
@@ -382,7 +383,7 @@ internal fun DrawScope.drawDimensionWorld(engine: GameplayRenderModel, shakeX: F
         if (!isOnScreen(center, HALO_EXTENT)) continue
         // The course ring after the next one waits in grey; every other ring shows its Grace.
         val following = !dimension.completed && halo.courseIndex >= 0 && halo.courseIndex == dimension.progress + 1
-        if (following) drawCircle(Kk.Mute.copy(alpha = 0.7f), HALO_RADIUS, center, style = kkStroke(3f)) else drawHalo(center, roles)
+        if (following) drawCircle(Kk.Mute.copy(alpha = 0.7f), HALO_RADIUS, center, style = kkStroke(KkStrokeWidth.Heavy)) else drawHalo(center, roles)
         if (halo.id == dimension.nextHaloId) drawNextHaloRing(center, time, slow, split, roles)
     }
     val embers = dimension.embers
@@ -398,7 +399,7 @@ internal fun DrawScope.drawDimensionWorld(engine: GameplayRenderModel, shakeX: F
             val tail = Offset(from.x + (center.x - from.x) * flown, from.y + (center.y - from.y) * flown)
             drawLine(roles.heat.copy(alpha = 0.6f * (1f - flown) * alpha), tail, center, 2f)
         }
-        drawCircle(roles.heat.copy(alpha = 0.25f * alpha), EMBER_GLOW_RADIUS, center, style = kkStroke(2f))
+        drawCircle(roles.heat.copy(alpha = 0.25f * alpha), EMBER_GLOW_RADIUS, center, style = kkStroke(KkStrokeWidth.Icon))
         rotate(45f, center) {
             drawRect(roles.heat.copy(alpha = alpha), Offset(center.x - EMBER_SIDE * 0.5f, center.y - EMBER_SIDE * 0.5f), Size(EMBER_SIDE, EMBER_SIDE))
         }
@@ -421,7 +422,7 @@ private fun DrawScope.drawDimensionPortal(
 /** A halo ring: a faint shield disc in a shield ring with eight blunt bone ticks outside it. */
 private fun DrawScope.drawHalo(center: Offset, roles: KkRolePalette) {
     drawCircle(roles.shield.copy(alpha = 0.05f), HALO_RADIUS, center)
-    drawCircle(roles.shield.copy(alpha = 0.9f), HALO_RADIUS, center, style = kkStroke(3f))
+    drawCircle(roles.shield.copy(alpha = 0.9f), HALO_RADIUS, center, style = kkStroke(KkStrokeWidth.Heavy))
     val tick = Kk.Bone.copy(alpha = 0.5f)
     for (index in 0 until HALO_TICKS) {
         val dx = HaloTickDirections[index * 2]
@@ -491,7 +492,7 @@ internal fun DrawScope.drawPortal(center: Offset, target: WorldLayer, locked: Bo
     } else {
         drawPortalRings(center, rings, time)
     }
-    drawCircle(Kk.Bone.copy(alpha = 0.8f), PORTAL_RIM_RADIUS, center, style = kkStroke(2f))
+    drawCircle(Kk.Bone.copy(alpha = 0.8f), PORTAL_RIM_RADIUS, center, style = kkStroke(KkStrokeWidth.Icon))
     drawDimensionSigil(target, center, PORTAL_SIGIL_RADIUS, accent)
 }
 
@@ -573,7 +574,7 @@ internal fun DrawScope.drawDimensionMinimapMarks(
         val dx = (halos[index].x - coreX) * scale
         val dy = (halos[index].y - coreY) * scale
         if (abs(dx) > half || abs(dy) > half) continue
-        drawCircle(roles.shield, dot * 1.9f, Offset(centerX + dx, centerY + dy), style = kkStroke(1f))
+        drawCircle(roles.shield, dot * 1.9f, Offset(centerX + dx, centerY + dy), style = kkStroke(KkStrokeWidth.Line))
     }
     val embers = dimension.embers
     for (index in embers.indices) {

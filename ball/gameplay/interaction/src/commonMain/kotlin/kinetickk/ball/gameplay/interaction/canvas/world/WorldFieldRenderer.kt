@@ -179,7 +179,7 @@ internal fun DrawScope.drawCombatFields(engine: GameplayRenderModel, shakeX: Flo
                 }
                 if (left < 0.08f) {
                     val t = 1f - left / 0.08f
-                    drawCircle(Kk.Bone, max(1f, radius * (0.1f + 1.1f * t)), center, style = kkStroke(2f))
+                    drawCircle(Kk.Bone, max(1f, radius * (0.1f + 1.1f * t)), center, style = kkStroke(KkStrokeWidth.Icon))
                 }
             }
             CombatFieldVisual.ROT_WELL -> {
@@ -205,7 +205,7 @@ internal fun DrawScope.drawCombatFields(engine: GameplayRenderModel, shakeX: Flo
                 if (fieldMotion(7)) {
                     drawShearedSquare(center, 8f, a, fade, 2f)
                     val beat = (elapsed % 0.75f) / 0.4f
-                    if (beat < 1f) drawCircle(a, radius * (0.6f + 0.4f * beat), center, alpha = 0.6f * (1f - beat) * fade, style = kkStroke(2f))
+                    if (beat < 1f) drawCircle(a, radius * (0.6f + 0.4f * beat), center, alpha = 0.6f * (1f - beat) * fade, style = kkStroke(KkStrokeWidth.Icon))
                     val used = (field.charge01 * ECHO_TICKS).roundToInt()
                     for (tick in 0 until used) {
                         val angle = -PI.toFloat() / 2f + tick * TAU / ECHO_TICKS
@@ -219,14 +219,14 @@ internal fun DrawScope.drawCombatFields(engine: GameplayRenderModel, shakeX: Flo
                 val eaten = (field.charge01 * 20f).roundToInt()
                 val armed = eaten >= 5
                 FxDrawBudget.take(FxPool.FIELDS, 1, signature = true)
-                drawCircle(if (armed) Kk.Bone else b, core45, center, alpha = fade, style = kkStroke(3f))
+                drawCircle(if (armed) Kk.Bone else b, core45, center, alpha = fade, style = kkStroke(KkStrokeWidth.Heavy))
                 drawFieldTimer(center, radius, remaining, b, 1.5f, fade, null)
                 if (fieldMotion(6 + eaten)) {
                     val turn = -elapsed * 120f
                     for (arc in 0 until 6) {
                         val r = radius * 0.75f
                         drawArc(a, turn + arc * 60f - 15f, 30f, false, Offset(center.x - r, center.y - r), Size(r * 2f, r * 2f), alpha = fade,
-                            style = kkStroke(2f))
+                            style = kkStroke(KkStrokeWidth.Icon))
                     }
                     for (notch in 0 until eaten.coerceAtMost(20)) {
                         val angle = -PI.toFloat() / 2f + notch * 18f / RAD_TO_DEG
@@ -235,7 +235,7 @@ internal fun DrawScope.drawCombatFields(engine: GameplayRenderModel, shakeX: Flo
                 }
                 if (armed && left < 0.12f) {
                     val t = 1f - left / 0.12f
-                    drawCircle(Kk.Bone, max(1f, radius * (0.45f + 0.75f * t)), center, style = kkStroke(2f))
+                    drawCircle(Kk.Bone, max(1f, radius * (0.45f + 0.75f * t)), center, style = kkStroke(KkStrokeWidth.Icon))
                 }
             }
             CombatFieldVisual.PLASMA -> {
@@ -283,7 +283,7 @@ internal fun DrawScope.drawCombatFields(engine: GameplayRenderModel, shakeX: Flo
                         val start = if (ring == 0) turn else -turn
                         for (arc in 0 until 3) {
                             drawArc(if (ring == 0) a else b, start + arc * 120f - 25f, 50f, false, Offset(center.x - r, center.y - r),
-                                Size(r * 2f, r * 2f), alpha = fade, style = kkStroke(2f))
+                                Size(r * 2f, r * 2f), alpha = fade, style = kkStroke(KkStrokeWidth.Icon))
                         }
                     }
                 }
@@ -295,9 +295,9 @@ internal fun DrawScope.drawCombatFields(engine: GameplayRenderModel, shakeX: Flo
                     val tick = (age % 0.5f) / 0.5f
                     if (tick < 0.4f) {
                         val flash = (1f - tick / 0.4f) * fade
-                        drawCircle(a, 8f, center, alpha = flash, style = kkStroke(1.5f))
-                        drawCircle(a, 12f, center, alpha = flash, style = kkStroke(1.5f))
-                        drawCircle(a, 16f, center, alpha = flash, style = kkStroke(1.5f))
+                        drawCircle(a, 8f, center, alpha = flash, style = kkStroke(KkStrokeWidth.Line2))
+                        drawCircle(a, 12f, center, alpha = flash, style = kkStroke(KkStrokeWidth.Line2))
+                        drawCircle(a, 16f, center, alpha = flash, style = kkStroke(KkStrokeWidth.Line2))
                     }
                 }
             }
@@ -348,7 +348,7 @@ private fun DrawScope.fieldCenter(engine: GameplayRenderModel, field: CombatFiel
 private fun DrawScope.drawFieldTimer(center: Offset, radius: Float, remaining: Float, color: Color, width: Float, alpha: Float, dashed: Stroke?) {
     FxDrawBudget.take(FxPool.FIELDS, 2, signature = true)
     if (dashed != null) drawCircle(color, radius, center, alpha = alpha * 0.6f, style = dashed)
-    else drawCircle(color, radius, center, alpha = alpha * 0.18f, style = kkStroke(1.5f))
+    else drawCircle(color, radius, center, alpha = alpha * 0.18f, style = kkStroke(KkStrokeWidth.Line2))
     if (remaining > 0f) drawArc(color, -90f, 360f * remaining, false, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f),
         alpha = alpha, style = kkStroke(width))
 }
@@ -437,8 +437,8 @@ internal fun DrawScope.drawSkillMarkers(engine: GameplayRenderModel, shakeX: Flo
                 val landing = engine.content.skills.getOrNull(skill.ordinal)?.rank(slot.rank.coerceAtLeast(1))?.values?.getOrNull(0) ?: 140f
                 val flight = 1f - slot.pending01.coerceIn(0f, 1f)
                 FxDrawBudget.take(FxPool.FIELDS, 9, signature = true)
-                drawCircle(thermal, landing, anchor, alpha = 0.6f, style = kkStroke(2f))
-                drawCircle(thermal, max(1f, landing * (1f - 0.75f * flight)), anchor, style = kkStroke(1.5f))
+                drawCircle(thermal, landing, anchor, alpha = 0.6f, style = kkStroke(KkStrokeWidth.Icon))
+                drawCircle(thermal, max(1f, landing * (1f - 0.75f * flight)), anchor, style = kkStroke(KkStrokeWidth.Line2))
                 for (corner in 0 until 4) {
                     val angle = (45f + 90f * corner + 90f * flight) / RAD_TO_DEG
                     val point = polar(anchor, landing, angle)
@@ -457,8 +457,8 @@ internal fun DrawScope.drawSkillMarkers(engine: GameplayRenderModel, shakeX: Flo
                 val r = 90f * (0.2f + 0.4f * (1f - slot.pending01.coerceIn(0f, 1f)))
                 FxDrawBudget.take(FxPool.FIELDS, 3, signature = true)
                 drawCircle(Kk.Ink, r, anchor, alpha = 0.85f)
-                drawCircle(void, r, anchor, style = kkStroke(2f))
-                drawCircle(void, r * 0.6f, anchor, style = kkStroke(1.5f))
+                drawCircle(void, r, anchor, style = kkStroke(KkStrokeWidth.Icon))
+                drawCircle(void, r * 0.6f, anchor, style = kkStroke(KkStrokeWidth.Line2))
             }
             SkillId.MASS_DRIVER -> if (slot.active01 > 0f) {
                 val gravitic = roles.element(GRAVITIC)
@@ -481,13 +481,13 @@ internal fun DrawScope.drawSkillMarkers(engine: GameplayRenderModel, shakeX: Flo
                 val turn = elapsed * 2f * RAD_TO_DEG
                 FxDrawBudget.take(FxPool.CORE_STATES, 2, signature = true)
                 drawArc(roles.element(dominant.ordinal), turn - 85f, 170f, false, Offset(core.x - r, core.y - r), Size(r * 2f, r * 2f),
-                    alpha = alpha, style = kkStroke(2f))
+                    alpha = alpha, style = kkStroke(KkStrokeWidth.Icon))
                 drawArc(roles.element(secondary.ordinal), turn + 95f, 170f, false, Offset(core.x - r, core.y - r), Size(r * 2f, r * 2f),
-                    alpha = alpha, style = kkStroke(2f))
+                    alpha = alpha, style = kkStroke(KkStrokeWidth.Icon))
             }
             SkillId.SLINGSHOT -> if (slot.active01 > 0f) {
                 FxDrawBudget.take(FxPool.CORE_STATES, 1, signature = true)
-                drawCircle(roles.kinetic, coreRadius + 8f, core, alpha = 0.5f, style = kkStroke(1.5f))
+                drawCircle(roles.kinetic, coreRadius + 8f, core, alpha = 0.5f, style = kkStroke(KkStrokeWidth.Line2))
             }
             else -> Unit
         }
@@ -543,7 +543,7 @@ internal fun DrawScope.drawPersistentLinks(engine: GameplayRenderModel, shakeX: 
         if (kotlin.math.abs(turn) <= ANCHOR_BLINK_ANGLE) {
             drawLine(void, core, target, 5f, alpha = 0.3f)
             drawLine(Kk.Bone, core, target, 2f)
-            drawCircle(void, enemy.radius + 8f, target, style = kkStroke(2f))
+            drawCircle(void, enemy.radius + 8f, target, style = kkStroke(KkStrokeWidth.Icon))
         } else {
             drawLine(void.copy(alpha = 0.35f), core, target, 1.5f, pathEffect = WorldStrokes.dashEffect)
         }

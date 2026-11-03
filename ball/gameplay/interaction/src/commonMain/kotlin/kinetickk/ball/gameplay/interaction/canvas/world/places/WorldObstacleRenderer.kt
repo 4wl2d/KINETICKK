@@ -15,6 +15,7 @@ import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkRolePalette
+import kinetickk.foundation.design.KkStrokeWidth
 import kinetickk.foundation.design.isOnScreen
 import kinetickk.foundation.design.kkStroke
 import kotlin.math.cos
@@ -59,8 +60,8 @@ private fun DrawScope.drawAsteroid(obstacle: ObstacleProjection, center: Offset,
     translate(center.x, center.y) {
         drawPath(outline, Kk.Ink3)
         drawPath(outline, Kk.Ink4, alpha = 0.6f, style = kkStroke(rimWidth(obstacle.radius)))
-        drawPath(outline, (if (unstable) roles.heat else Kk.Bone).copy(alpha = if (unstable) 0.7f else 0.32f), style = kkStroke(2f))
-        if (unstable) drawPath(ObstaclePaths.cracks(obstacle.shapeSeed, obstacle.radius), roles.heat.copy(alpha = 0.75f), style = kkStroke(1.5f))
+        drawPath(outline, (if (unstable) roles.heat else Kk.Bone).copy(alpha = if (unstable) 0.7f else 0.32f), style = kkStroke(KkStrokeWidth.Icon))
+        if (unstable) drawPath(ObstaclePaths.cracks(obstacle.shapeSeed, obstacle.radius), roles.heat.copy(alpha = 0.75f), style = kkStroke(KkStrokeWidth.Line2))
     }
     if (unstable) {
         val pulse = (sin(time * 5.5f + obstacle.shapeSeed % 7) + 1f) * 0.5f
@@ -80,7 +81,7 @@ private fun DrawScope.drawBumper(center: Offset, radius: Float, time: Float, rol
     drawCircle(roles.pol.copy(alpha = 0.08f + 0.06f * glow), radius * 1.45f, center)
     drawCircle(Kk.Ink2, radius, center)
     drawCircle(roles.pol.copy(alpha = 0.85f), radius, center, style = kkStroke(4f))
-    drawCircle(roles.pol.copy(alpha = 0.35f + 0.25f * glow), radius * 0.62f, center, style = kkStroke(2f))
+    drawCircle(roles.pol.copy(alpha = 0.35f + 0.25f * glow), radius * 0.62f, center, style = kkStroke(KkStrokeWidth.Icon))
 }
 
 /**

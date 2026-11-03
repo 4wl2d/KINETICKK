@@ -37,7 +37,7 @@ internal fun DrawScope.drawMotionEchoes(
         val center = world(engine, echo.x, echo.y, shakeX, shakeY)
         if (!isOnScreen(center, 60f)) continue
         val life = (echo.life / echo.maxLife).coerceIn(0f, 1f)
-        drawCircle(roles.you.copy(alpha = life * life * echo.intensity * 0.7f), 18f, center, style = kkStroke(2f))
+        drawCircle(roles.you.copy(alpha = life * life * echo.intensity * 0.7f), 18f, center, style = kkStroke(KkStrokeWidth.Icon))
     }
 }
 

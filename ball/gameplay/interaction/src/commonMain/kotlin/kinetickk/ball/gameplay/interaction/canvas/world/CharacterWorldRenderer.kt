@@ -41,8 +41,8 @@ internal fun DrawScope.drawCharacterField(engine: GameplayRenderModel, shakeX: F
             val active = engine.speed >= 40f
             val radius = ability.ringRadius
             drawCircle(you.copy(alpha = if (active) 0.07f else 0.02f), radius, core, style = kkStroke(36f))
-            drawCircle(you.copy(alpha = if (active) 0.45f else 0.18f), max(1f, radius - 18f), core, style = kkStroke(1f))
-            drawCircle(you.copy(alpha = if (active) 0.6f else 0.2f), radius + 18f, core, style = kkStroke(1.5f))
+            drawCircle(you.copy(alpha = if (active) 0.45f else 0.18f), max(1f, radius - 18f), core, style = kkStroke(KkStrokeWidth.Line))
+            drawCircle(you.copy(alpha = if (active) 0.6f else 0.2f), radius + 18f, core, style = kkStroke(KkStrokeWidth.Line2))
             val burst = ability.haloBurstFlash
             if (burst > 0f) drawCircle(Kk.Bone.copy(alpha = burst * 0.7f), radius + 24f * (1f - burst), core, style = kkStroke(4f * burst + 1f))
         }
@@ -55,9 +55,9 @@ internal fun DrawScope.drawCharacterField(engine: GameplayRenderModel, shakeX: F
             // Dashes drift outward while repelling and inward while attracting.
             val drift = ((engine.renderElapsed * 0.9f) % 1f).let { if (repel) it else 1f - it }
             drawCircle(hue.copy(alpha = 0.4f), radius, core, style = WorldStrokes.dashedMedium)
-            drawCircle(hue.copy(alpha = 0.22f * (1f - drift)), radius * (0.35f + 0.65f * drift), core, style = kkStroke(1.5f))
+            drawCircle(hue.copy(alpha = 0.22f * (1f - drift)), radius * (0.35f + 0.65f * drift), core, style = kkStroke(KkStrokeWidth.Line2))
             val flash = ability.polarityFlash
-            if (flash > 0f) drawCircle(hue.copy(alpha = flash * 0.6f), radius * (1.1f - 0.1f * flash), core, style = kkStroke(3f))
+            if (flash > 0f) drawCircle(hue.copy(alpha = flash * 0.6f), radius * (1.1f - 0.1f * flash), core, style = kkStroke(KkStrokeWidth.Heavy))
         }
         CoreShape.PENTAGON -> {
             val period = ability.beatPeriod
@@ -99,7 +99,7 @@ internal fun DrawScope.drawCharacterField(engine: GameplayRenderModel, shakeX: F
                     drawLine(you.copy(alpha = 0.5f), world(engine, previous.x, previous.y, shakeX, shakeY), position, 1.5f)
                 }
                 rotate(45f, position) {
-                    drawRect(you, Offset(position.x - 7f, position.y - 7f), Size(14f, 14f), style = kkStroke(1.5f))
+                    drawRect(you, Offset(position.x - 7f, position.y - 7f), Size(14f, 14f), style = kkStroke(KkStrokeWidth.Line2))
                 }
             }
             if (lattice.size >= 2) {
@@ -136,7 +136,7 @@ internal fun DrawScope.drawCharacterActors(engine: GameplayRenderModel, shakeX: 
             shakeX, shakeY)
         val path = KkFormPaths.of(KkFormGeometry.HEXAGON, if (drone.darting) 7f else 5.5f)
         translate(center.x, center.y) {
-            drawPath(path, Kk.Ink, style = kkStroke(3f))
+            drawPath(path, Kk.Ink, style = kkStroke(KkStrokeWidth.Heavy))
             drawPath(path, if (drone.darting) roles.you else Kk.Bone)
         }
     }
@@ -206,7 +206,7 @@ private fun DrawScope.drawFacetRing(facets: Int, progress: Float, center: Offset
                 drawRect(roles.shield, Offset(point.x - half, point.y - half), Size(half * 2f, half * 2f))
             } else {
                 drawRect(roles.shield.copy(alpha = 0.25f + 0.6f * if (index == facets) progress else 0f),
-                    Offset(point.x - half, point.y - half), Size(half * 2f, half * 2f), style = kkStroke(1.5f))
+                    Offset(point.x - half, point.y - half), Size(half * 2f, half * 2f), style = kkStroke(KkStrokeWidth.Line2))
             }
         }
     }

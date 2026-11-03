@@ -109,7 +109,7 @@ internal fun DrawScope.drawWorldEventStrikes(engine: GameplayRenderModel, shakeX
                 val ion = roles.element(StatusElement.ION.ordinal)
                 drawCircle(ion.copy(alpha = 0.05f + 0.15f * progress), strike.radius * progress, center)
                 drawCircle(ion.copy(alpha = 0.5f + 0.4f * progress), strike.radius, center, style = WorldStrokes.dashedMedium)
-                drawCircle(threat.copy(alpha = 0.3f + 0.5f * progress), coreReach, center, style = kkStroke(1.5f))
+                drawCircle(threat.copy(alpha = 0.3f + 0.5f * progress), coreReach, center, style = kkStroke(KkStrokeWidth.Line2))
             }
             WorldEventKind.DATA_STORM, WorldEventKind.GRAVITY_STORM, WorldEventKind.SOLAR_FLARE -> Unit
         }

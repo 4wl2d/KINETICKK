@@ -19,6 +19,7 @@ import kinetickk.foundation.design.kkStroke
 import kotlin.math.cos
 import kotlin.math.sin
 import kinetickk.ball.gameplay.interaction.canvas.CanvasMath
+import kinetickk.foundation.design.KkStrokeWidth
 
 // Baby mode (the easy run mode) in the run: pastel accents, the diaper on the Core, the pacifier wings on the cursor and
 // the pacifier plate in the Rebirth strip's slot. Procedural and cached: a steady frame allocates nothing.
@@ -41,10 +42,10 @@ internal fun DrawScope.drawDiaper(engine: GameplayRenderModel, center: Offset, r
     val shapes = EasyModeShapes.of(engine.coreRadius * DIAPER_RADIUS_RATIO)
     translate(center.x, center.y) {
         drawPath(shapes.band, kkMix(Kk.Bone, roles.soft, 0.25f), alpha = alpha)
-        drawPath(shapes.band, Kk.Ink, alpha = alpha, style = kkStroke(1.5f))
+        drawPath(shapes.band, Kk.Ink, alpha = alpha, style = kkStroke(KkStrokeWidth.Line2))
         drawPath(shapes.tabs, easyPastelLilac(roles), alpha = alpha)
         drawPath(shapes.pin, Kk.Bone2, alpha = alpha)
-        drawPath(shapes.pin, Kk.Ink, alpha = alpha, style = kkStroke(1f))
+        drawPath(shapes.pin, Kk.Ink, alpha = alpha, style = kkStroke(KkStrokeWidth.Line))
     }
 }
 

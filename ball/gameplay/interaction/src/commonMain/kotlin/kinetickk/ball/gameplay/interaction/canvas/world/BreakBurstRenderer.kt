@@ -37,7 +37,7 @@ internal fun DrawScope.drawBreakBurst(
         // Ignite: the stacks explode outward; flame ticks ride the ring.
         0 -> {
             val radius = reach * out
-            drawCircle(color, radius, center, alpha = fade * bright, style = kkStroke(3f))
+            drawCircle(color, radius, center, alpha = fade * bright, style = kkStroke(KkStrokeWidth.Heavy))
             for (tick in 0 until 10) {
                 val angle = tick * TAU / 10f + progress * 0.6f
                 drawLine(color.copy(alpha = fade * bright), polar(center, radius * 0.72f, angle), polar(center, radius * 1.08f, angle), 2f)
@@ -73,7 +73,7 @@ internal fun DrawScope.drawBreakBurst(
         3 -> {
             val closing = reach * (1f - 0.68f * out)
             drawCircle(color, closing, center, alpha = fade * bright, style = kkStroke(3.5f))
-            drawCircle(color, closing * 0.62f, center, alpha = fade * 0.8f, style = kkStroke(2f))
+            drawCircle(color, closing * 0.62f, center, alpha = fade * 0.8f, style = kkStroke(KkStrokeWidth.Icon))
             for (streak in 0 until 8) {
                 val a = streak * TAU / 8f + 0.2f - progress * 0.9f
                 drawLine(color.copy(alpha = fade * bright), polar(center, closing * 1.06f, a), polar(center, closing * (1.34f - 0.14f * out), a + 0.14f),
@@ -108,10 +108,10 @@ internal fun DrawScope.drawBreakBurst(
             val closing = reach * (1f - 0.7f * out)
             drawCircle(color, closing, center, alpha = fade * bright, style = WorldStrokes.dashedThin)
             drawCircle(Kk.Ink, reach * 0.22f * out, center, alpha = fade * 0.7f)
-            drawCircle(color, reach * 0.22f * out, center, alpha = fade * bright, style = kkStroke(2f))
+            drawCircle(color, reach * 0.22f * out, center, alpha = fade * bright, style = kkStroke(KkStrokeWidth.Icon))
             if (progress > 0.45f) {
                 val t = (progress - 0.45f) / 0.55f
-                drawCircle(color, reach * (0.3f + 0.7f * KkEase.Out.transform(t)), center, alpha = (1f - t) * bright, style = kkStroke(1.5f))
+                drawCircle(color, reach * (0.3f + 0.7f * KkEase.Out.transform(t)), center, alpha = (1f - t) * bright, style = kkStroke(KkStrokeWidth.Line2))
             }
         }
         // Rupture: a broken ring tears open and pits scatter.
@@ -120,7 +120,7 @@ internal fun DrawScope.drawBreakBurst(
             for (arc in 0 until 5) {
                 val start = arc * 72f + progress * 50f
                 drawArc(color, start, 44f, false, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f),
-                    alpha = fade * bright, style = kkStroke(3f))
+                    alpha = fade * bright, style = kkStroke(KkStrokeWidth.Heavy))
             }
             for (pit in 0 until 7) {
                 val a = pit * TAU / 7f + 0.4f

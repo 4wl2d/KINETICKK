@@ -61,7 +61,7 @@ private fun DrawScope.drawMine(center: Offset, radius: Float, life: Float, elaps
     val armed = life <= MINE_ARMED_LIFE
     rotate(45f, center) {
         drawRect(Kk.Ink1, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f))
-        drawRect(threat, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f), style = kkStroke(2f))
+        drawRect(threat, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f), style = kkStroke(KkStrokeWidth.Icon))
     }
     val blink = if (armed) (if (cos(elapsed * 9f) > 0f) 1f else 0.3f) else 0.25f
     drawCircle(threat.copy(alpha = blink), radius * 0.4f, center)
@@ -108,7 +108,7 @@ private fun DrawScope.drawPickupPlate(center: Offset, outline: androidx.compose.
     val plate = WorldPaths.shearedPlate(28f)
     translate(center.x, center.y) {
         drawPath(plate, Kk.Ink2)
-        drawPath(plate, outline.copy(alpha = 0.7f), style = kkStroke(1f))
+        drawPath(plate, outline.copy(alpha = 0.7f), style = kkStroke(KkStrokeWidth.Line))
     }
 }
 

@@ -57,8 +57,8 @@ internal fun DrawScope.drawEventSignals(engine: GameplayRenderModel, shakeX: Flo
         val life = signalLifeShare(signal, policy.lifetimeSeconds, now)
         val arcTopLeft = Offset(center.x - SIGNAL_LIFE_RADIUS, center.y - SIGNAL_LIFE_RADIUS)
         val arcSize = Size(SIGNAL_LIFE_RADIUS * 2f, SIGNAL_LIFE_RADIUS * 2f)
-        drawCircle(Kk.Bone.copy(alpha = 0.12f), SIGNAL_LIFE_RADIUS, center, style = kkStroke(2f))
-        if (life > 0f) drawArc(Kk.Bone, -90f, 360f * life, false, arcTopLeft, arcSize, style = kkStroke(2f))
+        drawCircle(Kk.Bone.copy(alpha = 0.12f), SIGNAL_LIFE_RADIUS, center, style = kkStroke(KkStrokeWidth.Icon))
+        if (life > 0f) drawArc(Kk.Bone, -90f, 360f * life, false, arcTopLeft, arcSize, style = kkStroke(KkStrokeWidth.Icon))
         drawKkIcon(signal.kind.worldIcon(), center, SIGNAL_ICON_SIZE, Kk.Bone, strokeWidth = 1.8f)
         inScreenUnits(scale) {
             drawSignalName(signal.kind, Offset(center.x * scale, center.y * scale), (policy.touchRadius + 8f) * scale, textMeasurer, keepOut)

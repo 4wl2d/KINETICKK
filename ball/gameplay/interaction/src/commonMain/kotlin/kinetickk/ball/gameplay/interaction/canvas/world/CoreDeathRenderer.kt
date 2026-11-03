@@ -13,6 +13,7 @@ import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.foundation.design.KkEase
 import kinetickk.foundation.design.KkRolePalette
+import kinetickk.foundation.design.KkStrokeWidth
 import kinetickk.foundation.design.kkLerp
 import kinetickk.foundation.design.kkStroke
 
@@ -45,7 +46,7 @@ internal fun DrawScope.drawCoreDeath(
     val ring = (t / 0.6f).coerceIn(0f, 1f)
     if (ring < 1f) {
         val eased = KkEase.Out.transform(ring)
-        drawCircle(threat.copy(alpha = (1f - eased) * fade), kkLerp(18f, 150f, eased), core, style = kkStroke(3f))
+        drawCircle(threat.copy(alpha = (1f - eased) * fade), kkLerp(18f, 150f, eased), core, style = kkStroke(KkStrokeWidth.Heavy))
     }
     // Shards fly out on the board's timeline, compressed.
     val art = reportShatterArt(victory = false)
@@ -67,7 +68,7 @@ internal fun DrawScope.drawCoreDeath(
             drawCircle(threat.copy(alpha = GlowAlphas[index] * fade), radius + GlowWidths[index], core)
         }
         drawCircle(Color.Black.copy(alpha = fade), radius, core)
-        drawCircle(threat.copy(alpha = fade), radius + 1f, core, style = kkStroke(1.5f))
+        drawCircle(threat.copy(alpha = fade), radius + 1f, core, style = kkStroke(KkStrokeWidth.Line2))
     }
 }
 

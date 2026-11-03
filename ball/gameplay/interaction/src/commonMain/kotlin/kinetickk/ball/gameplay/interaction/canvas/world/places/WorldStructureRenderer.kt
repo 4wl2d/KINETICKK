@@ -51,6 +51,7 @@ import kinetickk.ball.gameplay.interaction.canvas.*
 import kinetickk.ball.gameplay.interaction.canvas.hud.*
 import kinetickk.ball.gameplay.interaction.canvas.look.*
 import kinetickk.ball.gameplay.interaction.canvas.world.*
+import kinetickk.foundation.design.KkStrokeWidth
 
 /*
  * Structures and dungeons in the world layer: room floor plates, wall slabs and doors, the sealed room's brackets, the
@@ -159,7 +160,7 @@ internal fun DrawScope.drawStructureWalls(engine: GameplayRenderModel, shakeX: F
         val slabs = StructurePaths.walls(template, rotation)
         translate(center.x, center.y) {
             // The stroke's outer half is the rim; the fill covers its inner half and the seams where slabs meet.
-            drawPath(slabs, kkMix(Kk.Bone, accent, 0.3f), style = kkStroke(2f))
+            drawPath(slabs, kkMix(Kk.Bone, accent, 0.3f), style = kkStroke(KkStrokeWidth.Icon))
             drawPath(slabs, Kk.Ink3)
         }
         val current = dungeon != null && dungeon.structureId == structure.id
@@ -461,7 +462,7 @@ private fun DrawScope.drawSealedDoor(a: Offset, b: Offset, halfThickness: Float,
     val size = Size(abs(b.x - a.x) + halfThickness * 2f, abs(b.y - a.y) + halfThickness * 2f)
     drawRect(Kk.Ink3, topLeft, size)
     drawRect(kkFillBrush(KkFillKind.HATCH, Kk.Bone.copy(alpha = 0.55f)), topLeft, size)
-    drawRect(edge, topLeft, size, style = kkStroke(2f))
+    drawRect(edge, topLeft, size, style = kkStroke(KkStrokeWidth.Icon))
 }
 
 /** Four threat brackets in the corners of the sealed room, pulsing. */
