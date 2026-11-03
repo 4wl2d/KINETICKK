@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.interaction.fx
 
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.mapToImmutableList
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.random.CloneableXorWowRandom
@@ -60,7 +61,7 @@ class InteractionFxReducer(seed: Int) {
     private val shockwaves = mutableListOf<Shockwave>()
     private val damageNumbers = mutableListOf<DamageNumber>()
     private val weaponArcs = mutableListOf<WeaponArc>()
-    private val buildNotifications = mutableListOf<BuildNotificationProjection>()
+    private val buildNotifications = mutableListOf<BuildNotice>()
     private val elementBursts = mutableListOf<ElementBurst>()
     private val reactionStamps = mutableListOf<ReactionStamp>()
     private val skillBursts = mutableListOf<SkillBurst>()
@@ -70,6 +71,7 @@ class InteractionFxReducer(seed: Int) {
     private var runBreakMask = 0
     private var projectionDirty = false
     private var cachedProjection = VisualFxProjection.EMPTY
+    private var buildNotificationsDirty = false
     private var particlesDirty = false
     private var motionEchoesDirty = false
     private var shockwavesDirty = false
@@ -114,7 +116,9 @@ class InteractionFxReducer(seed: Int) {
     fun snapshot(): VisualFxProjection {
         if (!projectionDirty) return cachedProjection
         cachedProjection = VisualFxProjection(
-            buildNotifications = buildNotifications.mapToImmutableList { it },
+            buildNotifications = if (buildNotificationsDirty) buildNotifications.mapToImmutableList { value ->
+                BuildNotificationProjection(value.title, value.details, value.life, value.kind, value.maxLife, value.age)
+            } else cachedProjection.buildNotifications,
             particles = if (particlesDirty) particles.mapToImmutableList { value ->
                 ParticleProjection(
                     value.x,
@@ -177,6 +181,7 @@ class InteractionFxReducer(seed: Int) {
             coreRibbon = if (coreRibbonDirty) buildCoreRibbon() else cachedProjection.coreRibbon,
         )
         projectionDirty = false
+        buildNotificationsDirty = false
         particlesDirty = false
         motionEchoesDirty = false
         shockwavesDirty = false
@@ -337,6 +342,7 @@ class InteractionFxReducer(seed: Int) {
         ribbonStepSpeed = 0f
         if (changed) {
             coreRibbonDirty = true
+            buildNotificationsDirty = true
             particlesDirty = true
             motionEchoesDirty = true
             shockwavesDirty = true
@@ -371,16 +377,23 @@ class InteractionFxReducer(seed: Int) {
                 val merged = ArrayList<String>(notice.details.size + fresh)
                 merged += notice.details
                 for (line in details) if (line !in merged) merged += line
-                buildNotifications[index] = notice.copy(details = merged.toImmutableList(), life = notice.maxLife)
+                notice.details = merged.toImmutableList()
+                notice.life = notice.maxLife
+                buildNotificationsDirty = true
                 return NOTICE_MERGED
             }
         }
-        val notice = BuildNotificationProjection(title, details.toImmutableList(), kind.lifeSeconds, kind)
+        val notice = BuildNotice(title, details.toImmutableList(), kind.lifeSeconds, kind)
         var at = buildNotifications.size
         while (at > 0 && buildNotifications[at - 1].kind.priority > kind.priority) at--
         buildNotifications.add(at, notice)
         trimFront(buildNotifications, InteractionFxLimits.MAX_BUILD_NOTIFICATIONS)
-        for (index in buildNotifications.indices) if (buildNotifications[index] === notice) return NOTICE_OPENED
+        for (index in buildNotifications.indices) {
+            if (buildNotifications[index] === notice) {
+                buildNotificationsDirty = true
+                return NOTICE_OPENED
+            }
+        }
         return NOTICE_DROPPED
     }
 
@@ -604,11 +617,12 @@ class InteractionFxReducer(seed: Int) {
             ribbonCount == 0
         ) return false
         ageCoreRibbon(delta)
-        for (index in buildNotifications.indices) {
-            val value = buildNotifications[index]
-            buildNotifications[index] = value.copy(life = value.life - delta, age = value.age + delta)
+        retainInPlace(buildNotifications) { value ->
+            value.life -= delta
+            value.age += delta
+            value.life > 0f
         }
-        retainInPlace(buildNotifications) { it.life > 0f }
+        if (buildNotifications.isNotEmpty() || cachedProjection.buildNotifications.isNotEmpty()) buildNotificationsDirty = true
         val particleDamping = exp(-2.2f * delta)
         retainInPlace(particles) { value ->
             value.x += value.vx * delta
@@ -748,6 +762,16 @@ class InteractionFxReducer(seed: Int) {
             values.removeAt(index)
             index--
         }
+    }
+
+    /**
+     * A live build toast, published as a [BuildNotificationProjection]. Its title, kind and lifetime never
+     * change; [life] and [age] advance in place each step, and a merge replaces [details] (an immutable
+     * list) and restarts [life].
+     */
+    private class BuildNotice(val title: String, var details: ImmutableList<String>, var life: Float, val kind: BuildNoticeKind) {
+        val maxLife: Float = kind.lifeSeconds
+        var age: Float = maxLife - life
     }
 
     private data class Particle(
