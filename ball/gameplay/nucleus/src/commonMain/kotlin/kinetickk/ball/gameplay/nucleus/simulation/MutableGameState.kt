@@ -99,6 +99,9 @@ internal class MutableGameState(
         const val MAX_SKILL_SCRATCH = 10
     }
 
+    /** Per-step combat and elements scratch. */
+    internal val scratch: StepScratch = StepScratch(copySource?.scratch)
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -318,14 +321,6 @@ internal class MutableGameState(
     internal var clauseDepth: Int = copySource?.clauseDepth ?: 0
     internal var arsenalCounter: Int = copySource?.arsenalCounter ?: 0
     internal var necroticClock: Float = copySource?.necroticClock ?: 0f
-    /** Visual cue budget for statuses and reactions within the current fixed step. */
-    internal var statusCuesThisStep: Int = copySource?.statusCuesThisStep ?: 0
-    /** Candidate-private scratch for bounded chain targeting; never read across steps. */
-    internal val chainScratch: IntArray = IntArray(MAX_CHAIN_SCRATCH)
-    /** Nesting level of [chainScratch] use within the current step; zero between steps. */
-    internal var chainDepth: Int = 0
-    /** The enemy whose Freeze the current hit is shattering, so that hit's clauses still see it Frozen; -1 between hits. */
-    internal var shatteringEnemyId: Int = -1
     internal var soundCueStorage: MutableList<GameplayAudioCue>? =
         copySource?.soundCueStorage?.let { source -> ArrayList(source) }
     internal val soundCues: PendingSoundCueBuffer

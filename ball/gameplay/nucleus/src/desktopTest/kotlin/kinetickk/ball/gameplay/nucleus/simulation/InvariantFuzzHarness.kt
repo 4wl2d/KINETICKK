@@ -1356,10 +1356,13 @@ private class SeekFuzzPilot(private val bot: NoPoiBot) : FuzzPilot {
 // -------------------------------------------------------------------------------------------------
 // Reflective state checks.
 
-/** Candidate-private scratch of [MutableGameState]: never read across steps or casts, so never copied. */
+/**
+ * Candidate-private scratch of [MutableGameState], by field path below the state (a holder's field as
+ * `holder.field`): never read across steps or casts, so never copied.
+ */
 internal val FuzzScratchFields: Set<String> = setOf(
     "skillScratch", "castSlot", "castHits", "castAttunedStacks", "castPrimaryId", "castBossHitFirst", "castBossHitSecond",
-    "chainScratch", "chainDepth", "shatteringEnemyId",
+    "scratch.chainScratch", "scratch.chainDepth", "scratch.shatteringEnemyId",
 )
 
 private fun isGameClass(type: Class<*>): Boolean = type.name.startsWith("kinetickk.")
@@ -1399,10 +1402,11 @@ private fun runStorageView(value: Any): List<*>? {
  * The first logical difference between two game values, as a path, or null when they are equal: floats by their bits,
  * run storage arrays and sets by content, a hit history (a projectile's, a weapon entity's) up to its count, random
  * streams by snapshot,
- * every other game class field by field (skipping [exclude] at the top level).
+ * every other game class field by field (skipping the [exclude] field paths below the top level value, written
+ * `field` or `holder.field`).
  */
 internal object FuzzStateDiff {
-    fun first(a: Any?, b: Any?, path: String, exclude: Set<String> = emptySet(), depth: Int = 0): String? {
+    fun first(a: Any?, b: Any?, path: String, exclude: Set<String> = emptySet(), depth: Int = 0, fieldPath: String = ""): String? {
         if (a === b) return null
         if (a == null || b == null) return "$path: $a vs $b"
         if (a.javaClass != b.javaClass) return "$path: ${a.javaClass.simpleName} vs ${b.javaClass.simpleName}"
@@ -1436,7 +1440,8 @@ internal object FuzzStateDiff {
         runStorageView(a)?.let { view -> return first(view, runStorageView(b), path, depth = depth + 1) }
         val fields = instanceFields(a.javaClass)
         for (field in fields) {
-            if (depth == 0 && field.name in exclude) continue
+            val childPath = if (fieldPath.isEmpty()) field.name else "$fieldPath.${field.name}"
+            if (childPath in exclude) continue
             val left = field.get(a)
             val right = field.get(b)
             // A hit history (`xIds` with its `xCount`) is copied up to its count: what lies past it is stale.
@@ -1449,7 +1454,7 @@ internal object FuzzStateDiff {
                 for (index in 0 until used) if (l!![index] != r!![index]) return "$path.${field.name}[$index]"
                 continue
             }
-            first(left, right, "$path.${field.name}", depth = depth + 1)?.let { return it }
+            first(left, right, "$path.${field.name}", exclude, depth + 1, childPath)?.let { return it }
         }
         return null
     }
