@@ -4,7 +4,6 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.ContentBounds
-import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.RebirthProfile
@@ -44,6 +43,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.sites.SiteRunState
 import kinetickk.ball.gameplay.nucleus.simulation.variety.VarietyRunState
 import kinetickk.ball.gameplay.nucleus.simulation.elements.ElementRunState
 import kinetickk.ball.gameplay.nucleus.simulation.weapons.WeaponRunState
+import kinetickk.ball.gameplay.nucleus.simulation.characters.CharacterRunState
 
 /**
  * Reducer-owned simulation state. Each field declares its initial value and its copy from [copySource] together,
@@ -177,6 +177,9 @@ internal class MutableGameState(
     /** Weapon level, runtime, clocks and weapon entities. */
     internal val weaponRun: WeaponRunState = WeaponRunState(content, copySource?.weaponRun)
 
+    /** Character shape, runtime and Refit. */
+    internal val characterRun: CharacterRunState = CharacterRunState(copySource?.characterRun, bootstrapProgress)
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -190,10 +193,6 @@ internal class MutableGameState(
         ?: CloneableXorWowRandom(seed xor SPAWN_SEED_SALT)
     /** Folded Matrix effects of [matrixRanks]; immutable, refolded when a run starts. */
     internal var matrix: MatrixModifiers = copySource?.matrix ?: foldMatrix()
-    /** The selected character's Refit level, fixed when a run starts. */
-    internal var characterUpgradeLevel: Int = copySource?.characterUpgradeLevel ?: 0
-    /** Refit's character-mechanic damage multiplier, fixed when a run starts. */
-    internal var characterUpgradePower: Float = copySource?.characterUpgradePower ?: 1f
     internal val pendingDiscoveredItemIds: PendingDiscoveredItemIdBuffer
         get() = PendingDiscoveredItemIdBuffer(this)
     /** Baby mode (RunMode.EASY), fixed when the run is created; a run never changes it. */
@@ -222,8 +221,6 @@ internal class MutableGameState(
         copySource?.visualFxCueStorage?.copy()
     internal val visualFxCues: PendingVisualFxCueBuffer
         get() = PendingVisualFxCueBuffer(this)
-    /** Mutable character state; a deep copy forks it (scalars and buffers copied). */
-    internal var characterRuntime: CharacterRuntime = copySource?.characterRuntime?.fork() ?: CharacterRuntime()
     /** Window kinds draw from their own stream, so sites never shift offers, spawns or crits. */
     internal var siteRandom: CloneableXorWowRandom = copySource?.siteRandom?.copy()
         ?: CloneableXorWowRandom(seed xor SITE_SEED_SALT)
@@ -368,10 +365,6 @@ internal class MutableGameState(
     var overdriveTime: Float = copySource?.overdriveTime ?: 0f
         internal set
     var equippedRelics: List<EquippedRelic> = copySource?.equippedRelics ?: emptyList()
-        internal set
-
-    var coreShape: CoreShape = copySource?.coreShape
-        ?: bootstrapProgress?.loadout?.coreShape ?: CoreShape.ORB
         internal set
 
     val enemies: MutableList<Enemy> = copySource?.enemies?.let { source ->

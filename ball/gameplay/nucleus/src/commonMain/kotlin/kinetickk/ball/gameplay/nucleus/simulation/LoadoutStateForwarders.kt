@@ -3,7 +3,9 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.gameplay.nucleus.model.ActiveBuff
+import kinetickk.ball.gameplay.nucleus.model.CharacterRuntime
 import kinetickk.ball.gameplay.nucleus.model.CombatFieldTable
 import kinetickk.ball.gameplay.nucleus.model.RunFloatArray
 import kinetickk.ball.gameplay.nucleus.model.RunIntArray
@@ -151,3 +153,21 @@ internal var MutableGameState.weaponBeamEndX: Float
 internal var MutableGameState.weaponBeamEndY: Float
     get() = weaponRun.weaponBeamEndY
     set(value) { weaponRun.weaponBeamEndY = value }
+
+// CharacterRunState
+
+internal var MutableGameState.characterRuntime: CharacterRuntime
+    get() = characterRun.characterRuntime
+    set(value) { characterRun.characterRuntime = value }
+
+internal var MutableGameState.characterUpgradeLevel: Int
+    get() = characterRun.characterUpgradeLevel
+    set(value) { characterRun.characterUpgradeLevel = value }
+
+internal var MutableGameState.characterUpgradePower: Float
+    get() = characterRun.characterUpgradePower
+    set(value) { characterRun.characterUpgradePower = value }
+
+internal var MutableGameState.coreShape: CoreShape
+    get() = characterRun.coreShape
+    set(value) { characterRun.coreShape = value }
