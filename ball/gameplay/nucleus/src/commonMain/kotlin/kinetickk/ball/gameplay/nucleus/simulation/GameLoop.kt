@@ -186,8 +186,11 @@ internal fun MutableGameState.simulateStep(delta: Float) {
         // The Architect meets the Core in realspace, and no encounter survives into its fight.
         forceRealspaceBeforeArchitect()
         endAllEncounters(despawn = true)
-        // The terminal boss has priority over the oldest ordinary enemy at the hard cap.
-        if (enemies.size >= content.rebirth.maxActiveEnemies) enemies.removeAt(0)
+        // At the hard cap the oldest ordinary enemy makes room for the terminal boss, else the oldest enemy.
+        if (enemies.size >= content.rebirth.maxActiveEnemies) {
+            evictOldestOrdinaryEnemy()
+            if (enemies.size >= content.rebirth.maxActiveEnemies) enemies.removeAt(0)
+        }
         spawnEnemy(EnemyType.ARCHITECT)
         spawnSingularityEscort()
     }

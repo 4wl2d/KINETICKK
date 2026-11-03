@@ -14,6 +14,7 @@ import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
+import kinetickk.ball.gameplay.nucleus.model.TAU
 import kinetickk.ball.gameplay.nucleus.model.impactTaken
 import kinetickk.ball.gameplay.nucleus.model.profile
 import kinetickk.ball.gameplay.nucleus.model.weaponTaken
@@ -22,8 +23,11 @@ import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.PickupType
+import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
+import kotlin.math.cos
 import kotlin.math.min
+import kotlin.math.sin
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -421,6 +425,37 @@ class ArchitectEncounterTest {
         val state = kill(architect = true)
         assertEquals(GamePhase.VICTORY, state.phase)
         assertEquals(state.rebirthLevel, state.pendingClearedRebirthLevel)
+    }
+
+    @Test
+    fun atTheHardCapTheArchitectEvictsTheOldestOrdinaryEnemyElseTheOldestEnemy() {
+        /** A full arena of [types] in age order on a ring around the Core, stepped into the Architect's arrival. */
+        fun arrival(types: List<EnemyType>): Pair<MutableGameState, List<Enemy>> {
+            val state = buildTestState()
+            state.clearObstaclesForTesting()
+            val cap = state.content.rebirth.maxActiveEnemies
+            assertEquals(cap, types.size)
+            val placed = types.mapIndexed { index, type ->
+                val angle = index * TAU / cap
+                state.addEnemyForTesting(state.coreX + cos(angle) * 900f, state.coreY + sin(angle) * 900f, type = type)
+            }
+            state.elapsed = state.content.tempo.bossAtSeconds
+            state.simulateStep(MutableGameState.FIXED_STEP)
+            assertEquals(1, state.enemies.count { it.type == EnemyType.ARCHITECT })
+            assertEquals(cap, state.enemies.size, "One enemy made room")
+            return state to placed
+        }
+        val cap = canonicalGameplayContent.rebirth.maxActiveEnemies
+        val (mixed, placed) = arrival(listOf(EnemyType.ELITE, EnemyType.HERALD) + List(cap - 2) { EnemyType.DRIFTER })
+        assertTrue(placed[0] in mixed.enemies, "The oldest Elite stays")
+        assertTrue(placed[1] in mixed.enemies, "The Herald stays")
+        assertTrue(placed[2] !in mixed.enemies, "The oldest ordinary enemy made room")
+        assertTrue(placed.drop(3).all { it in mixed.enemies })
+
+        // With no ordinary enemy left to evict, the oldest enemy still makes room.
+        val (elites, oldest) = arrival(List(cap) { EnemyType.ELITE })
+        assertTrue(oldest[0] !in elites.enemies, "The oldest enemy made room")
+        assertTrue(oldest.drop(1).all { it in elites.enemies })
     }
 
     @Test
