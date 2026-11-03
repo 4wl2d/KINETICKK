@@ -30,7 +30,6 @@ import kinetickk.ball.content.api.breakThresholdCut
 import kinetickk.ball.content.api.overhealOverfill
 import kinetickk.ball.gameplay.nucleus.render.RelicLinkKind
 import kinetickk.foundation.collections.ImmutableList
-import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.characters.*
@@ -723,7 +722,3 @@ internal fun MutableGameState.itemDormantShare(item: ItemDefinition): Float {
 }
 
 private val BuffStat.isSkillStat: Boolean get() = actsOnSkills
-
-internal val RelicAspect.isElemental: Boolean get() = element != null
-
-internal fun emptyRelicLinks(): ImmutableList<RelicLink> = immutableListOf()
