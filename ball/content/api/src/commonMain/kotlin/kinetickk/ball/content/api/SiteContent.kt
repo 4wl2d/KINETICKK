@@ -87,8 +87,6 @@ data class SiteReward(
         }
     }
 
-    val isEmpty: Boolean get() = this == NONE
-
     companion object {
         val NONE: SiteReward = SiteReward()
     }
@@ -111,7 +109,10 @@ data class SiteDefinition(
     val minimumRebirth: Int = 0,
     /** Fly-through radius (window sites keep 65 so positions and the bots' clearance stay exact). */
     val activationRadius: Float = 65f,
-    /** Trial seconds once active; 0 = untimed (bounty, secret duels, instant sites). */
+    /**
+     * Trial seconds once active; 0 = untimed (bounty, secret duels, instant sites). Challenges count this down; an
+     * anomaly runs the window policy's trial duration and a race its course's limit, so for them only `> 0` matters.
+     */
     val duration: Float = 25f,
 ) {
     init {
@@ -206,8 +207,10 @@ data class RacePolicy(
     }
 }
 
+/** Challenge rules; each challenge counts down its [SiteDefinition.duration]. */
 data class ChallengePolicy(
     val brakelessRequired: Float = 16f,
+    /** Seconds over which the brakeless ring shrinks from its start to its end radius. */
     val brakelessDuration: Float = 20f,
     val brakelessStartRadius: Float = 900f,
     val brakelessEndRadius: Float = 450f,
@@ -215,23 +218,19 @@ data class ChallengePolicy(
     val brakelessGrace: Float = 0.5f,
     val ramFoes: Int = 8,
     val ramRequired: Int = 2,
-    val ramDuration: Float = 20f,
     val ramFoeHealthShare: Float = 1.0f,
     val ramRingRadius: Float = 320f,
     val ramClamp: Float = 650f,
     val untouchedRequired: Float = 10f,
-    val untouchedDuration: Float = 22f,
     val untouchedRadius: Float = 650f,
     val untouchedVolleyInterval: Float = 1.6f,
     val untouchedWarning: Float = 0.8f,
     val untouchedShotSpeed: Float = 520f,
     val untouchedShotDamage: Float = 10f,
     val velocityRequired: Float = 6f,
-    val velocityDuration: Float = 25f,
     val velocityMinSpeed: Float = 1_400f,
     val velocityZoneRadius: Float = 1_800f,
     val slalomPoles: Int = 6,
-    val slalomDuration: Float = 10f,
     val slalomFirstAlong: Float = 360f,
     val slalomSpacing: Float = 340f,
     val slalomPoleOffset: Float = 150f,
@@ -243,11 +242,10 @@ data class ChallengePolicy(
         require(ramFoes in 1..ContentBounds.MAX_SITE_FOES && ramRequired in 1..ramFoes) {
             "Ram foes must be in 1..${ContentBounds.MAX_SITE_FOES} and the requirement within them"
         }
-        listOf(brakelessDuration, ramDuration, untouchedDuration, velocityDuration, slalomDuration).forEach {
-            require(it in 1f..25f) { "Challenge durations must be in 1..25 s" }
+        require(brakelessDuration in 1f..25f) { "The brakeless ring shrinks over 1..25 s" }
+        require(brakelessRequired >= 0f && untouchedRequired >= 0f && velocityRequired >= 0f) {
+            "Challenge seconds must not be negative"
         }
-        require(brakelessRequired in 0f..brakelessDuration && untouchedRequired in 0f..untouchedDuration &&
-            velocityRequired in 0f..velocityDuration) { "A challenge never asks for more seconds than it lasts" }
         listOf(
             brakelessStartRadius, brakelessEndRadius, ramRingRadius, ramClamp, untouchedRadius, velocityZoneRadius,
             slalomSpacing, slalomPoleOffset, slalomMaxLateral, slalomPoleClearance,
@@ -447,6 +445,11 @@ data class SitePolicy(
         require(definitions.all { it.windowWeight == 0f || it.duration <= windows.trialDuration }) {
             "A window site never lasts longer than the trial"
         }
+        require(
+            challenges.brakelessRequired <= definition(SiteKind.BRAKELESS_TRIAL).duration &&
+                challenges.untouchedRequired <= definition(SiteKind.UNTOUCHED_TRIAL).duration &&
+                challenges.velocityRequired <= definition(SiteKind.VELOCITY_TRIAL).duration,
+        ) { "A challenge never asks for more seconds than it lasts" }
         // A Golden Drifter released within its trigger radius must not count as escaped at once.
         require(ambient.rules.none { it.kind == SiteKind.GOLDEN_DRIFTER && it.triggerRadius >= secrets.goldenEscapeDistance }) {
             "The Golden Drifter escapes farther away than its trigger reaches"

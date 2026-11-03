@@ -68,6 +68,11 @@ class WorldContractBoundsTest {
         assertFailsWith<IllegalArgumentException> { ChallengePolicy(ramClamp = 320f, ramRingRadius = 321f) }
         ChallengePolicy(ramClamp = 120f, ramRingRadius = 100f)
         assertFailsWith<IllegalArgumentException> { ChallengePolicy(ramClamp = 119f, ramRingRadius = 100f) }
+        // A challenge counts down its definition's duration, so it never asks for more seconds than that.
+        SitePolicy(challenges = ChallengePolicy(brakelessRequired = 20f, untouchedRequired = 22f, velocityRequired = 25f))
+        assertFailsWith<IllegalArgumentException> { SitePolicy(challenges = ChallengePolicy(brakelessRequired = 20.5f)) }
+        assertFailsWith<IllegalArgumentException> { SitePolicy(challenges = ChallengePolicy(untouchedRequired = 22.5f)) }
+        assertFailsWith<IllegalArgumentException> { SitePolicy(challenges = ChallengePolicy(velocityRequired = 25.5f)) }
         SecretPolicy(spinBuckets = ContentBounds.MAX_SPIN_BUCKETS)
         assertFailsWith<IllegalArgumentException> { SecretPolicy(spinBuckets = ContentBounds.MAX_SPIN_BUCKETS + 1) }
         // Spin Cycle runs in every run: at most five Matter and nothing that acts in the run.

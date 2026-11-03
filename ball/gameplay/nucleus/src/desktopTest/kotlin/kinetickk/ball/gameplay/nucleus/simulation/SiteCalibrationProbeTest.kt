@@ -4,6 +4,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.SitePolicy
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test
@@ -108,22 +109,21 @@ class SiteCalibrationProbeTest {
                 "ramFoes" -> sites.copy(challenges = sites.challenges.copy(ramFoes = value.toInt()))
                 "ramFoeHealthShare" -> sites.copy(challenges = sites.challenges.copy(ramFoeHealthShare = value))
                 "ramRingRadius" -> sites.copy(challenges = sites.challenges.copy(ramRingRadius = value))
-                "ramDuration" -> sites.copy(challenges = sites.challenges.copy(ramDuration = value))
+                "ramDuration" -> sites.withDuration(SiteKind.RAM_TRIAL, value)
                 "untouchedRequired" -> sites.copy(challenges = sites.challenges.copy(untouchedRequired = value))
                 "velocityRequired" -> sites.copy(challenges = sites.challenges.copy(velocityRequired = value))
                 "velocityMinSpeed" -> sites.copy(challenges = sites.challenges.copy(velocityMinSpeed = value))
-                "slalomDuration" -> sites.copy(
-                    challenges = sites.challenges.copy(slalomDuration = value),
-                    definitions = sites.definitions.map {
-                        if (it.kind == SiteKind.SLALOM_TRIAL) it.copy(duration = value) else it
-                    }.toImmutableList(),
-                )
+                "slalomDuration" -> sites.withDuration(SiteKind.SLALOM_TRIAL, value)
                 "bossIntegrityShare" -> sites.copy(bounty = sites.bounty.copy(bossIntegrityShare = value))
                 else -> error("unknown site knob $name")
             }
         }
         return base.copy(sites = sites)
     }
+
+    /** [kind]'s definition counting down [seconds] (a challenge's duration knob). */
+    private fun SitePolicy.withDuration(kind: SiteKind, seconds: Float): SitePolicy =
+        copy(definitions = definitions.map { if (it.kind == kind) it.copy(duration = seconds) else it }.toImmutableList())
 
     private fun pilot(text: String): SitePilotTuning {
         var tuning = SitePilotTuning()
