@@ -155,6 +155,8 @@ internal fun MutableGameState.simulateStep(delta: Float) {
     updateDimension(delta)
     if (phase != GamePhase.RUNNING) return
     updateRunVariety(delta)
+    // A world-event strike can end the run: nothing else acts once it did.
+    if (phase != GamePhase.RUNNING) return
     updateWeapons(delta)
     updateEnemies(delta)
     if (phase != GamePhase.RUNNING) return

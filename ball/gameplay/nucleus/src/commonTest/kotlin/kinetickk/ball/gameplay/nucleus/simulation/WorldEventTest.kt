@@ -17,6 +17,7 @@ import kinetickk.ball.gameplay.nucleus.model.distanceSquared
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.EventStrikeProjection
+import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
@@ -309,6 +310,28 @@ class WorldEventTest {
         assertNull(state.worldEvent, "The event still ends at its end")
         assertEquals(SKIES_CLEAR, state.message)
         assertEquals(1, state.nextWorldEvent)
+    }
+
+    @Test
+    fun aLethalEventStrikeEndsTheStepBeforeWeaponsAndEnemiesAct() {
+        val meteor = policy.meteor
+        val state = arena()
+        val plan = state.planOnly(WorldEventKind.METEOR_SHOWER)
+        state.eventStepAt(plan.startsAt + 5f)
+        state.worldEventNextPulseAt = Float.MAX_VALUE
+        val bystander = state.addEnemyForTesting(state.coreX - 600f, state.coreY).apply { vx = 50f }
+        val bystanderX = bystander.x
+        state.hp = 1f
+        state.shield = 0f
+        // Due now, on the Core: it lands in the next step's world events.
+        state.worldEvent = checkNotNull(state.worldEvent).copy(
+            strikes = immutableListOf(EventStrikeProjection(state.coreX, state.coreY, meteor.radius, state.elapsed - 1f, state.elapsed)),
+        )
+        val weaponClock = state.weaponClock
+        state.simulateStep(MutableGameState.FIXED_STEP)
+        assertEquals(GamePhase.GAME_OVER, state.phase, "The meteor ended the run")
+        assertEquals(weaponClock, state.weaponClock, "No weapon acts once the Core fell")
+        assertEquals(bystanderX, bystander.x, "No enemy acts once the Core fell")
     }
 
     @Test
