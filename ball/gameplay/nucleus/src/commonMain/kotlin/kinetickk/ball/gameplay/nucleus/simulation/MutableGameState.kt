@@ -9,7 +9,6 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.DirectorPersonalityId
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.GameplayContentSnapshot
-import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.OmenId
 import kinetickk.ball.content.api.RebirthProfile
@@ -140,6 +139,9 @@ internal class MutableGameState(
     /** Relic ranks, cooldowns, counters and the Heirloom offer. */
     internal val relicRun: RelicRunState = RelicRunState(content, copySource?.relicRun, bootstrapProgress)
 
+    /** Choice type, rerolls, offer pity and the last acquisition. */
+    internal val offerRun: OfferRunState = OfferRunState(copySource?.offerRun)
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -205,9 +207,6 @@ internal class MutableGameState(
     internal var freeDashPrimed: Boolean = copySource?.freeDashPrimed ?: false
     internal var freeDashReadyAt: Float = copySource?.freeDashReadyAt ?: 0f
     internal var comboKillCounter: Int = copySource?.comboKillCounter ?: 0
-    internal var offerPity: Int = copySource?.offerPity ?: 0
-    /** Item offers opened this run; the Matrix widens every n-th one. */
-    internal var itemOffersOpened: Int = copySource?.itemOffersOpened ?: 0
     internal var dashHitThisDash: Boolean = copySource?.dashHitThisDash ?: false
     internal var clauseDepth: Int = copySource?.clauseDepth ?: 0
     internal var arsenalCounter: Int = copySource?.arsenalCounter ?: 0
@@ -272,8 +271,6 @@ internal class MutableGameState(
     internal var signalsEngaged: Int = copySource?.signalsEngaged ?: 0
     /** At most [ContentBounds.MAX_PENDING_SIGNAL_PROMPTS] prompts. */
     internal var pendingSignalPrompts: ImmutableList<SignalPrompt> = copySource?.pendingSignalPrompts ?: immutableListOf()
-    /** The open item offer's rarity floor (null: none); rerolls keep it, finishing the choice clears it. */
-    internal var offerRarityFloor: ItemRarity? = copySource?.offerRarityFloor
 
     internal var nextEntityId: Int = copySource?.nextEntityId ?: 1
     /** Seed of this run; obstacle chunks hash it with their absolute chunk. */
@@ -373,7 +370,6 @@ internal class MutableGameState(
     internal var hurtCooldown: Float = copySource?.hurtCooldown ?: 0f
     internal var lastAimDirectionX: Float = copySource?.lastAimDirectionX ?: 1f
     internal var lastAimDirectionY: Float = copySource?.lastAimDirectionY ?: 0f
-    internal var activeChoiceType: ChoiceType = copySource?.activeChoiceType ?: ChoiceType.ITEM
 
     var phase: GamePhase = copySource?.phase ?: GamePhase.RUNNING
         internal set
@@ -535,12 +531,6 @@ internal class MutableGameState(
     var overdriveCharge: Float = copySource?.overdriveCharge ?: 0f
         internal set
     var overdriveTime: Float = copySource?.overdriveTime ?: 0f
-        internal set
-    var rerollsRemaining: Int = copySource?.rerollsRemaining ?: 1
-        internal set
-    var acquiredItemCount: Int = copySource?.acquiredItemCount ?: 0
-        internal set
-    var recentItem: ItemDefinition? = copySource?.recentItem
         internal set
     var equippedRelics: List<EquippedRelic> = copySource?.equippedRelics ?: emptyList()
         internal set

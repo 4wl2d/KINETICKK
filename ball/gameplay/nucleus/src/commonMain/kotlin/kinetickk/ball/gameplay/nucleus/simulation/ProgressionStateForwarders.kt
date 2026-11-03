@@ -4,6 +4,8 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
@@ -14,6 +16,7 @@ import kinetickk.ball.gameplay.nucleus.model.RunFloatArray
 import kinetickk.ball.gameplay.nucleus.model.RunIntArray
 import kinetickk.ball.gameplay.nucleus.model.RunMutableSet
 import kinetickk.ball.gameplay.nucleus.model.SeveredRelic
+import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 
 /*
  * Legacy forwarders; new code uses the holder; never add a forwarder for a new field.
@@ -194,3 +197,33 @@ internal var MutableGameState.pendingHeirloomResolved: Boolean
 internal var MutableGameState.pendingVictoryRelics: List<RelicId>?
     get() = relicRun.pendingVictoryRelics
     set(value) { relicRun.pendingVictoryRelics = value }
+
+// OfferRunState
+
+internal var MutableGameState.activeChoiceType: ChoiceType
+    get() = offerRun.activeChoiceType
+    set(value) { offerRun.activeChoiceType = value }
+
+internal var MutableGameState.rerollsRemaining: Int
+    get() = offerRun.rerollsRemaining
+    set(value) { offerRun.rerollsRemaining = value }
+
+internal var MutableGameState.offerPity: Int
+    get() = offerRun.offerPity
+    set(value) { offerRun.offerPity = value }
+
+internal var MutableGameState.itemOffersOpened: Int
+    get() = offerRun.itemOffersOpened
+    set(value) { offerRun.itemOffersOpened = value }
+
+internal var MutableGameState.offerRarityFloor: ItemRarity?
+    get() = offerRun.offerRarityFloor
+    set(value) { offerRun.offerRarityFloor = value }
+
+internal var MutableGameState.acquiredItemCount: Int
+    get() = offerRun.acquiredItemCount
+    set(value) { offerRun.acquiredItemCount = value }
+
+internal var MutableGameState.recentItem: ItemDefinition?
+    get() = offerRun.recentItem
+    set(value) { offerRun.recentItem = value }
