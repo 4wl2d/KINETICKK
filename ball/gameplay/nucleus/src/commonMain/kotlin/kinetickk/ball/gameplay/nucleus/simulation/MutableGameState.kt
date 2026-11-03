@@ -114,30 +114,30 @@ internal class MutableGameState(
         ?: content.rebirth.profile(
             bootstrapProgress?.rebirthProgress?.level ?: initialRebirthLevel,
         )
-    internal val unlockedWeaponSet: CopyOnWriteMutableSet<WeaponId> = copySource?.unlockedWeaponSet?.fork()
-        ?: CopyOnWriteMutableSet(mutableSetOf<WeaponId>().apply {
+    internal val unlockedWeaponSet: RunMutableSet<WeaponId> = copySource?.unlockedWeaponSet?.copy()
+        ?: RunMutableSet(mutableSetOf<WeaponId>().apply {
             addAll(bootstrapProgress?.loadout?.unlockedWeapons.orEmpty())
             add(WeaponId.FLUX_WAKE)
         })
     internal var unlockedWeaponView: Set<WeaponId> = copySource?.unlockedWeaponView
         ?: unlockedWeaponSet.toSet()
     /** Owned Core Matrix ranks by content node index, captured from the profile at bootstrap. */
-    internal val matrixRanks: CopyOnWriteIntArray = copySource?.matrixRanks?.fork()
-        ?: CopyOnWriteIntArray(IntArray(content.matrixNodes.size) { index ->
+    internal val matrixRanks: RunIntArray = copySource?.matrixRanks?.copy()
+        ?: RunIntArray(IntArray(content.matrixNodes.size) { index ->
             val definition = content.matrixNodes[index]
             (bootstrapProgress?.matrix?.rank(definition.id) ?: 0).coerceIn(0, definition.maxRanks)
         })
     /** Folded Matrix effects of [matrixRanks]; immutable, refolded when a run starts. */
     internal var matrix: MatrixModifiers = copySource?.matrix ?: foldMatrix()
     /** Bought Refit levels by [CoreShape.ordinal], captured from the profile at bootstrap; a run never writes them. */
-    internal val characterUpgradeLevels: CopyOnWriteIntArray = copySource?.characterUpgradeLevels?.fork()
-        ?: CopyOnWriteIntArray(IntArray(CoreShape.entries.size) { index ->
+    internal val characterUpgradeLevels: RunIntArray = copySource?.characterUpgradeLevels?.copy()
+        ?: RunIntArray(IntArray(CoreShape.entries.size) { index ->
             (bootstrapProgress?.upgrades?.characterLevels?.getOrElse(index) { 0 } ?: 0)
                 .coerceIn(0, content.upgrades.maxLevel)
         })
     /** Bought Honing levels by [WeaponId.ordinal], captured from the profile at bootstrap; a run never writes them. */
-    internal val weaponUpgradeLevels: CopyOnWriteIntArray = copySource?.weaponUpgradeLevels?.fork()
-        ?: CopyOnWriteIntArray(IntArray(WeaponId.entries.size) { index ->
+    internal val weaponUpgradeLevels: RunIntArray = copySource?.weaponUpgradeLevels?.copy()
+        ?: RunIntArray(IntArray(WeaponId.entries.size) { index ->
             (bootstrapProgress?.upgrades?.weaponLevels?.getOrElse(index) { 0 } ?: 0)
                 .coerceIn(0, content.upgrades.maxLevel)
         })
@@ -145,8 +145,8 @@ internal class MutableGameState(
     internal var characterUpgradeLevel: Int = copySource?.characterUpgradeLevel ?: 0
     /** Refit's character-mechanic damage multiplier, fixed when a run starts. */
     internal var characterUpgradePower: Float = copySource?.characterUpgradePower ?: 1f
-    internal val discoveredItemIds: CopyOnWriteMutableSet<Int> = copySource?.discoveredItemIds?.fork()
-        ?: CopyOnWriteMutableSet(
+    internal val discoveredItemIds: RunMutableSet<Int> = copySource?.discoveredItemIds?.copy()
+        ?: RunMutableSet(
             bootstrapProgress?.collection?.discoveredItemIds
                 ?.filterTo(mutableSetOf()) { content.item(it) != null }
                 ?: mutableSetOf(),
@@ -154,14 +154,14 @@ internal class MutableGameState(
     internal var discoveredRelicMask: Long = copySource?.discoveredRelicMask
         ?: bootstrapProgress?.collection?.discoveredRelicIds?.fold(0L) { mask, id -> mask or (1L shl id.ordinal) } ?: 0L
     internal var pendingDiscoveredRelicMask: Long = copySource?.pendingDiscoveredRelicMask ?: 0L
-    internal var pendingDiscoveredItemIdStorage: CopyOnWriteMutableSet<Int>? =
-        copySource?.pendingDiscoveredItemIdStorage?.fork()
+    internal var pendingDiscoveredItemIdStorage: RunMutableSet<Int>? =
+        copySource?.pendingDiscoveredItemIdStorage?.copy()
     internal val pendingDiscoveredItemIds: PendingDiscoveredItemIdBuffer
         get() = PendingDiscoveredItemIdBuffer(this)
-    internal val itemStacks: CopyOnWriteIntArray = copySource?.itemStacks?.fork()
-        ?: CopyOnWriteIntArray(IntArray(content.items.size))
-    internal val rebornItems: CopyOnWriteIntArray = copySource?.rebornItems?.fork()
-        ?: CopyOnWriteIntArray(IntArray(content.items.size))
+    internal val itemStacks: RunIntArray = copySource?.itemStacks?.copy()
+        ?: RunIntArray(IntArray(content.items.size))
+    internal val rebornItems: RunIntArray = copySource?.rebornItems?.copy()
+        ?: RunIntArray(IntArray(content.items.size))
     /**
      * Build gains in order: item ids at first acquisition (a replaced active item's id leaves it) and relic binds or
      * rank-three upgrades as [relicGain] entries. Decides affinity ties. Immutable value, replaced on change.
@@ -187,16 +187,16 @@ internal class MutableGameState(
     )
     /** Immutable compiled build shared by reduction siblings; replaced by [recompileBuild]. */
     internal var build: CompiledBuild = copySource?.build ?: CompiledBuild.empty(content)
-    internal val clauseReadyAt: CopyOnWriteFloatArray = copySource?.clauseReadyAt?.fork()
-        ?: CopyOnWriteFloatArray(FloatArray(content.totalClauseCount))
-    internal val clauseCounters: CopyOnWriteIntArray = copySource?.clauseCounters?.fork()
-        ?: CopyOnWriteIntArray(IntArray(content.totalClauseCount))
+    internal val clauseReadyAt: RunFloatArray = copySource?.clauseReadyAt?.copy()
+        ?: RunFloatArray(FloatArray(content.totalClauseCount))
+    internal val clauseCounters: RunIntArray = copySource?.clauseCounters?.copy()
+        ?: RunIntArray(IntArray(content.totalClauseCount))
     /** Fractional status stacks per item, so stack magnitudes apply deterministically without RNG. */
-    internal val statusAccumulators: CopyOnWriteFloatArray = copySource?.statusAccumulators?.fork()
-        ?: CopyOnWriteFloatArray(FloatArray(content.items.size))
+    internal val statusAccumulators: RunFloatArray = copySource?.statusAccumulators?.copy()
+        ?: RunFloatArray(FloatArray(content.items.size))
     /** Earliest time each item may apply statuses again (per-item rate bound). */
-    internal val itemStatusReadyAt: CopyOnWriteFloatArray = copySource?.itemStatusReadyAt?.fork()
-        ?: CopyOnWriteFloatArray(FloatArray(content.items.size))
+    internal val itemStatusReadyAt: RunFloatArray = copySource?.itemStatusReadyAt?.copy()
+        ?: RunFloatArray(FloatArray(content.items.size))
     internal var buffs: List<ActiveBuff> = copySource?.buffs ?: emptyList()
     /** Lingering fields; a deep copy forks the table. */
     internal val combatFieldTable: CombatFieldTable = copySource?.combatFieldTable?.fork() ?: CombatFieldTable()
@@ -336,7 +336,7 @@ internal class MutableGameState(
         get() = PendingVisualFxCueBuffer(this)
     internal var pendingBankedMatter: Long = copySource?.pendingBankedMatter ?: 0L
     internal var pendingClearedRebirthLevel: Int? = copySource?.pendingClearedRebirthLevel
-    /** Mutable character state; a deep copy forks it (scalars copied, buffers copy-on-write). */
+    /** Mutable character state; a deep copy forks it (scalars and buffers copied). */
     internal var characterRuntime: CharacterRuntime = copySource?.characterRuntime?.fork() ?: CharacterRuntime()
     /** Owned state of the equipped weapon (entities, proc gates, element cadences, scaling inputs); a deep copy forks it. */
     internal var weaponRuntime: WeaponRuntime = copySource?.weaponRuntime?.fork() ?: WeaponRuntime()
@@ -541,19 +541,19 @@ internal class MutableGameState(
      */
     internal var pendingActiveItemId: Int? = copySource?.pendingActiveItemId
     internal var pendingActiveReborn: Boolean = copySource?.pendingActiveReborn ?: false
-    internal val relicRanks: CopyOnWriteIntArray = copySource?.relicRanks?.fork()
-        ?: CopyOnWriteIntArray(IntArray(content.relics.size))
-    internal val relicCooldowns: CopyOnWriteFloatArray = copySource?.relicCooldowns?.fork()
-        ?: CopyOnWriteFloatArray(FloatArray(content.relics.size))
-    internal val relicCounters: CopyOnWriteIntArray = copySource?.relicCounters?.fork()
-        ?: CopyOnWriteIntArray(IntArray(content.relics.size))
+    internal val relicRanks: RunIntArray = copySource?.relicRanks?.copy()
+        ?: RunIntArray(IntArray(content.relics.size))
+    internal val relicCooldowns: RunFloatArray = copySource?.relicCooldowns?.copy()
+        ?: RunFloatArray(FloatArray(content.relics.size))
+    internal val relicCounters: RunIntArray = copySource?.relicCounters?.copy()
+        ?: RunIntArray(IntArray(content.relics.size))
     internal val echoHits: MutableList<EchoHit> = copySource?.echoHits
         ?.let { source ->
             source.mapTo(ArrayList(source.size), EchoHit::copy)
         }
         ?: mutableListOf()
-    internal val agonyMutationCounts: CopyOnWriteIntArray = copySource?.agonyMutationCounts?.fork()
-        ?: CopyOnWriteIntArray(IntArray(content.weapons.size))
+    internal val agonyMutationCounts: RunIntArray = copySource?.agonyMutationCounts?.copy()
+        ?: RunIntArray(IntArray(content.weapons.size))
     internal var dataFraction: Float = copySource?.dataFraction ?: 0f
     internal var matterFraction: Float = copySource?.matterFraction ?: 0f
     internal var shieldRechargeDelay: Float = copySource?.shieldRechargeDelay ?: 0f
@@ -885,8 +885,8 @@ internal fun MutableGameState.deepCopy(): MutableGameState =
 /**
  * Allocation-free owner view over discoveries awaiting publication.
  *
- * The actual COW set is absent for the overwhelmingly common empty state. A reduction fork only
- * creates its small COW facade when there is retained output to preserve.
+ * The actual set is absent for the overwhelmingly common empty state. A deep copy only copies it when
+ * there is retained output to preserve.
  */
 @JvmInline
 internal value class PendingDiscoveredItemIdBuffer(
@@ -904,7 +904,7 @@ internal value class PendingDiscoveredItemIdBuffer(
 
     fun add(itemId: Int): Boolean {
         owner.pendingDiscoveredItemIdStorage?.let { return it.add(itemId) }
-        owner.pendingDiscoveredItemIdStorage = CopyOnWriteMutableSet(mutableSetOf(itemId))
+        owner.pendingDiscoveredItemIdStorage = RunMutableSet(mutableSetOf(itemId))
         return true
     }
 

@@ -166,10 +166,8 @@ class CombatFieldTableTest {
 
         val candidate = state.deepCopy()
         assertNotSame(state.combatFieldTable, candidate.combatFieldTable)
-        assertTrue(candidate.combatFieldTable.sharesStorageWith(state.combatFieldTable), "A fork copies nothing up front")
         candidate.updateCombatFields(0.5f)
         candidate.addTestField(CombatFieldKind.FUSION, x = 1f, y = 1f, radius = 5f)
-        assertFalse(candidate.combatFieldTable.sharesStorageWith(state.combatFieldTable))
         assertEquals(before, state.fieldRecords)
         assertEquals(2, candidate.combatFieldTable.count)
         assertEquals(1.5f, candidate.fieldRecords[0].remaining)

@@ -20,7 +20,6 @@ import kinetickk.ball.gameplay.nucleus.simulation.weapons.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNotSame
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -233,7 +232,6 @@ class SynergySystemTest {
         copy.updateCombatFields(2f)
         assertEquals(0, copy.combatFieldTable.count)
         assertNotSame(state.combatFieldTable, copy.combatFieldTable)
-        assertFalse(copy.combatFieldTable.sharesStorageWith(state.combatFieldTable))
 
         assertEquals(sourceEchoes, state.echoHits.toList())
         assertEquals(12f, state.enemies.single().status[kinetickk.ball.gameplay.nucleus.model.StatusCell.CINDER_BANK])

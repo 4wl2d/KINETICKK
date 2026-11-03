@@ -85,14 +85,14 @@ internal data class CombatFieldRecord(
 
 /**
  * The run's lingering fields: at most [CAPACITY] fixed-stride records, live ones packed at the front in
- * admission order (removal compacts in place, so creation order is scan order). Forks share storage until
- * the first changed write; a step allocates nothing. [revision] moves whenever the set of fields, a position
+ * admission order (removal compacts in place, so creation order is scan order). A fork copies the records
+ * eagerly; a step allocates nothing. [revision] moves whenever the set of fields, a position
  * or a counter changes, never for the per-step life and tick clocks.
  */
 internal class CombatFieldTable private constructor(
-    private val cells: CopyOnWriteFloatArray,
+    private val cells: RunFloatArray,
 ) {
-    constructor() : this(CopyOnWriteFloatArray(FloatArray(CAPACITY * FieldCell.STRIDE)))
+    constructor() : this(RunFloatArray(FloatArray(CAPACITY * FieldCell.STRIDE)))
 
     var count: Int = 0
         private set
@@ -215,14 +215,12 @@ internal class CombatFieldTable private constructor(
         revision++
     }
 
-    /** An isolated candidate: counters copied, records shared until the first changed write. */
-    fun fork(): CombatFieldTable = CombatFieldTable(cells.fork()).also { copy ->
+    /** An isolated candidate: counters and records copied. */
+    fun fork(): CombatFieldTable = CombatFieldTable(cells.copy()).also { copy ->
         copy.count = count
         copy.revision = revision
         copy.nextSequence = nextSequence
     }
-
-    fun sharesStorageWith(other: CombatFieldTable): Boolean = cells.sharesStorageWith(other.cells)
 
     fun record(index: Int): CombatFieldRecord {
         require(index in 0 until count) { "field $index is not live" }

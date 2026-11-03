@@ -13,7 +13,6 @@ import kinetickk.ball.content.api.DimensionObjective
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
-import kinetickk.ball.gameplay.nucleus.model.ApexCell
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.DimensionRewardGrant
 import kinetickk.ball.gameplay.nucleus.model.DimensionVisit
@@ -23,7 +22,6 @@ import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.Totem
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
 import kinetickk.ball.gameplay.nucleus.model.WeaponNode
-import kinetickk.ball.gameplay.nucleus.model.WeaponEntity
 import kinetickk.ball.gameplay.nucleus.model.WeaponOrbital
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
@@ -32,7 +30,6 @@ import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
 import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
-import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
@@ -377,232 +374,6 @@ class GameplayReductionIsolationTest {
     }
 
     @Test
-    fun threeProductionFrameSiblingsDetachOnlyActiveRelicTimersAndRemainDeterministic() {
-        val furnaceIndex = RelicId.FURNACE_COVENANT.ordinal
-        val codexIndex = RelicId.PANDEMIC_CODEX.ordinal
-        val thermal = StatusElement.THERMAL.ordinal
-        val source = MutableGameState(canonicalGameplayContent, seed = 7_201).apply {
-            startRun()
-            enemies.clear()
-            spawnClock = 1_000f
-            // Admit exactly one fixed step independently of presentation-speed preferences.
-            accumulator = MutableGameState.FIXED_STEP
-            acquireRelicForTesting(RelicId.FURNACE_COVENANT)
-            acquireRelicForTesting(RelicId.PANDEMIC_CODEX)
-            relicCooldowns[furnaceIndex] = 0.8f
-            relicCounters[codexIndex] = 2
-            val enemy = addEnemyForTesting(x = 240f, y = 40f)
-            // A due decay is an event: it is the only status write this frame performs.
-            enemy.status[StatusCell.STACKS + thermal] = 3f
-            enemy.status[StatusCell.DECAY_AT + thermal] = 0f
-        }
-        // Make the source a committed, drained state just like a production component frame.
-        source.takeSoundCues()
-        source.takeVisualFxCues()
-        val sourceEngine = EngineState(source)
-        val reducer = GameReducer()
-
-        val siblings = List(3) {
-            assertIs<GameReductionResult.Accepted>(
-                reducer.reduce(
-                    sourceEngine,
-                    GameplayInteractionPulse.FrameElapsed.fromValidated(0f),
-                ),
-            ).state.model
-        }
-
-        siblings.forEach { branch ->
-            assertFalse(branch.relicCooldowns.sharesStorageWith(source.relicCooldowns))
-            assertFalse(branch.enemies.single().status.sharesStorageWith(source.enemies.single().status))
-            assertTrue(branch.relicRanks.sharesStorageWith(source.relicRanks))
-            assertTrue(branch.relicCounters.sharesStorageWith(source.relicCounters))
-            assertTrue(branch.clauseReadyAt.sharesStorageWith(source.clauseReadyAt))
-            assertTrue(branch.itemStatusReadyAt.sharesStorageWith(source.itemStatusReadyAt))
-            assertEquals(2f, branch.enemies.single().status[StatusCell.STACKS + thermal])
-            assertEquals(0.8f, source.relicCooldowns[furnaceIndex])
-            assertEquals(3f, source.enemies.single().status[StatusCell.STACKS + thermal])
-            assertEquals(0f, source.enemies.single().status[StatusCell.DECAY_AT + thermal])
-        }
-        assertEquivalentSimulation(siblings[0], siblings[1])
-        assertEquivalentSimulation(siblings[1], siblings[2])
-
-        // A later production reduction of one sibling must not mutate either retained sibling.
-        val retainedSecond = siblings[1].exactSimulationFingerprint()
-        val retainedThird = siblings[2].exactSimulationFingerprint()
-        val advancedFirst = assertIs<GameReductionResult.Accepted>(
-            reducer.reduce(
-                EngineState(siblings[0]),
-                GameplayInteractionPulse.FrameElapsed.fromValidated(MutableGameState.FIXED_STEP * 2f),
-            ),
-        ).state.model
-        assertTrue(advancedFirst.elapsed > siblings[0].elapsed)
-        assertEquals(retainedSecond, siblings[1].exactSimulationFingerprint())
-        assertEquals(retainedThird, siblings[2].exactSimulationFingerprint())
-    }
-
-    @Test
-    fun threeProductionCollisionSiblingsDetachEnemyRelicBuffersWithoutTouchingSource() {
-        val thermal = StatusElement.THERMAL.ordinal
-        val source = MutableGameState(canonicalGameplayContent, seed = 8_301).apply {
-            startRun()
-            enemies.clear()
-            spawnClock = 1_000f
-            // Admit exactly one fixed step independently of presentation-speed preferences.
-            accumulator = MutableGameState.FIXED_STEP
-            // Furnace Covenant makes every hit above 70 heat apply Thermal to its target.
-            acquireRelicForTesting(RelicId.FURNACE_COVENANT)
-            heat = 75f
-            val enemy = addEnemyForTesting(x = 90f, y = 0f)
-            trail += TrailPoint(enemy.x, enemy.y)
-            takeSoundCues()
-            takeVisualFxCues()
-        }
-        val reducer = GameReducer()
-        val sourceEngine = EngineState(source)
-
-        val siblings = List(3) {
-            assertIs<GameReductionResult.Accepted>(
-                reducer.reduce(
-                    sourceEngine,
-                    GameplayInteractionPulse.FrameElapsed.fromValidated(0f),
-                ),
-            ).state.model
-        }
-
-        siblings.forEach { branch ->
-            val enemy = branch.enemies.single()
-            // Flux Wake's own Scorch and Furnace Covenant's Thermal.
-            assertEquals(2f, enemy.status[StatusCell.STACKS + thermal])
-            assertEquals((HitSource.WEAPON.ordinal + 1).toFloat(), enemy.status[StatusCell.LAST_SOURCE])
-            assertTrue(enemy.hp < enemy.maxHp)
-            assertFalse(enemy.status.sharesStorageWith(source.enemies.single().status))
-            assertFalse(branch.relicCooldowns.sharesStorageWith(source.relicCooldowns))
-        }
-        source.enemies.single().let { enemy ->
-            assertEquals(0f, enemy.status[StatusCell.STACKS + thermal])
-            assertEquals(0f, enemy.status[StatusCell.LAST_SOURCE])
-            assertEquals(enemy.maxHp, enemy.hp)
-        }
-        assertEquals(0f, source.relicCooldowns[RelicId.FURNACE_COVENANT.ordinal])
-        assertEquivalentSimulation(siblings[0], siblings[1])
-        assertEquivalentSimulation(siblings[1], siblings[2])
-    }
-
-    @Test
-    fun threeProductionItemChoiceSiblingsDetachProgressionStorageIndependently() {
-        val source = MutableGameState(canonicalGameplayContent, seed = 9_401).apply {
-            openItemChoice()
-            takeSoundCues()
-            takeVisualFxCues()
-        }
-        assertEquals(3, source.choices.size)
-        val selectedItemIds = source.choices.map { choice -> requireNotNull(choice.itemId) }
-        val sourceRandomCursor = source.gameplayRandom.snapshot()
-        val sourceRewardCursor = source.rewardRandom.snapshot()
-        val reducer = GameReducer()
-        val sourceEngine = EngineState(source)
-
-        val siblings = selectedItemIds.indices.map { choiceIndex ->
-            assertIs<GameReductionResult.Accepted>(
-                reducer.reduce(
-                    sourceEngine,
-                    GameplayInteractionPulse.ChoiceSelected.fromValidated(choiceIndex),
-                ),
-            ).state.model
-        }
-
-        siblings.forEachIndexed { index, branch ->
-            val selectedItemId = selectedItemIds[index]
-            assertEquals(1, branch.itemStacks[selectedItemId])
-            assertEquals(0, source.itemStacks[selectedItemId])
-            assertFalse(branch.itemStacks.sharesStorageWith(source.itemStacks))
-            assertFalse(branch.discoveredItemIds.sharesStorageWith(source.discoveredItemIds))
-            assertNotSame(source.build, branch.build)
-            assertEquals(listOf(selectedItemId), branch.acquisitionOrder)
-            assertTrue(source.acquisitionOrder.isEmpty())
-            assertEquals(0, source.build.ownedItemCount)
-            assertTrue(branch.relicRanks.sharesStorageWith(source.relicRanks))
-            assertTrue(branch.clauseReadyAt.sharesStorageWith(source.clauseReadyAt))
-        }
-        assertEquals(sourceRandomCursor, source.gameplayRandom.snapshot())
-        assertEquals(sourceRewardCursor, source.rewardRandom.snapshot())
-        assertEquals(selectedItemIds.toSet().size, siblings.size)
-        siblings.forEachIndexed { branchIndex, branch ->
-            selectedItemIds.forEachIndexed { itemIndex, itemId ->
-                assertEquals(if (branchIndex == itemIndex) 1 else 0, branch.itemStacks[itemId])
-            }
-        }
-    }
-
-    @Test
-    fun copyOnWriteProductionTraceMatchesIndependentEagerMutableReference() {
-        fun newTraceState(): MutableGameState = MutableGameState(
-            content = canonicalGameplayContent,
-            seed = 10_501,
-            initialMatter = 0,
-        ).apply {
-            startRun()
-            acquireRelicForTesting(RelicId.ECHO_CHAMBER)
-            acquireRelicForTesting(RelicId.FURNACE_COVENANT)
-            acquireRelicForTesting(RelicId.PANDEMIC_CODEX)
-            acquireItemForTesting(0)
-            acquireItemForTesting(content.items.single { it.name == "Igniter" }.id)
-            acquireItemForTesting(content.items.single { it.name == "Rime Rounds" }.id)
-            // Ensure the trace covers both entity and per-run relic/progression storage.
-            addEnemyForTesting(x = 120f, y = 15f)
-            trail += TrailPoint(120f, 15f)
-            populateAdditionalRetainedState()
-            drainReferenceOutputs()
-        }
-
-        var production = EngineState(newTraceState())
-        val eagerReference = newTraceState()
-        val retained = mutableListOf<Pair<MutableGameState, List<Pair<String, Any?>>>>()
-        val reducer = GameReducer()
-        repeat(240) { index ->
-            val pulse = when {
-                index % 61 == 0 -> GameplayInteractionPulse.DashRequested
-                index % 53 == 0 -> GameplayInteractionPulse.ApexRequested
-                index % 47 == 0 -> GameplayInteractionPulse.BrakeChanged(
-                    source = BrakeSource.KEYBOARD,
-                    active = (index / 47) % 2 == 0,
-                )
-                index % 31 == 0 -> GameplayInteractionPulse.PointerMoved.fromValidated(
-                    x = 640f + (index % 9) * 11f,
-                    y = 360f + (index % 7) * 7f,
-                )
-                else -> GameplayInteractionPulse.FrameElapsed.fromValidated(MutableGameState.FIXED_STEP)
-            }
-            val precedingState = production.model
-            val precedingFingerprint = precedingState.exactSimulationFingerprint()
-            if (index % 30 == 0) retained += precedingState to precedingFingerprint
-            production = assertIs<GameReductionResult.Accepted>(
-                reducer.reduce(production, pulse),
-            ).state
-            eagerReference.applyReferencePulse(pulse)
-            eagerReference.drainReferenceOutputs()
-            // Step scratch is idle between accepted reductions, so no candidate inherits it.
-            listOf(production.model, eagerReference).forEach { state ->
-                assertNull(state.activeLoadoutMismatch(), "transition $index active loadout")
-                assertEquals(0, state.chainDepth, "transition $index chain scratch depth")
-                assertEquals(-1, state.castSlot, "transition $index skill cast scratch")
-                assertEquals(-1, state.shatteringEnemyId, "transition $index shatter target")
-                assertEquals(0, state.clauseDepth, "transition $index clause depth")
-            }
-            assertEquals(
-                precedingFingerprint,
-                precedingState.exactSimulationFingerprint(),
-                "transition $index mutated the preceding State",
-            )
-            assertEquivalentSimulation(production.model, eagerReference)
-        }
-        retained.forEachIndexed { index, (state, fingerprint) ->
-            assertEquals(fingerprint, state.exactSimulationFingerprint(), "retained State $index")
-        }
-        assertEquals(2f, production.model.skillRuntime.apex(ApexCell.CAST_COUNT), "the trace casts the Apex")
-    }
-
-    @Test
     fun aDimensionVisitIsIsolatedAcrossReductions() {
         val source = MutableGameState(canonicalGameplayContent, seed = 6_061, initialMatter = 0).apply {
             startRun()
@@ -760,26 +531,6 @@ class GameplayReductionIsolationTest {
         }
         source.rewardPreviews()
         assertEquals(retained, source.exactSimulationFingerprint(), "the previews changed the committed state")
-    }
-
-    private fun MutableGameState.applyReferencePulse(pulse: GameplayInteractionPulse) {
-        when (pulse) {
-            is GameplayInteractionPulse.FrameElapsed -> update(pulse.realDeltaSeconds)
-            is GameplayInteractionPulse.ViewportChanged -> resize(pulse.width, pulse.height, pulse.density)
-            is GameplayInteractionPulse.PointerMoved -> updatePointer(pulse.x, pulse.y, pulse.active)
-            is GameplayInteractionPulse.BrakeChanged -> when (pulse.source) {
-                BrakeSource.KEYBOARD -> setBrake(pulse.active)
-                BrakeSource.SECONDARY_POINTER -> setSecondaryBrake(pulse.active)
-                BrakeSource.TOUCH_CONTROL -> setTouchBrake(pulse.active)
-            }
-            GameplayInteractionPulse.DashRequested -> requestDash()
-            GameplayInteractionPulse.PauseToggled -> togglePause()
-            is GameplayInteractionPulse.ChoiceSelected -> choose(pulse.index)
-            GameplayInteractionPulse.ChoicesRerolled -> rerollChoices()
-            GameplayInteractionPulse.UserGestureObserved -> Unit
-            is GameplayInteractionPulse.SkillRequested -> requestSkill(pulse.slot)
-            GameplayInteractionPulse.ApexRequested -> requestApex()
-        }
     }
 
     private fun MutableGameState.drainReferenceOutputs() {

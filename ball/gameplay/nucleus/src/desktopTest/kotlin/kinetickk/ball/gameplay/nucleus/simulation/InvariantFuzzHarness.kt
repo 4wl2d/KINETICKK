@@ -1383,9 +1383,12 @@ private fun instanceFields(type: Class<*>): List<Field> = FieldCache.getOrPut(ty
 
 private val ListViewCache = ConcurrentHashMap<Class<*>, java.util.Optional<java.lang.reflect.Method>>()
 
-/** The content list of a copy-on-write array (its public `toList()`), or null for any other class. */
-private fun copyOnWriteView(value: Any): List<*>? {
-    if (!value.javaClass.simpleName.startsWith("CopyOnWrite")) return null
+/** Run storage classes, compared and scanned by their content. */
+private val RunStorageClassNames = setOf("RunIntArray", "RunFloatArray", "RunPagedFloatArray", "RunMutableSet")
+
+/** The content list of a run storage array (its public `toList()`), or null for any other class. */
+private fun runStorageView(value: Any): List<*>? {
+    if (value.javaClass.simpleName !in RunStorageClassNames) return null
     val method = ListViewCache.getOrPut(value.javaClass) {
         java.util.Optional.ofNullable(value.javaClass.methods.firstOrNull { it.name == "toList" && it.parameterCount == 0 })
     }.orElse(null) ?: return null
@@ -1394,7 +1397,7 @@ private fun copyOnWriteView(value: Any): List<*>? {
 
 /**
  * The first logical difference between two game values, as a path, or null when they are equal: floats by their bits,
- * copy-on-write arrays and sets by content, a hit history (a projectile's, a weapon entity's) up to its count, random
+ * run storage arrays and sets by content, a hit history (a projectile's, a weapon entity's) up to its count, random
  * streams by snapshot,
  * every other game class field by field (skipping [exclude] at the top level).
  */
@@ -1430,7 +1433,7 @@ internal object FuzzStateDiff {
             is Map<*, *> -> return if (a == b) null else "$path: map"
         }
         if (!isGameClass(a.javaClass)) return if (a == b) null else "$path: $a vs $b"
-        copyOnWriteView(a)?.let { view -> return first(view, copyOnWriteView(b), path, depth = depth + 1) }
+        runStorageView(a)?.let { view -> return first(view, runStorageView(b), path, depth = depth + 1) }
         val fields = instanceFields(a.javaClass)
         for (field in fields) {
             if (depth == 0 && field.name in exclude) continue
@@ -1509,7 +1512,7 @@ internal object FuzzFiniteScan {
         }
         val type = value.javaClass
         if (!isGameClass(type) || value is Enum<*> || value is CloneableXorWowRandom) return null
-        copyOnWriteView(value)?.let { view ->
+        runStorageView(value)?.let { view ->
             for (index in view.indices) {
                 val element = view[index]
                 if (element is Float && element.isNaN()) return "$path[$index] = NaN"

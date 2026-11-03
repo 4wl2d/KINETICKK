@@ -58,43 +58,39 @@ class CharacterAbilityTest {
         projectiles += shot
     }
 
-    @Test fun reductionForkCopiesScalarsAndSharesBuffersUntilTheFirstChangedWrite() {
+    @Test fun reductionForkCopiesScalarsAndBuffers() {
         val source = game(CoreShape.SPIRAL)
         repeat(10) { source.moveAt(400f, 0f) }
         val committedPath = source.characterRuntime.ghostPath.toList()
         val fork = source.deepCopy()
-        val pages = source.characterRuntime.ghostPath.pageCount
         assertNotSame(source.characterRuntime, fork.characterRuntime)
-        assertEquals(pages, fork.characterRuntime.ghostPath.sharedPagesWith(source.characterRuntime.ghostPath))
-        assertTrue(fork.characterRuntime.drones.sharesStorageWith(source.characterRuntime.drones))
+        assertNotSame(source.characterRuntime.ghostPath, fork.characterRuntime.ghostPath)
+        assertNotSame(source.characterRuntime.drones, fork.characterRuntime.drones)
+        assertEquals(committedPath, fork.characterRuntime.ghostPath.toList())
         repeat(5) { fork.moveAt(400f, 0f) }
-        // Samples 10..14 share one page: only that page is copied.
-        assertEquals(pages - 1, fork.characterRuntime.ghostPath.sharedPagesWith(source.characterRuntime.ghostPath))
         assertEquals(committedPath, source.characterRuntime.ghostPath.toList())
         assertEquals(10, source.characterRuntime.ghostSamples)
         assertEquals(15, fork.characterRuntime.ghostSamples)
     }
 
-    @Test fun eachOneStepReductionCopiesOnlyThePageItsEchoSampleLandsOn() {
+    @Test fun eachOneStepReductionLeavesTheCommittedEchoRingUntouched() {
         var state = game(CoreShape.SPIRAL)
         repeat(CharacterRuntime.GHOST_SAMPLES) { state.moveAt(300f, 0f) }
-        val pages = state.characterRuntime.ghostPath.pageCount
-        // Three full turns of pages, one fixed step per reduction, wrapping around the ring.
+        // Three full turns of the ring, one fixed step per reduction, wrapping around it.
         repeat(3 * CharacterRuntime.GHOST_SAMPLES) {
             val committed = state.characterRuntime.toString()
             val fork = state.deepCopy()
             fork.moveAt(300f, 0f)
-            assertEquals(pages - 1, fork.characterRuntime.ghostPath.sharedPagesWith(state.characterRuntime.ghostPath))
             assertEquals(committed, state.characterRuntime.toString(), "the committed ring is untouched")
             state = fork
         }
-        // An owned ring is written in place: the candidate keeps its storage and a probe keeps the old samples.
+        // The ring is written in place: the state keeps its storage and a copy keeps the old samples.
         val owned = state.characterRuntime.ghostPath
-        val probe = owned.fork()
+        val probe = owned.copy()
         val probed = probe.toList()
         repeat(300) { state.moveAt(300f, 0f) }
         assertSame(owned, state.characterRuntime.ghostPath)
-        assertEquals(0, probe.sharedPagesWith(owned))
+        assertNotEquals(probed, owned.toList())
         assertEquals(probed, probe.toList())
     }
 

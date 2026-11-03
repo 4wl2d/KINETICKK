@@ -82,8 +82,8 @@ internal data class Enemy private constructor(
     var affix: EliteAffix? = null,
     /** A rare champion ordinary enemy. */
     var champion: Boolean = false,
-    /** Elemental status cells; see [StatusCell]. Copy-on-write so reduction siblings stay isolated. */
-    val status: CopyOnWriteFloatArray,
+    /** Elemental status cells; see [StatusCell]. Copied eagerly by [isolatedCopy]. */
+    val status: RunFloatArray,
 ) {
     constructor(
         id: Int,
@@ -136,7 +136,7 @@ internal data class Enemy private constructor(
         shiftUntil = shiftUntil,
         escortsPending = escortsPending,
         lastDamagedAt = lastDamagedAt,
-        status = CopyOnWriteFloatArray(status),
+        status = RunFloatArray(status),
     )
 
     /** The run's final boss only (the Architect): hit cap, encounter lookup and victory. */
@@ -148,8 +148,8 @@ internal data class Enemy private constructor(
     val isSecretBoss: Boolean get() = type.profile.rank == EnemyRank.SECRET_BOSS
     val alive: Boolean get() = !dead && hp > 0f
 
-    /** Copies mutable scalar state while sharing the status cells until their first changed write. */
-    fun isolatedCopy(): Enemy = copy(status = status.fork())
+    /** Copies mutable scalar state and the status cells. */
+    fun isolatedCopy(): Enemy = copy(status = status.copy())
 }
 
 /**

@@ -85,14 +85,14 @@ internal object ApexCell {
 
 /**
  * Timing and per-cast state of the three skill slots and the Apex, then the run's skill damage per active effect: one
- * fixed copy-on-write float block ([ContentBounds.SKILL_SLOTS] × [SkillCell.STRIDE] + [ApexCell.STRIDE] +
- * [ContentBounds.MAX_SKILLS]). A deep copy forks it (the block is shared until the copy first writes it), a new run
+ * fixed float block ([ContentBounds.SKILL_SLOTS] × [SkillCell.STRIDE] + [ApexCell.STRIDE] +
+ * [ContentBounds.MAX_SKILLS]). A deep copy forks it (the block is copied eagerly), a new run
  * replaces it. A step allocates nothing.
  */
 internal class SkillRuntime private constructor(
-    private val cells: CopyOnWriteFloatArray,
+    private val cells: RunFloatArray,
 ) {
-    constructor() : this(CopyOnWriteFloatArray(initialCells()))
+    constructor() : this(RunFloatArray(initialCells()))
 
     /** Skill damage dealt this run (each instance up to the integrity it removed). */
     var skillDamage: Double = 0.0
@@ -136,14 +136,12 @@ internal class SkillRuntime private constructor(
         }
     }
 
-    /** An isolated candidate: metrics copied, cells shared until the first changed write. */
-    fun fork(): SkillRuntime = SkillRuntime(cells.fork()).also { copy ->
+    /** An isolated candidate: metrics and cells copied. */
+    fun fork(): SkillRuntime = SkillRuntime(cells.copy()).also { copy ->
         copy.skillDamage = skillDamage
         copy.apexBossDamage = apexBossDamage
         copy.skillCausedDamage = skillCausedDamage
     }
-
-    fun sharesStorageWith(other: SkillRuntime): Boolean = cells.sharesStorageWith(other.cells)
 
     /** Every retained fact in a stable order (state witnesses and diagnostics). */
     override fun toString(): String =
