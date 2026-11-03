@@ -13,6 +13,7 @@ import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.gameplay.nucleus.model.Totem
+import kinetickk.ball.gameplay.nucleus.model.TotemChest
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
 import kinetickk.ball.gameplay.nucleus.model.WeaponHitCadence
 import kinetickk.ball.content.api.WeaponId
@@ -67,6 +68,22 @@ internal fun MutableGameState.finalPhaseArchitectForTesting(
 internal fun MutableGameState.activateTotemForTesting(x: Float = coreX, y: Float = coreY) {
     keys++
     totem = Totem(x, y)
+}
+
+/**
+ * Puts a Totem chest with [charges] at ([x], [y]) (by default on the Core), armed now or after the materialise delay,
+ * as the only waiting chest besides those already there; its id is a free structure id.
+ */
+internal fun MutableGameState.placeTotemChestForTesting(
+    x: Float = coreX,
+    y: Float = coreY,
+    charges: Int = 1,
+    armed: Boolean = true,
+    id: Long = (900L + structures.totemChests.size) shl 8,
+): TotemChest {
+    val chest = TotemChest(id, x, y, charges, bornAt = elapsed, armedAt = if (armed) elapsed else elapsed + 0.6f)
+    structures.totemChests = structures.totemChests + chest
+    return chest
 }
 
 internal fun MutableGameState.equipWeaponForTesting(id: WeaponId) = equipRunWeapon(id)

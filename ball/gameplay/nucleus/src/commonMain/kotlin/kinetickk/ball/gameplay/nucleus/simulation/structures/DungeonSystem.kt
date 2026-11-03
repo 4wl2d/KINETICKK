@@ -131,7 +131,7 @@ private fun MutableGameState.enterStructure() {
         val structure = structures[index]
         if (abs(coreX - structure.x) > structure.halfWidth || abs(coreY - structure.y) > structure.halfHeight) continue
         if (isSpent(structure.id)) continue
-        dungeon = DungeonState(structure.id, structure.template, structure.rotation, structure.x, structure.y)
+        dungeon = DungeonState(structure.id, structure.template, structure.rotation, structure.x, structure.y, chestCharges = structure.chestCharges)
         applyStructureDoors(structure.id)
         val template = content.structures.template(structure.template)
         if (template.secret) return
@@ -264,16 +264,17 @@ private fun MutableGameState.clearRoom(current: DungeonState, room: Int) {
     messageTime = if (locksOpened) 2f else 1.4f
 }
 
-/** Pays the final room's rewards at its centre, records the Doodle, spends the structure and disintegrates it. */
+/**
+ * Pays the final room's rewards at its centre, records the Doodle, spends the structure, materialises its Totem chest
+ * there and disintegrates the structure.
+ */
 private fun MutableGameState.finishStructure(current: DungeonState, template: StructureTemplate) {
     val room = template.rooms[template.finalRoom]
     val localX = (room.minX + room.maxX) * 0.5f
     val localY = (room.minY + room.maxY) * 0.5f
-    payStructureRewards(
-        template,
-        current.x + rotateQuarterX(localX, localY, current.rotation),
-        current.y + rotateQuarterY(localX, localY, current.rotation),
-    )
+    val centreX = current.x + rotateQuarterX(localX, localY, current.rotation)
+    val centreY = current.y + rotateQuarterY(localX, localY, current.rotation)
+    payStructureRewards(template, centreX, centreY)
     if (template.secret) {
         if (template.id == StructureTemplateId.ARCHITECTS_DOODLE) discoverDoodle() else discoverWorld(template.id.discovery)
         message = template.name.uppercase()
@@ -283,6 +284,7 @@ private fun MutableGameState.finishStructure(current: DungeonState, template: St
     messageTime = 2.5f
     markSpent(current.structureId)
     dungeon = null
+    materializeTotemChest(current.structureId, centreX, centreY, current.chestCharges)
     retireSpentStructure(current.structureId)
 }
 

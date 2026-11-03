@@ -185,6 +185,7 @@ internal fun MutableGameState.simulateStep(delta: Float) {
     updateVolatileRemains()
     if (phase != GamePhase.RUNNING) return
     rebaseWorldIfNeeded()
+    updateTotemChests()
 
     openNextPendingChoice()
 

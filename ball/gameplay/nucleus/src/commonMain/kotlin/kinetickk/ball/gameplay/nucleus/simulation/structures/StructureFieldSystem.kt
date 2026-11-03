@@ -95,6 +95,7 @@ private fun MutableGameState.buildStructureField(chunkX: Int, chunkY: Int, colla
                 halfHeight = placement.halfHeight,
                 wallStart = start,
                 wallEnd = walls.size,
+                chestCharges = totemChestCharges(policy, template, runSeed, worldLayer, cellX, cellY),
             )
         }
     }
@@ -287,16 +288,18 @@ internal fun MutableGameState.spentStructureSetFull(): Boolean =
 // ---------------------------------------------------------------------------------------------
 // Run lifecycle.
 
-/** A new run: no structure window, no dungeon, nothing spent (the obstacle reset builds the window). */
+/** A new run: no structure window, no dungeon, nothing spent, no chest (the obstacle reset builds the window). */
 internal fun MutableGameState.resetStructures() {
     structureField = StructureField.EMPTY
     dungeon = null
     spentStructureIds = emptyList()
     lastAnnouncedStructureId = 0L
+    resetTotemChests()
 }
 
 /** Positions follow a rebase; ids and absolute cells stay. */
 internal fun MutableGameState.rebaseStructures(dx: Float, dy: Float) {
     structureField = structureField.shifted(dx, dy)
     dungeon = dungeon?.shifted(dx, dy)
+    rebaseTotemChests(dx, dy)
 }

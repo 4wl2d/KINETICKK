@@ -56,11 +56,13 @@ internal fun MutableGameState.structureRenderProjection(
 private fun MutableGameState.dungeonProjection(current: DungeonState, previous: DungeonProjection?): DungeonProjection {
     val panel = !content.structures.template(current.template).secret
     if (previous != null && previous.structureId == current.structureId && previous.engagedRoom == current.engagedRoom &&
-        previous.panel == panel
+        previous.panel == panel && previous.chestCharges == current.chestCharges
     ) {
         return previous
     }
-    return DungeonProjection(structureId = current.structureId, engagedRoom = current.engagedRoom, panel = panel)
+    return DungeonProjection(
+        structureId = current.structureId, engagedRoom = current.engagedRoom, panel = panel, chestCharges = current.chestCharges,
+    )
 }
 
 private fun MutableGameState.structureProjections(
@@ -83,6 +85,7 @@ private fun MutableGameState.structureProjections(
             wallEnd = structure.wallEnd,
             clearedRooms = clearedRooms(structure, current),
             engagedRoom = engagedRoom(structure, current),
+            chestCharges = structure.chestCharges,
         )
     }
 
@@ -104,7 +107,8 @@ private fun StructureProjection.matches(structure: PlacedStructure, clearedRooms
         wallStart == structure.wallStart &&
         wallEnd == structure.wallEnd &&
         this.clearedRooms == clearedRooms &&
-        this.engagedRoom == engagedRoom
+        this.engagedRoom == engagedRoom &&
+        chestCharges == structure.chestCharges
 
 private fun wallProjections(walls: List<Wall>, reusable: ImmutableList<WallProjection>?): ImmutableList<WallProjection> =
     walls.reuseProjectionIfContentEqual(reusable) { wall, projected -> projected.matches(wall) }

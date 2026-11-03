@@ -1158,7 +1158,7 @@ class RedesignShotsWorldTest {
             weapon = weapon, weaponLevel = 5, overdriveCharge = 58f, overdriveTime = overdriveTime, rerollsRemaining = 1,
             acquiredItemCount = 0, recentItem = null, equippedRelics = immutableListOf(), morningstarAngle = 0.4f,
             morningstarX = coreX + 70f, morningstarY = coreY + 40f, weaponBeamTime = 0f, weaponBeamStartX = 0f,
-            weaponBeamStartY = 0f, weaponBeamEndX = 0f, weaponBeamEndY = 0f, totem = totem, coreShape = coreShape,
+            weaponBeamStartY = 0f, weaponBeamEndX = 0f, weaponBeamEndY = 0f, totem = totem, totemChests = immutableListOf(), coreShape = coreShape,
             enemies = enemies.toImmutableList(), projectiles = projectiles.toImmutableList(),
             pickups = pickups.map { (type, offset) ->
                 PickupProjection(type, coreX + offset.first, coreY + offset.second, 0f, 0f, 3f, coreX + offset.first + 8f, coreY + offset.second + 5f)

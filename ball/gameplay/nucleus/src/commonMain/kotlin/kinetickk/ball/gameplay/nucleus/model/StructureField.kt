@@ -19,7 +19,10 @@ internal data class Wall(
     val door: Int = -1,
 )
 
-/** A structure placed in the window: run-local centre, rotated extents and its slice of [StructureField.walls]. */
+/**
+ * A structure placed in the window: run-local centre, rotated extents, its slice of [StructureField.walls] and the
+ * Totem chest charges its final room promises (0: none; a pure hash of seed, layer and cell).
+ */
 internal data class PlacedStructure(
     val id: Long,
     val template: StructureTemplateId,
@@ -30,6 +33,7 @@ internal data class PlacedStructure(
     val halfHeight: Float,
     val wallStart: Int,
     val wallEnd: Int,
+    val chestCharges: Int = 0,
 ) {
     fun shifted(shiftX: Float, shiftY: Float): PlacedStructure = copy(x = x - shiftX, y = y - shiftY)
 }
@@ -163,7 +167,25 @@ internal data class DungeonState(
     val engagedRoom: Int = -1,
     /** A garrison fight ever started (leaving marks it spent and it disintegrates). */
     val engaged: Boolean = false,
+    /** Totem chest charges the final room pays (copied from the placed structure at entry; 0: none). */
+    val chestCharges: Int = 0,
 ) {
     fun shifted(shiftX: Float, shiftY: Float): DungeonState = copy(x = x - shiftX, y = y - shiftY)
 }
 
+/** A dungeon's Totem chest waiting in realspace. Value-only: every change replaces the list that holds it. */
+internal data class TotemChest(
+    /** The structure that paid it (unique per run: a structure finishes once). */
+    val structureId: Long,
+    /** Run-local centre (rebased). */
+    val x: Float,
+    val y: Float,
+    /** Charges left, 1..[ContentBounds.MAX_TOTEM_CHEST_CHARGES]. */
+    val charges: Int,
+    /** Run time it materialised. */
+    val bornAt: Float,
+    /** Run time from which contact opens a charge (the materialise delay, then each re-arm). */
+    val armedAt: Float,
+) {
+    fun shifted(shiftX: Float, shiftY: Float): TotemChest = copy(x = x - shiftX, y = y - shiftY)
+}

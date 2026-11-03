@@ -374,6 +374,7 @@ class GameplayPerformanceBenchmarkTest {
             { dungeon = DungeonState(1L shl 63, StructureTemplateId.VAULT, 0, 900f, 0f) },
             { spentStructureIds = listOf(1L) },
             { lastAnnouncedStructureId = 1L },
+            { structures.totemChests = listOf(kinetickk.ball.gameplay.nucleus.model.TotemChest(1L, 1f, 2f, 2, 0f, 0f)) },
             { worldLayer = WorldLayer.ZENITH },
             { worldKeepOut = WorldKeepOut(WorldLayer.BASE, 0.0, 0.0, 900f) },
             { runBoons = immutableListOf(32) },

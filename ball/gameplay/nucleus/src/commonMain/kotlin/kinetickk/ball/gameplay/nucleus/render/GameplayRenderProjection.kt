@@ -287,6 +287,20 @@ data class ObstacleProjection(
 data class TrailPointProjection(val x: Float, val y: Float, val age: Float, val life: Float = 1.8f, val scale: Float = 1f)
 data class TotemProjection(val x: Float, val y: Float, val pulse: Float)
 
+/**
+ * A waiting Totem chest (published in realspace only): its structure [id], run-local position, charges left, and the
+ * run times it materialised and from which it opens. Openable (a Key held) and armed (`elapsed >= armedAt`) are
+ * derived by the renderer, so the projection changes only on a materialise, an open or a rebase.
+ */
+data class TotemChestProjection(
+    val id: Long,
+    val x: Float,
+    val y: Float,
+    val charges: Int,
+    val bornAt: Float,
+    val armedAt: Float,
+)
+
 data class WeaponNodeProjection(
     val type: WeaponNodeType,
     val x: Float,
@@ -427,6 +441,7 @@ class GameplayRenderModel(
     val weaponBeamEndX: Float,
     val weaponBeamEndY: Float,
     val totem: TotemProjection?,
+    val totemChests: ImmutableList<TotemChestProjection>,
     val coreShape: CoreShape,
     val enemies: ImmutableList<EnemyProjection>,
     val projectiles: ImmutableList<ProjectileProjection>,

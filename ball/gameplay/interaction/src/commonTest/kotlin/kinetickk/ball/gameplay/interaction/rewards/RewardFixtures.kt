@@ -267,6 +267,7 @@ internal fun rewardFixtureModel(
     morningstarAngle = 0f, morningstarX = 0f, morningstarY = 0f,
     weaponBeamTime = 0f, weaponBeamStartX = 0f, weaponBeamStartY = 0f, weaponBeamEndX = 0f, weaponBeamEndY = 0f,
     totem = null,
+    totemChests = immutableListOf(),
     coreShape = coreShape,
     skillBar = skillBar,
     enemies = immutableListOf(), projectiles = immutableListOf(), pickups = immutableListOf(), trail = immutableListOf(),
