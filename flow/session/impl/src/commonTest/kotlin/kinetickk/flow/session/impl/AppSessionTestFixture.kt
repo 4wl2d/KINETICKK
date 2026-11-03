@@ -19,7 +19,7 @@ import kinetickk.ball.gameplay.api.GameplaySettingsApplied
 import kinetickk.ball.gameplay.api.GameplayRefusal
 import kinetickk.ball.gameplay.api.GameplayRunStarted
 import kinetickk.ball.gameplay.api.GameplayOverlayPaused
-import kinetickk.ball.gameplay.interaction.GameplayRunHost
+import kinetickk.ball.gameplay.api.GameplayRunHost
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerPreferences
