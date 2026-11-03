@@ -104,6 +104,18 @@ import kinetickk.ball.gameplay.nucleus.simulation.matrixFreeDashReadyAt
 import kinetickk.ball.gameplay.nucleus.simulation.secondWindSpent
 import kinetickk.ball.gameplay.nucleus.simulation.stasisBank
 import kinetickk.ball.gameplay.nucleus.simulation.stormCharge
+import kinetickk.ball.gameplay.nucleus.simulation.ambushReadyAt
+import kinetickk.ball.gameplay.nucleus.simulation.capOverflowReadyAt
+import kinetickk.ball.gameplay.nucleus.simulation.directorPhase
+import kinetickk.ball.gameplay.nucleus.simulation.elitesSpawned
+import kinetickk.ball.gameplay.nucleus.simulation.encounters
+import kinetickk.ball.gameplay.nucleus.simulation.heraldsSpawned
+import kinetickk.ball.gameplay.nucleus.simulation.lastSpawnEventKind
+import kinetickk.ball.gameplay.nucleus.simulation.pendingEventKind
+import kinetickk.ball.gameplay.nucleus.simulation.recentEventTypes
+import kinetickk.ball.gameplay.nucleus.simulation.secretBossMask
+import kinetickk.ball.gameplay.nucleus.simulation.spawnBudget
+import kinetickk.ball.gameplay.nucleus.simulation.spawnEventCount
 
 class GameplayPerformanceBenchmarkTest {
     @Test

@@ -5,6 +5,8 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.EncounterState
+import kinetickk.foundation.collections.ImmutableList
 
 // StepScratch
 
@@ -297,3 +299,97 @@ internal var MutableGameState.matrixFreeDashReadyAt: Float
 internal var MutableGameState.necroticClock: Float
     get() = relicMechanics.necroticClock
     set(value) { relicMechanics.necroticClock = value }
+
+// SpawnDirectorState
+
+internal var MutableGameState.spawnClock: Float
+    get() = spawnDirector.spawnClock
+    set(value) { spawnDirector.spawnClock = value }
+
+internal var MutableGameState.nextEliteAt: Float
+    get() = spawnDirector.nextEliteAt
+    set(value) { spawnDirector.nextEliteAt = value }
+
+internal var MutableGameState.elitesSpawned: Int
+    get() = spawnDirector.elitesSpawned
+    set(value) { spawnDirector.elitesSpawned = value }
+
+internal var MutableGameState.heraldsSpawned: Int
+    get() = spawnDirector.heraldsSpawned
+    set(value) { spawnDirector.heraldsSpawned = value }
+
+internal var MutableGameState.directorPhase: Int
+    get() = spawnDirector.directorPhase
+    set(value) { spawnDirector.directorPhase = value }
+
+internal var MutableGameState.directorPhaseUntil: Float
+    get() = spawnDirector.directorPhaseUntil
+    set(value) { spawnDirector.directorPhaseUntil = value }
+
+internal var MutableGameState.spawnBudget: Float
+    get() = spawnDirector.spawnBudget
+    set(value) { spawnDirector.spawnBudget = value }
+
+internal var MutableGameState.pendingEventKind: Int
+    get() = spawnDirector.pendingEventKind
+    set(value) { spawnDirector.pendingEventKind = value }
+
+internal var MutableGameState.pendingEventSize: Int
+    get() = spawnDirector.pendingEventSize
+    set(value) { spawnDirector.pendingEventSize = value }
+
+internal var MutableGameState.pendingEventType: Int
+    get() = spawnDirector.pendingEventType
+    set(value) { spawnDirector.pendingEventType = value }
+
+internal var MutableGameState.recentEventTypes: Long
+    get() = spawnDirector.recentEventTypes
+    set(value) { spawnDirector.recentEventTypes = value }
+
+internal var MutableGameState.previousEventTypes: Long
+    get() = spawnDirector.previousEventTypes
+    set(value) { spawnDirector.previousEventTypes = value }
+
+internal var MutableGameState.secretBossMask: Long
+    get() = spawnDirector.secretBossMask
+    set(value) { spawnDirector.secretBossMask = value }
+
+internal var MutableGameState.encounters: ImmutableList<EncounterState>
+    get() = spawnDirector.encounters
+    set(value) { spawnDirector.encounters = value }
+
+internal var MutableGameState.ambushReadyAt: Float
+    get() = spawnDirector.ambushReadyAt
+    set(value) { spawnDirector.ambushReadyAt = value }
+
+internal var MutableGameState.encircleReadyAt: Float
+    get() = spawnDirector.encircleReadyAt
+    set(value) { spawnDirector.encircleReadyAt = value }
+
+internal var MutableGameState.wallReadyAt: Float
+    get() = spawnDirector.wallReadyAt
+    set(value) { spawnDirector.wallReadyAt = value }
+
+internal var MutableGameState.capOverflowReadyAt: Float
+    get() = spawnDirector.capOverflowReadyAt
+    set(value) { spawnDirector.capOverflowReadyAt = value }
+
+internal var MutableGameState.ambushSpeedSeconds: Float
+    get() = spawnDirector.ambushSpeedSeconds
+    set(value) { spawnDirector.ambushSpeedSeconds = value }
+
+internal var MutableGameState.spawnEventCount: Int
+    get() = spawnDirector.spawnEventCount
+    set(value) { spawnDirector.spawnEventCount = value }
+
+internal var MutableGameState.lastSpawnEventKind: Int
+    get() = spawnDirector.lastSpawnEventKind
+    set(value) { spawnDirector.lastSpawnEventKind = value }
+
+internal var MutableGameState.lastSpawnEventPlanned: Int
+    get() = spawnDirector.lastSpawnEventPlanned
+    set(value) { spawnDirector.lastSpawnEventPlanned = value }
+
+internal var MutableGameState.lastSpawnEventSpawned: Int
+    get() = spawnDirector.lastSpawnEventSpawned
+    set(value) { spawnDirector.lastSpawnEventSpawned = value }

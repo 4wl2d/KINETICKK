@@ -121,6 +121,28 @@ import kinetickk.ball.gameplay.nucleus.simulation.secondWindSpent
 import kinetickk.ball.gameplay.nucleus.simulation.stasisBank
 import kinetickk.ball.gameplay.nucleus.simulation.stasisMeter
 import kinetickk.ball.gameplay.nucleus.simulation.stormCharge
+import kinetickk.ball.gameplay.nucleus.simulation.ambushReadyAt
+import kinetickk.ball.gameplay.nucleus.simulation.ambushSpeedSeconds
+import kinetickk.ball.gameplay.nucleus.simulation.capOverflowReadyAt
+import kinetickk.ball.gameplay.nucleus.simulation.directorPhase
+import kinetickk.ball.gameplay.nucleus.simulation.directorPhaseUntil
+import kinetickk.ball.gameplay.nucleus.simulation.elitesSpawned
+import kinetickk.ball.gameplay.nucleus.simulation.encircleReadyAt
+import kinetickk.ball.gameplay.nucleus.simulation.encounters
+import kinetickk.ball.gameplay.nucleus.simulation.heraldsSpawned
+import kinetickk.ball.gameplay.nucleus.simulation.lastSpawnEventKind
+import kinetickk.ball.gameplay.nucleus.simulation.lastSpawnEventPlanned
+import kinetickk.ball.gameplay.nucleus.simulation.lastSpawnEventSpawned
+import kinetickk.ball.gameplay.nucleus.simulation.nextEliteAt
+import kinetickk.ball.gameplay.nucleus.simulation.pendingEventKind
+import kinetickk.ball.gameplay.nucleus.simulation.pendingEventSize
+import kinetickk.ball.gameplay.nucleus.simulation.pendingEventType
+import kinetickk.ball.gameplay.nucleus.simulation.previousEventTypes
+import kinetickk.ball.gameplay.nucleus.simulation.recentEventTypes
+import kinetickk.ball.gameplay.nucleus.simulation.secretBossMask
+import kinetickk.ball.gameplay.nucleus.simulation.spawnBudget
+import kinetickk.ball.gameplay.nucleus.simulation.spawnEventCount
+import kinetickk.ball.gameplay.nucleus.simulation.wallReadyAt
 
 internal const val GAMEPLAY_BENCHMARK_SUITE_VERSION = "gameplay-core-v6"
 private const val DEFAULT_SEED = 731_991
