@@ -53,7 +53,10 @@ class DefaultAudioService(
             musicClock = 0f
             return
         }
-        musicClock -= selectMusicAdvanceDeltaSeconds(realDeltaSeconds)
+        // A zero delta is not a display frame: it must not start a note on an expired clock.
+        val delta = selectMusicAdvanceDeltaSeconds(realDeltaSeconds)
+        if (delta <= 0f) return
+        musicClock -= delta
         if (musicClock <= 0f) {
             musicClock += MUSIC_STEP_SECONDS
             val frequency = MUSIC_NOTES[musicStep % MUSIC_NOTES.size]

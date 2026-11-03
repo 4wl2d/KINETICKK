@@ -67,7 +67,7 @@ interface AudioService {
     /** Effects only: more than 32 ids drop all (as today); stable priority sort; the first 3 distinct play. Never moves music. */
     fun play(sounds: List<SoundId>) = Unit
 
-    /** Music only: advances the sequencer by one display frame; resets while music is off. */
+    /** Music only: advances the sequencer by one display frame; delta <= 0 plays nothing; resets while music is off. */
     fun tick(realDeltaSeconds: Float) = Unit
 
     fun ensureUnlocked()

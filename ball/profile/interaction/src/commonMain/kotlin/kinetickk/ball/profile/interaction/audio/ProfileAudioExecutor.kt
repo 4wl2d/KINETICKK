@@ -5,8 +5,7 @@ package kinetickk.ball.profile.interaction.audio
 
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
-import kinetickk.resource.audio.api.ToneWave
+import kinetickk.resource.audio.api.SoundId
 
 internal enum class ProfileAudioCue {
     UI_CLICK,
@@ -21,7 +20,8 @@ internal class ProfileAudioExecutor(
 ) {
     fun play(cue: ProfileAudioCue) {
         audioService.ensureUnlocked()
-        audioService.advance(0f, listOf(cue.toToneRequest()))
+        // A menu press is an effect only; it never moves the music clock.
+        audioService.play(listOf(cue.soundId()))
     }
 
     fun updatePreferences(preferences: PlayerPreferences) {
@@ -29,8 +29,8 @@ internal class ProfileAudioExecutor(
     }
 }
 
-private fun ProfileAudioCue.toToneRequest(): ToneRequest = when (this) {
-    ProfileAudioCue.UI_CLICK -> ToneRequest(520f, 0.035f, 0.11f, ToneWave.SINE)
-    ProfileAudioCue.PURCHASE -> ToneRequest(490f, 0.1f, 0.16f, ToneWave.SINE)
-    ProfileAudioCue.REFUSED -> ToneRequest(260f, 0.06f, 0.12f, ToneWave.SINE)
+private fun ProfileAudioCue.soundId(): SoundId = when (this) {
+    ProfileAudioCue.UI_CLICK -> SoundId.UI_CLICK
+    ProfileAudioCue.PURCHASE -> SoundId.UI_CONFIRM
+    ProfileAudioCue.REFUSED -> SoundId.UI_REFUSED
 }

@@ -150,6 +150,45 @@ class DefaultAudioServiceTest {
     }
 
     @Test
+    fun uiPlayNeverAdvancesMusic() {
+        val player = RecordingTonePlayer()
+        val service = DefaultAudioService(player)
+
+        // Fresh music clock: a menu click must not start the sequencer.
+        service.play(listOf(SoundId.UI_CLICK))
+        assertEquals(listOf(520f), player.tones.map { it.frequencyHz })
+
+        // Music toggled off and on resets the clock; the next click stays a click.
+        service.updatePreferences(AudioPreferences(musicEnabled = false))
+        service.tick(0.016f)
+        service.updatePreferences(AudioPreferences(musicEnabled = true))
+        player.tones.clear()
+        service.play(listOf(SoundId.UI_CONFIRM))
+        assertEquals(listOf(490f), player.tones.map { it.frequencyHz })
+
+        // The first display frame still starts the music on its first note.
+        service.tick(0.016f)
+        assertEquals(listOf(490f, 110f), player.tones.map { it.frequencyHz })
+    }
+
+    @Test
+    fun zeroOrInvalidTickDeltaPlaysNoMusicNote() {
+        val player = RecordingTonePlayer()
+        val service = DefaultAudioService(player)
+
+        service.tick(0f)
+        service.tick(-0.016f)
+        service.tick(Float.NaN)
+        assertTrue(player.tones.isEmpty())
+
+        service.tick(0.016f)
+        assertEquals(listOf(110f), player.tones.map { it.frequencyHz })
+        // The clock is still running: a zero delta neither advances nor replays it.
+        repeat(3) { service.tick(0f) }
+        assertEquals(listOf(110f), player.tones.map { it.frequencyHz })
+    }
+
+    @Test
     fun musicAdvanceDeltaAcceptsMaximumAndClampsNextRepresentableValue() {
         val nextRepresentable = Float.fromBits(MAX_MUSIC_ADVANCE_DELTA_SECONDS.toBits() + 1)
 
