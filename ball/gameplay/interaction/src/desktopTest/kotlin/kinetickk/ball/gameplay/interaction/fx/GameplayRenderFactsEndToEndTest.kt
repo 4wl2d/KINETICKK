@@ -578,13 +578,13 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
         abs(x - cameraX) < screenWidth * 0.5f && abs(y - cameraY) < screenHeight * 0.5f
 
     fun report(): String = buildString {
-        append("level=$maxLevelSeen/$modelMaxLevel skills=$maxSkillsOwned casts=${skillCasts.sortedBy { it.first }} ")
+        append("level=$maxLevelSeen/$modelMaxLevel skills=$maxSkillsOwned casts=${skillCasts.sortedWith(compareBy({ it.first }, { it.second }))} ")
         append("projectedSkills=${projectedSkillPhases.size} delayed=${skillCasts.count { it.second == SkillCueCodes.PHASE_IMPACT }} ")
         append("apex=$apexActivations/$projectedApex unlocked=$apexUnlocked@$apexUnlockedAt ready=$apexReadySeen active=$apexActiveSeen cooling=$apexCooling ")
         append("apexRefunded=$apexRefunded strikes=$apexStrikesSeen refusals=$refusals skillRefunded=$skillRefunded pending=$skillPending ")
         append("skillActive=$skillActive reactionFlags=$reactionFlags/$projectedReactionFlags directions=$reactionDirections/$projectedDirections ")
         append("links=${linkStyles.sorted()}/${projectedLinkStyles.sorted()} waves=${shockwaveColors.sorted()}/${projectedShockwaveColors.sorted()} ")
-        append("bursts=${burstColors.sorted()} fields=$fieldSources controlBits=${Integer.toBinaryString(controlBits)} coreStates=$coreStates ")
+        append("bursts=${burstColors.sorted()} fields=${fieldSources.sorted()} controlBits=${Integer.toBinaryString(controlBits)} coreStates=$coreStates ")
         append("samples=${samples.keys} ")
         append("radii=${reactionRadii.entries.sortedBy { it.key }.joinToString { "${it.key}:${it.value.first.toInt()}-${it.value.second.toInt()}" }}")
         val end = model

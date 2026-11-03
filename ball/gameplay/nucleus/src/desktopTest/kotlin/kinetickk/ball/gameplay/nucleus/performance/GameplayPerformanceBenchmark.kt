@@ -1351,7 +1351,7 @@ private fun worldContractFingerprint(current: Long, state: MutableGameState): Lo
     signature = mix(signature, state.pendingSignalPrompts.toString().hashCode())
     signature = mix(signature, state.offerRarityFloor?.ordinal ?: -1)
     signature = mix(signature, if (state.offersRunOmen) 1 else 0)
-    signature = mix(signature, state.activeRebirthProfile.hashCode())
+    signature = mix(signature, state.activeRebirthProfile.toString().hashCode())
     signature = mixLong(signature, state.secretBossMask)
     signature = mix(signature, state.encounters.toString().hashCode())
     val structures = state.structureField
