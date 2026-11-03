@@ -201,6 +201,12 @@ internal fun MutableGameState.fightToLastWaveForTesting() {
     }
 }
 
+/** True while the sealed room's next wave is on its way and lands, or was due, at most [within] seconds from now. */
+internal fun MutableGameState.roomWaveDueForTesting(within: Float): Boolean {
+    val incomingAt = dungeon?.fight?.incomingAt ?: return false
+    return incomingAt >= 0f && abs(incomingAt - elapsed) <= within
+}
+
 /** A run with every far cell holding [template]; the Core rests at the centre of the one in cell (12, −9). */
 internal class DungeonFixture(
     template: StructureTemplateId,

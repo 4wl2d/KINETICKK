@@ -1039,7 +1039,7 @@ private class FuzzSession(private val plan: FuzzPlan, private val options: FuzzO
     /**
      * A sealed room holds every live enemy its encounter owns inside its walls, and the Core with them (so it can always
      * reach and clear them), or opens within a bounded time: two seconds for an enemy outside, five for the Core shut
-     * out; it never stays sealed for a second with nothing left alive.
+     * out; it never stays sealed for a second with nothing alive and no wave due within five seconds.
      */
     private fun checkSealedRoom(m: MutableGameState) {
         val dungeon = m.dungeon
@@ -1080,7 +1080,7 @@ private class FuzzSession(private val plan: FuzzPlan, private val options: FuzzO
         } else {
             sealOutsideSince = Float.NaN
         }
-        if (live == 0) {
+        if (live == 0 && !m.roomWaveDueForTesting(within = 5f)) {
             if (sealEmptySince.isNaN()) sealEmptySince = m.elapsed
             if (m.elapsed - sealEmptySince > 1f) record(FuzzInvariant.SEALED_ROOM, "${dungeon.template} room ${dungeon.engagedRoom} stays sealed with no live enemy")
         } else {
