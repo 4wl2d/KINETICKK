@@ -14,8 +14,6 @@ import kinetickk.ball.profile.api.ProfileBootstrapStatus
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.flow.session.api.AppDestination
-import kinetickk.flow.session.api.AppSessionInstanceId
-import kinetickk.flow.session.api.LOCAL_APP_SESSION_INSTANCE_ID
 import kinetickk.flow.session.api.SessionLifecycle
 import kinetickk.flow.session.api.SessionRevision
 import kinetickk.flow.session.api.SessionWorkflowFailureCode
@@ -84,7 +82,6 @@ sealed interface RebirthConfirmation {
 
 /** Complete immutable snapshot owned and published by the singleton AppSession acceptor. */
 data class AppSessionState(
-    val instanceId: AppSessionInstanceId,
     val revision: SessionRevision,
     val routeRevision: SessionRevision,
     val base: AppDestination,
@@ -100,9 +97,6 @@ data class AppSessionState(
     val runMode: RunMode,
 ) {
     init {
-        require(instanceId == LOCAL_APP_SESSION_INSTANCE_ID) {
-            "AppSession State must retain the singleton identity"
-        }
         require(base.isBaseDestination()) { "Only Home and Gameplay may be base destinations" }
         require(overlay == null || overlay.isOverlayDestination()) {
             "Only feature routes may be overlays"
@@ -121,7 +115,6 @@ data class AppSessionState(
                 "Session bootstrap must observe the local Profile"
             }
             return AppSessionState(
-                instanceId = LOCAL_APP_SESSION_INSTANCE_ID,
                 revision = SessionRevision.ZERO,
                 routeRevision = SessionRevision.ZERO,
                 base = AppDestination.Home,

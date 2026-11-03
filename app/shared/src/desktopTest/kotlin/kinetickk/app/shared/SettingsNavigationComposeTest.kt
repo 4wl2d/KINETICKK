@@ -37,7 +37,6 @@ import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
 import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kinetickk.ball.profile.impl.createProfileComponent
 import kinetickk.flow.session.api.AppDestination
-import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
@@ -130,7 +129,7 @@ class SettingsNavigationComposeTest {
                 settle()
                 onRoot().performKeyInput { pressKey(Key.S) }
                 settle()
-                assertEquals(AppDestination.Settings, owner.sessionPort.query(AppSessionQuery.GetShell).active)
+                assertEquals(AppDestination.Settings, owner.sessionPort.shell().active)
                 for (language in listOf("ru", "en")) {
                     click("kinetickk.settings.group.game")
                     click("kinetickk.settings.language.$language")
@@ -191,7 +190,7 @@ class SettingsNavigationComposeTest {
                 fun render(expected: AppDestination) {
                     mainClock.advanceTimeBy(260)
                     waitForIdle()
-                    assertEquals(expected, owner.sessionPort.query(AppSessionQuery.GetShell).active)
+                    assertEquals(expected, owner.sessionPort.shell().active)
                     val rendered = onNodeWithTag(APP_TAG).captureToImage()
                     assertTrue(rendered.width > 0 && rendered.height > 0)
                     System.getenv("KINETICKK_RENDER_CAPTURE_DIR")?.let { directory ->
@@ -278,7 +277,7 @@ class SettingsNavigationComposeTest {
                     assertVolume(42)
                     key(Key.Enter, AppDestination.Settings)
                     input.assertIsNotFocused()
-                    key(Key.Escape, owner.sessionPort.query(AppSessionQuery.GetShell).base)
+                    key(Key.Escape, owner.sessionPort.shell().base)
                     key(Key.S, AppDestination.Settings)
                     selectGroup("sound")
                     assertVolume(42)

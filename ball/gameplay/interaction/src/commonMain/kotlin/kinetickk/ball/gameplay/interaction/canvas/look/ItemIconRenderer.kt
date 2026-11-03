@@ -17,8 +17,11 @@ import kinetickk.foundation.design.drawKkPips
 import kinetickk.foundation.design.drawLayeredGlyph
 import kinetickk.foundation.design.kkContrast
 
-/** Gameplay owns the mapping of item semantics to the shared geometric drawing. */
-internal fun DrawScope.drawItemIcon(
+/**
+ * Gameplay owns the mapping of item semantics to the shared geometric drawing. The Codex draws
+ * items through it too, so an item reads the same in the Codex as during a run.
+ */
+fun DrawScope.drawItemIcon(
     item: ItemDefinition,
     center: Offset,
     radius: Float,
@@ -72,7 +75,7 @@ fun DrawScope.drawActiveItemMark(
 fun activeItemEmptyPipColor(plate: Color): Color = if (kkContrast(Kk.Line2, plate) >= kkContrast(Kk.Ink, plate)) Kk.Line2 else Kk.Ink
 
 /** The item's first element when it has one, otherwise its first tag. */
-internal fun ItemDefinition.primaryGlyphStyle(): CanvasGlyphStyle =
+fun ItemDefinition.primaryGlyphStyle(): CanvasGlyphStyle =
     elements.firstOrNull()?.toCanvasGlyphStyle() ?: tags.firstOrNull()?.toCanvasGlyphStyle() ?: CanvasGlyphStyle.SUNBURST
 
 /** The first tag behind an element, else the second tag or element; a lone mark repeats itself. */

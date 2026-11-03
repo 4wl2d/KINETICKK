@@ -18,7 +18,6 @@ import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
 import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kinetickk.ball.profile.impl.createProfileComponent
-import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.SessionAcceptance
 import kinetickk.flow.session.api.SessionInteractionPulse
 import kinetickk.flow.session.api.SessionWorkflowFailureCode
@@ -236,7 +235,7 @@ private class MuteFixture {
     }
 
     fun mute() = session.accept(SessionInteractionPulse.ToggleMuteRequested)
-    fun shell() = session.query(AppSessionQuery.GetShell)
+    fun shell() = session.shell()
     fun preferences() = profile.query(ProfileQuery.GetPreferences).preferences
 
     fun assertApplied() {

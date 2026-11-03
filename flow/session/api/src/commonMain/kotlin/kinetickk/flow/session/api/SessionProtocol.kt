@@ -54,15 +54,11 @@ sealed interface SessionRejection {
 }
 
 sealed interface SessionAcceptance {
-    val instanceId: AppSessionInstanceId
-
     data class Accepted(
-        override val instanceId: AppSessionInstanceId,
         val revision: SessionRevision,
     ) : SessionAcceptance
 
     data class Rejected(
-        override val instanceId: AppSessionInstanceId,
         val observedRevision: SessionRevision,
         val reason: SessionRejection,
     ) : SessionAcceptance

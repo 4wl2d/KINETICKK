@@ -34,7 +34,6 @@ import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
 import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kinetickk.ball.profile.impl.createProfileComponent
 import kinetickk.flow.session.api.AppDestination
-import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.api.ToneRequest
@@ -78,7 +77,7 @@ class ReactionEffectsPreferenceComposeTest {
                     mainClock.advanceTimeBy(260)
                     waitForIdle()
                 }
-                fun shell() = owner.sessionPort.query(AppSessionQuery.GetShell)
+                fun shell() = owner.sessionPort.shell()
                 fun key(key: Key) {
                     onRoot().performKeyInput { pressKey(key) }
                     settle()

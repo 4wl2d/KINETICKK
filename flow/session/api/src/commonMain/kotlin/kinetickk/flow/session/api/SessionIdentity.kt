@@ -3,16 +3,6 @@
 
 package kinetickk.flow.session.api
 
-/** The only AppSession instance supported by this application. */
-enum class AppSessionInstanceId(
-    val canonicalValue: String,
-) {
-    LOCAL_SESSION("kinetickk.local/AppSession/local-session"),
-}
-
-val LOCAL_APP_SESSION_INSTANCE_ID: AppSessionInstanceId =
-    AppSessionInstanceId.LOCAL_SESSION
-
 /** Monotonic revision of accepted AppSession frames. */
 data class SessionRevision(
     val value: Long,
@@ -26,7 +16,7 @@ data class SessionRevision(
     }
 }
 
-/** UI lifecycle token derived from, but distinct from, the stable AppSession identity. */
+/** UI lifecycle token derived from the Session route revision. */
 data class SessionRouteToken(
     val value: Long,
 ) {

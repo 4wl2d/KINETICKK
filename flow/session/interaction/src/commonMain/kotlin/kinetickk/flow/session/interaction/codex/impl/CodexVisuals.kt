@@ -32,7 +32,7 @@ import kinetickk.ball.gameplay.interaction.canvas.look.drawActiveItemMark
 import kinetickk.ball.gameplay.interaction.canvas.look.drawWorldDiscoveryMark
 import kinetickk.ball.gameplay.interaction.canvas.look.enemySilhouette
 import kinetickk.ball.gameplay.interaction.canvas.look.skillGlyph
-import kinetickk.flow.session.interaction.home.impl.formIndex
+import kinetickk.flow.session.interaction.shared.formIndex
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkAlign
@@ -60,6 +60,9 @@ import kinetickk.foundation.design.measureKkText
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
+import kinetickk.ball.gameplay.interaction.canvas.look.drawItemIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.drawRelicIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.primaryGlyphStyle
 
 /** The glyph of a status element (thermal flame, cryo asterisk, ion zigzag, gravitic ring, entropy broken ring). */
 internal fun StatusElement.glyph(): KkIcon = KkIcon.Elements[ordinal]
@@ -182,13 +185,13 @@ internal fun DrawScope.drawCodexRelicTile(icon: CodexIcon.Relic, policy: RelicPo
         drawKkHatch(Rect(Offset.Zero, size), roles.threat.copy(alpha = 0.18f))
         drawRect(roles.threat, Offset(1.dp.toPx(), 1.dp.toPx()), Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()),
             style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))))
-        drawRelicIcon(icon.definition, policy, center, radius, rank = null, time = 0f, alpha = 0.45f, roles = roles)
+        drawRelicIcon(icon.definition, policy, center, radius, rank = null, time = 0f, alpha = 0.45f, accent = relicAspectColor(icon.definition.aspect, roles))
         return
     }
     drawRect(kkMix(Kk.Ink2, relicAspectColor(icon.definition.aspect, roles), if (lit) 0.2f else 0.1f))
     drawKkRarityTile(roles.frame(CodexRelicMaterial), seed = icon.definition.id.ordinal)
     // The rank is the cell's badge; the medallion's rank markers would read as stray dots.
-    drawRelicIcon(icon.definition, policy, center, radius, rank = null, time = 0f, roles = roles)
+    drawRelicIcon(icon.definition, policy, center, radius, rank = null, time = 0f, accent = relicAspectColor(icon.definition.aspect, roles))
 }
 
 /** A Codex form glyph is this share of the cell glyph radius (the size the form icon used to take). */
@@ -620,8 +623,8 @@ internal fun DrawScope.drawCodexPairingDiagram(icon: CodexIcon.Pairing, catalog:
     drawLine(tone, Offset(left.x + radius * 0.9f, left.y), Offset(right.x - radius * 0.9f, right.y), width,
         pathEffect = if (dashed) PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 3.dp.toPx())) else null)
     if (icon.bound) drawCircle(roles.you, 3.dp.toPx(), Offset(size.width * 0.5f, size.height * 0.5f))
-    drawRelicIcon(icon.first, catalog.relicPolicy, left, radius, rank = null, roles = roles)
-    drawRelicIcon(icon.second, catalog.relicPolicy, right, radius, rank = null, roles = roles)
+    drawRelicIcon(icon.first, catalog.relicPolicy, left, radius, rank = null, accent = relicAspectColor(icon.first.aspect, roles))
+    drawRelicIcon(icon.second, catalog.relicPolicy, right, radius, rank = null, accent = relicAspectColor(icon.second.aspect, roles))
     if (icon.kind.named && !icon.discovered) {
         val mark = measureKkText(measurer, "?", measurer.typography.condStyle(18f))
         drawKkText(mark, size.width * 0.5f, size.height * 0.5f - 9.dp.toPx(), tone, KkAlign.CENTER, KkVAlign.CENTER)

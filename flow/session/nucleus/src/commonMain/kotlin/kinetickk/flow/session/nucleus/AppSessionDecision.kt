@@ -6,19 +6,12 @@ package kinetickk.flow.session.nucleus
 import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
 import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.gameplay.api.RunMode
-import kinetickk.ball.gameplay.api.GameplaySettingsApplied
 import kinetickk.ball.gameplay.api.GameplayRefusal
-import kinetickk.ball.gameplay.api.GameplayRunStarted
-import kinetickk.ball.gameplay.api.GameplayRunExited
-import kinetickk.ball.gameplay.api.GameplayOverlayPaused
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PreferencesProjection
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
-import kinetickk.ball.profile.api.ProfileSettingsChanged
 import kinetickk.ball.profile.api.ProfileRefusal
-import kinetickk.ball.profile.api.ProfileRebirthTierSelected
-import kinetickk.ball.profile.api.ProfileCoreShapeSelected
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.flow.session.api.SessionInteractionPulse
 import kinetickk.flow.session.api.SessionRejection
@@ -43,73 +36,28 @@ sealed interface AppSessionNucleusPulse {
         val intent: SessionInteractionPulse,
     ) : AppSessionNucleusPulse
 
-    sealed interface Result : AppSessionNucleusPulse
+    /** A participant accepted the command Session issued. */
+    sealed interface Result : AppSessionNucleusPulse {
+        data class ProfileRebirthTierSelected(val result: kinetickk.ball.profile.api.ProfileRebirthTierSelected) : Result
+        data class ProfileSettingsChanged(val result: kinetickk.ball.profile.api.ProfileSettingsChanged) : Result
+        data class ProfileCoreShapeSelected(val result: kinetickk.ball.profile.api.ProfileCoreShapeSelected) : Result
+        data class GameplaySettingsApplied(val result: kinetickk.ball.gameplay.api.GameplaySettingsApplied) : Result
+        data class GameplayRunExited(val result: kinetickk.ball.gameplay.api.GameplayRunExited) : Result
+        data class GameplayRunStarted(val result: kinetickk.ball.gameplay.api.GameplayRunStarted) : Result
+        data class GameplayOverlayPaused(val result: kinetickk.ball.gameplay.api.GameplayOverlayPaused) : Result
+    }
 
-    sealed interface Refusal : AppSessionNucleusPulse
+    /** A participant refused the command Session issued. */
+    sealed interface Refusal : AppSessionNucleusPulse {
+        data class ProfileRebirthRefused(val reason: ProfileRefusal) : Refusal
+        data class ProfileSettingsRefused(val reason: ProfileRefusal) : Refusal
+        data class ProfileCoreShapeRefused(val reason: ProfileRefusal) : Refusal
+        data class GameplaySettingsRefused(val runId: RunId, val reason: GameplayRefusal) : Refusal
+        data class GameplayExitRefused(val runId: RunId, val reason: GameplayRefusal) : Refusal
+        data class GameplayStartRefused(val runId: RunId, val reason: GameplayRefusal) : Refusal
+        data class GameplayPauseRefused(val runId: RunId, val reason: GameplayRefusal) : Refusal
+    }
 }
-
-internal data class ProfileRebirthTierSelectedPulse(val result: ProfileRebirthTierSelected) : AppSessionNucleusPulse.Result
-internal data class ProfileRebirthRefusedPulse(val reason: ProfileRefusal) : AppSessionNucleusPulse.Refusal
-
-fun profileRebirthTierSelected(result: ProfileRebirthTierSelected): AppSessionNucleusPulse.Result =
-    ProfileRebirthTierSelectedPulse(result)
-fun profileRebirthRefused(reason: ProfileRefusal): AppSessionNucleusPulse.Refusal = ProfileRebirthRefusedPulse(reason)
-
-internal data class ProfileSettingsChangedPulse(
-    val result: ProfileSettingsChanged,
-) : AppSessionNucleusPulse.Result
-
-internal data class ProfileCoreShapeSelectedPulse(
-    val result: ProfileCoreShapeSelected,
-) : AppSessionNucleusPulse.Result
-
-internal data class ProfileCoreShapeRefusedPulse(val reason: ProfileRefusal) : AppSessionNucleusPulse.Refusal
-
-fun profileCoreShapeSelected(result: ProfileCoreShapeSelected): AppSessionNucleusPulse.Result =
-    ProfileCoreShapeSelectedPulse(result)
-
-fun profileCoreShapeRefused(reason: ProfileRefusal): AppSessionNucleusPulse.Refusal =
-    ProfileCoreShapeRefusedPulse(reason)
-
-internal data class GameplaySettingsAppliedPulse(
-    val result: GameplaySettingsApplied,
-) : AppSessionNucleusPulse.Result
-
-internal data class GameplayRunExitedPulse(val result: GameplayRunExited) : AppSessionNucleusPulse.Result
-internal data class GameplayExitRefusedPulse(val runId: RunId, val reason: GameplayRefusal) : AppSessionNucleusPulse.Refusal
-fun gameplayRunExited(result: GameplayRunExited): AppSessionNucleusPulse.Result = GameplayRunExitedPulse(result)
-fun gameplayExitRefused(runId: RunId, reason: GameplayRefusal): AppSessionNucleusPulse.Refusal = GameplayExitRefusedPulse(runId, reason)
-
-internal data class GameplayRunStartedPulse(val result: GameplayRunStarted) : AppSessionNucleusPulse.Result
-internal data class GameplayOverlayPausedPulse(val result: GameplayOverlayPaused) : AppSessionNucleusPulse.Result
-internal data class GameplayStartRefusedPulse(val runId: RunId, val reason: GameplayRefusal) : AppSessionNucleusPulse.Refusal
-internal data class GameplayPauseRefusedPulse(val runId: RunId, val reason: GameplayRefusal) : AppSessionNucleusPulse.Refusal
-
-fun gameplayRunStarted(result: GameplayRunStarted): AppSessionNucleusPulse.Result = GameplayRunStartedPulse(result)
-fun gameplayOverlayPaused(result: GameplayOverlayPaused): AppSessionNucleusPulse.Result = GameplayOverlayPausedPulse(result)
-fun gameplayStartRefused(runId: RunId, reason: GameplayRefusal): AppSessionNucleusPulse.Refusal = GameplayStartRefusedPulse(runId, reason)
-fun gameplayPauseRefused(runId: RunId, reason: GameplayRefusal): AppSessionNucleusPulse.Refusal = GameplayPauseRefusedPulse(runId, reason)
-
-internal data class ProfileSettingsRefusedPulse(
-    val reason: ProfileRefusal,
-) : AppSessionNucleusPulse.Refusal
-
-internal data class GameplaySettingsRefusedPulse(
-    val runId: RunId,
-    val reason: GameplayRefusal,
-) : AppSessionNucleusPulse.Refusal
-
-fun profileSettingsChanged(result: ProfileSettingsChanged): AppSessionNucleusPulse.Result =
-    ProfileSettingsChangedPulse(result)
-
-fun gameplaySettingsApplied(result: GameplaySettingsApplied): AppSessionNucleusPulse.Result =
-    GameplaySettingsAppliedPulse(result)
-
-fun profileSettingsRefused(reason: ProfileRefusal): AppSessionNucleusPulse.Refusal =
-    ProfileSettingsRefusedPulse(reason)
-
-fun gameplaySettingsRefused(runId: RunId, reason: GameplayRefusal): AppSessionNucleusPulse.Refusal =
-    GameplaySettingsRefusedPulse(runId, reason)
 
 sealed interface AppSessionDecision {
     data class Accepted(val frame: AppSessionAcceptedFrame) : AppSessionDecision

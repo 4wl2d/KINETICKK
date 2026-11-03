@@ -70,6 +70,8 @@ import kinetickk.foundation.design.kkMix
 import kinetickk.foundation.design.kkStroke
 import kinetickk.foundation.design.labelStyle
 import kinetickk.foundation.design.monoStyle
+import kinetickk.ball.gameplay.interaction.canvas.look.drawItemIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.drawRelicIcon
 
 /**
  * The body of an entry's detail between its title and its facts: rule lines for items, the rank
@@ -397,7 +399,7 @@ private fun CodexRelicDetail(entry: CodexEntry, detail: CodexDetail.Relic, catal
         CodexChipLabel(language.text(CodexText.PAIRINGS_PROGRESS_LABEL), ui)
         detail.pairings.forEach { note ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Canvas(Modifier.size((24f * ui).dp)) { drawRelicIcon(note.partner, catalog.relicPolicy, center, size.minDimension * 0.46f, roles = roles) }
+                Canvas(Modifier.size((24f * ui).dp)) { drawRelicIcon(note.partner, catalog.relicPolicy, center, size.minDimension * 0.46f, accent = relicAspectColor(note.partner.aspect, roles)) }
                 Column(Modifier.weight(1f)) {
                     BasicText((note.name ?: "?").uppercase(), style = typography.condStyle(17f * ui, color = codexLinkTone(note.kind, roles)))
                     BasicText(note.partner.name.localizedContent(language).uppercase(), style = typography.monoStyle(10f * ui, color = Kk.Mute))
@@ -581,7 +583,7 @@ private fun CodexConflictDetail(entry: CodexEntry, detail: CodexDetail.Conflict,
             Canvas(Modifier.size((44f * ui).dp)) { drawItemIcon(item, center, size.minDimension * 0.42f, codexItemColor(item, roles)) }
         }
         detail.relics.forEach { relic ->
-            Canvas(Modifier.size((44f * ui).dp)) { drawRelicIcon(relic, catalog.relicPolicy, center, size.minDimension * 0.42f, roles = roles) }
+            Canvas(Modifier.size((44f * ui).dp)) { drawRelicIcon(relic, catalog.relicPolicy, center, size.minDimension * 0.42f, accent = relicAspectColor(relic.aspect, roles)) }
             BasicText(relic.name.localizedContent(language).uppercase(), Modifier.weight(1f), style = typography.monoStyle(10f * ui, color = Kk.Bone2))
         }
     }
@@ -653,7 +655,7 @@ private fun CodexKeyDetail(detail: CodexDetail.Key, catalog: UiCatalogSnapshot, 
         CodexChipLabel(language.text(CodexText.CARRIED_BY), ui)
         detail.relics.forEach { relic ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Canvas(Modifier.size((26f * ui).dp)) { drawRelicIcon(relic, catalog.relicPolicy, center, size.minDimension * 0.46f, roles = roles) }
+                Canvas(Modifier.size((26f * ui).dp)) { drawRelicIcon(relic, catalog.relicPolicy, center, size.minDimension * 0.46f, accent = relicAspectColor(relic.aspect, roles)) }
                 BasicText(relic.name.localizedContent(language).uppercase(), style = typography.condStyle(17f * ui, color = Kk.Bone))
             }
         }

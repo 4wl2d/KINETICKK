@@ -29,6 +29,8 @@ import kinetickk.foundation.design.drawLayeredGlyph
 import kinetickk.foundation.design.drawRuneMedallion
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
+import kinetickk.ball.gameplay.interaction.canvas.look.drawItemIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.drawRelicIcon
 import kotlin.math.PI
 import kotlin.test.Test
 import kotlin.test.assertContentEquals

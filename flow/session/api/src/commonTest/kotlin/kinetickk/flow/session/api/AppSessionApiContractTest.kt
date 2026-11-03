@@ -17,10 +17,6 @@ import kotlin.test.assertTrue
 class AppSessionApiContractTest {
     @Test
     fun singletonIdentityAndRouteTokenKeepIdentitySeparateFromRevision() {
-        assertEquals(
-            "kinetickk.local/AppSession/local-session",
-            LOCAL_APP_SESSION_INSTANCE_ID.canonicalValue,
-        )
         assertEquals(SessionRevision.ZERO, SessionRevision(0L))
         assertEquals(SessionRouteToken(9L), SessionRouteToken.from(SessionRevision(9L)))
         assertFailsWith<IllegalArgumentException> { SessionRevision(-1L) }
@@ -42,7 +38,6 @@ class AppSessionApiContractTest {
         assertEquals(4, destinations.count(AppDestination::isOverlayDestination))
 
         val projection = AppShellProjection(
-            instanceId = LOCAL_APP_SESSION_INSTANCE_ID,
             revision = SessionRevision(12L),
             routeRevision = SessionRevision(9L),
             base = AppDestination.Gameplay,
@@ -130,7 +125,6 @@ class AppSessionApiContractTest {
 }
 
 private fun homeProjection(): AppShellProjection = AppShellProjection(
-    instanceId = LOCAL_APP_SESSION_INSTANCE_ID,
     revision = SessionRevision.ZERO,
     routeRevision = SessionRevision.ZERO,
     base = AppDestination.Home,

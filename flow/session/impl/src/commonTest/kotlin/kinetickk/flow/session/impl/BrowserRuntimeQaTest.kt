@@ -6,7 +6,6 @@ package kinetickk.flow.session.impl
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.flow.session.api.AppDestination
-import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.SessionAcceptance
 import kinetickk.flow.session.api.SessionInteractionPulse
 import kinetickk.flow.session.api.SessionRejection
@@ -93,4 +92,4 @@ class BrowserRuntimeQaTest {
     }
 }
 
-private fun shell(rig: AppSessionTestRig) = rig.component.query(AppSessionQuery.GetShell)
+private fun shell(rig: AppSessionTestRig) = rig.component.shell()

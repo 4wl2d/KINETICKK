@@ -635,7 +635,6 @@ internal class ShotProfile(
 }
 
 internal class ShotSessionPort(var runMode: RunMode = RunMode.STANDARD) : AppSessionPort {
-    override val instanceId = LOCAL_APP_SESSION_INSTANCE_ID
     var overlay: AppDestination? = null
     private var revision = 0L
     override fun accept(pulse: SessionInteractionPulse): SessionAcceptance {
@@ -643,10 +642,10 @@ internal class ShotSessionPort(var runMode: RunMode = RunMode.STANDARD) : AppSes
         if (pulse is SessionInteractionPulse.OpenOverlay) overlay = pulse.destination
         if (pulse == SessionInteractionPulse.CloseOverlay) overlay = null
         if (pulse is SessionInteractionPulse.SelectRunModeRequested && overlay == null) runMode = pulse.mode
-        return SessionAcceptance.Accepted(instanceId, SessionRevision(revision))
+        return SessionAcceptance.Accepted(SessionRevision(revision))
     }
-    override fun query(query: AppSessionQuery.GetShell) = AppShellProjection(
-        instanceId, SessionRevision(revision), SessionRevision.ZERO, AppDestination.Home, overlay,
+    override fun shell() = AppShellProjection(
+        SessionRevision(revision), SessionRevision.ZERO, AppDestination.Home, overlay,
         null, false, null, SessionLifecycle.READY, false, null, runMode,
     )
 }

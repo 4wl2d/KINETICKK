@@ -22,7 +22,6 @@ import kinetickk.ball.profile.api.ProfileSettingsChanged
 import kinetickk.ball.profile.api.ProfileRefusal
 import kinetickk.ball.profile.api.ProfileCoreShapeSelected
 import kinetickk.flow.session.api.AppDestination
-import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.SessionAcceptance
 import kinetickk.flow.session.api.SessionInteractionPulse
 import kinetickk.flow.session.api.SessionLifecycle
@@ -455,8 +454,8 @@ class DefaultAppSessionComponentTest {
 
         assertEquals("audio-fault", failure.message)
         assertEquals(1, muteFeedback)
-        assertNull(component.query(AppSessionQuery.GetShell).pendingWorkflow)
-        assertEquals(SessionRevision(2L), component.query(AppSessionQuery.GetShell).revision)
+        assertNull(component.shell().pendingWorkflow)
+        assertEquals(SessionRevision(2L), component.shell().revision)
     }
 
     @Test
@@ -697,4 +696,4 @@ class DefaultAppSessionComponentTest {
     }
 }
 
-private fun shell(rig: AppSessionTestRig) = rig.component.query(AppSessionQuery.GetShell)
+private fun shell(rig: AppSessionTestRig) = rig.component.shell()

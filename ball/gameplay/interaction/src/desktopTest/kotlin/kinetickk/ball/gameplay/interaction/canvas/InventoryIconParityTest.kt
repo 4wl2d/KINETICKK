@@ -112,7 +112,7 @@ class InventoryIconParityTest {
             Color(0xFFD24CFF), Color(0xFF46D96A), Color(0xFF009C84), Color(0xFFCCC0FC), Color(0xFFFFC93C))
         val FrameSides = listOf(3, 6, 8, 4, 5, 7, 9, 12, 10)
 
-        /** The rune of each relic; the Codex copy of the renderer keeps the same table. */
+        /** The rune of each relic; the Codex draws relics through the same renderer. */
         val RelicRunes = mapOf(
             RelicId.PERPETUAL_VECTOR to CanvasRuneStyle.RADIAL_WHEEL,
             RelicId.BLINK_DRIVE to CanvasRuneStyle.OFFSET_CHEVRONS,

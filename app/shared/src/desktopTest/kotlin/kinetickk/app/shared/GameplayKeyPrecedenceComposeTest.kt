@@ -48,7 +48,6 @@ import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
 import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kinetickk.ball.profile.impl.createProfileComponent
 import kinetickk.flow.session.api.AppDestination
-import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.foundation.common.input.BindableKey
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
@@ -100,7 +99,7 @@ class GameplayKeyPrecedenceComposeTest {
                     mainClock.advanceTimeBy(260)
                     waitForIdle()
                 }
-                fun shell() = owner.sessionPort.query(AppSessionQuery.GetShell)
+                fun shell() = owner.sessionPort.shell()
                 fun phase() = gameplay.activeRun()?.query(GameplayQuery.GetRunStatus)?.phase
                 fun press(key: Key): List<GameplayInteractionPulse> {
                     gameplay.pulses.clear()
