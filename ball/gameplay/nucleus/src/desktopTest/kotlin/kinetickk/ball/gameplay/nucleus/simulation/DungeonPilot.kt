@@ -8,6 +8,7 @@ import kinetickk.ball.content.api.StructureTemplate
 import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.STRUCTURE_OUTSIDE
 import kinetickk.ball.content.api.WallAxis
+import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.roomAt
 import kinetickk.ball.content.api.rotateQuarterX
 import kinetickk.ball.content.api.rotateQuarterY
@@ -66,11 +67,15 @@ internal data class DungeonAttempt(
  * - Seeking: the entrance's outer approach point (260 u out along the door's outward normal), the entrance, the
  *   entrance room's centre, rounding the footprint by its corners when it lies in the way; with no signal it flies
  *   outward from the absolute origin at 900 u/s until one appears. Rocks, other optional sites and other structures
- *   are avoided as the bot avoids them. The Architect's Doodle is a secret, not a dungeon: it is never the target.
- * - Inside a sealed room: the nearest garrison member is the target, at most 800 u/s. The bot's hunting law decides
- *   how: its orbiting weapons (Arc Coil, Ion Swarm, Prism Relay) circle the target at 220 u, every other weapon rams
- *   it. Walls within 140 u of the predicted Core push it off (gain 6, [nearestWall]); a Dash only dodges a shot
- *   when its line is clear of walls and solid rocks, and never while the previous Dash phase runs.
+ *   are avoided as the bot avoids them; the search's heading excuses none of them. The Architect's Doodle is a
+ *   secret, not a dungeon: it is never the target, and the search rounds it like any other skipped structure.
+ * - Inside a sealed room, at most 800 u/s: a boss-class garrison member (the Vault's Brood Queen, the Reliquary's
+ *   Warden Prime) is fought as the bot fights the Architect, and as the site and dimension pilots fight their bosses:
+ *   orbited at 300 u, or at 100 u and 350 u/s with the Flux Wake, never rammed. Otherwise the nearest member is the
+ *   target and the bot's hunting law decides how: its orbiting weapons (Arc Coil, Ion Swarm, Prism Relay) circle it
+ *   at 220 u, every other weapon rams it. Walls within 140 u of the predicted Core push it off (gain 6,
+ *   [nearestWall]); a Dash only dodges a shot when its line is clear of walls and solid rocks, and never while
+ *   the previous Dash phase runs.
  * - Inside with no sealed room: a breadth-first route over open doors to the nearest room still to clear (an
  *   uncleared room with a garrison, or the final room once its locks are open), through door waypoints 160 u on each
  *   side of every door centre. Held from outside the walls (a notch of the footprint), it first leaves the footprint
@@ -226,14 +231,15 @@ internal class DungeonPilot(
             desiredX = vx
             desiredY = vy
         }
-        // Skipped optional sites (other structures included) stay outside the path, unless the next waypoint lies in
-        // their clearance (a neighbour whose circle overlaps the target's entrance); the target's own mark never counts.
+        // Skipped optional sites (other structures and the Doodle included) stay outside the path, unless the next
+        // waypoint of a target lies in their clearance (a neighbour whose circle overlaps the target's entrance); the
+        // target's own mark never counts. The outward search's waypoint is only a heading, so it excuses no site.
         val siteCount = s.optionalSiteMarks(siteMarks)
         for (mark in 0 until siteCount) {
             val base = mark * 3
             if (signal != null && distanceSquared(signal.x, signal.y, siteMarks[base], siteMarks[base + 1]) < 1f) continue
             val clearance = siteMarks[base + 2] + SITE_CLEARANCE_MARGIN
-            if (distanceSquared(waypointX, waypointY, siteMarks[base], siteMarks[base + 1]) < clearance * clearance) continue
+            if (signal != null && distanceSquared(waypointX, waypointY, siteMarks[base], siteMarks[base + 1]) < clearance * clearance) continue
             val px = s.coreX + s.velocityX * 0.35f - siteMarks[base]
             val py = s.coreY + s.velocityY * 0.35f - siteMarks[base + 1]
             val pd = max(1f, length(px, py))
@@ -336,7 +342,10 @@ internal class DungeonPilot(
         bot.castSkills(s)
     }
 
-    /** The bot's hunting law on the sealed room's garrison: orbit or ram the nearest member, at most 800 u/s. */
+    /**
+     * The bot's hunting law on the sealed room's garrison, at most 800 u/s: a boss-class member (the Brood Queen, the
+     * Warden Prime) as the bot fights a boss, else the nearest member, orbited or rammed by the bot's weapon.
+     */
     private fun fightVelocity(s: MutableGameState, held: DungeonState, template: StructureTemplate): Pair<Float, Float> {
         val tag = roomEncounterTag(held.structureId, held.engagedRoom)
         var targetX: Float
@@ -348,7 +357,17 @@ internal class DungeonPilot(
         targetX = held.x + rotateQuarterX(roomLocalX, roomLocalY, held.rotation)
         targetY = held.y + rotateQuarterY(roomLocalX, roomLocalY, held.rotation)
         var radius = 0f
-        for (enemy in s.enemies) {
+        var orbitSpeed = ORBIT_SPEED
+        val boss = s.enemies.firstOrNull { it.ownerTag == tag && it.alive && it.isBossClass }
+        if (boss != null) {
+            // The bot's fight against the Architect (as the site and dimension pilots fight their bosses): a tight
+            // orbit with the Flux Wake, a wide one with every other weapon, never a ram.
+            val wake = s.weapon == WeaponId.FLUX_WAKE
+            targetX = boss.x
+            targetY = boss.y
+            radius = if (wake) WAKE_BOSS_RADIUS else ARC_BOSS_RADIUS
+            if (wake) orbitSpeed = WAKE_BOSS_SPEED
+        } else for (enemy in s.enemies) {
             if (enemy.ownerTag != tag || !enemy.alive) continue
             val distance = distanceSquared(s.coreX, s.coreY, enemy.x, enemy.y)
             if (distance < best) {
@@ -370,8 +389,8 @@ internal class DungeonPilot(
             desiredY = -ny * RAM_SPEED
         } else {
             val radial = ((radius - distance) * 2.4f).coerceIn(-480f, 480f)
-            desiredX = -ny * ORBIT_SPEED + nx * radial
-            desiredY = nx * ORBIT_SPEED + ny * radial
+            desiredX = -ny * orbitSpeed + nx * radial
+            desiredY = nx * orbitSpeed + ny * radial
         }
         val speed = length(desiredX, desiredY)
         if (speed > INSIDE_SPEED) {

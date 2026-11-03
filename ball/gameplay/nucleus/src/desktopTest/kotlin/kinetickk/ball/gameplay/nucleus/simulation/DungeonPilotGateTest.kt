@@ -23,11 +23,17 @@ import kotlin.test.assertTrue
  * trivialising them and rarely dies inside, a strong build clears nearly all of them, clearly more often and within
  * 150 s, every attempt ends within the pilot's 300 s, and the shipped templates turn up. Elemental squads keep
  * `garrisonScale` 0.8 and `wallDamageScale` 1.0. The slower flight law is balanced with integrity 0.75 and hostile
- * damage 0.70 for room-owned enemies. Independent calibration i = 2,301..2,600: fresh clear 0.731 (SE 0.026),
- * died 0.245 (SE 0.025); strong clear 0.993, median 23.87 s. Lower integrity alone was not reliably better:
- * on i = 2,301..2,400, 0.75 integrity gave 0.309 deaths and 0.65 gave 0.320. A surface-id/cooldown diagnostic
- * ruled walls out (no wall-impact frames in those deaths), so room attack damage changed while attacks and
- * room populations stayed intact. The gate population confirms the candidate without changing its design bands.
+ * damage 0.72 for room-owned enemies. Lower integrity alone was not reliably better: on i = 2,301..2,400, 0.75
+ * integrity gave 0.309 deaths and 0.65 gave 0.320. A surface-id/cooldown diagnostic ruled walls out (no
+ * wall-impact frames in those deaths), so room attack damage changed while attacks and room populations stayed
+ * intact. The pilot fights a room's boss (the Brood Queen, the Warden Prime) as the bot fights the Architect and the
+ * other pilots fight their bosses; ramming it had made ram-weapon runs die in about half their attempts, almost all
+ * of it contact damage. The damage multiplier was then chosen on i = 2,301..2,600 against a stated target: died at
+ * most 0.15 (the gate draws more ram-weapon runs, 0.50 of its attempts against 0.40), clear at most 0.82 and every
+ * 100-seed sub-window inside the band; 0.70 left clear 0.824 and 0.867 on i = 2,401..2,500, 0.72 is the smallest
+ * change that meets it: fresh clear 0.807 (SE 0.023), died 0.146 (SE 0.021), strong clear 1.000, median 23.98 s.
+ * The gate population confirms it without changing its design bands: fresh clear 0.670 (SE 0.043), died 0.186
+ * (SE 0.036), abandoned 0.144; strong clear 1.000, median 24.88 s.
  */
 class DungeonPilotGateTest {
     /**

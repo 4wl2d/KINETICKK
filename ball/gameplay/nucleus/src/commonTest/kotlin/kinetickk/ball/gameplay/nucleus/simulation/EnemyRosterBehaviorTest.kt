@@ -48,8 +48,8 @@ class EnemyRosterBehaviorTest {
         assertEquals(world, damage(EncounterOwner.SITE))
         assertEquals(world, damage(EncounterOwner.DIMENSION))
         val room = damage(EncounterOwner.ROOM)
-        assertEquals(world.first * 0.70f, room.first, 0.001f)
-        assertEquals(world.second * 0.70f, room.second, 0.001f)
+        assertEquals(world.first * 0.72f, room.first, 0.001f)
+        assertEquals(world.second * 0.72f, room.second, 0.001f)
     }
 
     @Test

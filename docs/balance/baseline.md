@@ -1411,7 +1411,8 @@ The final weapon configuration wins 208 of 300 no-POI runs (69.3%), with
 Dungeon encounters retain the 0.8 garrison count scale, room geometry and
 attack patterns. Themed leads alternate with ordinary supports, respecting
 their time and Rebirth gates. Their health multiplier is 0.75 and their
-outgoing damage multiplier 0.70. Damage scaling applies only to ROOM-owned
+outgoing damage multiplier 0.70 (0.72 since the pilot's boss rule, see
+"Dungeon pilot and room damage" below). Damage scaling applies only to ROOM-owned
 enemies; actual projectile/contact regressions keep world, site and dimension
 enemies unchanged. Wall damage remains 1.0.
 
@@ -1563,3 +1564,49 @@ Nadir shift of -0.02. Gate results with bootstrap SE:
 The visit replay now takes the first population seed whose fresh run reaches
 its rift. The first seed's run falls at 93 s in realspace under the slower
 law, so it has no visit to replay.
+
+### Dungeon pilot and room damage
+
+After the thrust rise to 0.36 the dungeon gate's fresh died-inside share read
+0.314 (SE 0.043) on its 118 attempts, above 0.30, while the calibration window
+i = 2,301..2,600 read 0.200. Deaths split by the bot's weapon: orbiting
+weapons died in 1 of 176 window attempts, ram weapons in 58 of 119, and a
+damage-kind diagnostic put about 116 of the 126 integrity lost per ram death
+on contact damage, the Core meeting its target below the 190 u/s line. A
+quarter of those deaths came from ramming the Vault's Brood Queen or the
+Reliquary's Warden Prime. The bot never rams a boss: it orbits the Architect
+at 300 u (100 u at 350 u/s with the Flux Wake), and the site and dimension
+pilots fight their bosses the same way. The dungeon pilot now does too. Its
+outward search also stopped excusing a skipped site whose clearance held its
+heading, which had flown one window run into the Architect's Doodle.
+
+The room damage multiplier was then chosen on the window against a stated
+target: died at most 0.15 (the gate draws more ram-weapon runs, 0.50 of its
+attempts against 0.40), clear at most 0.82 and every 100-seed sub-window
+inside the band. 0.72 is the smallest change from 0.70 that meets it:
+
+| Dungeon fresh arm | Clear | Died inside | Abandoned |
+|---|---:|---:|---:|
+| Window, before | 0.776 | 0.200 (0.023) | 0.024 |
+| Window, Doodle heading fix | 0.780 | 0.200 | 0.020 |
+| Window, boss rule, damage 0.70 | 0.824 | 0.122 | 0.054 |
+| Window, boss rule, damage 0.72 | 0.807 (0.023) | 0.146 (0.021) | 0.048 |
+| Window, boss rule, damage 0.75 / 0.80 | 0.803 / 0.790 | 0.149 / 0.166 | 0.048 / 0.044 |
+| Gate, before | 0.636 | 0.314 (0.043) | 0.051 |
+| Gate, after | 0.670 (0.043) | 0.186 (0.036) | 0.144 (0.032) |
+
+At 0.70 the sub-window i = 2,401..2,500 cleared 0.867; at 0.72 the
+sub-windows read clear 0.786 / 0.847 / 0.788 and died 0.173 / 0.092 / 0.172.
+The strong arm clears every attempt on the window (median 23.98 s) and the
+gate (24.88 s). The gate reads the same at 0.70 and 0.72. The extra abandons
+are fresh ram-weapon runs that orbit the Brood Queen until the pilot's 300 s
+give-up. Thin margin: the fresh clear ceiling rests on the weapon mix, since
+orbiting weapons clear about 0.96 of their attempts.
+
+Flagged for the owner: the bot's ram law presses into its target below the
+hurting speed everywhere. A probe pilot that swings out for a run-up when it
+is within 90 u of its target and closing below 260 u/s clears 0.963 of the
+window's fresh attempts and dies in 0.017. Even the largest damage multiplier
+(1.5) leaves the clear share at 0.895, and the 0.85 ceiling needs integrity
+and damage of about 1.5 each (0.715 clear, 0.234 died). That pilot was not
+adopted.
