@@ -20,104 +20,106 @@ import kinetickk.foundation.design.clipKkCardFace
 import kinetickk.foundation.design.kkSeedFraction
 
 /**
- * The bespoke art of the shipped epic and legendary items, keyed by canonical English item name.
- * This enum is the single name-to-scene table: [rewardCardArt] looks items up here (and later epics and
- * legendaries borrow a family scene from it) and [drawRewardCardArt] dispatches on it. Epic art is a static
- * signature illustration; legendary art ([animated]) is a looping scene that replaces the generic legendary
- * rays and sparks.
+ * The bespoke art of the shipped epic and legendary items, keyed by the id of the item each scene was drawn
+ * for ([itemId]; [itemName] is that item's canonical English name). This enum is the single item-to-scene
+ * table: [rewardCardArt] looks items up here (and later epics and legendaries borrow a family scene from it)
+ * and [drawRewardCardArt] dispatches on it. Epic art is a static signature illustration; legendary art
+ * ([animated]) is a looping scene that replaces the generic legendary rays and sparks. The ids are the shipped
+ * catalog's; RewardCardArtParityTest pins every id to the item name that chose its scene.
  */
-internal enum class RewardCardArt(val itemName: String, val animated: Boolean = false) {
-    TUNGSTEN_HEART("Tungsten Heart"),
-    REDLINE_GOVERNOR("Redline Governor"),
-    ARREST_ENGINE("Arrest Engine"),
-    OVERCHARGED_CAPACITOR("Overcharged Capacitor"),
-    GLASS_EDGE("Glass Edge"),
-    LAST_STAND("Last Stand"),
-    REDLINE_REACTOR("Redline Reactor"),
-    DOMINO_PROTOCOL("Domino Protocol"),
-    GAMBLERS_LEDGER("Gambler's Ledger"),
-    PHOENIX_COIL("Phoenix Coil"),
-    SHATTERGLASS("Shatterglass"),
-    STORM_LATTICE("Storm Lattice"),
-    DARK_STAR("Dark Star"),
-    NECROTIC_EXCHANGE("Necrotic Exchange"),
-    DEADEYE_RETICLE("Deadeye Reticle"),
-    PRISMATIC_CORE("Prismatic Core"),
-    VOLATILE_COMPOUND("Volatile Compound"),
-    SOLAR_CHOIR("Solar Choir", animated = true),
-    GLACIAL_HEART("Glacial Heart", animated = true),
-    RESONANCE_FORK("Resonance Fork", animated = true),
+internal enum class RewardCardArt(val itemId: Int, val itemName: String, val animated: Boolean = false) {
+    TUNGSTEN_HEART(4, "Tungsten Heart"),
+    REDLINE_GOVERNOR(10, "Redline Governor"),
+    ARREST_ENGINE(15, "Arrest Engine"),
+    OVERCHARGED_CAPACITOR(20, "Overcharged Capacitor"),
+    GLASS_EDGE(25, "Glass Edge"),
+    LAST_STAND(31, "Last Stand"),
+    REDLINE_REACTOR(36, "Redline Reactor"),
+    DOMINO_PROTOCOL(41, "Domino Protocol"),
+    GAMBLERS_LEDGER(46, "Gambler's Ledger"),
+    PHOENIX_COIL(51, "Phoenix Coil"),
+    SHATTERGLASS(57, "Shatterglass"),
+    STORM_LATTICE(63, "Storm Lattice"),
+    DARK_STAR(68, "Dark Star"),
+    NECROTIC_EXCHANGE(73, "Necrotic Exchange"),
+    DEADEYE_RETICLE(74, "Deadeye Reticle"),
+    PRISMATIC_CORE(77, "Prismatic Core"),
+    VOLATILE_COMPOUND(79, "Volatile Compound"),
+    SOLAR_CHOIR(52, "Solar Choir", animated = true),
+    GLACIAL_HEART(58, "Glacial Heart", animated = true),
+    RESONANCE_FORK(78, "Resonance Fork", animated = true),
 }
 
-private val ArtByName: Map<String, RewardCardArt> = RewardCardArt.entries.associateBy { it.itemName }
+/** The bespoke scenes by item id, built once. */
+private val ArtById: Map<Int, RewardCardArt> = RewardCardArt.entries.associateBy { it.itemId }
 
 /**
  * Epic and legendary items without a scene of their own borrow the scene of the shipped item closest in
- * theme, keyed by canonical English item name. The face still differs: the art is drawn in the item's own
- * hues, under its own ornament and frame, so no two cards share a look.
+ * theme, keyed by item id (each entry names its item). The face still differs: the art is drawn in the item's
+ * own hues, under its own ornament and frame, so no two cards share a look.
  */
-private val FamilyArtByName: Map<String, RewardCardArt> = mapOf(
-    "Pile-Up Protocol" to RewardCardArt.DOMINO_PROTOCOL,
-    "Gravity Breech" to RewardCardArt.DARK_STAR,
-    "Frozen Moment" to RewardCardArt.SHATTERGLASS,
-    "Annihilator Coil" to RewardCardArt.STORM_LATTICE,
-    "Singularity Seed" to RewardCardArt.DARK_STAR,
-    "Stillness Sight" to RewardCardArt.SHATTERGLASS,
-    "Avalanche Protocol" to RewardCardArt.DARK_STAR,
-    "Comet Drive" to RewardCardArt.TUNGSTEN_HEART,
-    "Siege Ram" to RewardCardArt.ARREST_ENGINE,
-    "Nitro Injector" to RewardCardArt.REDLINE_REACTOR,
-    "Hard Stop" to RewardCardArt.REDLINE_GOVERNOR,
-    "Usurer's Contract" to RewardCardArt.LAST_STAND,
-    "Feeding Frenzy" to RewardCardArt.NECROTIC_EXCHANGE,
-    "Cathedral Bell" to RewardCardArt.RESONANCE_FORK,
-    "Nothing Left" to RewardCardArt.RESONANCE_FORK,
-    "Perfect Carom" to RewardCardArt.GLACIAL_HEART,
-    "Pyre Magazine" to RewardCardArt.SOLAR_CHOIR,
-    "Last Word" to RewardCardArt.RESONANCE_FORK,
-    "Cornucopia Core" to RewardCardArt.SOLAR_CHOIR,
-    "Twin Chamber" to RewardCardArt.STORM_LATTICE,
-    "Alchemical Core" to RewardCardArt.PRISMATIC_CORE,
-    "Overture" to RewardCardArt.OVERCHARGED_CAPACITOR,
-    "Encore Protocol" to RewardCardArt.VOLATILE_COMPOUND,
-    "Quench Seal" to RewardCardArt.SHATTERGLASS,
-    "Arc Furnace" to RewardCardArt.STORM_LATTICE,
-    "Degenerate Matter" to RewardCardArt.DARK_STAR,
-    "Ember Treads" to RewardCardArt.TUNGSTEN_HEART,
-    "Cryogenic Bus" to RewardCardArt.STORM_LATTICE,
-    "Glacier Scope" to RewardCardArt.SHATTERGLASS,
-    "Glassblower's Ram" to RewardCardArt.TUNGSTEN_HEART,
-    "Like Poles" to RewardCardArt.DARK_STAR,
-    "Shunt Resistor" to RewardCardArt.OVERCHARGED_CAPACITOR,
-    "Grave Mulch" to RewardCardArt.NECROTIC_EXCHANGE,
-    "Blast Rider" to RewardCardArt.REDLINE_GOVERNOR,
-    "Choir Prism" to RewardCardArt.SHATTERGLASS,
-    "Wavefront Rudder" to RewardCardArt.REDLINE_GOVERNOR,
-    "Fault Hammer" to RewardCardArt.ARREST_ENGINE,
-    "Sapper's Wedge" to RewardCardArt.GLASS_EDGE,
-    "Anechoic Shell" to RewardCardArt.LAST_STAND,
-    "Brazier of Ash" to RewardCardArt.PHOENIX_COIL,
-    "Hourglass Relay" to RewardCardArt.GLACIAL_HEART,
-    "Horizon Knife" to RewardCardArt.RESONANCE_FORK,
-    "Starving Lantern" to RewardCardArt.DARK_STAR,
-    "Requiem Engine" to RewardCardArt.RESONANCE_FORK,
-    "Gravity Assist" to RewardCardArt.ARREST_ENGINE,
-    "Furnace Liturgy" to RewardCardArt.PHOENIX_COIL,
-    "Kinetic Rosary" to RewardCardArt.DEADEYE_RETICLE,
-    "Siphon Script" to RewardCardArt.NECROTIC_EXCHANGE,
-    "Hazard Pay" to RewardCardArt.DOMINO_PROTOCOL,
-    "Philosopher's Engine" to RewardCardArt.SOLAR_CHOIR,
-    "Summit Crown" to RewardCardArt.SOLAR_CHOIR,
-    "Meridian Engine" to RewardCardArt.GLACIAL_HEART,
+private val FamilyArtById: Map<Int, RewardCardArt> = mapOf(
+    111 to RewardCardArt.DOMINO_PROTOCOL, // Pile-Up Protocol
+    122 to RewardCardArt.DARK_STAR, // Gravity Breech
+    131 to RewardCardArt.SHATTERGLASS, // Frozen Moment
+    132 to RewardCardArt.STORM_LATTICE, // Annihilator Coil
+    133 to RewardCardArt.DARK_STAR, // Singularity Seed
+    156 to RewardCardArt.SHATTERGLASS, // Stillness Sight
+    160 to RewardCardArt.DARK_STAR, // Avalanche Protocol
+    164 to RewardCardArt.TUNGSTEN_HEART, // Comet Drive
+    168 to RewardCardArt.ARREST_ENGINE, // Siege Ram
+    169 to RewardCardArt.REDLINE_REACTOR, // Nitro Injector
+    170 to RewardCardArt.REDLINE_GOVERNOR, // Hard Stop
+    171 to RewardCardArt.LAST_STAND, // Usurer's Contract
+    172 to RewardCardArt.NECROTIC_EXCHANGE, // Feeding Frenzy
+    95 to RewardCardArt.RESONANCE_FORK, // Cathedral Bell
+    101 to RewardCardArt.RESONANCE_FORK, // Nothing Left
+    106 to RewardCardArt.GLACIAL_HEART, // Perfect Carom
+    123 to RewardCardArt.SOLAR_CHOIR, // Pyre Magazine
+    134 to RewardCardArt.RESONANCE_FORK, // Last Word
+    140 to RewardCardArt.SOLAR_CHOIR, // Cornucopia Core
+    182 to RewardCardArt.STORM_LATTICE, // Twin Chamber
+    183 to RewardCardArt.PRISMATIC_CORE, // Alchemical Core
+    195 to RewardCardArt.OVERCHARGED_CAPACITOR, // Overture
+    196 to RewardCardArt.VOLATILE_COMPOUND, // Encore Protocol
+    197 to RewardCardArt.SHATTERGLASS, // Quench Seal
+    198 to RewardCardArt.STORM_LATTICE, // Arc Furnace
+    199 to RewardCardArt.DARK_STAR, // Degenerate Matter
+    200 to RewardCardArt.TUNGSTEN_HEART, // Ember Treads
+    201 to RewardCardArt.STORM_LATTICE, // Cryogenic Bus
+    202 to RewardCardArt.SHATTERGLASS, // Glacier Scope
+    203 to RewardCardArt.TUNGSTEN_HEART, // Glassblower's Ram
+    204 to RewardCardArt.DARK_STAR, // Like Poles
+    205 to RewardCardArt.OVERCHARGED_CAPACITOR, // Shunt Resistor
+    206 to RewardCardArt.NECROTIC_EXCHANGE, // Grave Mulch
+    207 to RewardCardArt.REDLINE_GOVERNOR, // Blast Rider
+    208 to RewardCardArt.SHATTERGLASS, // Choir Prism
+    209 to RewardCardArt.REDLINE_GOVERNOR, // Wavefront Rudder
+    210 to RewardCardArt.ARREST_ENGINE, // Fault Hammer
+    211 to RewardCardArt.GLASS_EDGE, // Sapper's Wedge
+    212 to RewardCardArt.LAST_STAND, // Anechoic Shell
+    213 to RewardCardArt.PHOENIX_COIL, // Brazier of Ash
+    214 to RewardCardArt.GLACIAL_HEART, // Hourglass Relay
+    215 to RewardCardArt.RESONANCE_FORK, // Horizon Knife
+    216 to RewardCardArt.DARK_STAR, // Starving Lantern
+    217 to RewardCardArt.RESONANCE_FORK, // Requiem Engine
+    244 to RewardCardArt.ARREST_ENGINE, // Gravity Assist
+    262 to RewardCardArt.PHOENIX_COIL, // Furnace Liturgy
+    263 to RewardCardArt.DEADEYE_RETICLE, // Kinetic Rosary
+    264 to RewardCardArt.NECROTIC_EXCHANGE, // Siphon Script
+    265 to RewardCardArt.DOMINO_PROTOCOL, // Hazard Pay
+    266 to RewardCardArt.SOLAR_CHOIR, // Philosopher's Engine
+    267 to RewardCardArt.SOLAR_CHOIR, // Summit Crown
+    268 to RewardCardArt.GLACIAL_HEART, // Meridian Engine
     // The epic active items: a planted resonator's rings, the tide drawn in round the Core, the lattice a catalyst
     // sets off at once, the weapon's two infusions mixed in one flask.
-    "Resonator" to RewardCardArt.REDLINE_REACTOR,
-    "Entropic Tide" to RewardCardArt.DARK_STAR,
-    "Catalyze" to RewardCardArt.STORM_LATTICE,
-    "Dual Infusion" to RewardCardArt.VOLATILE_COMPOUND,
+    280 to RewardCardArt.REDLINE_REACTOR, // Resonator
+    278 to RewardCardArt.DARK_STAR, // Entropic Tide
+    285 to RewardCardArt.STORM_LATTICE, // Catalyze
+    286 to RewardCardArt.VOLATILE_COMPOUND, // Dual Infusion
     // The terrain epics: a piece of a gravity knot trailing the Core out, a vent's plume banked in a coil.
-    "Horizon Surfer" to RewardCardArt.DARK_STAR,
-    "Updraft Kiln" to RewardCardArt.PHOENIX_COIL,
+    292 to RewardCardArt.DARK_STAR, // Horizon Surfer
+    298 to RewardCardArt.PHOENIX_COIL, // Updraft Kiln
 )
 
 /**
@@ -127,9 +129,9 @@ private val FamilyArtByName: Map<String, RewardCardArt> = mapOf(
  */
 internal fun rewardCardArt(item: ItemDefinition?): RewardCardArt? {
     if (item == null) return null
-    ArtByName[item.name]?.let { return it }
+    ArtById[item.id]?.let { return it }
     if (item.rarity.rank < ItemRarity.EPIC.rank) return null
-    FamilyArtByName[item.name]?.let { return it }
+    FamilyArtById[item.id]?.let { return it }
     return if (item.rarity == ItemRarity.LEGENDARY) RewardCardArt.RESONANCE_FORK else when (item.tags.firstOrNull()) {
         BuildTag.RAM -> RewardCardArt.TUNGSTEN_HEART
         BuildTag.DRIVE -> RewardCardArt.REDLINE_GOVERNOR
@@ -145,7 +147,7 @@ internal fun rewardCardArt(item: ItemDefinition?): RewardCardArt? {
 }
 
 /** Whether [item] draws a scene borrowed from its family rather than one of its own. */
-internal fun usesFamilyArt(item: ItemDefinition): Boolean = rewardCardArt(item) != null && item.name !in ArtByName
+internal fun usesFamilyArt(item: ItemDefinition): Boolean = rewardCardArt(item) != null && item.id !in ArtById
 
 /**
  * Draws [art] into the card face of [frame] at [time] seconds, clipped to the face slab. The card
