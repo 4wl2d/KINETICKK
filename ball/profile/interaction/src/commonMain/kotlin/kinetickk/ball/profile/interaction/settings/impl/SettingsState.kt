@@ -3,12 +3,11 @@
 
 package kinetickk.ball.profile.interaction.settings.impl
 
-import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
-
 import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.formatMultiplier
+import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
 import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
@@ -231,7 +230,6 @@ internal data class SettingsPlatform(
 ) {
     /** Whether [row] is shown here. */
     fun offers(row: SettingsRow): Boolean = when (row) {
-        SettingsRow.SHOW_FPS -> true
         SettingsRow.BIND_PERFORMANCE -> DIAGNOSTICS_ENABLED && support.keyboard
         SettingsRow.WINDOW_MODE -> support.windowModes
         SettingsRow.WINDOW_SIZE -> support.windowModes && support.windowSizes.isNotEmpty()

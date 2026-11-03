@@ -555,7 +555,7 @@ private fun PlayerCollectionDto.isFromRetiredCatalog(): Boolean {
     )
     // Only bits of defined discoveries; a sign or higher bit names none.
     rejectUnless(
-        worldDiscoveryMask >= 0 && worldDiscoveryMask and WorldDiscovery.VALID_MASK.inv() == 0,
+        worldDiscoveryMask and WorldDiscovery.VALID_MASK.inv() == 0,
         ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
     )
     // The retired codec never wrote these fields, so a save carrying them without an epoch was not

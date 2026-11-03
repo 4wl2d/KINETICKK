@@ -15,7 +15,6 @@ import kinetickk.ball.profile.api.PreferencesProjection
 import kinetickk.ball.profile.api.ProfileAcceptance
 import kinetickk.ball.profile.api.ProfileEffectRef
 import kinetickk.ball.profile.api.ProfileInstanceId
-import kinetickk.ball.profile.api.ProfilePersistenceStatus
 import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.api.ProfileRevision
@@ -235,7 +234,6 @@ internal class DefaultProfileComponent(
         when (output) {
             is ProfileOutput.PersistSnapshot -> {
                 val result = resource.writeSnapshot(output.snapshot)
-                validateWriteCompletion(output, result)
                 acceptance.retainCompletion(ProfileWorkItem.WriteCompleted(output.effectRef, result))
             }
             is ProfileOutput.SettingsChanged -> when (item) {
@@ -253,24 +251,6 @@ internal class DefaultProfileComponent(
             is ProfileOutput.ProgressApplied -> when (item) {
                 is ProfileWorkItem.ProgressApplication -> item.reply.accepted(output.result)
                 else -> error("Profile progress result has no current typed call")
-            }
-        }
-    }
-
-    /** Trusted Resource boundary validation precedes Fact construction. */
-    private fun validateWriteCompletion(
-        output: ProfileOutput.PersistSnapshot,
-        result: ProfileWriteResult,
-    ) {
-        val pending = checkNotNull(committedState.persistence as? ProfilePersistenceStatus.Pending) {
-            "Profile Resource returned a write completion with no accepted effect"
-        }
-        check(pending.effectRef == output.effectRef) {
-            "Profile Resource write completion effect correlation mismatch"
-        }
-        if (result is ProfileWriteResult.Written) {
-            check(result.revision == pending.snapshotRevision) {
-                "Profile Resource write completion revision mismatch"
             }
         }
     }
