@@ -7,7 +7,7 @@ import androidx.compose.ui.graphics.Color
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.WeaponId
-import kinetickk.ball.gameplay.nucleus.model.DamageNumberTier
+import kinetickk.ball.gameplay.nucleus.render.DamageNumberTier
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.foundation.design.Kk

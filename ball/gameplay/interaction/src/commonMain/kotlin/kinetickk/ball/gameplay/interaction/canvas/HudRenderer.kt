@@ -43,7 +43,7 @@ import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
 import kinetickk.ball.gameplay.interaction.performance.GameplayFpsCounter
 import kinetickk.ball.profile.api.GameAction
-import kinetickk.ball.gameplay.nucleus.model.formatRunTime
+import kinetickk.ball.gameplay.nucleus.render.formatRunTime
 import kinetickk.ball.gameplay.nucleus.render.ApexProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
 import kinetickk.ball.gameplay.nucleus.render.EnemyType

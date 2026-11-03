@@ -10,7 +10,7 @@ import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.random.CloneableXorWowRandom
 import kinetickk.ball.gameplay.nucleus.model.clamp
 import kinetickk.ball.profile.api.DamageNumberFormat
-import kinetickk.ball.gameplay.nucleus.model.formatDamageNumber
+import kinetickk.ball.gameplay.nucleus.render.formatDamageNumber
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kotlin.math.atan2

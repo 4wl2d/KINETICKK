@@ -29,9 +29,9 @@ import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
 import kinetickk.ball.gameplay.interaction.localization.RunVarietyText
 import kinetickk.ball.gameplay.interaction.rewards.activeSlotKey
 import kinetickk.ball.gameplay.interaction.rewards.overlayUiTextScale
-import kinetickk.ball.gameplay.nucleus.model.formatRunTime
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.RelicLinkKind
+import kinetickk.ball.gameplay.nucleus.render.formatRunTime
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*

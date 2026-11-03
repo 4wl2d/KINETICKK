@@ -80,7 +80,7 @@ import kinetickk.ball.gameplay.interaction.rewards.OverlayText
 import kinetickk.ball.gameplay.interaction.rewards.RewardScrollIndicator
 import kinetickk.ball.gameplay.interaction.rewards.overlayUiTextScale
 import kinetickk.ball.gameplay.interaction.rewards.overlayFrame
-import kinetickk.ball.gameplay.nucleus.model.formatRunTime
+import kinetickk.ball.gameplay.nucleus.render.formatRunTime
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.foundation.common.localization.AppLanguage

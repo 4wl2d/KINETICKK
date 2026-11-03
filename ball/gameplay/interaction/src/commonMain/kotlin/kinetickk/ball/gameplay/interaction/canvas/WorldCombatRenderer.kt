@@ -19,7 +19,7 @@ import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.interaction.fx.InteractionFxLimits
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.model.clamp
-import kinetickk.ball.gameplay.nucleus.model.damageNumberTier
+import kinetickk.ball.gameplay.nucleus.render.damageNumberTier
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
