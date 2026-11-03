@@ -422,13 +422,13 @@ internal fun MutableGameState.updatePyreHerald(enemy: Enemy, dx: Float, dy: Floa
             enemy.modeUntil = elapsed + bossClockSeconds(enemy, PYRE_EMBER_SECONDS)
             if (canAttack(enemy)) queueEmber(enemy.x, enemy.y, PYRE_EMBER_DELAY)
         }
-    }
-    // The Herald's shield cycle; each shield also calls in Imps.
-    if (elapsed >= enemy.abilityAt && enemy.shieldUntil <= elapsed) {
-        enemy.shieldUntil = elapsed + HERALD_SHIELD_SECONDS
-        enemy.abilityAt = elapsed + if (enemy.phase >= 2) PYRE_FINAL_SHIELD_INTERVAL_SECONDS else HERALD_SHIELD_INTERVAL_SECONDS
-        spawnBossAdds(enemy, EnemyType.IMP, PYRE_IMPS, 1f, maxLive = PYRE_IMPS_LIVE)
-        shockwave(enemy.x, enemy.y, 0.45f, enemy.radius * 2.6f, 3)
+        // The Herald's shield cycle; each shield also calls in Imps. A shield due during a shift rises after it.
+        if (elapsed >= enemy.abilityAt && enemy.shieldUntil <= elapsed) {
+            enemy.shieldUntil = elapsed + HERALD_SHIELD_SECONDS
+            enemy.abilityAt = elapsed + if (enemy.phase >= 2) PYRE_FINAL_SHIELD_INTERVAL_SECONDS else HERALD_SHIELD_INTERVAL_SECONDS
+            spawnBossAdds(enemy, EnemyType.IMP, PYRE_IMPS, 1f, maxLive = PYRE_IMPS_LIVE)
+            shockwave(enemy.x, enemy.y, 0.45f, enemy.radius * 2.6f, 3)
+        }
     }
 }
 

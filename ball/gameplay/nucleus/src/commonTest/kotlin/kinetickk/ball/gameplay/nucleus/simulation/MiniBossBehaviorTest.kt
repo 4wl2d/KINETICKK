@@ -435,6 +435,7 @@ class MiniBossBehaviorTest {
         assertEquals(PYRE_RING_EMBERS, ring.size)
         assertEquals(PYRE_RING_EMBERS, state.volatileBursts.size, "no trail ember while it shifts")
         ring.forEach { assertEquals(PYRE_RING_RADIUS, sqrt((it.x - pyre.x) * (it.x - pyre.x) + (it.y - pyre.y) * (it.y - pyre.y)), 1e-2f) }
+        state.elapsed = maxOf(state.elapsed, pyre.shiftUntil)
         pyre.shieldUntil = 0f
         pyre.abilityAt = state.elapsed
         state.runFor(FIXED)
@@ -466,8 +467,9 @@ class MiniBossBehaviorTest {
             val state = quietState()
             val boss = state.spawn(type, 450f, 0f)
             state.runFor(FIXED)
-            if (type == EnemyType.PYRE_HERALD) boss.abilityAt = Float.MAX_VALUE
             state.crossGate(boss)
+            // The Pyre Herald's shield (and its Imps) comes due inside the shift.
+            if (type == EnemyType.PYRE_HERALD) boss.abilityAt = state.elapsed
             val shift = boss.shiftUntil - state.elapsed
             boss.actionTimer = 0f
             boss.modeUntil = state.elapsed
