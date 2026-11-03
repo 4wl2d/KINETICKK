@@ -620,8 +620,9 @@ class DimensionRewardsTest {
      */
     @Test
     fun theRefuseCardNamesTheMatterItGrantsThroughTheRunsMatterGain() {
-        // (Rebirth tier, omen Matter gain scale) -> the card's number: tier 5 with Rich Veins, Ascetic Path, Iron Tide at tier 1.
-        for ((setup, expected) in listOf((5 to 1.5f) to 30, (0 to 0.6f) to 6, (1 to 1.3f) to 16)) {
+        // (Rebirth tier, omen Matter gain scale) -> the card's number: tier 5 with Rich Veins (10 × 1.16^5 × 1.5 = 31.5),
+        // Ascetic Path, Iron Tide at tier 1 (10 × 1.16 × 1.3 = 15.1).
+        for ((setup, expected) in listOf((5 to 1.5f) to 32, (0 to 0.6f) to 6, (1 to 1.3f) to 15)) {
             val (tier, scale) = setup
             val state = buildTestState(rebirth = tier).apply {
                 applyRunModifier(RunModifierEffect.MatterGainScale(scale))

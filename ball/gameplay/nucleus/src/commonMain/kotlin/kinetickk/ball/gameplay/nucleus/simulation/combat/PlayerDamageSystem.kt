@@ -44,13 +44,13 @@ internal enum class IncomingDamage(
 
 /**
  * Damage of a hostile attack from [enemy] (null for sourceless hazards), evaluated when the attack is
- * created: a projectile is fired or a contact resolves. It applies the run growth `1 + 0.5p` and the
- * per-enemy [hostileOutputFactor]. The Rebirth incoming-damage multiplier is not part of it, because
- * [takeDamage] applies that multiplier to every amount it receives; applying it here as well would
- * count it twice.
+ * created: a projectile is fired or a contact resolves. It applies the run growth
+ * ([kinetickk.ball.content.api.RunTempoProfile.hostileDamageRunGrowth], `1 + 0.5p`) and the per-enemy
+ * [hostileOutputFactor]. The Rebirth incoming-damage multiplier is not part of it, because [takeDamage] applies that
+ * multiplier to every amount it receives; applying it here as well would count it twice.
  */
 internal fun MutableGameState.hostileDamage(enemy: Enemy?, base: Float): Float =
-    base * (1f + HOSTILE_RUN_GROWTH * runProgress) * hostileOutputFactor(enemy)
+    base * content.tempo.hostileDamageRunGrowth(elapsed) * hostileOutputFactor(enemy)
 
 /**
  * Effects on the attacking enemy that scale its damage output: Hollow (Void) multiplies
@@ -63,9 +63,6 @@ internal fun MutableGameState.hostileOutputFactor(enemy: Enemy?): Float {
     } else 1f
     return hollowOutputFactor(enemy) * objectiveBossDamageShare(enemy) * roomScale
 }
-
-/** Hostile damage grows by this fraction of run progress; see [hostileDamage]. */
-internal const val HOSTILE_RUN_GROWTH: Float = 0.5f
 
 /** Damage-taken buffs and liabilities together never bring the multiplier on a hit below this. */
 internal const val MIN_DAMAGE_TAKEN_MULTIPLIER: Float = 0.1f

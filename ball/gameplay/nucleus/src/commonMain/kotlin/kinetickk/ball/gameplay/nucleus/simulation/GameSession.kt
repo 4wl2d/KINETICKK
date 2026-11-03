@@ -100,7 +100,7 @@ internal fun MutableGameState.startRun() {
     weaponLevel = 1 + matrix.startingWeaponLevels + signatureLevelBonus()
     // Refit of the selected character is a run constant; Honing is read by the current weapon.
     characterUpgradeLevel = characterUpgradeLevels[coreShape.ordinal]
-    characterUpgradePower = 1f + content.upgrades.characterPowerPerLevel * characterUpgradeLevel
+    characterUpgradePower = content.upgrades.characterPower(characterUpgradeLevel)
     resetRunStats()
     resetDimensions()
     recompileBuild()
@@ -139,7 +139,10 @@ internal const val BASE_MAGNET_STRENGTH: Float = 4.65f
 /** Base exponential drag on the Core's velocity per second. */
 internal const val BASE_DRAG_COEFFICIENT: Float = 0.29f
 
-/** Character base stats, then the owned Core Matrix effects from content, Refit integrity, then Rebirth. */
+/**
+ * Character base stats, then the owned Core Matrix effects from content, the permanent integrity shares (the Matrix's
+ * and Refit's, both of the character's base integrity), then Rebirth.
+ */
 internal fun MutableGameState.resetRunStats() {
     coreStats.reset(pickupRadius = content.pickups.magnetRadius)
     maxHp = 100f + rebirthProfile.playerIntegrityBonus
@@ -147,13 +150,16 @@ internal fun MutableGameState.resetRunStats() {
     maxShield = 0f
     shield = 0f
     applyCharacterTraits()
+    val baseIntegrity = maxHp
     applyMatrixStats()
-    maxHp += content.upgrades.characterIntegrityPerLevel * characterUpgradeLevel
+    maxHp = max(MIN_RUN_INTEGRITY, maxHp + baseIntegrity * permanentIntegrityShare(characterUpgradeLevel))
     matterGain *= rebirthProfile.matterGainMultiplier
     applyOmenStats()
     dashHeatCost *= matrix.dashHeatMultiplier
     dragCoefficient *= matrix.dragMultiplier
     hp = maxHp
+    // The Matrix's shield share starts charged, as a flat shield stat does.
+    shield += matrix.shieldShare * maxHp
     polarityStability = 1f
     shieldRechargeDelay = 0f
     timeSinceDamage = 0f
@@ -294,7 +300,7 @@ internal fun MutableGameState.choose(index: Int) {
         }
         ChoiceType.TOTEM -> when (option.totemAction ?: return) {
             TotemAction.AMPLIFY_CURRENT -> {
-                amplifyCurrentWeapon()
+                takeAmplify()
                 GameplayAudioCue.WEAPON_ACQUIRED
             }
             TotemAction.CHANGE_WEAPON -> {

@@ -27,8 +27,7 @@ internal fun MutableGameState.gainData(rawAmount: Float) {
             weaponLevel < content.tempo.maximumAutomaticWeaponLevel + matrix.startingWeaponLevels + signatureLevelBonus()
         ) {
             val before = captureBuildChange()
-            amplifyCurrentWeapon()
-            emitBuildChange(before, currentWeaponDefinition.name + " mastery advanced")
+            if (amplifyCurrentWeapon()) emitBuildChange(before, currentWeaponDefinition.name + " mastery advanced")
         }
         if (level == maximumLevel) {
             // The capped level holds no Data: the leftover would only charge an Apex that unlocks ready.

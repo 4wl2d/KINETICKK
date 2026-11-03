@@ -51,7 +51,7 @@ private fun MutableGameState.rewardPreview(
             }
             candidate().acquireItem(id, option.reborn)
         }
-        ChoiceType.TOTEM -> if (option.totemAction == TotemAction.AMPLIFY_CURRENT) candidate().amplifyCurrentWeapon()
+        ChoiceType.TOTEM -> if (option.totemAction == TotemAction.AMPLIFY_CURRENT) candidate().takeAmplify()
         // Weapon level and global bonuses are preserved when switching systems.
         ChoiceType.WEAPON -> option.weaponId?.let {
             val candidate = candidate()

@@ -19,6 +19,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kinetickk.ball.gameplay.nucleus.simulation.flight.*
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kinetickk.foundation.collections.ImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -166,18 +167,22 @@ class WeaponEntityRulesTest {
 
     @Test
     fun theConcussionShockwaveTakesTheRebirthPowerOnce() {
+        // The shipped tiers give no player power (docs/balance/progression.md); the knob still exists, so a tier with
+        // power 1.3 checks that the shockwave counts it once.
+        val rebirth = canonicalGameplayContent.rebirth
+        val powered = canonicalGameplayContent.copy(rebirth = rebirth.copy(profiles = ImmutableList.copyOf(rebirth.profiles.map { profile ->
+            if (profile.tier == 10) profile.copy(playerPowerMultiplier = 1.3f) else profile
+        })))
         fun wave(tier: Int): Float {
-            val state = buildTestState(rebirth = tier, weapon = WeaponId.CONCUSSION_ENGINE, shape = CoreShape.HEXAGON)
+            val state = buildTestState(rebirth = tier, weapon = WeaponId.CONCUSSION_ENGINE, shape = CoreShape.HEXAGON, content = powered)
             state.critChance = 0f
             val target = state.dummy(x = state.coreX + 40f, y = state.coreY)
             state.onWeaponImpact(IMPACT_SPEED, state.impactPower(IMPACT_SPEED))
             return target.maxHp - target.hp
         }
-        val power = canonicalGameplayContent.rebirth.profile(10).playerPowerMultiplier
-        assertTrue(power > 1f)
         val base = wave(0)
         assertTrue(base > 0f)
-        assertEquals(power, wave(10) / base, 1e-3f)
+        assertEquals(1.3f, wave(10) / base, 1e-3f)
     }
 
     @Test

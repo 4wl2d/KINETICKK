@@ -125,7 +125,6 @@ internal enum class ProfileScreensRedesignText(
     UpgradeBuyDescription("Upgrade {0} to Lvl {1} for {2} Matter", "Улучшить «{0}» до ур. {1} за {2} материи"),
     UpgradeCharacterDamage("{0} damage", "Урон «{0}»"),
     UpgradeWeaponDamage("Weapon damage", "Урон оружия"),
-    UpgradePlus("+{0}", "+{0}"),
     UpgradePlusPercent("+{0}%", "+{0}%"),
     UpgradeRefusedMax("Already at level {0}", "Уже уровень {0}"),
     UpgradeRefusedWeapon("Unlock this weapon first", "Сначала откройте это оружие"),

@@ -21,6 +21,10 @@ import kotlin.math.min
 internal data class MatrixModifiers(
     /** Summed stat deltas by [ItemEffect.ordinal]: per-rank amount × owned ranks. */
     val statTotals: List<Float> = List(ItemEffect.entries.size) { 0f },
+    /** Share of the character's base integrity added to maximum integrity at run start (negative for a cost). */
+    val integrityShare: Float = 0f,
+    /** Share of the current maximum integrity added to shield capacity. */
+    val shieldShare: Float = 0f,
     val damageMultiplier: Float = 1f,
     val reactionPowerBonus: Float = 0f,
     val statusPotencyBonus: Float = 0f,
@@ -78,6 +82,8 @@ private fun MatrixModifiers.with(effect: MatrixEffect, ranks: Int, stats: FloatA
             stats[effect.delta.effect.ordinal] += effect.delta.amount * ranks
             this
         }
+        is MatrixEffect.IntegrityShare -> copy(integrityShare = integrityShare + effect.fraction * ranks)
+        is MatrixEffect.ShieldShare -> copy(shieldShare = shieldShare + effect.fraction * ranks)
         is MatrixEffect.DamageMultiplier -> copy(damageMultiplier = damageMultiplier + effect.fraction * ranks)
         is MatrixEffect.ReactionPower -> copy(reactionPowerBonus = reactionPowerBonus + effect.fraction * ranks)
         is MatrixEffect.StatusPotency -> copy(statusPotencyBonus = statusPotencyBonus + effect.fraction * ranks)
@@ -159,6 +165,16 @@ internal fun MatrixModifiers.statValue(effect: ItemEffect, base: Float, pickupRa
         else -> base + amount
     }
 }
+
+/**
+ * The permanent shares of the character's base integrity a run starts with: the owned Matrix's
+ * ([MatrixModifiers.integrityShare]) plus Refit's at [refitLevel].
+ */
+internal fun MutableGameState.permanentIntegrityShare(refitLevel: Int): Float =
+    matrix.integrityShare + content.upgrades.characterIntegrity(refitLevel) - 1f
+
+/** Maximum integrity a run never starts below, whatever its costs. */
+internal const val MIN_RUN_INTEGRITY: Float = 10f
 
 /** True while the next Dash costs no heat (Perpetual Drift). */
 internal fun MutableGameState.matrixFreeDashReady(): Boolean =

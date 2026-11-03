@@ -103,7 +103,7 @@ class MatrixComposeTest {
             waitForIdle()
             assertEquals(listOf<ProfilePulse.Business>(ProfilePulse.PurchaseMatrixNode(MatrixNodeId.WEAPON_CALIBRATION)), port.pulses)
             onNodeWithTag(tag(MatrixNodeId.WEAPON_CALIBRATION)).assert(stateContains("Rank 1/3"))
-            assertEquals(10_000L - 200L, port.matter)
+            assertEquals(10_000L - 500L, port.matter)
         }
     }
 
@@ -173,7 +173,7 @@ class MatrixComposeTest {
     fun resetNeedsTwoPressesAndIsDisabledWithNothingToRefund() {
         val owned = MatrixTestPort(matter = 0L, ranks = mapOf(MatrixNodeId.IMPACT_DRIVER to 2))
         run(owned) {
-            onNodeWithTag("profile-matrix-reset").assert(stateContains("550"))
+            onNodeWithTag("profile-matrix-reset").assert(stateContains("1,900"))
             onNodeWithTag("profile-matrix-reset").performClick()
             waitForIdle()
             assertTrue(owned.pulses.isEmpty(), "the first press only arms")
@@ -183,7 +183,7 @@ class MatrixComposeTest {
             onNodeWithTag("profile-matrix-reset").performClick()
             waitForIdle()
             assertEquals(listOf<ProfilePulse.Business>(ProfilePulse.ResetMatrix), owned.pulses)
-            assertEquals(550L, owned.matter)
+            assertEquals(1_900L, owned.matter)
             onNodeWithTag("profile-matrix-reset").assertIsNotEnabled()
         }
         run(MatrixTestPort(matter = 10L)) { onNodeWithTag("profile-matrix-reset").assertIsNotEnabled() }

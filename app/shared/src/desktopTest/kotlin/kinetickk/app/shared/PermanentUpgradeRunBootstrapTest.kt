@@ -63,7 +63,8 @@ class PermanentUpgradeRunBootstrapTest {
         val plain = start(content, snapshot.copy(upgrades = PermanentUpgrades()))
         val upgradedModel = requireNotNull(GameplayNucleus.renderSnapshot(upgraded).renderModel)
         val plainModel = requireNotNull(GameplayNucleus.renderSnapshot(plain).renderModel)
-        assertEquals(plainModel.maxHp + 2 * content.upgrades.characterIntegrityPerLevel, upgradedModel.maxHp, 1e-4f)
+        // Refit 2 adds its integrity share of the Orb's base integrity (the plain run starts at that base).
+        assertEquals(plainModel.maxHp * content.upgrades.characterIntegrity(2), upgradedModel.maxHp, 1e-3f)
         val summary = GameplayNucleus.query(upgraded, GameplayQuery.GetBuildSummary)
         assertEquals(2, summary.characterUpgradeLevel)
         assertEquals(3, summary.weaponUpgradeLevel)

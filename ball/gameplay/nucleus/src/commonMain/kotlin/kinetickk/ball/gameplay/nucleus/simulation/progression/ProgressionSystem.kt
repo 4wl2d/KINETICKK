@@ -72,14 +72,7 @@ internal fun MutableGameState.openTotemChoice() {
     // Recalibration needs another owned weapon to offer; a profile with only the starter amplifies.
     val canRecalibrate = weaponOfferCandidates().isNotEmpty()
     choices = listOfNotNull(
-        ChoiceOption(
-            type = ChoiceType.TOTEM,
-            title = "Amplify ${currentWeaponDefinition.name}",
-            description = "Advance the current system from level $weaponLevel to $nextLevel immediately.",
-            tag = masteryTag,
-            weaponId = weapon,
-            totemAction = TotemAction.AMPLIFY_CURRENT,
-        ),
+        amplifyOption("Advance the current system from level $weaponLevel to $nextLevel immediately.", masteryTag),
         ChoiceOption(
             type = ChoiceType.TOTEM,
             title = "Change weapon",
@@ -188,8 +181,15 @@ private fun MutableGameState.openNextFloorOffer() {
     openItemOfferWithFloor(floor)
 }
 
-/** One more level of the current weapon, announced as `[title] // LEVEL n` (or the mastery it reaches). */
-internal fun MutableGameState.amplifyCurrentWeapon(title: String = currentWeaponDefinition.name.uppercase()) {
+/** True once the current weapon is at [kinetickk.ball.content.api.RunTempoProfile.maximumWeaponLevel]: nothing amplifies it. */
+internal fun MutableGameState.weaponAtMaximumLevel(): Boolean = weaponLevel >= content.tempo.maximumWeaponLevel
+
+/**
+ * One more level of the current weapon, announced as `[title] // LEVEL n` (or the mastery it reaches). Every source of
+ * weapon levels comes through here, so none passes the maximum level: there it changes nothing and returns false.
+ */
+internal fun MutableGameState.amplifyCurrentWeapon(title: String = currentWeaponDefinition.name.uppercase()): Boolean {
+    if (weaponAtMaximumLevel()) return false
     weaponLevel++
     val reachedMastery = content.weaponMasteries.firstOrNull { it.minimumLevel == weaponLevel }
     message = if (reachedMastery != null) {
@@ -198,17 +198,45 @@ internal fun MutableGameState.amplifyCurrentWeapon(title: String = currentWeapon
         title + " // LEVEL " + weaponLevel
     }
     messageTime = 1.5f
+    return true
 }
 
 /**
+ * The Amplify card of a Totem or directed WEAPON choice: [description] and [tag] below the maximum level; at it the
+ * card says it salvages the amplification for Matter ([takeAmplify]).
+ */
+internal fun MutableGameState.amplifyOption(description: String, tag: String): ChoiceOption = ChoiceOption(
+    type = ChoiceType.TOTEM,
+    title = "Amplify ${currentWeaponDefinition.name}",
+    description = if (weaponAtMaximumLevel()) WEAPON_PEAK_DESCRIPTION else description,
+    tag = if (weaponAtMaximumLevel()) WEAPON_PEAK_TAG else tag,
+    weaponId = weapon,
+    totemAction = TotemAction.AMPLIFY_CURRENT,
+)
+
+/** A taken Amplify card: one weapon level, or at the maximum level [WEAPON_PEAK_SALVAGE_MATTER] base Matter instead. */
+internal fun MutableGameState.takeAmplify() {
+    if (amplifyCurrentWeapon()) return
+    grantMatter(WEAPON_PEAK_SALVAGE_MATTER)
+    message = WEAPON_PEAK_SALVAGED
+    messageTime = 1.5f
+}
+
+/** Base Matter an Amplify card salvages when the weapon is already at its maximum level. */
+internal const val WEAPON_PEAK_SALVAGE_MATTER: Float = 12f
+private const val WEAPON_PEAK_DESCRIPTION = "This weapon is at its maximum level; selecting it salvages Kinetic Matter."
+private const val WEAPON_PEAK_TAG = "MAX LEVEL"
+private const val WEAPON_PEAK_SALVAGED = "WEAPON AT MAXIMUM // MATTER SALVAGED"
+
+/**
  * Elite resonance: an Elite-class kill (the kills that drop a Key) amplifies the current weapon by the tempo's
- * resonance levels at once (0: off). It draws from no stream.
+ * resonance levels at once (0: off), up to the maximum weapon level. It draws from no stream.
  */
 internal fun MutableGameState.resonateEliteKill() {
     val levels = content.tempo.eliteResonanceLevels
-    if (levels <= 0) return
-    repeat(levels) { amplifyCurrentWeapon(title = EnemyNotices.ELITE_RESONANCE) }
-    emitSound(GameplayAudioCue.WEAPON_ACQUIRED)
+    var amplified = false
+    repeat(levels) { if (amplifyCurrentWeapon(title = EnemyNotices.ELITE_RESONANCE)) amplified = true }
+    if (amplified) emitSound(GameplayAudioCue.WEAPON_ACQUIRED)
 }
 
 /**

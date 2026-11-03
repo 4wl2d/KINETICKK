@@ -44,9 +44,7 @@ internal fun MutableGameState.openDirectedReward(reward: DirectedReward) {
 
 /** The weapon reward's offer: Amplify the current weapon, then each of [pool] as a change. */
 private fun MutableGameState.directedWeaponChoices(pool: List<WeaponDefinition>): List<ChoiceOption> =
-    listOf(ChoiceOption(ChoiceType.TOTEM, "Amplify ${currentWeaponDefinition.name}",
-        "Raise current weapon mastery by one level.", "AMPLIFY", weaponId = weapon,
-        totemAction = TotemAction.AMPLIFY_CURRENT)) + pool.map {
+    listOf(amplifyOption("Raise current weapon mastery by one level.", "AMPLIFY")) + pool.map {
         ChoiceOption(ChoiceType.WEAPON, it.name, it.description, "CHANGE", weaponId = it.id)
     }
 

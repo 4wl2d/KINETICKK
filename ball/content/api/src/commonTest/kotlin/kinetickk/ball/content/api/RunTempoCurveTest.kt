@@ -27,6 +27,24 @@ class RunTempoCurveTest {
     }
 
     @Test
+    fun theWeaponLevelFactorIsOneFormulaThatStopsAtTheWeaponLevelCap() {
+        val tempo = RunTempoProfile()
+        assertEquals(30, tempo.maximumWeaponLevel)
+        assertEquals(1f, tempo.weaponLevelFactor(1))
+        assertEquals(1f + 9 * 0.08f, tempo.weaponLevelFactor(10))
+        assertEquals(1f + 29 * 0.08f, tempo.weaponLevelFactor(30))
+        assertEquals(tempo.weaponLevelFactor(30), tempo.weaponLevelFactor(45), "no level past the cap adds power")
+        assertEquals(1f, tempo.weaponLevelFactor(0))
+        // The run ramp: enemy integrity ×6.9 and hostile damage ×1.5 by the boss, then flat.
+        assertEquals(6.9f, tempo.enemyHealthMultiplier(tempo.bossAtSeconds), 1e-5f)
+        assertEquals(1.5f, tempo.hostileDamageRunGrowth(tempo.bossAtSeconds), 1e-6f)
+        assertEquals(1.5f, tempo.hostileDamageRunGrowth(tempo.bossAtSeconds * 2f), 1e-6f)
+        assertEquals(1f, tempo.hostileDamageRunGrowth(0f))
+        assertFailsWith<IllegalArgumentException> { RunTempoProfile(maximumWeaponLevel = 9) }
+        assertFailsWith<IllegalArgumentException> { RunTempoProfile(weaponLevelStep = -0.01f) }
+    }
+
+    @Test
     fun earlyLevelsKeepTheLegacyRequirementAndLaterLevelsClimbAtLeastAsSteeply() {
         val shipped = RunTempoProfile()
         val legacy = legacyLevelRequirements(42)

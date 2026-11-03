@@ -276,19 +276,20 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Reactions deal 20% more damage and statuses are 15% more potent." to "Реакции наносят на 20% больше урона, а состояния на 15% сильнее.",
     "Start every run with 50 Overdrive and gain Overdrive 25% faster." to
         "Каждый забег начинается с 50 единицами перегрузки, а перегрузка копится на 25% быстрее.",
-    "Weapon power gains up to an extra +40% as the run progresses." to "По ходу забега мощность оружия получает до +40% сверху.",
-    "All damage +35%. Maximum integrity −30." to "Весь урон +35%. Максимальная прочность −30.",
-    "+25 maximum integrity per rank." to "+25 к максимальной прочности за ранг.",
-    "+20 shield capacity per rank." to "+20 к ёмкости щита за ранг.",
+    "Weapon power gains up to an extra +80% as the run progresses." to "По ходу забега мощность оружия получает до +80% сверху.",
+    "All damage +35%. Maximum integrity −15%." to "Весь урон +35%. Максимальная прочность −15%.",
+    "+15% maximum integrity per rank." to "+15% к максимальной прочности за ранг.",
+    "Shield capacity +10% of maximum integrity per rank." to "Ёмкость щита +10% от максимальной прочности за ранг.",
     "Obstacle collisions deal 25% less damage per rank, and the lethal collision speed rises by 150 per rank, up to a cap." to
         "Столкновения с препятствиями наносят на 25% меньше урона за ранг, а смертельная скорость столкновения растёт на 150 за ранг, но не выше предела.",
     "Once per run, lethal damage leaves you at 30% integrity with 2 seconds of invulnerability." to
         "Раз за забег смертельный урон оставляет 30% прочности и 2 секунды неуязвимости.",
     "+0.8 integrity regeneration per second per rank." to "+0,8 к восстановлению прочности в секунду за ранг.",
-    "+12% damage reduction." to "+12% к снижению урона.",
-    "+30 shield capacity, and the shield starts recharging 40% sooner." to "+30 к ёмкости щита, а щит начинает восстанавливаться на 40% раньше.",
-    "Mass +30%, impact damage +20%, contact damage taken −30%, drag +10%." to
-        "Масса +30%, урон от столкновений +20%, получаемый контактный урон −30%, сопротивление +10%.",
+    "+30% damage reduction." to "+30% к снижению урона.",
+    "Shield capacity +50% of maximum integrity, and the shield starts recharging 40% sooner." to
+        "Ёмкость щита +50% от максимальной прочности, а щит начинает восстанавливаться на 40% раньше.",
+    "Mass +30%, impact damage +30%, contact damage taken −40%, drag +10%." to
+        "Масса +30%, урон от столкновений +30%, получаемый контактный урон −40%, сопротивление +10%.",
     "+70 pickup radius and +6% Data from each pickup per rank." to "+70 к радиусу сбора и +6% данных с каждого подбора за ранг.",
     "+20% cooling and 10% less Dash heat per rank." to "+20% к охлаждению и на 10% меньше нагрева от рывка за ранг.",
     "+15% Dash impulse per rank." to "+15% к импульсу рывка за ранг.",
@@ -398,6 +399,10 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "FOCUS" to "НАПРАВЛЕНИЕ",
     "Raise current weapon mastery by one level." to "Повысьте мастерство текущего оружия на один уровень.",
     "AMPLIFY" to "УСИЛЕНИЕ",
+    "This weapon is at its maximum level; selecting it salvages Kinetic Matter." to
+        "Это оружие уже на максимальном уровне; его выбор принесёт кинетическую материю.",
+    "MAX LEVEL" to "МАКС. УРОВЕНЬ",
+    "WEAPON AT MAXIMUM // MATTER SALVAGED" to "ОРУЖИЕ НА МАКСИМУМЕ // МАТЕРИЯ ИЗВЛЕЧЕНА",
     "CHANGE" to "СМЕНА",
     "/s" to "/с",
     "s" to "с",

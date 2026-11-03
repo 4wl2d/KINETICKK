@@ -54,7 +54,7 @@ enum class MatrixNodeId {
 
 /**
  * What one owned rank of a node does. Gameplay folds every owned effect at run start:
- * - additive values ([Stat], fractions, levels, counts, charge, bonuses) apply once per rank and add
+ * - additive values ([Stat], fractions, shares, levels, counts, charge, bonuses) apply once per rank and add
  *   across nodes;
  * - multipliers ([DashHeat], [Drag], [EnemyIntegrity], [ContactDamage], [ShieldRegenDelay] and the
  *   [ObstacleGuard] damage multiplier) add their difference from 1 once per rank, so two ranks of 0.9
@@ -66,6 +66,23 @@ enum class MatrixNodeId {
 sealed interface MatrixEffect {
     /** A passive stat change per rank, with the same rules as an item stat. */
     data class Stat(val delta: StatDelta) : MatrixEffect
+
+    /**
+     * Maximum integrity + [fraction] of the character's base integrity (the class's integrity with its traits) per
+     * rank, added to Refit's share at run start; negative for a cost.
+     */
+    data class IntegrityShare(val fraction: Float) : MatrixEffect {
+        init {
+            require(fraction.isFinite() && fraction != 0f && fraction in -MAX_INTEGRITY_COST..2f) {
+                "Integrity share must be within -$MAX_INTEGRITY_COST..2 and not 0"
+            }
+        }
+    }
+
+    /** Shield capacity + [fraction] of the current maximum integrity per rank, so the shield grows with integrity. */
+    data class ShieldShare(val fraction: Float) : MatrixEffect {
+        init { requireFraction(fraction) }
+    }
 
     /** All damage the Core deals (hits, procs, statuses, reactions, abilities) × (1 + fraction). */
     data class DamageMultiplier(val fraction: Float) : MatrixEffect {
@@ -222,6 +239,7 @@ sealed interface MatrixEffect {
 }
 
 private const val MAX_STARTING_WEAPON_LEVELS: Int = 3
+private const val MAX_INTEGRITY_COST: Float = 0.9f
 private const val MAX_EXTRA_HEIRLOOM_OFFERS: Int = 2
 private const val MAX_MATRIX_REROLLS: Int = 3
 private const val MAX_DATA_STRATUM_ITEMS: Int = 5
