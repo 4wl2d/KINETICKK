@@ -61,12 +61,16 @@ private const val BRAKE_RELEASE_SHARE = 1.25f
 /** The NoPoi bot's berth of optional sites from the Core 0.35 s ahead (obstacles and shots: [avoidRocks], [dodgeShots]). */
 private const val SITE_CLEARANCE_MARGIN = 295f
 
-/** A Dash the bot asked for is kept only when no solid body lies this long along the pilot's Dash line. */
+/**
+ * How long the pilot reads a pushed Dash's line: a Dash the bot asked for is dropped when a solid body (at the lethal
+ * speed) or a skipped optional site lies this long along it.
+ */
 private const val DASH_LOOKAHEAD_SECONDS = 0.3f
 
 /**
  * The NoPoi bot's Blink rule: with Blink Drive a Dash may teleport up to [BLINK_LANDING_REACH] along the pointer, so it
- * is kept only when that line passes at least [SITE_GUARD_MARGIN] outside every skipped optional site's radius.
+ * is kept only when that line passes at least [SITE_GUARD_MARGIN] outside every skipped optional site's radius. The
+ * pilot holds a pushed Dash's line to the same guard (see [DimensionPilot.dashAllowed]).
  */
 private const val BLINK_LANDING_REACH = 320f
 private const val SITE_GUARD_MARGIN = 85f
@@ -288,7 +292,7 @@ internal class DimensionPilot(
         val tether = min(aim.distance.coerceIn(MIN_TETHER, MAX_TETHER), s.pointerRoom(ux, uy)).coerceAtLeast(MIN_TETHER)
         s.updatePointer(s.screenWidth * 0.5f + offsetX + ux * tether, s.screenHeight * 0.5f + offsetY + uy * tether)
         // A threat Dash the bot asked for now flies along this pointer: dropped when it would ram a solid body at speed or
-        // Blink onto a skipped site.
+        // carry the Core onto a skipped site.
         if (s.dashBufferTime > dashBefore && !dashAllowed(s, ux, uy, skipGoalRift = goalIsRift)) s.dashBufferTime = dashBefore
     }
 
@@ -296,12 +300,18 @@ internal class DimensionPilot(
      * The bot's two Dash rules applied along the pilot's pointer (ux, uy): no solid body on the Dash line at the lethal
      * speed, and with Blink Drive no Blink landing on a skipped optional site (the rift the pilot flies to is no skipped
      * site when [skipGoalRift]). The bot checks both along its own cursor, which the pilot has replaced.
+     *
+     * The site guard also holds a pushed Dash's line. The bot needs no such rule, since its berth keeps it 295 u outside
+     * every site; the pilot flies inside that berth when a site lies beside its rift (the berth then reaches only to
+     * the rift), and there a pushed Dash at about 1,000 u/s crosses the room left before the berth can turn it.
      */
     private fun dashAllowed(s: MutableGameState, ux: Float, uy: Float, skipGoalRift: Boolean): Boolean {
-        if (!dashLineClear(s, ux, uy)) return false
-        if (s.relicRank(RelicId.BLINK_DRIVE) <= 0) return true
-        val endX = s.coreX + ux * BLINK_LANDING_REACH
-        val endY = s.coreY + uy * BLINK_LANDING_REACH
+        val dashSpeed = length(s.velocityX + ux * s.effectiveDashImpulse(), s.velocityY + uy * s.effectiveDashImpulse())
+        if (!dashLineClear(s, ux, uy, dashSpeed)) return false
+        var reach = dashSpeed * DASH_LOOKAHEAD_SECONDS
+        if (s.relicRank(RelicId.BLINK_DRIVE) > 0) reach = max(reach, BLINK_LANDING_REACH)
+        val endX = s.coreX + ux * reach
+        val endY = s.coreY + uy * reach
         val count = s.optionalSiteMarks(marks)
         for (mark in 0 until count) {
             val base = mark * 3
@@ -313,9 +323,8 @@ internal class DimensionPilot(
         return true
     }
 
-    /** False when a Dash along (ux, uy) reaches the lethal obstacle speed with a solid body on its line. */
-    private fun dashLineClear(s: MutableGameState, ux: Float, uy: Float): Boolean {
-        val dashSpeed = length(s.velocityX + ux * s.effectiveDashImpulse(), s.velocityY + uy * s.effectiveDashImpulse())
+    /** False when a Dash along (ux, uy) reaches the lethal obstacle speed ([dashSpeed]) with a solid body on its line. */
+    private fun dashLineClear(s: MutableGameState, ux: Float, uy: Float, dashSpeed: Float): Boolean {
         if (dashSpeed < s.obstacleLethalSpeed()) return true
         val endX = s.coreX + ux * dashSpeed * DASH_LOOKAHEAD_SECONDS
         val endY = s.coreY + uy * dashSpeed * DASH_LOOKAHEAD_SECONDS
