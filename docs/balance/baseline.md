@@ -2237,3 +2237,46 @@ the tail's `chestsOpened` moved: fresh 36/36 -> 33/33, strong 81/81 ->
 - Population runs never finish a dungeon, so no population gate sees the
   stack; only this probe does. Capping Elite resonance or chest Amplify per
   run would bound it directly; neither is a content knob today.
+
+## 2026-11-03 Dungeon rework: waves, guardians, hazards (0.6.0 rebalance D6)
+
+Rooms stop being the safest place of a run. The garrison cuts are gone
+(count 0.8, integrity 0.90 and damage 0.72 become 1.0); every garrisoned room
+fights in two waves and every final room in three, the last led by its
+guardian (the Vault's Brood Queen and the Reliquary's Warden Prime, or a
+themed ordinary kind at 6 times its integrity) with escorts; a wave is planned
+once at most 0.34 of the last wave lives or 18 s after it landed, and its
+breach points glow 1.2 s before it lands. Rebirth tiers grow every ordinary
+entry with the tier's enemy-cap multiplier and make room members champions
+from tier 2 (0.04 per tier). Every sealed room telegraphs vents or lances
+1.5 s after its seal and then every 3.5 s (telegraph 1.2 s, a hostile blast of
+12 base), one more per cycle in the final room and per Rebirth tier, at most
+four. Rewards are unchanged.
+
+`DungeonPilotGateTest` changes its design bands with the design (fresh clear
+in [0.35, 0.65], fresh died inside in [0.15, 0.35], strong median attempt
+damage at least 0.25 of max integrity, room over open-world damage per second
+at least 1.2 per arm; the other bands stay). The pilot dodges telegraphs with a
+0.2 s reaction, fights a room's guardian as a boss and retreats between rooms
+below 40 % integrity; without the retreat clear and death add up to 1 and the
+two fresh bands meet only at 0.65 / 0.35. Calibration on i = 2,301..2,400 and
+the sub-windows 2,401..2,500 and 2,501..2,600 (damage landed counts integrity
+and shield; the open world is the plain bot on the same seeds over the same
+spans):
+
+| Knobs | Fresh clear | Fresh died | Strong clear | Strong median damage | Room / world (fresh, strong) |
+|---|---|---|---|---|---|
+| b1788753 (cuts, one wave, no hazards) | 0.81 | 0.19 | 0.99 | 0.000 | 1.69, 1.72 |
+| hazards 12, 4.5 s, 1.3 s telegraph, no retreat | 0.51 | 0.49 | 0.99 | 0.178 | 3.60, 7.43 |
+| hazards 14, 3.5 s, 1.2 s, +1 per 3 tiers | 0.45 / 0.39 / 0.38 | 0.22 / 0.24 / 0.30 | 0.99 / 1 / 1 | 0.272 / 0.265 / 0.303 | 4.40 / 4.56 / 3.70, 9.9 / 9.8 / 6.8 |
+| **hazards 12, 3.5 s, 1.2 s, +1 per tier** | 0.49 / 0.42 / 0.41 | 0.20 / 0.23 / 0.27 | 0.99 / 1 / 1 | 0.296 / 0.302 / 0.272 | 4.18 / 4.44 / 3.52, 12.5 / 9.8 / 6.7 |
+
+Strong-arm damage is mostly hazards (0.077 with hazards off); champions,
+guardian integrity, wave intervals and counts barely move it. Gate population
+(first 120 `PopulationSeeds`): fresh clear 0.433 (SE 0.046), died 0.267
+(SE 0.041), abandoned 0.300, median clear 155.7 s; strong clear 1.000, median
+clear 58.5 s, median attempt damage 0.281 (SE 0.035); room over open-world
+damage per second 3.57 (SE 0.42) fresh and 6.59 (SE 1.15) strong. Flux Wake
+runs (half the fresh arm) clear almost none: the bot's ram law meets every
+wave head on. Fewer cleared dungeons also mean fewer Totem chests for the
+chest economy probe; the integrated tree restates it.

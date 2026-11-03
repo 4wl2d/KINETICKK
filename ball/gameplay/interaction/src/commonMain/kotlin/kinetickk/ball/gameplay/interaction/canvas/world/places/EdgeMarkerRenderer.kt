@@ -77,7 +77,10 @@ private fun DrawScope.drawEdgeMarker(x: Float, y: Float, distance: Float, icon: 
         EdgeMarkerIcon.SIGIL -> drawSiteGlyph(SiteGlyph.SIGIL, marker, iconSize, color)
         EdgeMarkerIcon.PORTAL -> drawSiteGlyph(SiteGlyph.PORTAL, marker, iconSize, color)
         EdgeMarkerIcon.SIGNAL -> drawSiteGlyph(SiteGlyph.SIGNAL, marker, iconSize, color)
-        EdgeMarkerIcon.STRUCTURE -> drawSiteGlyph(SiteGlyph.STRUCTURE, marker, iconSize, color)
+        EdgeMarkerIcon.STRUCTURE -> {
+            drawSiteGlyph(SiteGlyph.STRUCTURE, marker, iconSize, color)
+            drawDangerBrackets(marker, iconSize, roles.threat)
+        }
         EdgeMarkerIcon.HALO -> drawHaloEdgeGlyph(marker, iconSize, color)
     }
     val onRight = marker.x > size.width * 0.5f
@@ -92,10 +95,24 @@ private fun DrawScope.drawEdgeMarker(x: Float, y: Float, distance: Float, icon: 
     }
 }
 
+/** Four threat corner brackets round a structure entrance's mark: a dungeon is the most dangerous place of a run. */
+private fun DrawScope.drawDangerBrackets(marker: Offset, iconSize: Float, threat: Color) {
+    val half = iconSize * 0.72f
+    val arm = iconSize * 0.28f
+    val width = d(1.5f)
+    for (corner in 0 until 4) {
+        val sx = if (corner % 2 == 0) -1f else 1f
+        val sy = if (corner < 2) -1f else 1f
+        val tip = Offset(marker.x + sx * half, marker.y + sy * half)
+        drawLine(threat, tip, Offset(tip.x - sx * arm, tip.y), width)
+        drawLine(threat, tip, Offset(tip.x, tip.y - sy * arm), width)
+    }
+}
+
 /**
  * An edge marker's color: volt for the player's own course (an openable Totem chest, circuit, race, the next halo ring), threat
  * only for a bounty, the void hue for the sigil, mute for the quiet ambient sites and a locked chest, bone for rules, rifts,
- * event signals and structure entrances.
+ * event signals and structure entrances (whose mark the threat brackets frame).
  */
 internal fun edgeMarkerColor(icon: EdgeMarkerIcon, roles: KkRolePalette): Color = when (icon) {
     EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.RESONANT_CIRCUIT, EdgeMarkerIcon.RACE, EdgeMarkerIcon.HALO -> roles.you

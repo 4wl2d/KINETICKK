@@ -50,6 +50,8 @@ internal enum class FxPool(val ops: Int) {
     CORE_STATES(100),
     /** The shards of shattering structures (one line each; floors and the slabs' flash draw regardless). */
     RUBBLE(360),
+    /** Dungeon motes, telegraphs and moments (motes are secondary; telegraphs, the guardian and moments are signature). */
+    DUNGEON(320),
 }
 
 /**

@@ -56,7 +56,6 @@ main-file-lines	ball/content/api/src/commonMain/kotlin/kinetickk/ball/content/ap
 main-file-lines	ball/gameplay/impl/src/commonMain/kotlin/kinetickk/ball/gameplay/impl/GameComponent.kt	630
 main-file-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/canvas/world/places/SiteRenderer.kt	743
 main-file-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/canvas/world/places/WorldDimensionRenderer.kt	653
-main-file-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/canvas/world/places/WorldStructureRenderer.kt	606
 main-file-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/rewards/art/LegendaryGlacialHeartArt.kt	754
 main-file-lines	ball/profile/interaction/src/commonMain/kotlin/kinetickk/ball/profile/interaction/rebirth/impl/RebirthRenderer.kt	688
 main-file-lines	ball/profile/interaction/src/commonMain/kotlin/kinetickk/ball/profile/interaction/settings/impl/SettingsLayout.kt	646
@@ -74,7 +73,7 @@ test-file-lines	ball/gameplay/impl/src/commonTest/kotlin/kinetickk/ball/gameplay
 test-file-lines	ball/gameplay/interaction/src/desktopTest/kotlin/kinetickk/ball/gameplay/interaction/canvas/RedesignShotsWorldTest.kt	1224
 test-file-lines	ball/gameplay/interaction/src/desktopTest/kotlin/kinetickk/ball/gameplay/interaction/canvas/WorldHotPathAllocationTest.kt	1081
 test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/SimulationWitnessFixtures.kt	1208
-test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/structures/DungeonSystemTest.kt	1082
+test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/structures/DungeonSystemTest.kt	1081
 test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/world/ObstacleKindSystemTest.kt	1480
 test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/world/ObstacleSystemTest.kt	1223
 test-file-lines	ball/gameplay/nucleus/src/desktopTest/kotlin/kinetickk/ball/gameplay/nucleus/performance/GameplayPerformanceBenchmark.kt	1816

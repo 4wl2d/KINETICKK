@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.interaction.fx
 
 import kinetickk.ball.content.api.StructureTemplateId
+import kinetickk.ball.gameplay.nucleus.protocol.DungeonMomentKind
 import kinetickk.ball.gameplay.nucleus.render.formatDamageNumber
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.foundation.collections.ImmutableList
@@ -186,6 +187,25 @@ data class StructureDisintegrationProjection(
     val seed: Int,
 )
 
+/**
+ * A dungeon room's moment ([kind]) in [template]'s identity: the room as a run-local rect centred at ([x], [y]) with half
+ * extents [halfWidth] × [halfHeight], its focus ([focusX], [focusY]) (the guardian, else the room's centre), [life] of
+ * [maxLife] seconds left; [seed] picks its sparks.
+ */
+data class DungeonMomentProjection(
+    val kind: DungeonMomentKind,
+    val template: StructureTemplateId,
+    val x: Float,
+    val y: Float,
+    val halfWidth: Float,
+    val halfHeight: Float,
+    val focusX: Float,
+    val focusY: Float,
+    val life: Float,
+    val maxLife: Float,
+    val seed: Int,
+)
+
 /** Immutable Interaction-owned visual snapshot attached after the stamped Game read. */
 data class VisualFxProjection(
     val particles: ImmutableList<ParticleProjection>,
@@ -205,6 +225,8 @@ data class VisualFxProjection(
     val coreRibbon: CoreRibbonProjection = CoreRibbonProjection.EMPTY,
     /** Spent structures shattering, oldest first. */
     val disintegrations: ImmutableList<StructureDisintegrationProjection> = immutableListOf(),
+    /** Dungeon moments playing (seals, waves, guardians, clears), oldest first. */
+    val dungeonMoments: ImmutableList<DungeonMomentProjection> = immutableListOf(),
 ) {
     companion object {
         val EMPTY = VisualFxProjection(

@@ -63,7 +63,7 @@ class InteractionFxReducer(seed: Int) {
     private val reactionStamps = mutableListOf<ReactionStamp>()
     private val skillBursts = mutableListOf<SkillBurst>()
     private val apexBursts = mutableListOf<ApexBurst>()
-    private val disintegrations = StructureDisintegrationTrack()
+    private val structures = StructureFxTracks()
     private var runReactionMask = 0
     private var runDiscoveryMask = 0
     private var runBreakMask = 0
@@ -112,7 +112,8 @@ class InteractionFxReducer(seed: Int) {
             runReactionMask = runReactionMask,
             runDiscoveryMask = runDiscoveryMask,
             coreRibbon = coreRibbon.published(cachedProjection.coreRibbon),
-            disintegrations = disintegrations.published(),
+            disintegrations = structures.disintegrations.published(),
+            dungeonMoments = structures.moments.published(),
         )
         projectionDirty = false
         buildNotificationsDirty = false
@@ -183,7 +184,8 @@ class InteractionFxReducer(seed: Int) {
             }
             is VisualFxCue.WorldRebased -> worldRebased(cue)
             is VisualFxCue.VisualCuesDropped -> false
-            is VisualFxCue.StructureDisintegrated -> disintegrations.add(cue, random.nextInt())
+            is VisualFxCue.StructureDisintegrated -> structures.disintegrations.add(cue, random.nextInt())
+            is VisualFxCue.DungeonMoment -> structures.moments.add(cue, random.nextInt())
             is VisualFxCue.SkillCast -> skillCast(cue)
             is VisualFxCue.ApexActivated -> {
                 apexBursts += ApexBurst(cue.shape.ordinal, cue.x, cue.y, random.nextInt(), ApexFxSpec.activation.life,
@@ -240,8 +242,8 @@ class InteractionFxReducer(seed: Int) {
         if (skillBursts.isNotEmpty()) skillBurstsDirty = true
         if (apexBursts.isNotEmpty()) apexBurstsDirty = true
         val ribbonMoved = coreRibbon.rebase(cue.shiftX, cue.shiftY)
-        // A shattering structure's shards mark the world like the flashes.
-        val shardsMoved = disintegrations.rebase(cue.shiftX, cue.shiftY)
+        // A shattering structure's shards and a dungeon's moments mark the world like the flashes.
+        val shardsMoved = structures.rebase(cue.shiftX, cue.shiftY)
         return changed || shardsMoved || elementBursts.isNotEmpty() || reactionStamps.isNotEmpty() || skillBursts.isNotEmpty() || apexBursts.isNotEmpty() ||
             ribbonMoved
     }
@@ -258,12 +260,12 @@ class InteractionFxReducer(seed: Int) {
             apexBursts.isNotEmpty() ||
             !coreRibbon.isEmpty ||
             runReactionMask != 0 || runDiscoveryMask != 0 ||
-            !disintegrations.isEmpty
+            !structures.isEmpty
         elementBursts.clear()
         reactionStamps.clear()
         skillBursts.clear()
         apexBursts.clear()
-        disintegrations.clear()
+        structures.clear()
         runReactionMask = 0
         runDiscoveryMask = 0
         runBreakMask = 0
@@ -460,7 +462,7 @@ class InteractionFxReducer(seed: Int) {
             skillBursts.isEmpty() &&
             apexBursts.isEmpty() &&
             coreRibbon.isEmpty &&
-            disintegrations.isEmpty
+            structures.isEmpty
         ) return false
         coreRibbon.age(delta)
         retainInPlace(buildNotifications) { value ->
@@ -515,7 +517,7 @@ class InteractionFxReducer(seed: Int) {
         }
         if (skillBursts.isNotEmpty() || cachedProjection.skillBursts.isNotEmpty()) skillBurstsDirty = true
         if (apexBursts.isNotEmpty() || cachedProjection.apexBursts.isNotEmpty()) apexBurstsDirty = true
-        disintegrations.advance(delta)
+        structures.advance(delta)
         return true
     }
 

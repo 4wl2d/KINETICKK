@@ -294,7 +294,7 @@ class HudDungeonPanelTest {
             val bitmap = ImageBitmap(400, 300)
             CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(400f, 300f)) {
                 drawRect(Kk.Bone)
-                drawDungeonVignette(model)
+                drawDungeonVignette(model, KkRolePalette.Default, 0f)
             }
             val pixels = bitmap.toPixelMap()
             return pixels[1, 1].red to pixels[200, 150].red

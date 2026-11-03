@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.DungeonHazardKind
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.StructurePolicy
 import kinetickk.ball.content.api.StructureTemplate
@@ -12,11 +13,14 @@ import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.content.api.roomAt
 import kinetickk.ball.content.api.rotateQuarterX
 import kinetickk.ball.content.api.rotateQuarterY
+import kinetickk.ball.gameplay.nucleus.model.DungeonHazard
 import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
+import kinetickk.ball.gameplay.nucleus.model.RoomFight
 import kinetickk.ball.gameplay.nucleus.model.StructureField
 import kinetickk.ball.gameplay.nucleus.model.Wall
 import kinetickk.ball.gameplay.nucleus.model.length
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.WallKind
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.structures.*
@@ -266,3 +270,10 @@ internal class DungeonFixture(
         run.updateStructures(MutableGameState.FIXED_STEP)
     }
 }
+
+/** A sealed room's fight with every field off its default: a wave on its way, a guardian and a struck hazard cycle. */
+internal val WitnessRoomFight: RoomFight = RoomFight(
+    sealedAt = 4f, waves = 2, landedAt = 6f, landedMembers = 5, incomingAt = 7.2f, incoming = listOf(EnemyType.CRAWLER),
+    incomingPoints = listOf(2_050f, 1_480f), incomingGuardian = 0, guardianId = 21, hazardCycles = 1, hazardsStruck = true,
+    hazards = listOf(DungeonHazard(DungeonHazardKind.VENT, 1_990f, 1_510f, 1_990f, 1_510f, 120f, 7f, 8.3f)),
+)
