@@ -47,6 +47,13 @@ import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
+import kinetickk.ball.gameplay.nucleus.simulation.weaponUpgradeLevels
+import kinetickk.ball.gameplay.nucleus.simulation.pendingArchitectDefeatedWith
+import kinetickk.ball.gameplay.nucleus.simulation.pendingBankedMatter
+import kinetickk.ball.gameplay.nucleus.simulation.pendingClearedRebirthLevel
+import kinetickk.ball.gameplay.nucleus.simulation.pendingVictoryRelics
+import kinetickk.ball.gameplay.nucleus.simulation.runMatter
+import kinetickk.ball.gameplay.nucleus.simulation.characterUpgradeLevel
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

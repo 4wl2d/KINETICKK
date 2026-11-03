@@ -21,4 +21,14 @@ internal class PendingChoiceState(source: PendingChoiceState?) {
      */
     internal var pendingActiveItemId: Int? = source?.pendingActiveItemId
     internal var pendingActiveReborn: Boolean = source?.pendingActiveReborn ?: false
+
+    /** A new run has no choice waiting. */
+    fun reset() {
+        pendingLevelChoices = 0
+        pendingRelicChoices = 0
+        pendingBindingRelic = null
+        pendingRelicBindAction = null
+        pendingActiveItemId = null
+        pendingActiveReborn = false
+    }
 }

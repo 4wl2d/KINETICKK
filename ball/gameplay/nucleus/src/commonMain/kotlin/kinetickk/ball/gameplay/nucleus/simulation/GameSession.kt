@@ -24,10 +24,12 @@ import kinetickk.ball.gameplay.nucleus.simulation.weapons.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
 import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 
-
+/**
+ * Starts a fresh run on this state. The holders reset their own groups ([PendingChoiceState.reset] and the others); the
+ * order of the calls between them is the order every run-start draw, id and cue depends on.
+ */
 internal fun MutableGameState.startRun() {
     phase = GamePhase.RUNNING
-    interpolationPrimed = false
     matrix = foldMatrix()
     drawItemDeck()
     characterRuntime = CharacterRuntime()
@@ -41,53 +43,16 @@ internal fun MutableGameState.startRun() {
     weaponNodes.clear()
     weaponOrbitals.clear()
     choices = emptyList()
-    activeChoiceType = ChoiceType.ITEM
     equippedRelics = emptyList()
-    pendingRelicChoices = 0
-    pendingBindingRelic = null
-    pendingRelicBindAction = null
-    pendingActiveItemId = null
-    pendingActiveReborn = false
-    relicRanks.fill(0)
-    relicCooldowns.fill(0f)
-    relicCounters.fill(0)
+    pendingChoice.reset()
+    relicRun.reset()
     agonyMutationCounts.fill(0)
-    echoHits.clear()
-    itemStacks.fill(0)
-    rebornItems.fill(0)
-    acquisitionOrder = emptyList()
-    clauseReadyAt.fill(0f)
-    clauseCounters.fill(0)
-    statusAccumulators.fill(0f)
-    itemStatusReadyAt.fill(0f)
-    buffs = emptyList()
-    combatFieldTable.clear()
-    coreFieldMask = 0
-    fieldEnterReadyAt = 0f
+    buildRun.reset()
+    elementRun.reset()
     resetCoreReactionState()
-    reactionTokens = MutableGameState.REACTION_BURST
-    breakTokens = MutableGameState.BREAK_BURST
-    severedRelics = emptyList()
-    ouroborosSpent = false
-    ouroborosLockedUntil = 0f
     invulnerableUntil = 0f
-    glassInvulnerabilityReadyAt = 0f
-    bulwarkInvulnerabilityReadyAt = 0f
-    stormCharge = 0f
-    stasisMeter = MutableGameState.STASIS_SECONDS
-    stasisBank = 0
-    stasisLockedUntil = 0f
-    sinceTurn = 0f
-    gyreReadyAt = 0f
-    gyreEchoAt = -1f
-    gyreEchoDamage = 0f
+    relicMechanics.reset()
     overdriveBurnoutUntil = 0f
-    overdriveExtension = 0f
-    overdriveKills = 0
-    aegisAbsorbed = 0f
-    aegisNovaReadyAt = 0f
-    shieldBreakArmed = false
-    shieldBreakReadyAt = 0f
     overheatArmed = true
     wasBraking = false
     brakeHoldTime = 0f
@@ -95,19 +60,7 @@ internal fun MutableGameState.startRun() {
     critMissStreak = 0
     freeDashPrimed = false
     freeDashReadyAt = 0f
-    comboKillCounter = 0
-    glassCharge = 0f
-    integrityLiabilityCut = 0f
-    cinderRecoilReadyAt = 0f
-    offerPity = 0
-    itemOffersOpened = 0
-    secondWindSpent = false
-    matrixFreeDashReadyAt = 0f
     dashHitThisDash = false
-    clauseDepth = 0
-    arsenalCounter = 0
-    necroticClock = 0f
-    heirloomOfferActive = false
     heirloomPending = !easyMode && heirloomCandidates.isNotEmpty() && rebirthRank >= 1
     omenPending = offersRunOmen && content.variety.omens.enabled
     volatileBursts = kinetickk.foundation.collections.immutableListOf()
@@ -119,24 +72,8 @@ internal fun MutableGameState.startRun() {
     startRunVariety()
     resetSpawnDirector()
     bossSpawned = false
-    accumulator = 0f
-    coreX = 0f
-    coreY = 0f
-    previousCoreX = 0f
-    previousCoreY = 0f
-    velocityX = 0f
-    velocityY = 0f
-    cameraX = 0f
-    cameraY = 0f
-    previousCameraX = 0f
-    previousCameraY = 0f
-    pointerX = screenWidth * 0.76f
-    pointerY = screenHeight * 0.5f
-    previousSingularityX = pointerX - screenWidth * 0.5f
-    previousSingularityY = pointerY - screenHeight * 0.5f
-    lastAimDirectionX = 1f
-    lastAimDirectionY = 0f
-    pointerActive = true
+    frameState.reset()
+    placeCoreForRunStart()
     keyboardBrakeActive = false
     secondaryBrakeActive = false
     touchBrakeActive = false
@@ -148,37 +85,14 @@ internal fun MutableGameState.startRun() {
     overheated = false
     overheatHoldTime = 0f
     dashPhaseTime = 0f
-    level = 1
-    data = 0
-    dataFraction = 0f
-    nextLevelData = dataRequiredForLevel(1)
-    pendingLevelChoices = 0
-    keys = 0
-    kills = 0
-    damageDealt = 0.0
-    damageTaken = 0.0
-    damageAbsorbed = 0.0
-    dataCollected = 0L
-    pickupsCollected = 0L
-    keysCollected = 0L
-    eliteKills = 0
-    bestCombo = 0
+    runEconomy.reset(firstLevelData = dataRequiredForLevel(1))
+    runStats.reset()
     combo = 0
     comboTime = 0f
-    runMatter = 0L
-    matterFraction = 0f
     bankedRunMatter = 0L
-    lastImpact = 0f
-    lastImpactTime = 0f
-    damageFlash = 0f
     hurtCooldown = 0f
     runGrace = 1.35f
-    screenShake = 0f
-    message = "DRIFT PHASE"
-    messageTime = 2.2f
-    recentItem = null
-    acquiredItemCount = 0
-    rerollsRemaining = 1 + matrix.rerolls + rebirthProfile.bonusRerolls
+    offerRun.reset(rerolls = 1 + matrix.rerolls + rebirthProfile.bonusRerolls)
     overdriveCharge = matrix.startingOverdrive
     overdriveTime = 0f
     weapon = startingWeapon
@@ -200,6 +114,25 @@ internal fun MutableGameState.startRun() {
     spawnOpeningPacks()
 }
 
+/** The Core at rest at the origin under the camera, the pointer ahead of it to the right, aiming right. */
+private fun MutableGameState.placeCoreForRunStart() {
+    coreX = 0f
+    coreY = 0f
+    previousCoreX = 0f
+    previousCoreY = 0f
+    velocityX = 0f
+    velocityY = 0f
+    cameraX = 0f
+    cameraY = 0f
+    pointerX = screenWidth * 0.76f
+    pointerY = screenHeight * 0.5f
+    previousSingularityX = pointerX - screenWidth * 0.5f
+    previousSingularityY = pointerY - screenHeight * 0.5f
+    lastAimDirectionX = 1f
+    lastAimDirectionY = 0f
+    pointerActive = true
+}
+
 /** Base pull per unit of distance to the singularity, before items and the Matrix. */
 internal const val BASE_MAGNET_STRENGTH: Float = 4.65f
 
@@ -208,31 +141,11 @@ internal const val BASE_DRAG_COEFFICIENT: Float = 0.29f
 
 /** Character base stats, then the owned Core Matrix effects from content, Refit integrity, then Rebirth. */
 internal fun MutableGameState.resetRunStats() {
-    mass = 1f
-    damageMultiplier = 1f
-    weaponPower = 1f
-    coolingRate = 19f
-    magnetStrength = BASE_MAGNET_STRENGTH
-    dashImpulse = 590f
-    dashHeatCost = 36f
+    coreStats.reset(pickupRadius = content.pickups.magnetRadius)
     maxHp = 100f + rebirthProfile.playerIntegrityBonus
-    regenPerSecond = 0f
-    critChance = 0.05f
-    critMultiplier = 1.5f
-    pickupRadius = content.pickups.magnetRadius
     coreRadius = MutableGameState.CORE_RADIUS
-    luck = 0f
-    dataGain = 1f
-    matterGain = 1f
-    attackSpeed = 1f
     maxShield = 0f
     shield = 0f
-    damageReduction = 0f
-    comboWindow = 2.8f
-    overdriveGain = 1f
-    dragCoefficient = BASE_DRAG_COEFFICIENT
-    gripStrength = 1f
-    slingStrength = 1f
     applyCharacterTraits()
     applyMatrixStats()
     maxHp += content.upgrades.characterIntegrityPerLevel * characterUpgradeLevel
