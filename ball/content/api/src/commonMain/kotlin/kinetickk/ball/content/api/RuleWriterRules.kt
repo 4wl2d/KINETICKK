@@ -14,31 +14,8 @@ internal fun RuleWriter.rule(rule: ItemRule): List<RuleLine> = when (rule) {
     is ItemRule.ElementPotency -> listOf(
         RuleLine(RuleLineKind.RULE, text(BuildRulesText.RulePotency, signedPercent(rule.amount * gain), element(rule.element)), rule.element),
     )
-    is ItemRule.StatusDuration -> {
-        val change = (rule.multiplier - 1.0) * magnitude
-        listOf(
-            if (change >= 0.0) {
-                RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleDurationLonger, element(rule.element), percent(change)), rule.element)
-            } else {
-                RuleLine(
-                    RuleLineKind.COST,
-                    text(BuildRulesText.RuleDurationShorter, element(rule.element), percent((-change).coerceAtMost(MAX_SHORTENING))),
-                    rule.element,
-                    negative = true,
-                )
-            },
-        )
-    }
-    is ItemRule.BreakThreshold -> listOf(
-        RuleLine(
-            RuleLineKind.RULE,
-            breakThresholdCut(rule.reduction, context.stacks).let { cut ->
-                if (cut == 1) text(BuildRulesText.RuleThresholdOne, element(rule.element))
-                else text(BuildRulesText.RuleThresholdFew, element(rule.element), cut)
-            },
-            rule.element,
-        ),
-    )
+    is ItemRule.StatusDuration -> statusDurationRule(rule)
+    is ItemRule.BreakThreshold -> breakThresholdRule(rule)
     is ItemRule.BreakPower -> listOf(
         RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleBreakPower, signedPercent(rule.amount * gain), breakName(rule.element, genitive = true)), rule.element),
     )
@@ -88,19 +65,7 @@ internal fun RuleWriter.rule(rule: ItemRule): List<RuleLine> = when (rule) {
             text(BuildRulesText.RuleComboDamage, signedPercent(rule.perCombo * gain), percent(rule.cap * context.bonus.toDouble())),
         ),
     )
-    is ItemRule.BonusRerolls -> listOf(
-        RuleLine(
-            RuleLineKind.RULE,
-            text(
-                when (countForm(rule.count.toDouble())) {
-                    CountForm.ONE -> BuildRulesText.RuleRerollsOne
-                    CountForm.FEW -> BuildRulesText.RuleRerollsFew
-                    CountForm.MANY -> BuildRulesText.RuleRerollsMany
-                },
-                rule.count,
-            ),
-        ),
-    )
+    is ItemRule.BonusRerolls -> bonusRerollsRule(rule)
     is ItemRule.GuaranteedCritAfter -> listOf(
         RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleGuaranteedCrit, rule.misses)),
     )
@@ -119,76 +84,129 @@ internal fun RuleWriter.rule(rule: ItemRule): List<RuleLine> = when (rule) {
             rule.reaction.first,
         ),
     )
-    is ItemRule.ReactionTuning -> listOf(
-        RuleLine(
-            RuleLineKind.RULE,
-            text(
-                BuildRulesText.RuleReactionTuning,
-                rule.reaction?.let(::reactionName) ?: text(BuildRulesText.AllReactions),
-                signedPercent(rule.amount * gain),
-                text(rule.aspect.phrase),
-            ),
-            rule.reaction?.first,
-        ),
-    )
-    is ItemRule.FieldTuning -> listOf(
-        RuleLine(
-            RuleLineKind.RULE,
-            text(
-                if (rule.aspect == FieldAspect.RADIUS) BuildRulesText.RuleFieldRadius else BuildRulesText.RuleFieldDuration,
-                percent(rule.amount * gain),
-            ),
-        ),
-    )
-    is ItemRule.SkillCooldown -> listOf(
-        RuleLine(
-            RuleLineKind.RULE,
-            rule.element?.let { text(BuildRulesText.RuleSkillCooldown, elementName(it), percent(rule.amount * gain)) }
-                ?: text(BuildRulesText.RuleSkillCooldownAll, percent(rule.amount * gain)),
-            rule.element,
-        ),
-    )
-    is ItemRule.SkillPower -> listOf(
-        RuleLine(
-            RuleLineKind.RULE,
-            rule.element?.let { text(BuildRulesText.RuleSkillPower, elementName(it), signedPercent(rule.amount * gain)) }
-                ?: text(BuildRulesText.RuleSkillPowerAll, signedPercent(rule.amount * gain)),
-            rule.element,
-        ),
-    )
+    is ItemRule.ReactionTuning -> reactionTuningRule(rule)
+    is ItemRule.FieldTuning -> fieldTuningRule(rule)
+    is ItemRule.SkillCooldown -> skillCooldownRule(rule)
+    is ItemRule.SkillPower -> skillPowerRule(rule)
     ItemRule.SkillCharges -> listOf(RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleSkillCharges)))
-    is ItemRule.SkillAttunement -> {
-        val resolved = resolve(rule.pick)
-        listOf(
-            RuleLine(
-                RuleLineKind.RULE,
-                when {
-                    resolved != null -> text(BuildRulesText.RuleSkillAttunement, elementName(resolved))
-                    rule.pick == ElementPick.SECONDARY -> text(BuildRulesText.RuleSkillAttunementSecondary)
-                    else -> text(BuildRulesText.RuleSkillAttunementDominant)
-                },
-                resolved,
-            ),
-        )
-    }
+    is ItemRule.SkillAttunement -> skillAttunementRule(rule)
     is ItemRule.CatalysisRate -> listOf(RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleCatalysisRate, percent(rule.amount * gain))))
     is ItemRule.ApexCooldown -> listOf(RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleApexCooldown, percent(rule.amount * gain))))
     is ItemRule.CoreLinkRadius -> listOf(
         RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleCoreLinkRadius, language.number(rule.bonus * gain, 0))),
     )
-    is ItemRule.ObstacleTuning -> listOf(
+    is ItemRule.ObstacleTuning -> obstacleTuningRule(rule)
+}
+
+private fun RuleWriter.statusDurationRule(rule: ItemRule.StatusDuration): List<RuleLine> = run {
+    val change = (rule.multiplier - 1.0) * magnitude
+    listOf(
+        if (change >= 0.0) {
+            RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleDurationLonger, element(rule.element), percent(change)), rule.element)
+        } else {
+            RuleLine(
+                RuleLineKind.COST,
+                text(BuildRulesText.RuleDurationShorter, element(rule.element), percent((-change).coerceAtMost(MAX_SHORTENING))),
+                rule.element,
+                negative = true,
+            )
+        },
+    )
+}
+
+private fun RuleWriter.breakThresholdRule(rule: ItemRule.BreakThreshold): List<RuleLine> = listOf(
+    RuleLine(
+        RuleLineKind.RULE,
+        breakThresholdCut(rule.reduction, context.stacks).let { cut ->
+            if (cut == 1) text(BuildRulesText.RuleThresholdOne, element(rule.element))
+            else text(BuildRulesText.RuleThresholdFew, element(rule.element), cut)
+        },
+        rule.element,
+    ),
+    )
+
+private fun RuleWriter.bonusRerollsRule(rule: ItemRule.BonusRerolls): List<RuleLine> = listOf(
+    RuleLine(
+        RuleLineKind.RULE,
+        text(
+            when (countForm(rule.count.toDouble())) {
+                CountForm.ONE -> BuildRulesText.RuleRerollsOne
+                CountForm.FEW -> BuildRulesText.RuleRerollsFew
+                CountForm.MANY -> BuildRulesText.RuleRerollsMany
+            },
+            rule.count,
+        ),
+    ),
+    )
+
+private fun RuleWriter.reactionTuningRule(rule: ItemRule.ReactionTuning): List<RuleLine> = listOf(
+    RuleLine(
+        RuleLineKind.RULE,
+        text(
+            BuildRulesText.RuleReactionTuning,
+            rule.reaction?.let(::reactionName) ?: text(BuildRulesText.AllReactions),
+            signedPercent(rule.amount * gain),
+            text(rule.aspect.phrase),
+        ),
+        rule.reaction?.first,
+    ),
+    )
+
+private fun RuleWriter.fieldTuningRule(rule: ItemRule.FieldTuning): List<RuleLine> = listOf(
+    RuleLine(
+        RuleLineKind.RULE,
+        text(
+            if (rule.aspect == FieldAspect.RADIUS) BuildRulesText.RuleFieldRadius else BuildRulesText.RuleFieldDuration,
+            percent(rule.amount * gain),
+        ),
+    ),
+    )
+
+private fun RuleWriter.skillCooldownRule(rule: ItemRule.SkillCooldown): List<RuleLine> = listOf(
+    RuleLine(
+        RuleLineKind.RULE,
+        rule.element?.let { text(BuildRulesText.RuleSkillCooldown, elementName(it), percent(rule.amount * gain)) }
+            ?: text(BuildRulesText.RuleSkillCooldownAll, percent(rule.amount * gain)),
+        rule.element,
+    ),
+    )
+
+private fun RuleWriter.skillPowerRule(rule: ItemRule.SkillPower): List<RuleLine> = listOf(
+    RuleLine(
+        RuleLineKind.RULE,
+        rule.element?.let { text(BuildRulesText.RuleSkillPower, elementName(it), signedPercent(rule.amount * gain)) }
+            ?: text(BuildRulesText.RuleSkillPowerAll, signedPercent(rule.amount * gain)),
+        rule.element,
+    ),
+    )
+
+private fun RuleWriter.skillAttunementRule(rule: ItemRule.SkillAttunement): List<RuleLine> = run {
+    val resolved = resolve(rule.pick)
+    listOf(
         RuleLine(
             RuleLineKind.RULE,
-            when (rule.aspect) {
-                ObstacleAspect.RESTITUTION -> text(BuildRulesText.RuleObstacleRestitution, percent(rule.amount * gain))
-                ObstacleAspect.COLLISION_DAMAGE -> text(BuildRulesText.RuleObstacleDamage, signedPercent(-rule.amount * gain))
-                ObstacleAspect.LETHAL_SPEED -> text(BuildRulesText.RuleObstacleLethal, speed((rule.amount * gain).toFloat()))
-                ObstacleAspect.BOOST_POWER -> text(BuildRulesText.RuleBoostPower, percent(rule.amount * gain))
-                ObstacleAspect.WELL_PULL -> text(BuildRulesText.RuleWellPull, percent(rule.amount * gain))
+            when {
+                resolved != null -> text(BuildRulesText.RuleSkillAttunement, elementName(resolved))
+                rule.pick == ElementPick.SECONDARY -> text(BuildRulesText.RuleSkillAttunementSecondary)
+                else -> text(BuildRulesText.RuleSkillAttunementDominant)
             },
+            resolved,
         ),
     )
 }
+
+private fun RuleWriter.obstacleTuningRule(rule: ItemRule.ObstacleTuning): List<RuleLine> = listOf(
+    RuleLine(
+        RuleLineKind.RULE,
+        when (rule.aspect) {
+            ObstacleAspect.RESTITUTION -> text(BuildRulesText.RuleObstacleRestitution, percent(rule.amount * gain))
+            ObstacleAspect.COLLISION_DAMAGE -> text(BuildRulesText.RuleObstacleDamage, signedPercent(-rule.amount * gain))
+            ObstacleAspect.LETHAL_SPEED -> text(BuildRulesText.RuleObstacleLethal, speed((rule.amount * gain).toFloat()))
+            ObstacleAspect.BOOST_POWER -> text(BuildRulesText.RuleBoostPower, percent(rule.amount * gain))
+            ObstacleAspect.WELL_PULL -> text(BuildRulesText.RuleWellPull, percent(rule.amount * gain))
+        },
+    ),
+    )
 
 private fun RuleWriter.conversion(rule: ItemRule.Convert): List<RuleLine> = when (rule.kind) {
     ConversionKind.OVERHEAL_TO_SHIELD -> listOf(
