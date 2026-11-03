@@ -46,83 +46,16 @@ internal fun MutableGameState.resolveSkillCast(
     val runtime = skillRuntime
     val rankThree = rank >= ContentBounds.MAX_SKILL_RANK
     return when (id) {
-        SkillId.SOLAR_FLARE -> {
-            val vented = min(heat, values[SOLAR_VENT_CAP])
-            heat -= vented
-            val radius = values[SOLAR_RADIUS] * selfSkillRadiusScale()
-            val damage = (values[SOLAR_DAMAGE] + values[SOLAR_DAMAGE_PER_HEAT] * vented) * skillPower(id)
-            val scorch = min(SOLAR_SCORCH_CAP, values[SOLAR_SCORCH].toInt() + floor(vented / SOLAR_HEAT_PER_SCORCH).toInt())
-            val element = attuned(StatusElement.THERMAL)
-            forEachEnemyWithin(coreX, coreY, radius) { enemy ->
-                skillHit(enemy, damage, element)
-                if (enemy.alive) applyStatus(enemy, element, scorch, 0)
-                if (rankThree && enemy.alive &&
-                    stacks(enemy, element) >= breakThreshold(element, enemy) - SKILL_BREAK_MARGIN
-                ) forceElementBreak(enemy, element)
-            }
-            shockwave(coreX, coreY, 0.35f, radius, FxColorCode.elementTone(StatusElement.THERMAL))
-            prepareGhost(slot, damage, radius)
-            radius
-        }
+        SkillId.SOLAR_FLARE -> castSolarFlare(slot, id, values, rankThree)
         SkillId.METEOR -> {
             runtime[slot, SkillCell.ANCHOR_X] = anchorX
             runtime[slot, SkillCell.ANCHOR_Y] = anchorY
             runtime[slot, SkillCell.PENDING_AT] = elapsed + values[METEOR_DELAY]
             values[METEOR_RADIUS]
         }
-        SkillId.FROST_LINE -> {
-            val half = values[FROST_LINE_LENGTH] * 0.5f
-            val centreX = coreX + aimX * FROST_LINE_AHEAD
-            val centreY = coreY + aimY * FROST_LINE_AHEAD
-            // Perpendicular to the aim.
-            addField(
-                CombatFieldKind.FROST_LINE, FieldSource.SKILL, slot, centreX - aimY * half, centreY + aimX * half,
-                radius = values[FROST_LINE_HALF_WIDTH], seconds = values[FROST_LINE_SECONDS], damagePerSecond = 0f,
-                element = attuned(StatusElement.CRYO), stacksPerTick = values[FROST_LINE_CHILL].toInt(), generation = 0,
-                x2 = centreX + aimY * half, y2 = centreY - aimX * half,
-                flags = if (rankThree) FieldFlags.RANK_III else 0, power = values[FROST_LINE_BOLTS],
-            )
-            half
-        }
-        SkillId.FROST_SNAP -> {
-            val radius = values[FROST_SNAP_RADIUS] * selfSkillRadiusScale()
-            val shatter = impactPower(max(speed, FROST_SNAP_MIN_SPEED)) * values[FROST_SNAP_SHATTER] * kineticSkillScale(id)
-            val element = attuned(StatusElement.CRYO)
-            forEachEnemyWithin(coreX, coreY, radius) { enemy ->
-                val brittle = enemy.status[StatusCell.BRITTLE] > 0f
-                if (isFrozen(enemy) || brittle) {
-                    if (brittle) enemy.status[StatusCell.BRITTLE] = 0f
-                    skillHit(enemy, shatter, null, kinetic = true)
-                }
-                if (enemy.alive) applyStatus(enemy, element, values[FROST_SNAP_CHILL].toInt(), 0)
-                if (rankThree && enemy.alive &&
-                    stacks(enemy, element) >= breakThreshold(element, enemy) - SKILL_BREAK_MARGIN
-                ) forceElementBreak(enemy, element)
-            }
-            runtime[slot, SkillCell.AUX_UNTIL] = elapsed + values[FROST_SNAP_COILED_SECONDS]
-            shockwave(coreX, coreY, 0.3f, radius, FxColorCode.elementTone(StatusElement.CRYO))
-            prepareGhost(slot, shatter, radius)
-            radius
-        }
-        SkillId.ARC_HOOK -> {
-            val hooked = target ?: return 0f
-            applyStatus(hooked, attuned(StatusElement.ION), values[ARC_HOOK_CHARGE].toInt(), 0)
-            noteCastTarget(hooked)
-            val dx = hooked.x - coreX
-            val dy = hooked.y - coreY
-            val distance = max(1f, length(dx, dy))
-            val dirX = dx / distance
-            val dirY = dy / distance
-            val along = velocityX * dirX + velocityY * dirY
-            val hookSpeed = max(values[ARC_HOOK_SPEED], along)
-            velocityX = dirX * hookSpeed
-            velocityY = dirY * hookSpeed
-            runtime[slot, SkillCell.TARGET_ID] = hooked.id.toFloat()
-            runtime[slot, SkillCell.TARGET_UNTIL] = elapsed + values[ARC_HOOK_WINDOW]
-            runtime[slot, SkillCell.AUX_UNTIL] = if (rankThree) elapsed + ARC_HOOK_KILL_WINDOW else 0f
-            addRelicArc(coreX, coreY, hooked.x, hooked.y, LinkStyleCode.skill(SkillId.ARC_HOOK))
-            distance
-        }
+        SkillId.FROST_LINE -> castFrostLine(slot, values, aimX, aimY, rankThree)
+        SkillId.FROST_SNAP -> castFrostSnap(slot, id, values, runtime, rankThree)
+        SkillId.ARC_HOOK -> castArcHook(slot, values, target, runtime, rankThree)
         SkillId.STORM_COIL -> {
             addField(
                 CombatFieldKind.STORM_COIL, FieldSource.SKILL, slot, anchorX, anchorY, radius = values[STORM_COIL_RADIUS],
@@ -148,71 +81,9 @@ internal fun MutableGameState.resolveSkillCast(
             shockwave(coreX, coreY, 0.3f, coreRadius * 4f, FxColorCode.elementTone(StatusElement.GRAVITIC))
             0f
         }
-        SkillId.DECAY_SPORES -> {
-            val radius = values[SPORES_RADIUS]
-            runtime[slot, SkillCell.STORED] = 0f
-            runtime[slot, SkillCell.AUX_COUNT] = 0f
-            val element = attuned(StatusElement.ENTROPY)
-            forEachEnemyWithin(anchorX, anchorY, radius) { enemy ->
-                applyStatus(enemy, element, values[SPORES_DECAY].toInt(), 0)
-                if (enemy.alive) {
-                    setMark(enemy, MarkKind.SPORED, values[SPORES_SECONDS], cast = true)
-                    noteCastTarget(enemy)
-                }
-            }
-            shockwave(anchorX, anchorY, 0.35f, radius, FxColorCode.elementTone(StatusElement.ENTROPY))
-            radius
-        }
-        SkillId.ENTROPIC_TIDE -> {
-            val radius = values[TIDE_RADIUS] * selfSkillRadiusScale()
-            val scale = values[TIDE_SCALE] * kineticSkillScale(id)
-            var consumed = 0
-            forEachEnemyWithin(coreX, coreY, radius) { enemy ->
-                val decay = stacks(enemy, StatusElement.ENTROPY)
-                if (decay <= 0) return@forEachEnemyWithin
-                val amount = detonateDecayAmount(enemy, StatusElement.ENTROPY) * scale
-                enemy.status[StatusCell.STACKS + StatusElement.ENTROPY.ordinal] = 0f
-                consumed += decay
-                skillHit(enemy, amount, attuned(StatusElement.ENTROPY))
-            }
-            if (consumed > 0) {
-                val mended = min(consumed, values[TIDE_HEAL_CAP].toInt()) * values[TIDE_HEAL_PER_STACK]
-                val missing = maxHp - hp
-                heal(mended, HealSource.SKILL)
-                // Rank III: what the Core could not take mends the shield.
-                if (rankThree && mended > missing) addShield(mended - max(0f, missing))
-                heat = max(0f, heat - consumed * TIDE_HEAT_PER_STACK)
-            }
-            shockwave(coreX, coreY, 0.4f, radius, FxColorCode.elementTone(StatusElement.ENTROPY))
-            prepareGhost(slot, scale, radius)
-            radius
-        }
-        SkillId.SONIC_BOOM -> {
-            val range = values[BOOM_RANGE]
-            val damage = values[BOOM_DAMAGE] * skillPower(id)
-            val cone = cos(BOOM_HALF_ANGLE_DEGREES * RADIANS_PER_DEGREE)
-            val element = attuned(StatusElement.SONIC)
-            forEachEnemyWithin(coreX, coreY, range) { enemy ->
-                if (!inCone(enemy.x, enemy.y, aimX, aimY, cone)) return@forEachEnemyWithin
-                skillHit(enemy, damage, element)
-                if (!enemy.alive) return@forEachEnemyWithin
-                applyStatus(enemy, element, values[BOOM_RESONANCE].toInt(), 0)
-                if (!enemy.alive) return@forEachEnemyWithin
-                hurl(coreX, coreY, enemy, values[BOOM_PUSH])
-                if (rankThree && !enemy.isBossClass) setMark(enemy, MarkKind.BOOMED, BOOMED_SECONDS)
-            }
-            var erased = 0
-            val cap = values[BOOM_BOLTS].toInt()
-            for (index in projectiles.indices) {
-                if (erased >= cap) break
-                val shot = projectiles[index]
-                if (!shot.hostile || shot.spent || shot.kind != ProjectileKind.BOLT) continue
-                if (distanceSquared(coreX, coreY, shot.x, shot.y) > range * range || !inCone(shot.x, shot.y, aimX, aimY, cone)) continue
-                if (eraseHostileShot(shot, EraseCause.SKILL, shot.x, shot.y)) erased++
-            }
-            applyCoreImpulse(-aimX, -aimY, values[BOOM_RECOIL], gated = false)
-            range
-        }
+        SkillId.DECAY_SPORES -> castDecaySpores(slot, values, anchorX, anchorY, runtime)
+        SkillId.ENTROPIC_TIDE -> castEntropicTide(slot, id, values, rankThree)
+        SkillId.SONIC_BOOM -> castSonicBoom(id, values, aimX, aimY, rankThree)
         SkillId.RESONATOR -> {
             // The tick clock starts on the beat grid, so pulses land on global beats.
             val nextBeat = (floor(elapsed / BEAT_PERIOD) + 1f) * BEAT_PERIOD
@@ -233,31 +104,8 @@ internal fun MutableGameState.resolveSkillCast(
             swallowShots(slot)
             coreRadius + SHROUD_REACH
         }
-        SkillId.SLINGSHOT -> {
-            var swung = (speed * values[SLING_SCALE]).coerceIn(values[SLING_MIN_SPEED], values[SLING_MAX_SPEED])
-            // The swing never flings the Core into a rock: it slows to what keeps the next moments' path clear.
-            swung = min(swung, blinkRangeClearOfObstacles(aimX, aimY, swung * SLING_CLEAR_SECONDS) / SLING_CLEAR_SECONDS)
-            velocityX = aimX * swung
-            velocityY = aimY * swung
-            runtime[slot, SkillCell.ACTIVE_UNTIL] = elapsed + values[SLING_WINDOW]
-            fireTurnEdge()
-            0f
-        }
-        SkillId.FULL_STOP -> {
-            val impact = impactPower(speed) * values[FULL_STOP_SCALE] * kineticSkillScale(id)
-            velocityX = 0f
-            velocityY = 0f
-            val radius = values[FULL_STOP_RADIUS] * selfSkillRadiusScale()
-            forEachEnemyWithin(coreX, coreY, radius) { enemy ->
-                skillHit(enemy, impact, null, kinetic = true)
-                if (enemy.alive) forceBreaks(enemy, values[FULL_STOP_BREAK])
-            }
-            shockwave(coreX, coreY, 0.35f, radius, 3)
-            prepareGhost(slot, impact, radius)
-            // Rank III: the stop counts as a Brake release.
-            if (rankThree) onBrakeRelease()
-            radius
-        }
+        SkillId.SLINGSHOT -> castSlingshot(slot, values, aimX, aimY, runtime)
+        SkillId.FULL_STOP -> castFullStop(slot, id, values, rankThree)
         SkillId.CATALYZE -> {
             catalyzeAround(anchorX, anchorY, values[CATALYZE_RADIUS], values[CATALYZE_TARGETS].toInt(), values[CATALYZE_SCALE],
                 values[CATALYZE_FALLBACK].toInt())
@@ -271,6 +119,182 @@ internal fun MutableGameState.resolveSkillCast(
             0f
         }
     }
+}
+
+private fun MutableGameState.castSolarFlare(slot: Int, id: SkillId, values: List<Float>, rankThree: Boolean): Float {
+    val vented = min(heat, values[SOLAR_VENT_CAP])
+    heat -= vented
+    val radius = values[SOLAR_RADIUS] * selfSkillRadiusScale()
+    val damage = (values[SOLAR_DAMAGE] + values[SOLAR_DAMAGE_PER_HEAT] * vented) * skillPower(id)
+    val scorch = min(SOLAR_SCORCH_CAP, values[SOLAR_SCORCH].toInt() + floor(vented / SOLAR_HEAT_PER_SCORCH).toInt())
+    val element = attuned(StatusElement.THERMAL)
+    forEachEnemyWithin(coreX, coreY, radius) { enemy ->
+        skillHit(enemy, damage, element)
+        if (enemy.alive) applyStatus(enemy, element, scorch, 0)
+        if (rankThree && enemy.alive &&
+            stacks(enemy, element) >= breakThreshold(element, enemy) - SKILL_BREAK_MARGIN
+        ) forceElementBreak(enemy, element)
+    }
+    shockwave(coreX, coreY, 0.35f, radius, FxColorCode.elementTone(StatusElement.THERMAL))
+    prepareGhost(slot, damage, radius)
+    return radius
+}
+
+private fun MutableGameState.castFrostLine(slot: Int, values: List<Float>, aimX: Float, aimY: Float, rankThree: Boolean): Float {
+    val half = values[FROST_LINE_LENGTH] * 0.5f
+    val centreX = coreX + aimX * FROST_LINE_AHEAD
+    val centreY = coreY + aimY * FROST_LINE_AHEAD
+    // Perpendicular to the aim.
+    addField(
+        CombatFieldKind.FROST_LINE, FieldSource.SKILL, slot, centreX - aimY * half, centreY + aimX * half,
+        radius = values[FROST_LINE_HALF_WIDTH], seconds = values[FROST_LINE_SECONDS], damagePerSecond = 0f,
+        element = attuned(StatusElement.CRYO), stacksPerTick = values[FROST_LINE_CHILL].toInt(), generation = 0,
+        x2 = centreX + aimY * half, y2 = centreY - aimX * half,
+        flags = if (rankThree) FieldFlags.RANK_III else 0, power = values[FROST_LINE_BOLTS],
+    )
+    return half
+}
+
+private fun MutableGameState.castFrostSnap(
+    slot: Int, id: SkillId, values: List<Float>, runtime: SkillRuntime, rankThree: Boolean,
+): Float {
+    val radius = values[FROST_SNAP_RADIUS] * selfSkillRadiusScale()
+    val shatter = impactPower(max(speed, FROST_SNAP_MIN_SPEED)) * values[FROST_SNAP_SHATTER] * kineticSkillScale(id)
+    val element = attuned(StatusElement.CRYO)
+    forEachEnemyWithin(coreX, coreY, radius) { enemy ->
+        val brittle = enemy.status[StatusCell.BRITTLE] > 0f
+        if (isFrozen(enemy) || brittle) {
+            if (brittle) enemy.status[StatusCell.BRITTLE] = 0f
+            skillHit(enemy, shatter, null, kinetic = true)
+        }
+        if (enemy.alive) applyStatus(enemy, element, values[FROST_SNAP_CHILL].toInt(), 0)
+        if (rankThree && enemy.alive &&
+            stacks(enemy, element) >= breakThreshold(element, enemy) - SKILL_BREAK_MARGIN
+        ) forceElementBreak(enemy, element)
+    }
+    runtime[slot, SkillCell.AUX_UNTIL] = elapsed + values[FROST_SNAP_COILED_SECONDS]
+    shockwave(coreX, coreY, 0.3f, radius, FxColorCode.elementTone(StatusElement.CRYO))
+    prepareGhost(slot, shatter, radius)
+    return radius
+}
+
+private fun MutableGameState.castArcHook(
+    slot: Int, values: List<Float>, target: Enemy?, runtime: SkillRuntime, rankThree: Boolean,
+): Float {
+    val hooked = target ?: return 0f
+    applyStatus(hooked, attuned(StatusElement.ION), values[ARC_HOOK_CHARGE].toInt(), 0)
+    noteCastTarget(hooked)
+    val dx = hooked.x - coreX
+    val dy = hooked.y - coreY
+    val distance = max(1f, length(dx, dy))
+    val dirX = dx / distance
+    val dirY = dy / distance
+    val along = velocityX * dirX + velocityY * dirY
+    val hookSpeed = max(values[ARC_HOOK_SPEED], along)
+    velocityX = dirX * hookSpeed
+    velocityY = dirY * hookSpeed
+    runtime[slot, SkillCell.TARGET_ID] = hooked.id.toFloat()
+    runtime[slot, SkillCell.TARGET_UNTIL] = elapsed + values[ARC_HOOK_WINDOW]
+    runtime[slot, SkillCell.AUX_UNTIL] = if (rankThree) elapsed + ARC_HOOK_KILL_WINDOW else 0f
+    addRelicArc(coreX, coreY, hooked.x, hooked.y, LinkStyleCode.skill(SkillId.ARC_HOOK))
+    return distance
+}
+
+private fun MutableGameState.castDecaySpores(
+    slot: Int, values: List<Float>, anchorX: Float, anchorY: Float, runtime: SkillRuntime,
+): Float {
+    val radius = values[SPORES_RADIUS]
+    runtime[slot, SkillCell.STORED] = 0f
+    runtime[slot, SkillCell.AUX_COUNT] = 0f
+    val element = attuned(StatusElement.ENTROPY)
+    forEachEnemyWithin(anchorX, anchorY, radius) { enemy ->
+        applyStatus(enemy, element, values[SPORES_DECAY].toInt(), 0)
+        if (enemy.alive) {
+            setMark(enemy, MarkKind.SPORED, values[SPORES_SECONDS], cast = true)
+            noteCastTarget(enemy)
+        }
+    }
+    shockwave(anchorX, anchorY, 0.35f, radius, FxColorCode.elementTone(StatusElement.ENTROPY))
+    return radius
+}
+
+private fun MutableGameState.castEntropicTide(slot: Int, id: SkillId, values: List<Float>, rankThree: Boolean): Float {
+    val radius = values[TIDE_RADIUS] * selfSkillRadiusScale()
+    val scale = values[TIDE_SCALE] * kineticSkillScale(id)
+    var consumed = 0
+    forEachEnemyWithin(coreX, coreY, radius) { enemy ->
+        val decay = stacks(enemy, StatusElement.ENTROPY)
+        if (decay <= 0) return@forEachEnemyWithin
+        val amount = detonateDecayAmount(enemy, StatusElement.ENTROPY) * scale
+        enemy.status[StatusCell.STACKS + StatusElement.ENTROPY.ordinal] = 0f
+        consumed += decay
+        skillHit(enemy, amount, attuned(StatusElement.ENTROPY))
+    }
+    if (consumed > 0) {
+        val mended = min(consumed, values[TIDE_HEAL_CAP].toInt()) * values[TIDE_HEAL_PER_STACK]
+        val missing = maxHp - hp
+        heal(mended, HealSource.SKILL)
+        // Rank III: what the Core could not take mends the shield.
+        if (rankThree && mended > missing) addShield(mended - max(0f, missing))
+        heat = max(0f, heat - consumed * TIDE_HEAT_PER_STACK)
+    }
+    shockwave(coreX, coreY, 0.4f, radius, FxColorCode.elementTone(StatusElement.ENTROPY))
+    prepareGhost(slot, scale, radius)
+    return radius
+}
+
+private fun MutableGameState.castSonicBoom(id: SkillId, values: List<Float>, aimX: Float, aimY: Float, rankThree: Boolean): Float {
+    val range = values[BOOM_RANGE]
+    val damage = values[BOOM_DAMAGE] * skillPower(id)
+    val cone = cos(BOOM_HALF_ANGLE_DEGREES * RADIANS_PER_DEGREE)
+    val element = attuned(StatusElement.SONIC)
+    forEachEnemyWithin(coreX, coreY, range) { enemy ->
+        if (!inCone(enemy.x, enemy.y, aimX, aimY, cone)) return@forEachEnemyWithin
+        skillHit(enemy, damage, element)
+        if (!enemy.alive) return@forEachEnemyWithin
+        applyStatus(enemy, element, values[BOOM_RESONANCE].toInt(), 0)
+        if (!enemy.alive) return@forEachEnemyWithin
+        hurl(coreX, coreY, enemy, values[BOOM_PUSH])
+        if (rankThree && !enemy.isBossClass) setMark(enemy, MarkKind.BOOMED, BOOMED_SECONDS)
+    }
+    var erased = 0
+    val cap = values[BOOM_BOLTS].toInt()
+    for (index in projectiles.indices) {
+        if (erased >= cap) break
+        val shot = projectiles[index]
+        if (!shot.hostile || shot.spent || shot.kind != ProjectileKind.BOLT) continue
+        if (distanceSquared(coreX, coreY, shot.x, shot.y) > range * range || !inCone(shot.x, shot.y, aimX, aimY, cone)) continue
+        if (eraseHostileShot(shot, EraseCause.SKILL, shot.x, shot.y)) erased++
+    }
+    applyCoreImpulse(-aimX, -aimY, values[BOOM_RECOIL], gated = false)
+    return range
+}
+
+private fun MutableGameState.castSlingshot(slot: Int, values: List<Float>, aimX: Float, aimY: Float, runtime: SkillRuntime): Float {
+    var swung = (speed * values[SLING_SCALE]).coerceIn(values[SLING_MIN_SPEED], values[SLING_MAX_SPEED])
+    // The swing never flings the Core into a rock: it slows to what keeps the next moments' path clear.
+    swung = min(swung, blinkRangeClearOfObstacles(aimX, aimY, swung * SLING_CLEAR_SECONDS) / SLING_CLEAR_SECONDS)
+    velocityX = aimX * swung
+    velocityY = aimY * swung
+    runtime[slot, SkillCell.ACTIVE_UNTIL] = elapsed + values[SLING_WINDOW]
+    fireTurnEdge()
+    return 0f
+}
+
+private fun MutableGameState.castFullStop(slot: Int, id: SkillId, values: List<Float>, rankThree: Boolean): Float {
+    val impact = impactPower(speed) * values[FULL_STOP_SCALE] * kineticSkillScale(id)
+    velocityX = 0f
+    velocityY = 0f
+    val radius = values[FULL_STOP_RADIUS] * selfSkillRadiusScale()
+    forEachEnemyWithin(coreX, coreY, radius) { enemy ->
+        skillHit(enemy, impact, null, kinetic = true)
+        if (enemy.alive) forceBreaks(enemy, values[FULL_STOP_BREAK])
+    }
+    shockwave(coreX, coreY, 0.35f, radius, 3)
+    prepareGhost(slot, impact, radius)
+    // Rank III: the stop counts as a Brake release.
+    if (rankThree) onBrakeRelease()
+    return radius
 }
 
 /** Visits every live enemy whose body reaches within [radius] of ([x], [y]), in scan order. */
