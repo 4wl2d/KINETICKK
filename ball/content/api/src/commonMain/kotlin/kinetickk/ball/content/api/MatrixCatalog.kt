@@ -50,9 +50,9 @@ import kinetickk.foundation.collections.toImmutableList
  * are the most expensive purchases and carry the late defense and weapon growth, so the second half of the Matrix by
  * price is what lifts a profile from the middle tiers to tier 10. Prices follow measured
  * Matter income: the whole Matrix (358,500 Matter) with one character's Refit and one weapon's Honing at the maximum is
- * about 45-55 runs of normal play. Keystones are not exclusive; each is priced as a late purchase (25,000, together
- * more than a quarter of the Matrix) and carries its trade-off. A full Matrix is about ×2 offense and ×2.5 effective
- * integrity against none.
+ * about 50 runs of normal play (the campaign measure of docs/balance/progression.md). Keystones are not exclusive; each is priced as a late purchase (25,000, together
+ * more than a quarter of the Matrix) and carries its trade-off. At the Orb's run start a full Matrix multiplies the
+ * weapon's hit by 2.3, its damage per second by 3.6 and effective integrity by 3.2 against none.
  */
 fun defaultMatrixNodes(): ImmutableList<MatrixNodeDefinition> = DefaultMatrixNodes
 
