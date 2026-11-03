@@ -116,4 +116,6 @@ internal enum class OverlayRedesignText(
         "Забег в режиме малыша ничего не засчитывает: ни материю, ни ранг, ни записи кодекса, ни открытия, ни достижения.",
     ),
     MatterNotBanked("Matter not banked", "Материя не сохранена"),
+    // The report of a run Core Freeze ended: the rule that ended it.
+    CoreFrozenCause("Speed stayed under {0} for {1} s", "Скорость была ниже {0} {1} с подряд"),
 }

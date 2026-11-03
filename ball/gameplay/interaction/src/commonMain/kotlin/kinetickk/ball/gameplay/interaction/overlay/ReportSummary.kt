@@ -81,6 +81,37 @@ import kinetickk.foundation.design.rememberKkCanvasMeasurer
 import kinetickk.foundation.design.wideStyle
 import kotlin.math.max
 
+/**
+ * The cause stamp (the Architect's fall for a Victory, in ice for a Core frozen solid), the rule Core Freeze ended the
+ * run on, and Baby mode's "Not counted" stamp with its (!) saying what that means.
+ */
+@Composable
+private fun ReportCause(scene: ReportScene, stampFont: Float, textScale: Float, ruleSize: Float, gap: (Float) -> Dp) {
+    val presentation = scene.presentation
+    val language = LocalAppLanguage.current
+    val stamp = if (presentation.victory) language.text(GameplayText.ArchitectFallen) else presentation.reason
+    Box(Modifier.zIndex(1f).enter(scene, 0.3f)) {
+        OverlayStamp(stamp, Modifier.testTag("kinetickk.gameplay.results.cause"),
+            if (presentation.victory) KkStampVariant.YOU else KkStampVariant.THREAT,
+            color = if (presentation.frozenCause != null) scene.accent else Color.Unspecified, fontSize = stampFont, textScale = textScale)
+    }
+    presentation.frozenCause?.let { rule ->
+        Spacer(Modifier.height(gap(10f)))
+        OverlayText(rule, rememberInterfaceTypography().labelStyle(ruleSize, color = scene.accent),
+            Modifier.zIndex(1f).enter(scene, 0.32f).testTag("kinetickk.gameplay.results.frozen-cause"), uppercase = true)
+    }
+    if (presentation.easy) {
+        Spacer(Modifier.height(gap(10f)))
+        Row(Modifier.zIndex(1f).enter(scene, 0.33f), horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            OverlayStamp(language.text(OverlayRedesignText.NotCounted), Modifier.testTag("kinetickk.gameplay.results.not-counted"),
+                KkStampVariant.YOU, color = scene.roles.soft, fontSize = stampFont * 0.8f, textScale = textScale)
+            KkInfoButton(language.text(OverlayRedesignText.NotCountedInfo), Modifier.testTag("kinetickk.gameplay.results.not-counted-info"),
+                KkTooltipPlacement.ABOVE_START, textScale)
+        }
+    }
+}
+
 /** Header tags, the slammed two-line title, cause stamp, matter banked, bank and build rows. */
 @Composable
 internal fun ColumnScope.ReportSummary(
@@ -131,22 +162,7 @@ internal fun ColumnScope.ReportSummary(
         FitText(titleBottom, typography.wideStyle(display(titleSize, 24f), lineHeightEm = 0.92f, color = Kk.Bone))
     }
     Spacer(Modifier.height(gap(22f)))
-    val stamp = if (presentation.victory) language.text(GameplayText.ArchitectFallen) else presentation.reason
-    Box(Modifier.zIndex(1f).enter(scene, 0.3f)) {
-        OverlayStamp(stamp, Modifier.testTag("kinetickk.gameplay.results.cause"),
-            if (presentation.victory) KkStampVariant.YOU else KkStampVariant.THREAT, fontSize = stampSize * k, textScale = text)
-    }
-    if (presentation.easy) {
-        // Baby mode: the soft stamp says the run counted nothing; its (!) says what that means.
-        Spacer(Modifier.height(gap(10f)))
-        Row(Modifier.zIndex(1f).enter(scene, 0.33f), horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            OverlayStamp(language.text(OverlayRedesignText.NotCounted), Modifier.testTag("kinetickk.gameplay.results.not-counted"),
-                KkStampVariant.YOU, color = roles.soft, fontSize = stampSize * k * 0.8f, textScale = text)
-            KkInfoButton(language.text(OverlayRedesignText.NotCountedInfo), Modifier.testTag("kinetickk.gameplay.results.not-counted-info"),
-                KkTooltipPlacement.ABOVE_START, text)
-        }
-    }
+    ReportCause(scene, stampSize * k, text, sp(15f), ::gap)
     presentation.rebirthEarned?.takeIf { rebirthLines }?.let { earned ->
         Spacer(Modifier.height(gap(14f)))
         ReportRebirthEarned(earned, sp(15f), sp(12f), Modifier.zIndex(1f).enter(scene, 0.35f))
