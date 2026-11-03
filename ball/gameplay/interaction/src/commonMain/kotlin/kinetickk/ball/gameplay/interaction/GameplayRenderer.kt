@@ -11,7 +11,7 @@ import kinetickk.foundation.design.*
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
-import kinetickk.ball.gameplay.interaction.input.RunningControlPressLog
+import kinetickk.ball.gameplay.interaction.canvas.hud.RunningControlPressLog
 import kinetickk.ball.gameplay.interaction.layout.PauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.canvas.world.drawCoreDeath
 import kinetickk.ball.gameplay.interaction.canvas.*

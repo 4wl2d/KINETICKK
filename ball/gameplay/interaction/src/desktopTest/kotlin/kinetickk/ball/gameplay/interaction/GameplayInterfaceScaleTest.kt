@@ -27,7 +27,7 @@ import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.input.GameplayInput
-import kinetickk.ball.gameplay.interaction.input.hudScale
+import kinetickk.ball.gameplay.interaction.layout.hudScale
 import kinetickk.ball.gameplay.interaction.input.resolveGameplayPress
 import kinetickk.ball.gameplay.interaction.input.runningControlTargetAt
 import kinetickk.ball.gameplay.interaction.layout.RunningControlMask

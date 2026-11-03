@@ -540,7 +540,7 @@ class HudHotPathAllocationTest {
         val frames = List(FRAMES) { frame -> model.with("elapsed" to frame * GameplayRenderModel.FIXED_STEP) }
         val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
             AppLanguage.Russian)
-        val controls = kinetickk.ball.gameplay.interaction.input.RunningControlPressLog().apply { fps = 144 }
+        val controls = kinetickk.ball.gameplay.interaction.canvas.hud.RunningControlPressLog().apply { fps = 144 }
         val memory = HudPresentationMemory()
         val perFrame = steadyFrameBytes(390, 844) { frame ->
             drawHud(frames[frame % FRAMES], measurer, 10f + frame * 0.0001f, 0f, 0f, memory, controls = controls)

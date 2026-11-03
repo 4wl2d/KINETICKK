@@ -19,8 +19,8 @@ import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.input.GameInteractionValidator
 import kinetickk.ball.gameplay.interaction.input.InteractionValidationResult
-import kinetickk.ball.gameplay.interaction.input.hudHeight
-import kinetickk.ball.gameplay.interaction.input.hudWidth
+import kinetickk.ball.gameplay.interaction.layout.hudHeight
+import kinetickk.ball.gameplay.interaction.layout.hudWidth
 import kinetickk.ball.gameplay.nucleus.GameplayDecision
 import kinetickk.ball.gameplay.nucleus.GameplayNucleus
 import kinetickk.ball.gameplay.nucleus.GameplayNucleusPulse

@@ -247,7 +247,7 @@ class HudColorVisionTest {
         width: Int,
         height: Int,
         roles: KkRolePalette,
-        controls: kinetickk.ball.gameplay.interaction.input.RunningControlPressLog? = null,
+        controls: kinetickk.ball.gameplay.interaction.canvas.hud.RunningControlPressLog? = null,
     ): PixelMap {
         val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1.25f,
             AppLanguage.English, HudTestFonts.typography, roles)

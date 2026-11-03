@@ -139,7 +139,7 @@ class RedesignShotsHudTest {
         val memory: HudPresentationMemory,
         val time: Float,
         val focused: Boolean,
-        val controls: kinetickk.ball.gameplay.interaction.input.RunningControlPressLog? = null,
+        val controls: kinetickk.ball.gameplay.interaction.canvas.hud.RunningControlPressLog? = null,
     )
 
     private enum class Shot {

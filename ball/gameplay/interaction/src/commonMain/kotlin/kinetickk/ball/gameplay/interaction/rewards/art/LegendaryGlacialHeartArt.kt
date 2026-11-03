@@ -15,7 +15,6 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
-import kinetickk.ball.gameplay.interaction.rewards.*
 import kinetickk.foundation.design.kkLoop
 import kotlin.math.PI
 import kotlin.math.abs

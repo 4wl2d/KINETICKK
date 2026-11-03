@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
+import kinetickk.ball.gameplay.interaction.layout.*
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.KkPathCache
 import kinetickk.foundation.design.measureKkText
@@ -238,12 +239,6 @@ internal object HudMeasurers {
             .also { uiSource = measurer; uiMeasurer = it }
     }
 }
-
-/** The text-size setting at which the HUD's UI text renders at the boards' reference size. */
-internal const val HUD_REFERENCE_TEXT_SCALE = 1.25f
-
-/** Growth of the HUD's UI text relative to the boards: 0.8 at 100 %, 1 at the default, 1.4 at 175 %. */
-internal fun hudUiScale(textScale: Float): Float = textScale.coerceAtLeast(0.5f) / HUD_REFERENCE_TEXT_SCALE
 
 /** Cached strings for changing HUD numbers: the string is rebuilt only when the value changes. */
 internal class HudNumberText(private val format: (Long) -> String) {

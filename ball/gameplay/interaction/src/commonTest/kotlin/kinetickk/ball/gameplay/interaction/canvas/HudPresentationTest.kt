@@ -35,6 +35,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kinetickk.ball.gameplay.interaction.canvas.hud.*
 import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.layout.*
 
 class HudPresentationTest {
     @Test

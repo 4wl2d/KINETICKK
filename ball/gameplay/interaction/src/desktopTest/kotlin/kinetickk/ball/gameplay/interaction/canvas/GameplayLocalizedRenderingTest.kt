@@ -94,6 +94,7 @@ import kotlin.test.assertIs
 import kinetickk.ball.gameplay.interaction.*
 import kinetickk.ball.gameplay.interaction.canvas.hud.*
 import kinetickk.ball.gameplay.interaction.overlay.*
+import kinetickk.ball.gameplay.interaction.layout.*
 
 @OptIn(ExperimentalTestApi::class)
 class GameplayLocalizedRenderingTest {

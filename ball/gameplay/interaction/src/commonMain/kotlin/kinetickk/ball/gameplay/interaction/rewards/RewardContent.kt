@@ -3,7 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.rewards
 
-import kinetickk.ball.gameplay.interaction.input.hudWidth
+import kinetickk.ball.gameplay.interaction.layout.hudWidth
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween

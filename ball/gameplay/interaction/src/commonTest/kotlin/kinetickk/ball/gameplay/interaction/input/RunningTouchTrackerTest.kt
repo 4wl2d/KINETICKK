@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.input
 
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
 import kotlin.test.Test
 import kotlin.test.assertEquals

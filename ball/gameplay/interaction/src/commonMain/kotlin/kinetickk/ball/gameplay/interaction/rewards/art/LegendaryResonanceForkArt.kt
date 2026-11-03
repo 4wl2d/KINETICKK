@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import kinetickk.ball.gameplay.interaction.canvas.look.*
-import kinetickk.ball.gameplay.interaction.rewards.*
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.kkLoop
 import kinetickk.foundation.design.kkMix

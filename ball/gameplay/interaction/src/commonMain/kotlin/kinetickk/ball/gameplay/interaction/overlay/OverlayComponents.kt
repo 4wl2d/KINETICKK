@@ -69,7 +69,6 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kinetickk.ball.gameplay.interaction.canvas.look.*
-import kinetickk.ball.gameplay.interaction.rewards.*
 
 // Compose wrappers around the foundation DrawScope components for the reward and report
 // overlays: each keeps its text in semantics so the overlays stay accessible and testable.

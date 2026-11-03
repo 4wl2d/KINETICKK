@@ -5,7 +5,6 @@ package kinetickk.ball.gameplay.interaction.rewards.art
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.isSpecified
-import kinetickk.ball.gameplay.interaction.rewards.*
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkCardStyle
 import kinetickk.foundation.design.kkLuminance

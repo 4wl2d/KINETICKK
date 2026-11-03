@@ -15,7 +15,6 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import kinetickk.ball.gameplay.interaction.canvas.look.elementFill
-import kinetickk.ball.gameplay.interaction.rewards.*
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.kkFillBrush
 import kinetickk.foundation.design.kkLuminance

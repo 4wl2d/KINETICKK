@@ -40,6 +40,7 @@ import kotlin.test.assertTrue
 import kinetickk.ball.gameplay.interaction.canvas.hud.*
 import kinetickk.ball.gameplay.interaction.canvas.look.*
 import kinetickk.ball.gameplay.interaction.canvas.world.places.*
+import kinetickk.ball.gameplay.interaction.layout.*
 
 /**
  * The dungeon on the HUD: the trial panel names a held structure with its rooms, rewards and rules, its sealed room's

@@ -59,6 +59,7 @@ import kotlin.test.assertTrue
 import kinetickk.ball.gameplay.interaction.canvas.hud.*
 import kinetickk.ball.gameplay.interaction.canvas.look.*
 import kinetickk.ball.gameplay.interaction.canvas.world.places.*
+import kinetickk.ball.gameplay.interaction.layout.*
 
 class HudPresentationMemoryTest {
     private val base = hudTestModel()
@@ -489,8 +490,8 @@ internal val FULL_SKILL_BAR = SkillBarProjection(immutableListOf(
 ))
 
 /** The press log of a keyboard player: key caps show. */
-internal fun keyboardControls(): kinetickk.ball.gameplay.interaction.input.RunningControlPressLog =
-    kinetickk.ball.gameplay.interaction.input.RunningControlPressLog().apply { keyHints = true }
+internal fun keyboardControls(): kinetickk.ball.gameplay.interaction.canvas.hud.RunningControlPressLog =
+    kinetickk.ball.gameplay.interaction.canvas.hud.RunningControlPressLog().apply { keyHints = true }
 
 /** A started run's render model at [width] × [height] (density 1) for HUD tests. */
 internal fun hudTestModel(width: Float = 1_440f, height: Float = 810f): GameplayRenderModel =

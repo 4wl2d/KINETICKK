@@ -5,18 +5,18 @@ package kinetickk.ball.gameplay.interaction.input
 
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.interaction.canvas.hud.HudTrialPanelLayout
-import kinetickk.ball.gameplay.interaction.canvas.hud.activeTrial
+import kinetickk.ball.gameplay.interaction.layout.*
+import kinetickk.ball.gameplay.interaction.layout.HudTrialPanelLayout
 import kinetickk.ball.gameplay.interaction.layout.PauseTarget
 import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
+import kinetickk.ball.gameplay.interaction.layout.activeTrial
 import kinetickk.ball.gameplay.interaction.layout.containsInclusive
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
-import kotlin.math.max
 
 /** A pointer result is either a live-run action or a request for the Session-owned host. */
 sealed interface GameplayInput {
@@ -53,24 +53,6 @@ internal fun GameplayRenderModel.filledSkillSlots(): Int {
     for (index in 0 until slots.size) if (slots[index].skill >= 0) bits = bits or (1 shl index)
     return bits
 }
-
-/**
- * The gameplay surface in device pixels. The simulation viewport is dp; the HUD, the touch
- * controls and the Compose overlays are laid out in device pixels with [hudScale].
- */
-internal val GameplayRenderModel.hudWidth: Float get() = screenWidth * viewportDensity
-internal val GameplayRenderModel.hudHeight: Float get() = screenHeight * viewportDensity
-
-/**
- * px per dp of the HUD, the running controls and the run's overlays: [GameplayRenderModel.uiScale] at the
- * applied interface scale [interfaceScale] (1 = 100 %). The world keeps the raw viewport density; drawing
- * and hit tests use this one value, so they always agree.
- */
-internal fun GameplayRenderModel.hudScale(interfaceScale: Float): Float = hudScale(uiScale, viewportDensity, interfaceScale)
-
-/** [GameplayRenderModel.hudScale] from its parts: the model's [uiScale] at 100 %, else the scaled viewport density. */
-internal fun hudScale(uiScale: Float, viewportDensity: Float, interfaceScale: Float): Float =
-    if (interfaceScale == 1f) uiScale else max(1f, viewportDensity * interfaceScale)
 
 /**
  * Maps gameplay canvas coordinates (device pixels) without encoding any app destination in domain state;
