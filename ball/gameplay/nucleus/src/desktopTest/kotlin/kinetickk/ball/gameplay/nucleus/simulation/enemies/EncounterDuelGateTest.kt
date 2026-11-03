@@ -370,7 +370,7 @@ class EncounterDuelGateTest {
             val state = MutableGameState(content, seed = seed, bootstrapProgress = profile)
             state.unlockWeaponsForTesting(ReferenceArmory)
             state.startRun()
-            if (arm.strong) StrongRelics.forEach(state::acquireRelicForTesting)
+            if (arm.strong) StrongRelics.forEach(state::claimRelicForTesting)
             val bot = NoPoiBot(archetypeTag = BuildTag.RAM, weaponOrder = BotWeapons)
             while (state.elapsed < ARRIVAL_SECONDS && state.isLive()) {
                 state.invulnerableUntil = Float.MAX_VALUE

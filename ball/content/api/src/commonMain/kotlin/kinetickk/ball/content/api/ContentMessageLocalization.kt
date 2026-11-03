@@ -23,21 +23,14 @@ private typealias ContentMessageRenderer = (List<String>) -> String?
 private val ContentMessageTemplates: List<Pair<Regex, ContentMessageRenderer>> = listOf(
     Regex("Amplify (.+)") to { g -> g[1].contentInRussian()?.let { "Усилить: $it" } },
     Regex("Replace (.+)") to { g -> g[1].contentInRussian()?.let { "Заменить: $it" } },
-    Regex("Meld (.+)") to { g -> g[1].contentInRussian()?.let { "Слить: $it" } },
     Regex("Advance the current system from level ([0-9]+) to ([0-9]+) immediately\\.") to
         { g -> "Сразу повысить текущую систему с уровня ${g[1]} до ${g[2]}." },
     Regex("Merge the duplicate resonance and advance rank ([0-9]+) to ([0-9]+)\\.") to
         { g -> "Объединить повторный резонанс и повысить ранг с ${g[1]} до ${g[2]}." },
     Regex("This resonance is already rank ([0-9]+); selecting it salvages Kinetic Matter\\.") to
         { g -> "Этот резонанс уже имеет ранг ${g[1]}; его выбор принесёт кинетическую материю." },
-    Regex("Collapse this offering into one of the (four|[0-9]+) bound Relics and raise its rank\\.") to
-        { g -> "Слить дар с одной из ${if (g[1] == "four") "4" else g[1]} привязанных реликвий и повысить её ранг." },
     Regex("Break slot ([0-9]+) and bind (.+) at rank 1\\.") to
         { g -> g[2].contentInRussian()?.let { "Освободить ячейку ${g[1]} и привязать «$it» с рангом 1." } },
-    Regex("Collapse the offering into slot ([0-9]+) and advance rank ([0-9]+) to ([0-9]+)\\.") to
-        { g -> "Слить дар с ячейкой ${g[1]} и повысить ранг с ${g[2]} до ${g[3]}." },
-    Regex("Slot ([0-9]+) cannot be melded further; salvage the excess resonance\\.") to
-        { g -> "Ячейку ${g[1]} больше нельзя слить; утилизировать избыточный резонанс." },
     Regex("Slot ([0-9]+) is already rank ([0-9]+); salvage the excess resonance\\.") to
         { g -> "Ячейка ${g[1]} уже имеет ранг ${g[2]}; утилизировать избыточный резонанс." },
     Regex("Refit ([0-9]+) · Honing ([0-9]+)") to { g -> "Доработка ${g[1]} · Заточка ${g[2]}" },

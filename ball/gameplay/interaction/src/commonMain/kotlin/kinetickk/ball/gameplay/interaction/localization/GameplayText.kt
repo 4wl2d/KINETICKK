@@ -64,7 +64,6 @@ internal enum class GameplayText : TextResource {
     TotemResonance,
     WeaponSynchronization,
     RelicIntercept,
-    RelicMeld,
     RelicRebind,
     SelectChoice,
     ScrollableRewards,

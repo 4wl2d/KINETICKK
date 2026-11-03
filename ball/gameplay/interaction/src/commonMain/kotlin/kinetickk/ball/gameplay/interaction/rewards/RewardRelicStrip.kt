@@ -33,6 +33,7 @@ import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
+import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkPathCache
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.LocalKkRolePalette
@@ -49,8 +50,9 @@ import kotlin.math.min
 import kinetickk.ball.gameplay.interaction.overlay.*
 
 /**
- * Compact relic matrix for relic offers (top right of the deal): count, diamonds with synergy
- * links, and for the lifted offer its target slot ring and the synergy it would form (dashed).
+ * Compact relic matrix for relic offers (top right of the deal): the Relic choices the run has claimed of its budget,
+ * diamonds with synergy links (a slot a Meld sealed in Kinetic with the Meld mark), and for the lifted offer its target
+ * slot ring and the synergy it would form (dashed).
  */
 @Composable
 internal fun RewardRelicStrip(matrix: RewardRelicMatrix, preview: RewardRelicPreview?, state: RewardOverlayState, modifier: Modifier) {
@@ -61,7 +63,8 @@ internal fun RewardRelicStrip(matrix: RewardRelicMatrix, preview: RewardRelicPre
     val regular = state.mode == GameplayLayoutMode.REGULAR
     val dashed = rememberDashedStroke()
     val tagPaths = remember { KkPathCache(1) }
-    val countLabel = language.text(OverlayRedesignText.Relics)
+    val countLabel = language.text(OverlayRedesignText.RelicChoices)
+    val count = "${matrix.claims}/${matrix.budget}"
     Box(modifier.testTag("kinetickk.gameplay.rewards.relics")) {
         // Phones keep the strip to the header line: count left of the diamonds, no bracket tags.
         Row(
@@ -70,10 +73,10 @@ internal fun RewardRelicStrip(matrix: RewardRelicMatrix, preview: RewardRelicPre
             verticalAlignment = Alignment.Bottom,
         ) {
             if (regular) {
-                OverlayText(language.text(OverlayRedesignText.Relics), typography.labelStyle(14f * state.textScale, color = Kk.Mute),
+                OverlayText(countLabel, typography.labelStyle(14f * state.textScale, color = Kk.Mute),
                     Modifier.padding(bottom = 2.dp), uppercase = true)
             }
-            OverlayText("${matrix.equipped}/${matrix.maxSlots}", typography.wideStyle((if (regular) 22f else 15f) * state.textScale, tabular = true, color = Kk.Bone))
+            OverlayText(count, typography.wideStyle((if (regular) 22f else 15f) * state.textScale, tabular = true, color = Kk.Bone))
         }
         Canvas(Modifier.fillMaxSize().semantics { contentDescription = matrix.names.joinToString(", ") }) {
             val slot = (if (regular) 34f else 22f) * density
@@ -107,7 +110,7 @@ internal fun RewardRelicStrip(matrix: RewardRelicMatrix, preview: RewardRelicPre
                 drawRelicBrackets(measurer, named, centers, namedFirst, namedStep, legBottom, dashed, ticks = regular)
                 if (regular && named.isNotEmpty()) {
                     val labels = namedLinks.map { (index, link) -> link to link.bracketLabel(preview.addedNames.getOrElse(index) { "" }) }
-                    val countSize = measureKkText(measurer, "${matrix.equipped}/${matrix.maxSlots}", measurer.typography.wideStyle(22f, tabular = true)).size
+                    val countSize = measureKkText(measurer, count, measurer.typography.wideStyle(22f, tabular = true)).size
                     val countWidth = countSize.width + 10f * density +
                         measureKkText(measurer, countLabel, measurer.typography.labelStyle(14f), uppercase = true).size.width
                     drawRelicStripTags(measurer, labels, centers, namedFirst - (named.size - 1) * namedStep - 6f * density,
@@ -124,20 +127,22 @@ internal fun RewardRelicStrip(matrix: RewardRelicMatrix, preview: RewardRelicPre
                 }
                 val center = Offset(centers[index], cy)
                 val definition = matrix.definitions.getOrNull(index)
-                if (relic != null && definition != null) {
-                    drawRelicSlotRune(center, definition, matrix.policy, sizeDp, roles, time, ring)
-                } else {
-                    val incoming = preview?.incoming?.takeIf { target }
-                    if (incoming != null) {
-                        drawRelicSlotRune(center, incoming, matrix.policy, sizeDp, roles, time, ring, alpha = 0.6f)
-                    } else {
-                        drawKkRelicSlot(center, Color.Unspecified, sizeDp = sizeDp, ring = ring)
-                    }
+                val incoming = preview?.incoming?.takeIf { target }
+                when {
+                    relic != null && definition != null -> drawRelicSlotRune(center, definition, matrix.policy, sizeDp, roles, time, ring)
+                    incoming != null -> drawRelicSlotRune(center, incoming, matrix.policy, sizeDp, roles, time, ring, alpha = 0.6f)
+                    index >= n - matrix.sealed -> drawSealedRelicSlot(center, sizeDp, roles.kinetic, ring)
+                    target && preview?.meld == true -> drawSealedRelicSlot(center, sizeDp, roles.kinetic, ring, alpha = 0.6f)
+                    else -> drawKkRelicSlot(center, Color.Unspecified, sizeDp = sizeDp, ring = ring)
                 }
             }
         }
     }
 }
+
+/** A relic slot a Meld sealed: a Kinetic diamond with the Meld mark (the Meld card's icon). */
+internal fun DrawScope.drawSealedRelicSlot(center: Offset, sizeDp: Float, kinetic: Color, ring: Color = Color.Unspecified, alpha: Float = 1f) =
+    drawKkRelicSlot(center, kinetic, icon = KkIcon.UI_PLUS, sizeDp = sizeDp, ring = ring, alpha = alpha)
 
 /**
  * The tags of the named pairings a lifted relic offer forms, in one row whose bottom is

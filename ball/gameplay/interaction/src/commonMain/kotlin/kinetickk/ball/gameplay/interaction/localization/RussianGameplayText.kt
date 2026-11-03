@@ -62,7 +62,6 @@ internal fun russianGameplayText(key: GameplayText): String = when (key) {
     GameplayText.TotemResonance -> "Улучшение"
     GameplayText.WeaponSynchronization -> "Оружие"
     GameplayText.RelicIntercept -> "Реликвия"
-    GameplayText.RelicMeld -> "Слияние"
     GameplayText.RelicRebind -> "Замена реликвии"
     GameplayText.SelectChoice -> "Выбрать вариант {0}: {1}"
     GameplayText.ScrollableRewards -> "Прокручиваемое описание награды"

@@ -64,10 +64,14 @@ internal fun MutableGameState.buildProjection(
     val meter = stasisMeter / MutableGameState.STASIS_SECONDS
     val invulnerable = invulnerableUntil > elapsed
     val burnout = overdriveBurnoutUntil > elapsed
+    val budgetSpent = relicBudgetLeft() <= 0
+    val changesSpent = weaponChangesLeft() <= 0
     if (previous.severed === severed && previous.stormCharge.sameBitsAs(stormCharge) &&
         previous.stasisMeter.sameBitsAs(meter) && previous.stasisBank == stasisBank &&
         previous.ouroborosSpent == ouroborosSpent && previous.invulnerable == invulnerable &&
-        previous.overdriveBurnout == burnout
+        previous.overdriveBurnout == burnout && previous.relicClaims == relicRun.relicClaims &&
+        previous.relicBudgetSpent == budgetSpent && previous.meldedSlots == relicRun.meldedSlots &&
+        previous.weaponChangesSpent == changesSpent
     ) return previous
 
     return previous.copy(
@@ -78,6 +82,10 @@ internal fun MutableGameState.buildProjection(
         ouroborosSpent = ouroborosSpent,
         invulnerable = invulnerable,
         overdriveBurnout = burnout,
+        relicClaims = relicRun.relicClaims,
+        relicBudgetSpent = budgetSpent,
+        meldedSlots = relicRun.meldedSlots,
+        weaponChangesSpent = changesSpent,
     )
 }
 

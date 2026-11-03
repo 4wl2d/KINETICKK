@@ -109,7 +109,7 @@ internal fun RewardPresentation.bindPanel(preview: RewardRelicPreview?): RewardR
 /**
  * Relic binding (Relic board): incoming relic panel, the straight row of matrix slots (each slot
  * is a choice), synergy brackets and the signed preview of the lifted slot with the primary
- * action (Replace in the threat color, Meld, Salvage).
+ * action (Replace in the threat color).
  */
 @Composable
 internal fun RewardRelicBind(state: RewardOverlayState) {

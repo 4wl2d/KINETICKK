@@ -32,6 +32,7 @@ import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.label
+import kotlin.math.roundToLong
 import kinetickk.ball.gameplay.interaction.canvas.look.*
 
 internal fun GameplayRenderModel.rewardCardPresentation(
@@ -59,13 +60,12 @@ internal fun GameplayRenderModel.rewardCardPresentation(
     val rank = when (choice.relicAction) {
         RelicChoiceAction.ACQUIRE -> (ownedRank + 1).coerceIn(1, policy.maxRank)
         RelicChoiceAction.REPLACE -> slotRelic?.rank
-        RelicChoiceAction.MELD_TARGET -> slotRelic?.rank?.plus(1)?.coerceAtMost(policy.maxRank)
         RelicChoiceAction.MELD, RelicChoiceAction.DECLINE, null -> null
     }
     val choiceTag = choice.tag.localizedContent(language)
     val focus = choice.rewardFocus
     val action = choice.relicAction?.let { relicAction ->
-        rewardRelicAction(relicAction, ownedRank, slotRelic?.rank, equippedRelics.size, policy, language)
+        rewardRelicAction(relicAction, ownedRank, openRelicSlots(), policy, language)
     }
     val suppressedNow = item != null && (item.id in build.suppressedItemIds ||
         preview?.forecasts?.any { it.kind == ForecastKind.SUPPRESSED } == true)
@@ -89,7 +89,7 @@ internal fun GameplayRenderModel.rewardCardPresentation(
     return RewardCardPresentation(
         choice = choice,
         title = when {
-            decline -> language.text(if (choice.heirloom) OverlayRedesignText.LeaveHeirloom else OverlayRedesignText.LeaveHollow)
+            decline -> language.text(if (choice.heirloom) OverlayRedesignText.LeaveHeirloom else OverlayRedesignText.SalvageResonance)
             else -> choice.title.localizedContent(language)
         },
         accent = accent,
@@ -187,7 +187,7 @@ private fun rewardCardAccent(
     else -> Kk.Bone to RewardTone.FIXED
 }
 
-/** The card's lines: the focus effect, the item's rules, the relic's upside, or the leave, weapon or meld effect. */
+/** The card's lines: the focus effect, the item's rules, the relic's upside, or the leave, salvage, weapon or Meld effect. */
 private fun GameplayRenderModel.rewardDescriptions(
     choice: ChoiceOption,
     focus: RewardFocus?,
@@ -211,13 +211,20 @@ private fun GameplayRenderModel.rewardDescriptions(
         }
         relic != null -> add(relic.upsideText(language, rank ?: ownedRank.coerceAtLeast(1)))
         decline -> add(if (choice.heirloom) language.text(OverlayRedesignText.LeaveHeirloomEffect, content.relicPolicy.heirloomDeclineRerolls)
-            else language.text(OverlayRedesignText.LeaveHollowEffect, content.relicPolicy.salvageMatter))
+            else language.text(OverlayRedesignText.SalvageResonanceEffect, content.relicPolicy.salvageMatter))
         choice.totemAction == TotemAction.AMPLIFY_CURRENT -> add(currentWeaponDefinition.description.localizedContent(language))
         weapon != null -> add(weapon.description.localizedContent(language))
         choice.totemAction == TotemAction.CHANGE_WEAPON -> add(language.text(OverlayRedesignText.ChangeWeaponEffect))
-        choice.relicAction == RelicChoiceAction.MELD -> add(language.text(OverlayRedesignText.MeldEffect))
+        choice.relicAction == RelicChoiceAction.MELD -> add(meldEffect(language))
     }
 }.filter(String::isNotBlank).distinct()
+
+/** What one Meld gives: "Seals the empty slot for this run: damage dealt +4%, max integrity +3%". */
+private fun GameplayRenderModel.meldEffect(language: AppLanguage): String {
+    val policy = content.relicPolicy
+    fun percent(share: Float) = overlayDecimal((share * 100f).roundToLong().toFloat(), language)
+    return language.text(OverlayRedesignText.MeldEffect, percent(policy.meldDamage), percent(policy.meldIntegrity))
+}
 
 /** The card's head icon (none for an item, whose art is the icon). */
 private fun GameplayRenderModel.rewardCardIcon(

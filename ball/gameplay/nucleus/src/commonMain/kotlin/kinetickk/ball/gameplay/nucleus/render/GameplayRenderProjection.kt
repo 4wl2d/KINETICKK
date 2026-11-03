@@ -39,7 +39,8 @@ enum class ProjectileKind { BOLT, MINE }
  */
 enum class ChoiceType { ITEM, TOTEM, WEAPON, RELIC, RELIC_BIND, ACTIVE_SLOT, OMEN, SIGNAL, BOON }
 enum class TotemAction { AMPLIFY_CURRENT, CHANGE_WEAPON }
-enum class RelicChoiceAction { ACQUIRE, MELD, REPLACE, MELD_TARGET, DECLINE }
+/** A relic card: bind or rank up, Meld (seal the empty slot for a run bonus), break a slot, or leave the Heirloom / salvage. */
+enum class RelicChoiceAction { ACQUIRE, MELD, REPLACE, DECLINE }
 enum class WeaponNodeType { GRAVITY_MINE }
 /**
  * Weapon-owned world objects ([WeaponEntityProjection]): Gyre discs, sentries, lenses and their wells,

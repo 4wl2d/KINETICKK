@@ -305,7 +305,7 @@ class RewardRedesignPresentationTest {
 
     @Test
     fun declineIsACalmCardAndHeirloomsAreGold() {
-        val hollow = ChoiceOption(ChoiceType.RELIC, "Leave hollow", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE)
+        val hollow = ChoiceOption(ChoiceType.RELIC, "Salvage resonance", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE)
         val heirloom = ChoiceOption(ChoiceType.RELIC, "Event Horizon", "", "GRAVITIC", relicId = RelicId.EVENT_HORIZON,
             relicAction = RelicChoiceAction.ACQUIRE, heirloom = true)
         val model = rewardFixtureModel(choiceType = ChoiceType.RELIC, choices = listOf(heirloom, hollow), rebirthLevel = 4)
@@ -339,28 +339,26 @@ class RewardRedesignPresentationTest {
     @Test
     fun relicActionsNameTheGameOutcomeForEveryRelicChoiceAction() {
         val policy = RelicPolicy(4, 5)
-        fun label(action: RelicChoiceAction, owned: Int = 0, slotRank: Int? = null, equipped: Int = 2) =
-            rewardRelicAction(action, owned, slotRank, equipped, policy, AppLanguage.English)
+        fun label(action: RelicChoiceAction, owned: Int = 0, openSlots: Int = 2) =
+            rewardRelicAction(action, owned, openSlots, policy, AppLanguage.English)
         assertEquals(RewardAction("Bind", RewardTone.YOU), label(RelicChoiceAction.ACQUIRE))
-        assertEquals(RewardAction("Meld", RewardTone.YOU), label(RelicChoiceAction.ACQUIRE, owned = 2))
+        assertEquals(RewardAction("Rank up", RewardTone.YOU), label(RelicChoiceAction.ACQUIRE, owned = 2))
         assertEquals(RewardAction("Salvage", RewardTone.MUTE), label(RelicChoiceAction.ACQUIRE, owned = 5))
-        assertEquals(RewardAction("Replace", RewardTone.THREAT), label(RelicChoiceAction.ACQUIRE, equipped = 4))
+        assertEquals(RewardAction("Replace", RewardTone.THREAT), label(RelicChoiceAction.ACQUIRE, openSlots = 0))
         assertEquals(RewardAction("Meld", RewardTone.YOU), label(RelicChoiceAction.MELD))
-        assertEquals(RewardAction("Replace", RewardTone.THREAT), label(RelicChoiceAction.REPLACE, slotRank = 3))
-        assertEquals(RewardAction("Meld", RewardTone.YOU), label(RelicChoiceAction.MELD_TARGET, slotRank = 4))
-        assertEquals(RewardAction("Salvage", RewardTone.MUTE), label(RelicChoiceAction.MELD_TARGET, slotRank = 5))
+        assertEquals(RewardAction("Replace", RewardTone.THREAT), label(RelicChoiceAction.REPLACE, openSlots = 0))
         assertEquals(RewardAction("Decline", RewardTone.MUTE), label(RelicChoiceAction.DECLINE))
     }
 
     @Test
-    fun decliningAnOfferNamesWhatTheEmptySlotOrTheHeirloomGivesBackInBothLanguages() {
-        val hollow = ChoiceOption(ChoiceType.RELIC, "Leave hollow", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE)
+    fun decliningAnOfferNamesWhatTheSalvageOrTheHeirloomGivesBackInBothLanguages() {
+        val hollow = ChoiceOption(ChoiceType.RELIC, "Salvage resonance", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE)
         val heirloom = hollow.copy(title = "Leave the heirloom", heirloom = true)
         val model = rewardFixtureModel(choiceType = ChoiceType.RELIC, relics = listOf(vector), choices = listOf(hollow))
         val card = model.rewardCardPresentation(hollow, 0)
-        assertEquals("Leave hollow", card.title)
+        assertEquals("Salvage resonance", card.title)
         assertEquals(RewardAction("Decline", RewardTone.MUTE), card.action)
-        assertEquals(listOf(AppLanguage.English.text(OverlayRedesignText.LeaveHollowEffect, model.content.relicPolicy.salvageMatter)), card.descriptions)
+        assertEquals(listOf(AppLanguage.English.text(OverlayRedesignText.SalvageResonanceEffect, model.content.relicPolicy.salvageMatter)), card.descriptions)
         assertTrue(card.descriptions.single().contains("+8"), "The salvage names its matter")
         assertNull(card.relic)
         val preview = requireNotNull(card.relicPreview)
@@ -453,16 +451,17 @@ class RewardRedesignPresentationTest {
         assertEquals("×0.85", discord.rows.first().after)
         assertEquals(listOf("×1.00", "×0.85"), discord.rows.last().let { listOf(it.before, it.after) })
 
-        val meld = ChoiceOption(ChoiceType.RELIC_BIND, "Meld Perpetual Vector", "", "", relicId = RelicId.PERPETUAL_VECTOR,
-            relicAction = RelicChoiceAction.MELD_TARGET, relicSlot = 0)
-        val melding = rewardFixtureModel(choiceType = ChoiceType.RELIC_BIND, relics = listOf(vector, gyre), choices = listOf(meld))
-        val meldPreview = requireNotNull(melding.rewardCardPresentation(meld, 0).relicPreview)
-        assertEquals(listOf("+", "="), meldPreview.rows.map { it.sign }, "Next rank, kept concord")
-        assertEquals("Rank 3", meldPreview.rows.first().title)
-        // The row shows the values the meld raises, not the upside the panel already shows.
-        assertEquals(listOf("15\u00A0%", "18\u00A0%", null), meldPreview.rows.first().let { listOf(it.before, it.after, it.detail) })
-        assertEquals("Rank 3", meldPreview.panel?.rank)
-        assertEquals(0, melding.rewardPresentation().defaultSelection())
+        // A duplicate's rank-up names the next rank and keeps its concord.
+        val duplicate = ChoiceOption(ChoiceType.RELIC, "Perpetual Vector", "", "KINETIC", relicId = RelicId.PERPETUAL_VECTOR,
+            relicAction = RelicChoiceAction.ACQUIRE)
+        val ranking = rewardFixtureModel(choiceType = ChoiceType.RELIC, relics = listOf(vector, gyre), choices = listOf(duplicate))
+        val rankPreview = requireNotNull(ranking.rewardCardPresentation(duplicate, 0).relicPreview)
+        assertEquals(listOf("+", "="), rankPreview.rows.map { it.sign }, "Next rank, kept concord")
+        assertEquals("Rank 3", rankPreview.rows.first().title)
+        // The row shows the values the rank-up raises, not the upside the panel already shows.
+        assertEquals(listOf("15\u00A0%", "18\u00A0%", null), rankPreview.rows.first().let { listOf(it.before, it.after, it.detail) })
+        assertEquals("Rank 3", rankPreview.panel?.rank)
+        assertEquals(0, ranking.rewardPresentation().defaultSelection())
     }
 
     @Test
@@ -556,14 +555,22 @@ class RewardRedesignPresentationTest {
     }
 
     @Test
-    fun meldingUsesOneTermForTheHeadingAndItsAction() {
-        val english = rewardHeading(ChoiceType.RELIC_BIND, RelicChoiceAction.MELD_TARGET, AppLanguage.English)
-        val action = rewardRelicAction(RelicChoiceAction.MELD_TARGET, 0, 1, 3, RelicPolicy(4, 5), AppLanguage.English)
-        assertEquals(OverlayRedesignText.Meld.english, english)
-        assertEquals(english, action.label)
+    fun theMeldCardUsesOneTermForItsTitleAndItsActionAndNamesItsBonusAndTheSlotItSeals() {
+        val meld = ChoiceOption(ChoiceType.RELIC, "Meld", "", "MELD", relicAction = RelicChoiceAction.MELD)
+        val model = rewardFixtureModel(choiceType = ChoiceType.RELIC, relics = listOf(vector, gyre), choices = listOf(meld))
+        val english = model.rewardCardPresentation(meld, 0)
+        assertEquals(OverlayRedesignText.Meld.english, english.title)
+        assertEquals(english.title, english.action?.label)
+        assertEquals(listOf(AppLanguage.English.text(OverlayRedesignText.MeldEffect, "4", "3")), english.descriptions)
+        // The Meld seals the last open slot, and its preview names the lasting bonus it reaches.
+        val preview = requireNotNull(english.relicPreview)
+        assertTrue(preview.meld)
+        assertEquals(3, preview.targetSlot)
+        assertEquals("Meld ×1: damage +4%, integrity +3%", preview.rows.first().title)
+        assertEquals("+", preview.rows.first().sign)
         // Russian pairs the noun and the verb of the same word (Слияние / Слить).
-        val russian = rewardHeading(ChoiceType.RELIC_BIND, RelicChoiceAction.MELD_TARGET, AppLanguage.Russian)
-        assertEquals(russian.take(3), OverlayRedesignText.Meld.russian.take(3))
+        val russian = model.rewardCardPresentation(meld, 0, AppLanguage.Russian)
+        assertEquals(russian.title.take(3), russian.action?.label?.take(3))
     }
 
     @Test

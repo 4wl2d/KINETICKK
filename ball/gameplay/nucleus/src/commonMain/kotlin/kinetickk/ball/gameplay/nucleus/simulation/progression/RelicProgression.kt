@@ -7,54 +7,44 @@ import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
+import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kotlin.math.max
 import kotlin.math.min
 import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 
+/** Opens a queued Relic offer and claims its opportunity; a stray offer past the budget salvages and opens what waits next. */
 internal fun MutableGameState.openRelicChoice() {
+    if (!claimRelicOpportunity()) {
+        openNextPendingChoice()
+        return
+    }
     activeChoiceType = ChoiceType.RELIC
     buildRelicChoices()
     clearInputBuffers()
     phase = GamePhase.CHOICE
 }
 
+/**
+ * The defensive replacement step of an unowned Relic taken with no open slot (the budget leaves one open whenever an
+ * offer opens, so only content with more opportunities than slots gets here): one card per bound slot that may break.
+ */
 internal fun MutableGameState.openRelicBindChoice() {
     activeChoiceType = ChoiceType.RELIC_BIND
-    val action = pendingRelicBindAction ?: return
-    val incoming = pendingBindingRelic
+    if (pendingRelicBindAction != RelicChoiceAction.REPLACE) return
+    val replacement = content.relic(pendingBindingRelic ?: return)
     choices = equippedRelics.mapIndexedNotNull { index, equipped ->
-        val current = content.relic(equipped.id)
-        when (action) {
-            RelicChoiceAction.REPLACE -> {
-                val replacement = content.relic(incoming ?: return)
-                if (equipped.id == RelicId.OUROBOROS_SEAL && ouroborosLockedUntil > elapsed) return@mapIndexedNotNull null
-                ChoiceOption(
-                    type = ChoiceType.RELIC_BIND,
-                    title = "Replace ${current.name}",
-                    description = "Break slot ${index + 1} and bind ${replacement.name} at rank 1.",
-                    tag = "SLOT ${index + 1} // REPLACE",
-                    relicId = replacement.id,
-                    relicAction = RelicChoiceAction.REPLACE,
-                    relicSlot = index,
-                )
-            }
-            RelicChoiceAction.MELD_TARGET -> ChoiceOption(
-                type = ChoiceType.RELIC_BIND,
-                title = "Meld ${current.name}",
-                description = if (canMeld(equipped.id)) {
-                    "Collapse the offering into slot ${index + 1} and advance rank ${equipped.rank} to ${equipped.rank + 1}."
-                } else {
-                    "Slot ${index + 1} cannot be melded further; salvage the excess resonance."
-                },
-                tag = "SLOT ${index + 1} // RANK ${equipped.rank}",
-                relicId = equipped.id,
-                relicAction = RelicChoiceAction.MELD_TARGET,
-                relicSlot = index,
-            )
-            RelicChoiceAction.ACQUIRE, RelicChoiceAction.MELD, RelicChoiceAction.DECLINE -> return
-        }
+        if (equipped.id == RelicId.OUROBOROS_SEAL && ouroborosLockedUntil > elapsed) return@mapIndexedNotNull null
+        ChoiceOption(
+            type = ChoiceType.RELIC_BIND,
+            title = "Replace ${content.relic(equipped.id).name}",
+            description = "Break slot ${index + 1} and bind ${replacement.name} at rank 1.",
+            tag = "SLOT ${index + 1} // REPLACE",
+            relicId = replacement.id,
+            relicAction = RelicChoiceAction.REPLACE,
+            relicSlot = index,
+        )
     }
     if (choices.isEmpty()) {
         pendingBindingRelic = null
@@ -64,6 +54,48 @@ internal fun MutableGameState.openRelicBindChoice() {
     }
     clearInputBuffers()
     phase = GamePhase.CHOICE
+}
+
+/**
+ * Takes relic offer card [option] and returns the cue the offer closes with, or null when it does not close here: a
+ * card without an action, or an unowned Relic taken with no open slot, which opens the replacement step.
+ */
+internal fun MutableGameState.chooseRelicCard(option: ChoiceOption): GameplayAudioCue? = when (option.relicAction) {
+    RelicChoiceAction.DECLINE -> {
+        declineRelic(option.heirloom)
+        heirloomOfferActive = false
+        GameplayAudioCue.UI_CLICK
+    }
+    RelicChoiceAction.ACQUIRE -> option.relicId?.let { takeRelicCard(it, option.heirloom) }
+    RelicChoiceAction.MELD -> {
+        meldRelicSlot()
+        GameplayAudioCue.WEAPON_ACQUIRED
+    }
+    RelicChoiceAction.REPLACE, null -> null
+}
+
+/** Binds or ranks [relicId] from an offer card; an Heirloom card resolves the Heirloom and claims a Relic opportunity. */
+private fun MutableGameState.takeRelicCard(relicId: RelicId, heirloom: Boolean): GameplayAudioCue? {
+    // Measured while the offer is still open: Heirloom Vault extras it could not show become ranks.
+    val heirloomRanks = if (heirloom) heirloomRankBonus() else 0
+    if (heirloom) {
+        // The Heirloom offer opens only while the budget lasts, and leaving it claims nothing.
+        relicRun.relicClaims++
+        pendingHeirloomResolved = true
+        heirloomCandidates = emptyList()
+        heirloomOfferActive = false
+    }
+    if (relicRank(relicId) == 0 && openRelicSlots() <= 0) {
+        pendingBindingRelic = relicId
+        pendingRelicBindAction = RelicChoiceAction.REPLACE
+        openRelicBindChoice()
+        emitSound(GameplayAudioCue.UI_CLICK)
+        return null
+    }
+    acquireRelic(relicId)
+    // Each extra rank arrives as if the Relic were offered again (a maxed one is salvaged).
+    repeat(heirloomRanks) { acquireRelic(relicId) }
+    return GameplayAudioCue.WEAPON_ACQUIRED
 }
 
 private fun MutableGameState.discoverRelic(id: RelicId) {
@@ -89,7 +121,7 @@ internal fun MutableGameState.acquireRelic(id: RelicId) {
         messageTime = 1.7f
         return
     }
-    if (equippedRelics.size >= content.relicPolicy.maxSlots) return
+    if (openRelicSlots() <= 0) return
     discoverRelic(id)
     equippedRelics = equippedRelics + EquippedRelic(id, 1)
     relicRanks[id.ordinal] = 1
@@ -134,30 +166,16 @@ internal fun MutableGameState.replaceRelic(slot: Int, id: RelicId) {
     messageTime = 1.7f
 }
 
-internal fun MutableGameState.meldRelic(slot: Int) {
-    if (slot !in equippedRelics.indices) return
-    val current = equippedRelics[slot]
-    if (!canMeld(current.id)) {
-        grantMatter(content.relicPolicy.salvageMatter.toFloat())
-        message = content.relic(current.id).name.uppercase() + " // RESONANCE SALVAGED"
-    } else {
-        setRelicRank(slot, current.rank + 1)
-        message = content.relic(current.id).name.uppercase() + " // RANK " + (current.rank + 1)
-    }
-    messageTime = 1.7f
-}
-
-/** Declining a relic keeps the slot empty (or skips an Heirloom) for a small salvage. */
+/** Leaving the Heirloom skips it for rerolls; the salvage card of an offer with no open slot pays Matter. */
 internal fun MutableGameState.declineRelic(heirloom: Boolean) {
-    if (heirloom) {
-        rerollsRemaining += content.relicPolicy.heirloomDeclineRerolls
-        pendingHeirloomResolved = true
-        heirloomCandidates = emptyList()
-        message = "HEIRLOOM LEFT // +2 REROLLS"
-    } else {
-        grantMatter(content.relicPolicy.salvageMatter.toFloat())
-        message = "SLOT LEFT HOLLOW"
+    if (!heirloom) {
+        salvageRelicResonance()
+        return
     }
+    rerollsRemaining += content.relicPolicy.heirloomDeclineRerolls
+    pendingHeirloomResolved = true
+    heirloomCandidates = emptyList()
+    message = "HEIRLOOM LEFT // +2 REROLLS"
     messageTime = 1.6f
 }
 

@@ -266,7 +266,7 @@ class RewardCardGalleryShotsTest {
         val focus = listOf(RewardFocus.OFFENSE to ChoiceType.ITEM, RewardFocus.GRAVITIC to ChoiceType.RELIC, RewardFocus.MOTION to ChoiceType.TOTEM)
             .map { (focus, type) -> card(type, ChoiceOption(type, focus.label, "Choose a direction.", "FOCUS", rewardFocus = focus)) }
         val declines = listOf(
-            card(ChoiceType.RELIC, ChoiceOption(ChoiceType.RELIC, "Leave hollow", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE)),
+            card(ChoiceType.RELIC, ChoiceOption(ChoiceType.RELIC, "Salvage resonance", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE)),
             card(ChoiceType.RELIC, ChoiceOption(ChoiceType.RELIC, "Leave heirloom", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE, heirloom = true)),
         )
         return totems + focus + declines + weapons

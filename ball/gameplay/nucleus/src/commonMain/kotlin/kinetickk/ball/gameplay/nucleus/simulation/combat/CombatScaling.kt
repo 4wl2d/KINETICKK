@@ -121,7 +121,14 @@ internal fun MutableGameState.effectiveLuck(): Float = luck + if (tagTier(BuildT
 /** CHAIN I adds a second to the combo window. */
 internal fun MutableGameState.effectiveComboWindow(): Float = comboWindow + if (tagTier(BuildTag.CHAIN) >= 1) 1f else 0f
 
+/** Relic slots holding no Relic; a slot a Meld sealed stays empty (the Hollow Crown counts it). */
 internal fun MutableGameState.emptyRelicSlots(): Int = (content.relicPolicy.maxSlots - equippedRelics.size).coerceAtLeast(0)
+
+/**
+ * The run's global multiplier on damage dealt, applied once per damage instance (hit bases are measured without it):
+ * the Core Matrix's and the Melds'.
+ */
+internal fun MutableGameState.runDamageMultiplier(): Float = matrix.damageMultiplier * relicRun.meldDamageMultiplier
 
 internal fun MutableGameState.shieldCapacity(): Float {
     if (build.liability(RelicId.GLASS_COMET)) return 0f

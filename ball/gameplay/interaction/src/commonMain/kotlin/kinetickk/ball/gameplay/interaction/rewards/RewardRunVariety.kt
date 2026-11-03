@@ -122,7 +122,7 @@ private class SignalCardCopy(val title: RunVarietyText, val effect: String, val 
 internal fun GameplayRenderModel.rewardSignalCard(choice: ChoiceOption, index: Int, language: AppLanguage): RewardCardPresentation {
     val option = choice.signalOption ?: SignalOption.IGNORE
     val kind = (choice.signalKind ?: option.kind)?.displayName?.localizedContent(language).orEmpty()
-    val copy = signalCardCopy(option, choice.signalCost, choice.signalPayout, choice.signalRarity, language)
+    val copy = signalCardCopy(option, choice.signalCost, choice.signalPayout, choice.signalRarity, build.relicBudgetSpent, language)
     if (option == SignalOption.IGNORE) {
         return RewardCardPresentation(
             choice = choice,
@@ -155,11 +155,20 @@ internal fun GameplayRenderModel.rewardSignalCard(choice: ChoiceOption, index: I
 
 /**
  * The copy of [option] with the nucleus [cost] and [payout] (their meaning is the option's, see the signal system) and the
- * [rarity] an item-offer card deals at the profile's Rebirth rank (null: the option's own floor).
+ * [rarity] an item-offer card deals at the profile's Rebirth rank (null: the option's own floor). A Relic offer card says
+ * so when the run's Relic budget is spent ([relicBudgetSpent]; the nucleus locks it then).
  */
-private fun signalCardCopy(option: SignalOption, cost: Int, payout: Int, rarity: ItemRarity?, language: AppLanguage): SignalCardCopy {
+private fun signalCardCopy(
+    option: SignalOption,
+    cost: Int,
+    payout: Int,
+    rarity: ItemRarity?,
+    relicBudgetSpent: Boolean,
+    language: AppLanguage,
+): SignalCardCopy {
     fun text(resource: RunVarietyText, vararg arguments: Any) = language.text(resource, *arguments)
     fun offer(rarity: ItemRarity) = text(RunVarietyText.OfferAtLeast, rarity.displayLabel.localizedContent(language))
+    val relicOffer = text(if (relicBudgetSpent) RunVarietyText.RelicBudgetSpent else RunVarietyText.RelicOffer)
     val matter = overlayGrouped(cost.toLong(), language)
     val matterChip = RewardChip(RewardChipKind.COST, matter, icon = KkIcon.SYSTEM_MATTER)
     val integrityChip = RewardChip(RewardChipKind.COST, cost.toString(), icon = KkIcon.SYSTEM_INTEGRITY)
@@ -174,7 +183,7 @@ private fun signalCardCopy(option: SignalOption, cost: Int, payout: Int, rarity:
             text(RunVarietyText.CostIntegrity, cost), integrityChip)
         SignalOption.SHRINE_WARD -> SignalCardCopy(RunVarietyText.ShrineWardTitle, text(RunVarietyText.ShrineWardText),
             text(RunVarietyText.ShrineWardCost), integrityChip)
-        SignalOption.SHRINE_RELIC -> SignalCardCopy(RunVarietyText.ShrineRelicTitle, text(RunVarietyText.RelicOffer),
+        SignalOption.SHRINE_RELIC -> SignalCardCopy(RunVarietyText.ShrineRelicTitle, relicOffer,
             text(RunVarietyText.CostIntegrity, cost), integrityChip)
         SignalOption.GAMBLE_REROLL -> SignalCardCopy(RunVarietyText.GambleRerollTitle, text(RunVarietyText.GambleRerollText),
             text(RunVarietyText.GambleRerollStake), RewardChip(RewardChipKind.COST, cost.toString(), icon = KkIcon.SYSTEM_REROLL))
@@ -186,7 +195,7 @@ private fun signalCardCopy(option: SignalOption, cost: Int, payout: Int, rarity:
         SignalOption.CACHE_RELIQUARY -> SignalCardCopy(RunVarietyText.CacheReliquaryTitle,
             if ((rarity ?: ItemRarity.LEGENDARY) == ItemRarity.LEGENDARY) text(RunVarietyText.OfferLegendary) else offer(checkNotNull(rarity)),
             text(RunVarietyText.CacheReliquaryCurse), null)
-        SignalOption.CACHE_IDOL -> SignalCardCopy(RunVarietyText.CacheIdolTitle, text(RunVarietyText.RelicOffer), text(RunVarietyText.CacheIdolCurse), null)
+        SignalOption.CACHE_IDOL -> SignalCardCopy(RunVarietyText.CacheIdolTitle, relicOffer, text(RunVarietyText.CacheIdolCurse), null)
         SignalOption.DERELICT_REPAIR -> SignalCardCopy(RunVarietyText.DerelictRepairTitle, text(RunVarietyText.DerelictRepairText, payout), null, null)
         SignalOption.DERELICT_CARGO ->
             SignalCardCopy(RunVarietyText.DerelictCargoTitle, text(RunVarietyText.DerelictCargoText, overlayGrouped(payout.toLong(), language)), null, null)

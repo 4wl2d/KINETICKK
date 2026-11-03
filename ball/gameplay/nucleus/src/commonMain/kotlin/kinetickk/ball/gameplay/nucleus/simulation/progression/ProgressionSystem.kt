@@ -100,9 +100,16 @@ internal fun MutableGameState.openWeaponChoice() {
     phase = GamePhase.CHOICE
 }
 
-/** Weapons a Totem or point of interest may offer: owned by the profile and not the one equipped. */
+/**
+ * Weapons a Totem or point of interest may offer: owned by the profile and not the one equipped, and none once the run's
+ * weapon changes are spent (the offers then amplify only).
+ */
 internal fun MutableGameState.weaponOfferCandidates(): List<WeaponDefinition> =
-    content.weapons.filter { it.id != weapon && it.id in unlockedWeapons }
+    if (weaponChangesLeft() <= 0) emptyList() else content.weapons.filter { it.id != weapon && it.id in unlockedWeapons }
+
+/** Weapon changes the run may still make ([kinetickk.ball.content.api.RunTempoProfile.weaponChangesPerRun]). */
+internal fun MutableGameState.weaponChangesLeft(): Int =
+    (content.tempo.weaponChangesPerRun - offerRun.weaponChanges).coerceAtLeast(0)
 
 /**
  * Offer weight of an owned weapon: the run's signature character triples it, each point in its two tags
@@ -392,6 +399,16 @@ internal fun MutableGameState.applyStatDelta(effect: ItemEffect, amount: Float) 
 
 internal fun MutableGameState.itemStack(itemId: Int): Int = itemStacks.getOrElse(itemId) { 0 }
 internal fun MutableGameState.isItemDiscovered(itemId: Int): Boolean = itemId in discoveredItemIds
+/**
+ * A Totem chest's or a weapon site's weapon change: spends one of the run's changes and equips [id] at the share of the
+ * current level the tempo keeps ([kinetickk.ball.content.api.RunTempoProfile.weaponLevelAfterChange]).
+ */
+internal fun MutableGameState.changeRunWeapon(id: WeaponId) {
+    offerRun.weaponChanges++
+    weaponLevel = content.tempo.weaponLevelAfterChange(weaponLevel)
+    equipRunWeapon(id)
+}
+
 internal fun MutableGameState.equipRunWeapon(id: WeaponId) {
     weapon = id
     resetWeaponRuntime()

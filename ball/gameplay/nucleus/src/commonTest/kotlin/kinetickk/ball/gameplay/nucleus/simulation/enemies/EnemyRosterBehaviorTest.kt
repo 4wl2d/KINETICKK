@@ -553,6 +553,8 @@ class EnemyRosterBehaviorTest {
         assertEquals(matter, state.runMatter)
         assertTrue(state.pickups.isEmpty(), "The reward still requires a kill")
 
+        // The Relic budget's first Elite-drop opportunity is unlocked.
+        state.elapsed = state.content.relicPolicy.firstUnlockSeconds
         state.onEnemyKilled(herald)
         assertEquals(kills + 1, state.eliteKills)
         assertTrue(state.pickups.any { it.type == PickupType.KEY })

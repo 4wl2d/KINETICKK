@@ -183,19 +183,61 @@ data class EquippedRelic(
 data class RelicPolicy(
     val maxSlots: Int,
     val maxRank: Int,
-    /** Matter salvaged when a relic offer is left hollow or a resonance cannot rank any further. */
+    /**
+     * Matter a Relic opportunity pays when it cannot be one: a resonance that cannot rank any further, an offer with no
+     * open slot, or a Relic drop the run's budget or schedule holds back.
+     */
     val salvageMatter: Int = 8,
     /** Rerolls granted for leaving an Heirloom offer. */
     val heirloomDeclineRerolls: Int = 2,
+    /**
+     * Relic opportunities one run may claim: every Relic offer (and a taken Heirloom) is one, and its card (a bind, the
+     * rank-up of a duplicate or a Meld) consumes it. Rerolls redraw the open offer and never add one.
+     */
+    val acquisitionsPerRun: Int = 4,
+    /** The run second at which an Elite-class kill may first drop a Relic; opt-in sources may claim earlier. */
+    val firstUnlockSeconds: Float = 30f,
+    /** Seconds between the unlocks of the later Elite-drop opportunities (30, 195, 360, 525 s by default). */
+    val unlockIntervalSeconds: Float = 165f,
+    /** Each Meld multiplies all damage dealt by 1 + this share. */
+    val meldDamage: Float = 0.04f,
+    /** Each Meld raises maximum integrity by this share of its current value and heals the gain. */
+    val meldIntegrity: Float = 0.03f,
 ) {
     init {
         require(maxSlots > 0) { "Relic maxSlots must be positive" }
         require(maxRank > 0) { "Relic maxRank must be positive" }
         require(salvageMatter >= 0 && heirloomDeclineRerolls >= 0) { "Relic salvage must not be negative" }
+        require(acquisitionsPerRun in 0..ContentBounds.MAX_RELICS) { "Relic acquisitions per run must be in 0..${ContentBounds.MAX_RELICS}" }
+        require(firstUnlockSeconds.isFinite() && firstUnlockSeconds >= 0f && unlockIntervalSeconds.isFinite() && unlockIntervalSeconds > 0f) {
+            "Relic unlock times must be finite, the interval positive"
+        }
+        require(meldDamage.isFinite() && meldDamage in 0f..1f && meldIntegrity.isFinite() && meldIntegrity in 0f..1f) {
+            "Meld bonuses must be shares in 0..1"
+        }
     }
 
     fun acceptsRank(rank: Int): Boolean = rank in 1..maxRank
 
     /** Heirlooms offered at the start of a Reborn run: two, three from Rebirth 5. */
     fun heirloomOffers(rebirthLevel: Int): Int = if (rebirthLevel >= 5) 3 else 2
+
+    /** Relic opportunities an Elite-class kill may have unlocked by [elapsedSeconds]: one at each unlock, up to the budget. */
+    fun unlockedOpportunities(elapsedSeconds: Float): Int {
+        if (elapsedSeconds < firstUnlockSeconds) return 0
+        val unlocked = 1 + ((elapsedSeconds - firstUnlockSeconds) / unlockIntervalSeconds).toInt()
+        return unlocked.coerceAtMost(acquisitionsPerRun)
+    }
+
+    /** The damage multiplier of [melds] Melds: each multiplies by 1 + [meldDamage]. */
+    fun meldDamageMultiplier(melds: Int): Float = meldMultiplier(meldDamage, melds)
+
+    /** The maximum-integrity multiplier of [melds] Melds: each raises the then current maximum by [meldIntegrity]. */
+    fun meldIntegrityMultiplier(melds: Int): Float = meldMultiplier(meldIntegrity, melds)
+
+    private fun meldMultiplier(share: Float, melds: Int): Float {
+        var multiplier = 1f
+        repeat(melds.coerceAtLeast(0)) { multiplier *= 1f + share }
+        return multiplier
+    }
 }

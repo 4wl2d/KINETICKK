@@ -305,18 +305,19 @@ class BuildRuleIntegrityTest {
     }
 
     @Test
-    fun fullSlotsAlwaysOfferAMeldOrSalvageInsteadOfForcingAReplacement() {
+    fun fullSlotsAlwaysOfferASalvageInsteadOfForcingAReplacement() {
         val state = buildTestState()
-        listOf(RelicId.GYRE_ENGINE, RelicId.BLINK_DRIVE, RelicId.STASIS_ANCHOR, RelicId.EVENT_HORIZON).forEach { id ->
+        listOf(RelicId.GYRE_ENGINE, RelicId.BLINK_DRIVE, RelicId.STASIS_ANCHOR).forEach { id ->
             state.acquireRelic(id)
             state.acquireRelic(id)
         }
-        assertTrue(state.equippedRelics.none { state.canMeld(it.id) })
+        // The fourth slot is sealed: neither it nor a bound slot takes a Relic.
+        state.meldRelicSlot()
 
         state.buildRelicChoices()
 
         val tail = state.choices.last()
-        assertEquals(RelicChoiceAction.MELD, tail.relicAction)
+        assertEquals(RelicChoiceAction.DECLINE, tail.relicAction)
         assertEquals("Salvage resonance", tail.title)
     }
 

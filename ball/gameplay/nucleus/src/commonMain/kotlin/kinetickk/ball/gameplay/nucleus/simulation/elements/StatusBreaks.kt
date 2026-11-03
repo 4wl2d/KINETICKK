@@ -251,13 +251,13 @@ internal fun forgetHollowWhenEmpty(enemy: Enemy) {
 /**
  * Hollow (Void) memory: while the enemy carries Hollow it remembers a share of every damage it takes,
  * bounded by its maximum integrity. Called by the single enemy-integrity writer. Like every base derived
- * from a hit, the memory is measured without the Core Matrix damage multiplier, which the Unmake strike
+ * from a hit, the memory is measured without the run damage multiplier (Matrix and Melds), which the Unmake strike
  * applies once as a damage instance of its own.
  */
 internal fun MutableGameState.rememberHollowDamage(enemy: Enemy, dealt: Float) {
     val hollow = stacks(enemy, StatusElement.VOID)
     if (hollow <= 0 || dealt <= 0f) return
-    val applied = dealt / matrix.damageMultiplier
+    val applied = dealt / runDamageMultiplier()
     var share = hollow * HOLLOW_MEMORY_PER_STACK * build.potency(StatusElement.VOID)
     if (build.upside(RelicId.NULL_COVENANT)) share *= 1f + relicValue(RelicId.NULL_COVENANT, 0) / 100f
     enemy.status[StatusCell.HOLLOW_MEMORY] = min(enemy.maxHp, enemy.status[StatusCell.HOLLOW_MEMORY] + applied * share)

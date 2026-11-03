@@ -96,7 +96,7 @@ class OverlayTextFitTest {
 
     @Test
     fun relicBindingAndTotemRowsFitAndThePreviewNeverRunsUnderTheAction() {
-        forEachFrame(::replacing, ::melding, ::totem) { width, height, model ->
+        forEachFrame(::replacing, ::totem) { width, height, model ->
             assertTextFitsWithoutBreakingWords("${model.choiceType} ${width}x$height")
             if (model.choiceType == ChoiceType.RELIC_BIND) {
                 val take = onNodeWithTag("kinetickk.gameplay.take").fetchSemanticsNode().boundsInRoot
@@ -310,16 +310,6 @@ class OverlayTextFitTest {
         previews = relics4.map {
             RewardPreview(immutableListOf(RewardStatChange("Damage: distance >300", 0f, 8f, "%", sourceRelic = RelicId.EVENT_HORIZON)))
         },
-    )
-
-    private fun melding(language: AppLanguage, width: Float, height: Float) = rewardFixtureModel(
-        choiceType = ChoiceType.RELIC_BIND, relics = relics3, language = language, width = width, height = height,
-        choices = relics3.mapIndexed { index, equipped ->
-            ChoiceOption(ChoiceType.RELIC_BIND, "Meld ${rewardFixtureContent.relic(equipped.id).name}", "", "", relicId = equipped.id,
-                relicAction = RelicChoiceAction.MELD_TARGET, relicSlot = index)
-        },
-        previews = listOf(RewardPreview(immutableListOf(RewardStatChange("Damage: speed ≥500", 10f, 15f, "%", sourceRelic = RelicId.PERPETUAL_VECTOR),
-            RewardStatChange("Damage: speed ≥1600", 20f, 30f, "%", sourceRelic = RelicId.PERPETUAL_VECTOR)))),
     )
 
     private fun totem(language: AppLanguage, width: Float, height: Float, textScale: Float = 1f) = rewardFixtureModel(

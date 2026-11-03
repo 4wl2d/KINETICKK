@@ -306,37 +306,26 @@ internal fun MutableGameState.buildRelicChoices() {
 }
 
 /**
- * The fourth card of every relic offer, so no offer forces a replacement: Meld (or a salvage when no bound
- * relic can rise) while all slots are full, otherwise leaving the slot hollow.
+ * The fourth card of every relic offer: Meld, which seals an open slot for the run and takes a lasting bonus
+ * ([meldRelicSlot]), or, when no slot is open (only content with more opportunities than slots), a salvage.
  */
-internal fun MutableGameState.relicOfferTailCard(): ChoiceOption = when {
-    equippedRelics.size < content.relicPolicy.maxSlots -> ChoiceOption(
+internal fun MutableGameState.relicOfferTailCard(): ChoiceOption = if (openRelicSlots() > 0) {
+    ChoiceOption(
         type = ChoiceType.RELIC,
-        title = "Leave hollow",
-        description = "Keep the slot empty and salvage the resonance for Kinetic Matter.",
+        title = "Meld",
+        description = "Seal the empty slot for this run for lasting damage and maximum integrity.",
+        tag = "MELD",
+        relicAction = RelicChoiceAction.MELD,
+    )
+} else {
+    ChoiceOption(
+        type = ChoiceType.RELIC,
+        title = "Salvage resonance",
+        description = "Salvage the resonance for Kinetic Matter.",
         tag = "DECLINE",
         relicAction = RelicChoiceAction.DECLINE,
     )
-    equippedRelics.any { canMeld(it.id) } -> ChoiceOption(
-        type = ChoiceType.RELIC,
-        title = "Meld resonance",
-        description = "Collapse this offering into a bound Relic and raise it to rank 2.",
-        tag = "MELD",
-        relicAction = RelicChoiceAction.MELD,
-    )
-    else -> ChoiceOption(
-        type = ChoiceType.RELIC,
-        title = "Salvage resonance",
-        description = "Collapse this offering into a bound Relic for Kinetic Matter.",
-        tag = "MELD",
-        relicAction = RelicChoiceAction.MELD,
-    )
 }
-
-/** Generic Meld raises a relic to rank 2 only; rank 3 needs the relic itself to be offered again. */
-internal fun MutableGameState.canMeld(id: RelicId): Boolean =
-    content.relic(id).meldable && relicRank(id) < min(2, content.relicPolicy.maxRank) &&
-        !(id == RelicId.OUROBOROS_SEAL && ouroborosSpent)
 
 /** Carried Relics the Heirloom offer may still show: known to content and not bound this run. */
 private fun MutableGameState.openHeirloomCandidates(): List<RelicId> =
@@ -366,7 +355,7 @@ internal fun MutableGameState.heirloomRankBonus(): Int {
 internal fun MutableGameState.openHeirloomChoice() {
     val candidates = openHeirloomCandidates()
     heirloomPending = false
-    if (candidates.isEmpty() || rebirthRank < 1) {
+    if (candidates.isEmpty() || rebirthRank < 1 || relicBudgetLeft() <= 0) {
         if (heirloomCandidates.isNotEmpty()) pendingHeirloomResolved = true
         return
     }

@@ -597,7 +597,7 @@ class RewardContentTest {
         )
         showModel(model, 1000f, 700f) { selections += it }
         compose.onNodeWithTag("kinetickk.gameplay.reroll").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Weapon level stays for the whole run, even when you change weapon. Mastery milestones: Lvl 3, Lvl 6, Lvl 10.")
+        compose.onNodeWithContentDescription("A weapon change, once per run, keeps 60% of the weapon level. Mastery milestones: Lvl 3, Lvl 6, Lvl 10.")
             .assertIsDisplayed()
         compose.onNodeWithText("Flux Wake", substring = true, ignoreCase = true, useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithTag("kinetickk.gameplay.choice.2").performClick()
@@ -632,8 +632,8 @@ class RewardContentTest {
             ), language = AppLanguage.Russian),
             rewardFixtureModel(choiceType = ChoiceType.RELIC_BIND, relics = relics, language = AppLanguage.Russian,
                 choices = relics.mapIndexed { index, equipped ->
-                    ChoiceOption(ChoiceType.RELIC_BIND, "Meld ${equipped.id}", "Meld.", "", relicId = equipped.id,
-                        relicAction = RelicChoiceAction.MELD_TARGET, relicSlot = index)
+                    ChoiceOption(ChoiceType.RELIC_BIND, "Replace ${equipped.id}", "Replace.", "", relicId = RelicId.EVENT_HORIZON,
+                        relicAction = RelicChoiceAction.REPLACE, relicSlot = index)
                 }),
         )
         listOf(390f to 844f, 844f to 390f, 1440f to 810f).forEach { dimensions ->

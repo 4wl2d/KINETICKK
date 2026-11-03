@@ -8,8 +8,8 @@ import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 
 /**
- * The open choice's type, rerolls left, offer pity and count, the open offer's rarity floor and the last acquired item.
- * Written by the progression domain.
+ * The open choice's type, rerolls left, offer pity and count, the open offer's rarity floor, the last acquired item and
+ * the weapon changes made. Written by the progression domain.
  */
 internal class OfferRunState(source: OfferRunState?) {
     internal var activeChoiceType: ChoiceType = source?.activeChoiceType ?: ChoiceType.ITEM
@@ -21,10 +21,12 @@ internal class OfferRunState(source: OfferRunState?) {
     internal var offerRarityFloor: ItemRarity? = source?.offerRarityFloor
     internal var acquiredItemCount: Int = source?.acquiredItemCount ?: 0
     internal var recentItem: ItemDefinition? = source?.recentItem
+    /** Weapon changes made this run (a Totem chest's or a weapon site's change). */
+    internal var weaponChanges: Int = source?.weaponChanges ?: 0
 
     /**
-     * A new run opens item offers, has opened none, has no pity and no acquisition, and starts with [rerolls] rerolls.
-     * The rarity floor is cleared with the run variety.
+     * A new run opens item offers, has opened none, has no pity, no acquisition and no weapon change, and starts with
+     * [rerolls] rerolls. The rarity floor is cleared with the run variety.
      */
     fun reset(rerolls: Int) {
         activeChoiceType = ChoiceType.ITEM
@@ -32,6 +34,7 @@ internal class OfferRunState(source: OfferRunState?) {
         itemOffersOpened = 0
         recentItem = null
         acquiredItemCount = 0
+        weaponChanges = 0
         rerollsRemaining = rerolls
     }
 }

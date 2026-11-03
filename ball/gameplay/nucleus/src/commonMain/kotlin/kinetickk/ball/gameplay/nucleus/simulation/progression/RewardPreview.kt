@@ -52,18 +52,23 @@ private fun MutableGameState.rewardPreview(
             candidate().acquireItem(id, option.reborn)
         }
         ChoiceType.TOTEM -> if (option.totemAction == TotemAction.AMPLIFY_CURRENT) candidate().amplifyCurrentWeapon()
-        // Weapon level and global bonuses are preserved when switching systems.
+        // A weapon change keeps the global bonuses and the tempo's share of the weapon level.
         ChoiceType.WEAPON -> option.weaponId?.let {
             val candidate = candidate()
             candidate.weapon = it
+            candidate.weaponLevel = content.tempo.weaponLevelAfterChange(weaponLevel)
             candidate.recompileBuild()
         }
-        ChoiceType.RELIC -> if (option.relicAction == RelicChoiceAction.ACQUIRE) {
-            val id = option.relicId ?: return RewardPreview()
-            if (relicRank(id) == 0 && equippedRelics.size >= content.relicPolicy.maxSlots) {
-                return RewardPreview(forecasts = relicForecasts(id), requiresSlot = true)
+        ChoiceType.RELIC -> when (option.relicAction) {
+            RelicChoiceAction.ACQUIRE -> {
+                val id = option.relicId ?: return RewardPreview()
+                if (relicRank(id) == 0 && openRelicSlots() <= 0) {
+                    return RewardPreview(forecasts = relicForecasts(id), requiresSlot = true)
+                }
+                candidate().acquireRelic(id)
             }
-            candidate().acquireRelic(id)
+            RelicChoiceAction.MELD -> candidate().meldRelicSlot()
+            else -> Unit
         }
         // Replacing previews the whole replacement; keeping the loadout changes nothing to preview.
         ChoiceType.ACTIVE_SLOT -> {
@@ -78,10 +83,8 @@ private fun MutableGameState.rewardPreview(
         // A boon previews its run modifiers on the candidate; the Refuse card changes nothing.
         ChoiceType.BOON -> option.boonId?.let { candidate().applyRunBoon(it, preview = true) }
         ChoiceType.RELIC_BIND -> option.relicSlot?.let { slot ->
-            when (option.relicAction) {
-                RelicChoiceAction.REPLACE -> (option.relicId ?: pendingBindingRelic)?.let { candidate().replaceRelic(slot, it) }
-                RelicChoiceAction.MELD_TARGET -> candidate().meldRelic(slot)
-                else -> Unit
+            if (option.relicAction == RelicChoiceAction.REPLACE) {
+                (option.relicId ?: pendingBindingRelic)?.let { candidate().replaceRelic(slot, it) }
             }
         }
     }

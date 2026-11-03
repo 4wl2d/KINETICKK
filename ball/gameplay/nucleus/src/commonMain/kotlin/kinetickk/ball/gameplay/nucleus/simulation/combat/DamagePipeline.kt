@@ -212,7 +212,7 @@ internal fun MutableGameState.dealHit(
     }
     val crit = resolveCrit(enemy, source, canCrit, forceCrit, critChanceBonus)
     var amount = base * (1f + itemAmplification(enemy, source)) * relicSurge() * crit.multiplier *
-        (1f + vulnerability(enemy, source)) * damageLiability(source, crit.critical) * matrix.damageMultiplier *
+        (1f + vulnerability(enemy, source)) * damageLiability(source, crit.critical) * runDamageMultiplier() *
         characterDamageMultiplier(enemy)
     if (enemy.status[StatusCell.BRITTLE] > 0f) enemy.status[StatusCell.BRITTLE] = 0f
     val shatter = build.upside(RelicId.ABSOLUTE_ZERO) && isFrozen(enemy)
@@ -295,7 +295,7 @@ internal const val CONTINUOUS_HOOK_SECONDS: Float = 0.22f
 
 /**
  * Item and relic proc damage. [amount] is already measured against its basis; [rescale] adds target
- * vulnerability and liabilities. The Matrix damage multiplier always applies here, once: hit bases are
+ * vulnerability and liabilities. The run damage multiplier (Matrix and Melds) always applies here, once: hit bases are
  * measured without it. An element-picked proc carries its [element]. A [shareCapped] kill proc
  * takes at most [KILL_PROC_SHARE_CAP] of the target's weighted integrity. Proc kills never fire kill clauses.
  */
@@ -310,7 +310,7 @@ internal fun MutableGameState.dealProcDamage(
     if (amount <= 0f || !enemy.alive) return DamageResult(0f, false)
     if (isShifting(enemy)) return DamageResult(0f, false)
     var scaled = (if (rescale) amount * (1f + vulnerability(enemy, HitSource.PROC)) * damageLiability(HitSource.PROC, false) else amount) *
-        matrix.damageMultiplier
+        runDamageMultiplier()
     if (shareCapped) scaled = min(scaled, KILL_PROC_SHARE_CAP * enemy.maxHp * victimFactor(enemy))
     return dealReceived(enemy, scaled, HitSource.PROC, element, critical = false, killEligible = false, tone = tone)
 }
@@ -329,7 +329,7 @@ internal fun MutableGameState.dealStatusDamage(
     if (amount <= 0f || !enemy.alive) return DamageResult(0f, false)
     if (isShifting(enemy)) return DamageResult(0f, false)
     val scaled = amount * relicSurge() * (1f + vulnerability(enemy, HitSource.STATUS)) *
-        damageLiability(HitSource.STATUS, false) * matrix.damageMultiplier
+        damageLiability(HitSource.STATUS, false) * runDamageMultiplier()
     val tone = element?.let { it.ordinal + 1 } ?: 0
     if (ignoresAffinity) {
         return damageEnemy(enemy, scaled, false, killEligible = true, tone = tone, showNumber = showNumber, source = HitSource.STATUS)
@@ -341,7 +341,7 @@ internal fun MutableGameState.dealStatusDamage(
 /**
  * Skill damage: never crits; scales with the Relic surge, the target's vulnerability (impact terms for a
  * [kinetic] skill; never Brittle, which only the direct hit that spends it takes), damage liabilities and the
- * Matrix multiplier. An element-tagged skill is refused only
+ * run damage multiplier. An element-tagged skill is refused only
  * by an IMMUNE aspect; a kinetic one meets the impact frame, an element-less one the weapon frame. Kills
  * fire KILL clauses (the source maps to none); the Architect's gate applies in [damageEnemy].
  */
@@ -355,7 +355,7 @@ internal fun MutableGameState.dealSkillDamage(
     if (isShifting(enemy)) return DamageResult(0f, false)
     val scaled = amount * relicSurge() *
         (1f + vulnerability(enemy, if (kinetic) HitSource.IMPACT else HitSource.SKILL, brittle = false)) *
-        damageLiability(HitSource.SKILL, false) * matrix.damageMultiplier
+        damageLiability(HitSource.SKILL, false) * runDamageMultiplier()
     val received = when {
         element != null -> if (aspectRefuses(enemy, element)) 0f else 1f
         kinetic -> enemy.impactTaken
@@ -377,7 +377,7 @@ internal fun MutableGameState.dealSkillDamage(
  */
 internal fun MutableGameState.dealCharacterDamage(enemy: Enemy, amount: Float, edge: Boolean = true): DamageResult {
     if (amount <= 0f || !enemy.alive) return DamageResult(0f, false)
-    val scaled = amount * matrix.damageMultiplier * characterUpgradePower *
+    val scaled = amount * runDamageMultiplier() * characterUpgradePower *
         if (edge) characterDamageMultiplier(enemy) else 1f
     val integrity = enemy.hp
     val result = damageEnemy(enemy, scaled * enemy.weaponTaken, unmitigated = scaled)

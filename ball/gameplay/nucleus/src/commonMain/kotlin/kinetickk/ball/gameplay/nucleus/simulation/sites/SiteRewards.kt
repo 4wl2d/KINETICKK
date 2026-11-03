@@ -21,13 +21,18 @@ import kinetickk.ball.gameplay.nucleus.simulation.world.*
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** Grants every part of [reward] at ([x], [y]); [scatterSeed] places Data and repair pickups without any stream draw. */
+/**
+ * Grants every part of [reward] at ([x], [y]); [scatterSeed] places Data and repair pickups without any stream draw. A
+ * directed Relic reward or a Relic resonance the run's Relic budget cannot hold pays its salvage instead.
+ */
 internal fun MutableGameState.grantSiteReward(reward: SiteReward, x: Float, y: Float, scatterSeed: Long) {
-    reward.directed?.let { if (!enqueueDirectedReward(it)) salvageReward() }
+    reward.directed?.let {
+        if (it == DirectedReward.RELIC && relicBudgetLeft() <= 0 || !enqueueDirectedReward(it)) salvageReward()
+    }
     repeat(reward.itemOffers) { pendingLevelChoices++ }
     reward.itemOfferFloor?.let { if (!enqueueFloorOffer(it)) salvageReward() }
     repeat(reward.keys) { k -> addPickup(Pickup(PickupType.KEY, x + 18f * k, y)) }
-    repeat(reward.relics) { addPickup(Pickup(PickupType.RELIC, x + 15f, y - 8f)) }
+    repeat(reward.relics) { dropRelicResonance(x + 15f, y - 8f, paced = false) }
     scatterPickups(PickupType.REPAIR, reward.repairs, x, y, scatterSeed)
     scatterPickups(PickupType.DATA, reward.data, x, y, scatterSeed xor 0x5A)
     if (reward.matter > 0) grantMatter(reward.matter.toFloat())

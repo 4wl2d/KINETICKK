@@ -12,8 +12,9 @@ import kinetickk.ball.gameplay.nucleus.model.SeveredRelic
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 
 /**
- * Relic ranks, cooldowns and counters, echo hits, severed Relics, Ouroboros, and the Heirloom offer. Ranks, severing and
- * the Heirloom are written by relic progression; cooldowns, counters, echo hits and Ouroboros by the relic rules.
+ * Relic ranks, cooldowns and counters, echo hits, severed Relics, Ouroboros, the Heirloom offer, and the run's Relic budget
+ * and Melds. Ranks, severing, the Heirloom, the budget and Melds are written by relic progression; cooldowns, counters,
+ * echo hits and Ouroboros by the relic rules.
  */
 internal class RelicRunState(
     content: GameplayContentSnapshot,
@@ -40,10 +41,17 @@ internal class RelicRunState(
     internal var heirloomOfferActive: Boolean = source?.heirloomOfferActive ?: false
     internal var pendingHeirloomResolved: Boolean = source?.pendingHeirloomResolved ?: false
     internal var pendingVictoryRelics: List<RelicId>? = source?.pendingVictoryRelics
+    /** Relic opportunities claimed this run: every Relic offer opened and every Heirloom taken (the budget's count). */
+    internal var relicClaims: Int = source?.relicClaims ?: 0
+    /** Relic slots sealed by a Meld this run; they stay empty and no Relic binds there. */
+    internal var meldedSlots: Int = source?.meldedSlots ?: 0
+    /** The Melds' multiplier on all damage dealt (1 without a Meld). */
+    internal var meldDamageMultiplier: Float = source?.meldDamageMultiplier ?: 1f
 
     /**
-     * A new run owns no Relic and no echo hit, has severed none and spent no Ouroboros, and shows no Heirloom offer. The
-     * Heirloom candidates, the pending Heirloom flag, its resolution and the victory Relics are not touched.
+     * A new run owns no Relic and no echo hit, has severed none, spent no Ouroboros, claimed no Relic opportunity and
+     * melded no slot, and shows no Heirloom offer. The Heirloom candidates, the pending Heirloom flag, its resolution
+     * and the victory Relics are not touched.
      */
     fun reset() {
         relicRanks.fill(0)
@@ -54,5 +62,8 @@ internal class RelicRunState(
         ouroborosSpent = false
         ouroborosLockedUntil = 0f
         heirloomOfferActive = false
+        relicClaims = 0
+        meldedSlots = 0
+        meldDamageMultiplier = 1f
     }
 }

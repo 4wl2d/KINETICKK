@@ -493,8 +493,11 @@ class RelicRulesTest {
         state.acquireRelic(RelicId.HOLLOW_CROWN)
         assertEquals(1, state.relicRank(RelicId.HOLLOW_CROWN))
         assertTrue(state.runMatter > matter, "A duplicate crown is salvaged")
-        assertFalse(state.canMeld(RelicId.HOLLOW_CROWN))
         assertTrue(state.offerableRelics().none { it.id == RelicId.HOLLOW_CROWN })
+        // A slot a Meld sealed stays empty: the Crown keeps its bonus for it.
+        state.meldRelicSlot()
+        assertEquals(1, state.relicRun.meldedSlots)
+        assertEquals(surge(3 * 0.35f), state.relicSurge(), 0.0001f)
 
         state.takeDamage(10f, kind = IncomingDamage.PROJECTILE)
         val expected = 10f * state.rebirthProfile.incomingDamageMultiplier * (1f + 3 * 0.1f)
@@ -519,7 +522,6 @@ class RelicRulesTest {
         assertFalse(state.build.upside(RelicId.OUROBOROS_SEAL))
         assertTrue(state.build.liability(RelicId.OUROBOROS_SEAL))
         assertTrue(state.offerableRelics().none { it.id == RelicId.OUROBOROS_SEAL })
-        assertFalse(state.canMeld(RelicId.OUROBOROS_SEAL))
 
         // The slot stays locked for two minutes; the bind choice omits it.
         state.replaceRelic(0, RelicId.BLINK_DRIVE)
@@ -560,22 +562,25 @@ class RelicRulesTest {
     }
 
     @Test
-    fun anOpenSlotOffersLeaveHollowAndAFullMatrixOffersMeldInstead() {
+    fun anOpenSlotOffersMeldAndAFullMatrixOffersASalvageInstead() {
         val state = buildTestState(RelicId.GYRE_ENGINE)
         state.openRelicChoiceForTesting()
         assertEquals(ChoiceType.RELIC, state.choiceType)
-        val decline = state.choices.last()
-        assertEquals(RelicChoiceAction.DECLINE, decline.relicAction)
-        val matter = state.runMatter
+        assertEquals(RelicChoiceAction.MELD, state.choices.last().relicAction)
         state.choose(state.choices.lastIndex)
         assertEquals(GamePhase.RUNNING, state.phase)
-        assertEquals(matter + 8L, state.runMatter)
         assertEquals(1, state.equippedRelics.size)
+        assertEquals(1, state.relicRun.meldedSlots)
 
         val full = buildTestState(RelicId.GYRE_ENGINE, RelicId.GLASS_COMET, RelicId.ECHO_CHAMBER, RelicId.NEUTRON_HEART)
         full.openRelicChoiceForTesting()
-        assertEquals(RelicChoiceAction.MELD, full.choices.last().relicAction)
-        assertTrue(full.choices.none { it.relicAction == RelicChoiceAction.DECLINE })
+        val salvage = full.choices.last()
+        assertEquals(RelicChoiceAction.DECLINE, salvage.relicAction)
+        assertTrue(full.choices.none { it.relicAction == RelicChoiceAction.MELD })
+        val matter = full.runMatter
+        full.choose(full.choices.lastIndex)
+        assertEquals(matter + 8L, full.runMatter)
+        assertEquals(0, full.relicRun.meldedSlots)
     }
 
     @Test

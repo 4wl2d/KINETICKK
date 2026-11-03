@@ -215,6 +215,9 @@ private class SignalTerms(val cost: Int, val payout: Int, val locked: Boolean)
 
 private val FREE_TERMS = SignalTerms(cost = 0, payout = 0, locked = false)
 
+/** These terms, locked as well unless [allowed]. */
+private fun SignalTerms.lockedUnless(allowed: Boolean): SignalTerms = if (allowed || locked) this else SignalTerms(cost, payout, locked = true)
+
 private fun MutableGameState.signalTerms(option: SignalOption): SignalTerms {
     val tuning = content.variety.signals.tuning
     val unbanked = unbankedMatter()
@@ -226,7 +229,8 @@ private fun MutableGameState.signalTerms(option: SignalOption): SignalTerms {
         SignalOption.SHRINE_WARD -> SignalTerms(
             tuning.shrineWardIntegrity.roundToInt(), tuning.shrineWardShield.roundToInt(), maxHp <= tuning.shrineWardMinimumIntegrity,
         )
-        SignalOption.SHRINE_RELIC -> integrityPrice(tuning.shrineRelicShare)
+        // A Relic offer the run's Relic budget can no longer hold stays shown but locked.
+        SignalOption.SHRINE_RELIC -> integrityPrice(tuning.shrineRelicShare).lockedUnless(relicBudgetLeft() > 0)
         SignalOption.GAMBLE_REROLL -> SignalTerms(1, tuning.gambleRerollWin, rerollsRemaining < 1)
         SignalOption.GAMBLE_MATTER -> {
             val stake = matterStake(tuning, unbanked)
@@ -236,9 +240,8 @@ private fun MutableGameState.signalTerms(option: SignalOption): SignalTerms {
         SignalOption.DERELICT_REPAIR -> SignalTerms(0, (tuning.derelictRepairShare * maxHp).roundToInt(), locked = false)
         SignalOption.DERELICT_CARGO ->
             SignalTerms(0, (cargoMatter(tuning) * matterGain * layerMatterMultiplier()).roundToInt(), locked = false)
-        SignalOption.CACHE_CRATE, SignalOption.CACHE_RELIQUARY, SignalOption.CACHE_IDOL, SignalOption.DERELICT_VAULT,
-        SignalOption.IGNORE,
-        -> FREE_TERMS
+        SignalOption.CACHE_IDOL -> FREE_TERMS.lockedUnless(relicBudgetLeft() > 0)
+        SignalOption.CACHE_CRATE, SignalOption.CACHE_RELIQUARY, SignalOption.DERELICT_VAULT, SignalOption.IGNORE -> FREE_TERMS
     }
 }
 

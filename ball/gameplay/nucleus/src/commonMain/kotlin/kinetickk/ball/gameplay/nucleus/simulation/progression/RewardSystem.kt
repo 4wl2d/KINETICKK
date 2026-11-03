@@ -32,7 +32,8 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     // that completes a level cannot open a choice in place of the victory.
     val victory = enemy.type == EnemyType.ARCHITECT && phase == GamePhase.RUNNING
     if (victory) phase = GamePhase.VICTORY
-    // Mini-bosses (the Herald) and secret bosses pay out like an Elite: a Key, a Relic, an Elite kill and resonance.
+    // Mini-bosses (the Herald) and secret bosses pay out like an Elite: a Key, a Relic (while the budget's schedule has
+    // unlocked one, else its salvage Matter: dropRelicResonance), an Elite kill and resonance.
     val eliteReward = enemy.isElite || enemy.isMiniBoss || enemy.isSecretBoss
     // Resonance first, so a notice the kill's site, encounter or visit sets (a secret boss's defeat, a completed
     // objective) replaces its announcement. It draws nothing, so its place moves no stream.
@@ -67,7 +68,7 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     }
     if (eliteReward) {
         addPickup(Pickup(PickupType.KEY, enemy.x, enemy.y))
-        addPickup(Pickup(PickupType.RELIC, enemy.x + 15f, enemy.y - 8f))
+        dropRelicResonance(enemy.x + 15f, enemy.y - 8f, paced = true)
     }
     if (enemy.type != EnemyType.ARCHITECT && gameplayRandom.nextFloat() < 0.035f + effectiveLuck() * 0.02f) {
         addPickup(Pickup(PickupType.REPAIR, enemy.x, enemy.y))

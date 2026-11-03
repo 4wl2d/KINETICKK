@@ -281,7 +281,7 @@ class EventSignalTest {
         assertEquals(ChoiceType.ITEM, state.choiceType)
         state.choose(0)
         assertEquals(ChoiceType.RELIC, state.choiceType)
-        state.choose(state.choices.indexOfFirst { it.relicAction == RelicChoiceAction.DECLINE })
+        state.choose(state.choices.indexOfFirst { it.relicAction == RelicChoiceAction.MELD })
         assertEquals(ChoiceType.SIGNAL, state.choiceType)
         assertEquals(SignalKind.SHRINE, state.choices.first().signalKind)
     }

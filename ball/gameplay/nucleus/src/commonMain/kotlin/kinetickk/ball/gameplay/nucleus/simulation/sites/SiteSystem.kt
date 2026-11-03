@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation.sites
 
 import kinetickk.ball.content.api.DimensionNotices
+import kinetickk.ball.content.api.DirectedReward
 import kinetickk.ball.content.api.SiteFamily
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.SiteNotice
@@ -16,6 +17,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
 import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.*
@@ -283,13 +285,15 @@ internal fun MutableGameState.rollWindowKinds(scheduledAt: Float): Pair<SiteKind
 
 /**
  * True when a window scheduled at [scheduledAt] may draw [kind]: it has window weight, its earliest window and Rebirth
- * tier are reached, and its reserve still ends before the Architect. Rifts are never drawn; a rift claims its side.
+ * tier are reached, its reserve still ends before the Architect, and a directed Relic site only while the run's Relic
+ * budget holds another opportunity. Rifts are never drawn; a rift claims its side.
  */
 internal fun MutableGameState.windowEligible(kind: SiteKind, scheduledAt: Float): Boolean {
     val definition = content.sites.definition(kind)
     return kind.family != SiteFamily.PORTAL && definition.windowWeight > 0f && scheduledAt >= definition.minimumOfferAt &&
         rebirthLevel >= definition.minimumRebirth &&
-        scheduledAt + content.sites.windows.offerLifetime + definition.reserveSeconds < content.tempo.bossAtSeconds
+        scheduledAt + content.sites.windows.offerLifetime + definition.reserveSeconds < content.tempo.bossAtSeconds &&
+        !(definition.reward.directed == DirectedReward.RELIC && relicBudgetLeft() <= 0)
 }
 
 /** Linear scan of [weights] at `roll × total`; float rounding falls back to the last positive weight. */

@@ -304,46 +304,10 @@ internal fun MutableGameState.choose(index: Int) {
         }
         ChoiceType.WEAPON -> {
             val weaponId = option.weaponId ?: return
-            equipRunWeapon(weaponId)
+            changeRunWeapon(weaponId)
             GameplayAudioCue.WEAPON_ACQUIRED
         }
-        ChoiceType.RELIC -> when (option.relicAction ?: return) {
-            RelicChoiceAction.DECLINE -> {
-                declineRelic(option.heirloom)
-                heirloomOfferActive = false
-                GameplayAudioCue.UI_CLICK
-            }
-            RelicChoiceAction.ACQUIRE -> {
-                val relicId = option.relicId ?: return
-                // Measured while the offer is still open: Heirloom Vault extras it could not show become ranks.
-                val heirloomRanks = if (option.heirloom) heirloomRankBonus() else 0
-                if (option.heirloom) {
-                    pendingHeirloomResolved = true
-                    heirloomCandidates = emptyList()
-                    heirloomOfferActive = false
-                }
-                if (relicRank(relicId) > 0 || equippedRelics.size < content.relicPolicy.maxSlots) {
-                    acquireRelic(relicId)
-                    // Each extra rank arrives as if the Relic were offered again (a maxed one is salvaged).
-                    repeat(heirloomRanks) { acquireRelic(relicId) }
-                    GameplayAudioCue.WEAPON_ACQUIRED
-                } else {
-                    pendingBindingRelic = relicId
-                    pendingRelicBindAction = RelicChoiceAction.REPLACE
-                    openRelicBindChoice()
-                    emitSound(GameplayAudioCue.UI_CLICK)
-                    return
-                }
-            }
-            RelicChoiceAction.MELD -> {
-                pendingBindingRelic = null
-                pendingRelicBindAction = RelicChoiceAction.MELD_TARGET
-                openRelicBindChoice()
-                emitSound(GameplayAudioCue.UI_CLICK)
-                return
-            }
-            RelicChoiceAction.REPLACE, RelicChoiceAction.MELD_TARGET -> return
-        }
+        ChoiceType.RELIC -> chooseRelicCard(option) ?: return
         ChoiceType.ACTIVE_SLOT -> {
             val incoming = pendingActiveItemId ?: return
             val reborn = pendingActiveReborn
@@ -365,12 +329,8 @@ internal fun MutableGameState.choose(index: Int) {
         // A boon card takes its Blessing or Pact; the Refuse card salvages.
         ChoiceType.BOON -> takeBoonCard(option)
         ChoiceType.RELIC_BIND -> {
-            val slot = option.relicSlot ?: return
-            when (option.relicAction ?: return) {
-                RelicChoiceAction.REPLACE -> replaceRelic(slot, option.relicId ?: pendingBindingRelic ?: return)
-                RelicChoiceAction.MELD_TARGET -> meldRelic(slot)
-                RelicChoiceAction.ACQUIRE, RelicChoiceAction.MELD, RelicChoiceAction.DECLINE -> return
-            }
+            if (option.relicAction != RelicChoiceAction.REPLACE) return
+            replaceRelic(option.relicSlot ?: return, option.relicId ?: pendingBindingRelic ?: return)
             pendingBindingRelic = null
             pendingRelicBindAction = null
             GameplayAudioCue.WEAPON_ACQUIRED

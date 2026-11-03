@@ -28,29 +28,33 @@ import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.label
 import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.overlay.meldTotal
 
-/** The game's outcome of a relic action, named for its button or tag. */
+/**
+ * The game's outcome of a relic action, named for its button or tag: a new Relic binds into one of [openSlots] (or
+ * replaces a bound one without), a duplicate ranks up (or salvages at the top rank), and the Meld seals the empty slot.
+ */
 internal fun rewardRelicAction(
     action: RelicChoiceAction,
     ownedRank: Int,
-    slotRank: Int?,
-    equipped: Int,
+    openSlots: Int,
     policy: RelicPolicy,
     language: AppLanguage,
 ): RewardAction = when (action) {
     RelicChoiceAction.ACQUIRE -> when {
         ownedRank >= policy.maxRank -> RewardAction(language.text(OverlayRedesignText.Salvage), RewardTone.MUTE)
-        ownedRank > 0 -> RewardAction(language.text(OverlayRedesignText.Meld), RewardTone.YOU)
-        equipped < policy.maxSlots -> RewardAction(language.text(OverlayRedesignText.Bind), RewardTone.YOU)
+        ownedRank > 0 -> RewardAction(language.text(OverlayRedesignText.RankUp), RewardTone.YOU)
+        openSlots > 0 -> RewardAction(language.text(OverlayRedesignText.Bind), RewardTone.YOU)
         else -> RewardAction(language.text(OverlayRedesignText.Replace), RewardTone.THREAT)
     }
     RelicChoiceAction.MELD -> RewardAction(language.text(OverlayRedesignText.Meld), RewardTone.YOU)
     RelicChoiceAction.REPLACE -> RewardAction(language.text(OverlayRedesignText.Replace), RewardTone.THREAT)
-    RelicChoiceAction.MELD_TARGET -> if ((slotRank ?: 1) >= policy.maxRank) {
-        RewardAction(language.text(OverlayRedesignText.Salvage), RewardTone.MUTE)
-    } else RewardAction(language.text(OverlayRedesignText.Meld), RewardTone.YOU)
     RelicChoiceAction.DECLINE -> RewardAction(language.text(OverlayRedesignText.Decline), RewardTone.MUTE)
 }
+
+/** Relic slots of the render model a Relic may still bind into: neither bound nor sealed by a Meld. */
+internal fun GameplayRenderModel.openRelicSlots(): Int =
+    (content.relicPolicy.maxSlots - equippedRelics.size - build.meldedSlots).coerceAtLeast(0)
 
 internal fun GameplayRenderModel.rewardRelicPreview(
     choice: ChoiceOption,
@@ -63,18 +67,20 @@ internal fun GameplayRenderModel.rewardRelicPreview(
     val relicId = choice.relicId
     val slot = choice.relicSlot
     val ownedSlot = relicId?.let { id -> equippedRelics.indexOfFirst { it.id == id }.takeIf { it >= 0 } }
+    val openSlots = openRelicSlots()
     val (target, candidate) = when (action) {
         RelicChoiceAction.ACQUIRE -> when {
             relicId == null -> null to current
             ownedSlot != null -> ownedSlot to current
-            equippedRelics.size < policy.maxSlots -> equippedRelics.size to current.toMutableList().also { it[equippedRelics.size] = relicId }
+            openSlots > 0 -> equippedRelics.size to current.toMutableList().also { it[equippedRelics.size] = relicId }
             else -> null to current
         }
         RelicChoiceAction.REPLACE -> if (slot != null && relicId != null && slot in current.indices) {
             slot to current.toMutableList().also { it[slot] = relicId }
         } else slot to current
-        RelicChoiceAction.MELD_TARGET -> slot to current
-        RelicChoiceAction.MELD, RelicChoiceAction.DECLINE -> null to current
+        // A Meld seals the last open slot: sealed slots fill the matrix from its end.
+        RelicChoiceAction.MELD -> (equippedRelics.size + openSlots - 1).takeIf { openSlots > 0 } to current
+        RelicChoiceAction.DECLINE -> null to current
     }
     val before = overlayRelicLinks(current)
     val after = overlayRelicLinks(candidate)
@@ -82,10 +88,9 @@ internal fun GameplayRenderModel.rewardRelicPreview(
     val removed = before.filter { link -> after.none(link::joinsSame) }
     val kept = before.filter { link -> removed.none(link::joinsSame) }
     val slotRelic = slot?.let(equippedRelics::getOrNull)
-    val relicAction = rewardRelicAction(action, relicId?.let(::relicRank) ?: 0, slotRelic?.rank, equippedRelics.size, policy, language)
-    // The relic the preview is about: the one entering the matrix, or the bound one a meld raises.
+    val relicAction = rewardRelicAction(action, relicId?.let(::relicRank) ?: 0, openSlots, policy, language)
+    // The relic the preview is about: the one entering the matrix (or ranking up).
     val subject = when (action) {
-        RelicChoiceAction.MELD_TARGET -> slotRelic?.id
         RelicChoiceAction.ACQUIRE, RelicChoiceAction.REPLACE -> relicId?.takeIf { target != null }
         else -> null
     }
@@ -124,16 +129,17 @@ internal fun GameplayRenderModel.rewardRelicPreview(
             add(RewardPreviewRow("=", language.text(OverlayRedesignText.CostStays, overlayDecimal(content.build.policy.severanceSeconds, language)),
                 lost.liabilityText(language), RewardTone.THREAT))
         }
-        if (action == RelicChoiceAction.MELD_TARGET && slotRelic != null) {
-            val target = content.relic(slotRelic.id)
-            if (slotRelic.rank < policy.maxRank) {
-                // The panel shows the whole upside at the next rank; the row shows only the values that grow.
-                val (before, after) = target.rankValueChange(language, slotRelic.rank, slotRelic.rank + 1)
-                add(RewardPreviewRow("+", language.text(OverlayRedesignText.Rank, slotRelic.rank + 1),
-                    if (after == null) target.upsideText(language, slotRelic.rank + 1) else null, RewardTone.YOU, before = before, after = after))
-            } else {
-                add(RewardPreviewRow("+", relicAction.label, language.text(OverlayRedesignText.SalvageEffect), RewardTone.MUTE))
-            }
+        // A duplicate's rank-up: the panel shows the whole upside at the next rank, the row only the values that grow.
+        val owned = ownedSlot?.let(equippedRelics::getOrNull)
+        if (action == RelicChoiceAction.ACQUIRE && owned != null && owned.rank < policy.maxRank) {
+            val relic = content.relic(owned.id)
+            val (before, after) = relic.rankValueChange(language, owned.rank, owned.rank + 1)
+            add(RewardPreviewRow("+", language.text(OverlayRedesignText.Rank, owned.rank + 1),
+                if (after == null) relic.upsideText(language, owned.rank + 1) else null, RewardTone.YOU, before = before, after = after))
+        }
+        // The Meld's lasting bonus once this slot is sealed (it compounds with earlier Melds).
+        if (action == RelicChoiceAction.MELD && target != null) {
+            add(RewardPreviewRow("+", meldTotal(build.meldedSlots + 1, language), null, RewardTone.YOU))
         }
         // The subject's own upside multiplier, now and after the choice, when its links change it.
         if (subject != null && target != null) {
@@ -156,23 +162,20 @@ internal fun GameplayRenderModel.rewardRelicPreview(
         added.forEach { link ->
             add(if (link.interferes) linkRow(link, "−", RewardTone.THREAT, partnerOf(link, target)) else linkRow(link, "+", RewardTone.FIXED, partnerOf(link, target)))
         }
-        // Kept links of the subject (a meld keeps every link of its relic).
+        // Kept links of the subject (a rank-up keeps every link of its relic).
         kept.filter { link -> subject == null || subject in link.relics }.forEach { link ->
             add(linkRow(link, "=", RewardTone.FIXED, partnerOf(link, target)).copy(before = null, after = null))
         }
     }
-    val panelRelic = when (action) {
-        RelicChoiceAction.MELD_TARGET -> slotRelic?.let { content.relic(it.id) }
-        else -> relicId?.let(content::relic)
-    }
+    val panelRelic = relicId?.let(content::relic)
     val panelRank = when (action) {
-        RelicChoiceAction.MELD_TARGET -> slotRelic?.rank?.let { (it + 1).coerceAtMost(policy.maxRank) }
         RelicChoiceAction.REPLACE -> 1
         else -> relicId?.let { (relicRank(it) + 1).coerceAtMost(policy.maxRank) }
     }
     return RewardRelicPreview(
         targetSlot = target,
         replace = action == RelicChoiceAction.REPLACE,
+        meld = action == RelicChoiceAction.MELD,
         incomingAspect = when (action) {
             RelicChoiceAction.ACQUIRE, RelicChoiceAction.REPLACE -> relicId?.let { content.relic(it).aspect }
             else -> null

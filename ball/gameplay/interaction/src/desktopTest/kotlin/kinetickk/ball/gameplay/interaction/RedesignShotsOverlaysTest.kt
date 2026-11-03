@@ -289,20 +289,6 @@ class RedesignShotsOverlaysTest {
                     )
                 })
             },
-            Scene("relic-meld") { w, h, l ->
-                RewardShot(model {
-                    rewardFixtureModel(
-                        choiceType = ChoiceType.RELIC_BIND, relics = relics3, language = l, width = w, height = h, textScale = textScale,
-                        discoveredRelics = relics3.map { it.id }.toSet(),
-                        choices = relics3.mapIndexed { index, equipped ->
-                            val current = rewardFixtureContent.relic(equipped.id)
-                            ChoiceOption(ChoiceType.RELIC_BIND, "Meld ${current.name}", "Collapse the offering into slot ${index + 1}.",
-                                "SLOT ${index + 1} // RANK ${equipped.rank}", relicId = equipped.id, relicAction = RelicChoiceAction.MELD_TARGET, relicSlot = index)
-                        },
-                        previews = listOf(RewardPreview(immutableListOf(RewardStatChange("Damage: speed ≥500", 10f, 15f, "%", sourceRelic = RelicId.PERPETUAL_VECTOR)))),
-                    )
-                })
-            },
             // Directed reward focus steps (after every resolved anomaly trial) with the game's strings.
             Scene("focus-items") { w, h, l ->
                 RewardShot(model {
@@ -338,14 +324,14 @@ class RedesignShotsOverlaysTest {
                 RewardShot(model {
                     val offers = listOf(RelicId.EVENT_HORIZON, RelicId.ECHO_CHAMBER)
                     rewardFixtureModel(
-                        choiceType = ChoiceType.RELIC, relics = relics4, language = l, width = w, height = h, textScale = textScale,
-                        discoveredRelics = relics4.map { it.id }.toSet(),
+                        choiceType = ChoiceType.RELIC, relics = relics3, language = l, width = w, height = h, textScale = textScale,
+                        discoveredRelics = relics3.map { it.id }.toSet(),
                         choices = offers.map { id ->
                             val relic = rewardFixtureContent.relic(id)
                             ChoiceOption(ChoiceType.RELIC, relic.name, relic.upside, relic.aspect.displayLabel.uppercase(),
                                 relicId = id, relicAction = RelicChoiceAction.ACQUIRE)
-                        } + ChoiceOption(ChoiceType.RELIC, "Meld resonance",
-                            "Collapse this offering into one of the four bound Relics and raise its rank.", "MELD", relicAction = RelicChoiceAction.MELD),
+                        } + ChoiceOption(ChoiceType.RELIC, "Meld",
+                            "Seal the empty slot for this run for lasting damage and maximum integrity.", "MELD", relicAction = RelicChoiceAction.MELD),
                     )
                 })
             },

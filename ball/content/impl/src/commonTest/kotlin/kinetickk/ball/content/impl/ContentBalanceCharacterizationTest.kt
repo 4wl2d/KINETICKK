@@ -416,6 +416,13 @@ class ContentBalanceCharacterizationTest {
         assertEquals(true, relics.size <= ContentBounds.MAX_RELICS)
         assertEquals(4, ui.relicPolicy.maxSlots)
         assertEquals(3, ui.relicPolicy.maxRank)
+        // The Relic budget (one per slot, so a bind always finds an open slot), its Elite-drop schedule and the Meld.
+        assertEquals(ui.relicPolicy.maxSlots, ui.relicPolicy.acquisitionsPerRun)
+        assertEquals(listOf(30f, 165f), listOf(ui.relicPolicy.firstUnlockSeconds, ui.relicPolicy.unlockIntervalSeconds))
+        assertEquals(listOf(0.04f, 0.03f), listOf(ui.relicPolicy.meldDamage, ui.relicPolicy.meldIntegrity))
+        // One weapon change a run, keeping 60 % of the weapon level.
+        assertEquals(1, ui.tempo.weaponChangesPerRun)
+        assertEquals(0.6f, ui.tempo.weaponChangeKeptLevelShare)
         assertEquals(RelicId.entries.toList(), relics.map(RelicDefinition::id))
         assertEquals(
             "c8c02a43bec87968",

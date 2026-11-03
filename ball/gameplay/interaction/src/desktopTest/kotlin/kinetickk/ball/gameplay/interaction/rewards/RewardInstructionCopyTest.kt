@@ -73,7 +73,7 @@ class RewardInstructionCopyTest {
             assertEquals(language.text(OverlayRedesignText.ChangeWeaponEffect),
                 totem.cards.single { it.choice.totemAction == TotemAction.CHANGE_WEAPON }.totemRow!!.description)
             val meld = scenes.getValue("relic-meld-offer").rewardPresentation(language)
-            assertEquals(listOf(language.text(OverlayRedesignText.MeldEffect)),
+            assertEquals(listOf(language.text(OverlayRedesignText.MeldEffect, "4", "3")),
                 meld.cards.single { it.choice.relicAction == RelicChoiceAction.MELD }.descriptions)
         }
     }
@@ -142,28 +142,19 @@ class RewardInstructionCopyTest {
                 choices = focus(ChoiceType.TOTEM, RewardFocus.MOTION, RewardFocus.CONTROL, RewardFocus.STRIKE),
             ),
             "relic-meld-offer" to rewardFixtureModel(
-                choiceType = ChoiceType.RELIC, relics = relics4, language = language, width = width, height = height,
+                choiceType = ChoiceType.RELIC, relics = relics4.take(3), language = language, width = width, height = height,
                 choices = listOf(RelicId.EVENT_HORIZON, RelicId.ECHO_CHAMBER).map { id ->
                     val relic = rewardFixtureContent.relic(id)
                     ChoiceOption(ChoiceType.RELIC, relic.name, relic.upside, relic.aspect.displayLabel.uppercase(),
                         relicId = id, relicAction = RelicChoiceAction.ACQUIRE)
-                } + ChoiceOption(ChoiceType.RELIC, "Meld resonance",
-                    "Collapse this offering into one of the four bound Relics and raise its rank.", "MELD", relicAction = RelicChoiceAction.MELD),
-            ),
-            "relic-meld-target" to rewardFixtureModel(
-                choiceType = ChoiceType.RELIC_BIND, relics = relics4, language = language, width = width, height = height,
-                choices = relics4.mapIndexed { index, equipped ->
-                    ChoiceOption(ChoiceType.RELIC_BIND, "Meld ${rewardFixtureContent.relic(equipped.id).name}",
-                        if (equipped.rank < 5) "Collapse the offering into slot ${index + 1} and advance rank ${equipped.rank} to ${equipped.rank + 1}."
-                        else "Slot ${index + 1} is already rank 5; salvage the excess resonance.",
-                        "SLOT ${index + 1} // RANK ${equipped.rank}", relicId = equipped.id, relicAction = RelicChoiceAction.MELD_TARGET, relicSlot = index)
-                },
+                } + ChoiceOption(ChoiceType.RELIC, "Meld",
+                    "Seal the empty slot for this run for lasting damage and maximum integrity.", "MELD", relicAction = RelicChoiceAction.MELD),
             ),
         )
     }
 }
 
-private val StepActions = setOf(RelicChoiceAction.MELD, RelicChoiceAction.MELD_TARGET, RelicChoiceAction.REPLACE)
+private val StepActions = setOf(RelicChoiceAction.MELD, RelicChoiceAction.REPLACE)
 
 /** The nucleus focus-step description (DirectedRewardSystem.openDirectedReward). */
 private const val FocusDescription = "Choose a direction, then one of three matching offers."

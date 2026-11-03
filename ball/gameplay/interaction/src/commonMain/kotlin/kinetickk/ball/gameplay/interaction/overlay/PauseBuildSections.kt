@@ -83,7 +83,11 @@ internal fun DrawScope.drawPauseRelics(
         if (center.x + half > left + width + 1f) break
         val relic = overview.relics[index]
         if (relic == null) {
-            drawKkRelicSlot(center, Color.Unspecified, sizeDp = slot / density)
+            if (index >= overview.relics.size - overview.sealedSlots) {
+                drawKkRelicSlot(center, roles.kinetic, icon = KkIcon.UI_PLUS, sizeDp = slot / density)
+            } else {
+                drawKkRelicSlot(center, Color.Unspecified, sizeDp = slot / density)
+            }
             continue
         }
         val hue = relicHue(relic.definition, roles)
