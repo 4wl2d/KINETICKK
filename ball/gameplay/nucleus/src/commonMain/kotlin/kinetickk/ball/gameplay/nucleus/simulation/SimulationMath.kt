@@ -3,7 +3,6 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-internal fun MutableGameState.d(value: Float): Float = value * uiScale
 internal fun square(value: Float): Float = value * value
 internal fun MutableGameState.powFast(base: Float, exponent: Int): Float {
     var result = 1f
