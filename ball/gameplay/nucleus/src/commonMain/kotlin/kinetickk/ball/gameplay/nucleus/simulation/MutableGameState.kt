@@ -117,7 +117,6 @@ internal class MutableGameState(
     internal val structures: StructureRunState = StructureRunState(copySource?.structures)
     /** Core Stasis: the leash anchor, speed average and stillness clocks. */
     internal val coreStasis: CoreStasisState = CoreStasisState(copySource?.coreStasis)
-
     /** Profile capture, run options and the draft deck. */
     internal val profileCapture: RunProfileCapture = RunProfileCapture(
         content,
@@ -128,22 +127,16 @@ internal class MutableGameState(
         runMode,
         offerRunOmen,
     )
-
     /** Known and pending discoveries. */
     internal val discoveryState: DiscoveryState = DiscoveryState(content, copySource?.discoveryState, bootstrapProgress)
-
     /** Profile progress awaiting publication. */
     internal val progressOutbox: ProgressOutbox = ProgressOutbox(copySource?.progressOutbox)
-
     /** Relic ranks, cooldowns, counters and the Heirloom offer. */
     internal val relicRun: RelicRunState = RelicRunState(content, copySource?.relicRun, bootstrapProgress)
-
     /** Choice type, rerolls, offer pity and the last acquisition. */
     internal val offerRun: OfferRunState = OfferRunState(copySource?.offerRun)
-
     /** Run statistics. */
     internal val runStats: RunStatsState = RunStatsState(copySource?.runStats)
-
     /** Level, Data, Keys and Matter. */
     internal val runEconomy: RunEconomyState = RunEconomyState(
         content,
@@ -152,37 +145,26 @@ internal class MutableGameState(
         initialMatter,
         bootstrapProgress,
     )
-
     /** Build stats. */
     internal val coreStats: CoreStatsState = CoreStatsState(content, copySource?.coreStats)
-
     /** Sites, directed rewards and run secrets. */
     internal val siteRun: SiteRunState = SiteRunState(copySource?.siteRun)
-
     /** Omen, mutators, personality, world events and signals. */
     internal val varietyRun: VarietyRunState = VarietyRunState(copySource?.varietyRun)
-
-    /** World origin, obstacle window, layer and contact gates. */
+    /** World origin, obstacle window, keep-out and contact gates. */
     internal val worldRun: WorldRunState = WorldRunState(copySource?.worldRun)
-
     /** Rifts, the visit, its clocks and its reward. */
     internal val dimensionVisits: DimensionVisitState = DimensionVisitState(copySource?.dimensionVisits)
-
     /** Owned items, clause timers and counters, buffs. */
     internal val buildRun: BuildRunState = BuildRunState(content, copySource?.buildRun)
-
     /** Combat fields and the reaction and break budgets. */
     internal val elementRun: ElementRunState = ElementRunState(copySource?.elementRun)
-
     /** Weapon level, runtime, clocks and weapon entities. */
     internal val weaponRun: WeaponRunState = WeaponRunState(content, copySource?.weaponRun)
-
     /** Character shape, runtime and Refit. */
     internal val characterRun: CharacterRunState = CharacterRunState(copySource?.characterRun, bootstrapProgress)
-
     /** Frame admission, viewport and display feedback. */
     internal val frameState: FrameState = FrameState(copySource?.frameState)
-
     /** Sound and visual cues awaiting the owner. */
     internal val cueOutbox: CueOutbox = CueOutbox(copySource?.cueOutbox)
 

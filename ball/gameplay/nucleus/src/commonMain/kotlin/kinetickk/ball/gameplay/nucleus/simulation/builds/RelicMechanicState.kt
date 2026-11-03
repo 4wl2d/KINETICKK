@@ -35,4 +35,30 @@ internal class RelicMechanicState(source: RelicMechanicState?) {
     /** When the next heat-free Matrix Dash is ready. */
     internal var matrixFreeDashReadyAt: Float = source?.matrixFreeDashReadyAt ?: 0f
     internal var necroticClock: Float = source?.necroticClock ?: 0f
+
+    /** A new run: every timer, charge and counter at its initial value. */
+    fun reset() {
+        glassInvulnerabilityReadyAt = 0f
+        bulwarkInvulnerabilityReadyAt = 0f
+        stormCharge = 0f
+        stasisMeter = STASIS_SECONDS
+        stasisBank = 0
+        stasisLockedUntil = 0f
+        sinceTurn = 0f
+        gyreReadyAt = 0f
+        gyreEchoAt = -1f
+        gyreEchoDamage = 0f
+        overdriveExtension = 0f
+        overdriveKills = 0
+        aegisAbsorbed = 0f
+        aegisNovaReadyAt = 0f
+        shieldBreakArmed = false
+        shieldBreakReadyAt = 0f
+        glassCharge = 0f
+        integrityLiabilityCut = 0f
+        cinderRecoilReadyAt = 0f
+        secondWindSpent = false
+        matrixFreeDashReadyAt = 0f
+        necroticClock = 0f
+    }
 }
