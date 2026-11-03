@@ -21,7 +21,7 @@ function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/ga
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/layout/GameplayLayoutGeometry.kt#forEachRunningControlBounds	120
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/overlay/PauseBuildLayouts.kt#drawCompactBuild	117
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/overlay/PauseBuildOverview.kt#pauseBuildOverview	102
-function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/overlay/ReportSummary.kt#ReportSummary	136
+function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/overlay/ReportSummary.kt#ReportSummary	121
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/rewards/RelicPanel.kt#RelicPanel	115
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/rewards/RewardCard.kt#RewardCard	139
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/rewards/RewardCardStyles.kt#buildRewardCardLook	123
