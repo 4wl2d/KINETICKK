@@ -4,7 +4,6 @@
 package kinetickk.ball.profile.interaction.audio
 
 import kinetickk.ball.profile.api.PlayerPreferences
-import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.api.ToneRequest
 import kinetickk.resource.audio.api.ToneWave
@@ -26,13 +25,7 @@ internal class ProfileAudioExecutor(
     }
 
     fun updatePreferences(preferences: PlayerPreferences) {
-        audioService.updatePreferences(
-            AudioPreferences(
-                soundEnabled = preferences.soundEnabled,
-                musicEnabled = preferences.musicEnabled,
-                masterVolume = preferences.masterVolume,
-            ),
-        )
+        audioService.updatePreferences(preferences.toAudioPreferences())
     }
 }
 
@@ -41,5 +34,3 @@ private fun ProfileAudioCue.toToneRequest(): ToneRequest = when (this) {
     ProfileAudioCue.PURCHASE -> ToneRequest(490f, 0.1f, 0.16f, ToneWave.SINE)
     ProfileAudioCue.REFUSED -> ToneRequest(260f, 0.06f, 0.12f, ToneWave.SINE)
 }
-
-fun profilePreloadToneRequests(): List<ToneRequest> = ProfileAudioCue.entries.map { it.toToneRequest() }

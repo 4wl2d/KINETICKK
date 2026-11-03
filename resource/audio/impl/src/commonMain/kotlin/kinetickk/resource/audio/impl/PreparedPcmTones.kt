@@ -14,17 +14,17 @@ import kotlin.math.sin
 class PreparedPcmTones(requests: List<ToneRequest>, private val sampleRate: Int) {
     private class Entry(val request: ToneRequest, val samples: FloatArray)
 
+    private val entries: List<Entry>
+
     init {
         require(sampleRate in 8_000..48_000)
-        require(requests.size <= 64) { "Audio preparation accepts at most 64 fixed tones" }
-    }
-
-    private val entries = buildList<Entry> {
+        // Requests that differ only in gain share one waveform, so only distinct waveforms count.
+        val distinct = ArrayList<ToneRequest>()
         for (request in requests) {
-            if (none { it.request.sameWaveform(request) }) {
-                add(Entry(request, synthesizeTone(request, sampleRate)))
-            }
+            if (distinct.none { it.sameWaveform(request) }) distinct.add(request)
         }
+        require(distinct.size <= 64) { "Audio preparation accepts at most 64 distinct fixed tones" }
+        entries = distinct.map { Entry(it, synthesizeTone(it, sampleRate)) }
     }
 
     /** Fallback supports arbitrary validated callers; the shipped fixed tones always hit the bank. */

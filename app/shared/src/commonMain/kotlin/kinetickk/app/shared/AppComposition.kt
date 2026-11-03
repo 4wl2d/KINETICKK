@@ -16,7 +16,6 @@ import kinetickk.ball.content.api.ContentCatalog
 import kinetickk.ball.content.impl.createContentCatalog
 import kinetickk.ball.gameplay.impl.DefaultGameplayFeature
 import kinetickk.ball.gameplay.impl.GameplayCompositionComponent
-import kinetickk.ball.gameplay.impl.gameplayPreloadToneRequests
 import kinetickk.ball.gameplay.interaction.prepareGameplayVisualResources
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfilePort
@@ -24,7 +23,6 @@ import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.impl.ProfileComponent
 import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.createProfileComponent
-import kinetickk.ball.profile.interaction.audio.profilePreloadToneRequests
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
 import kinetickk.ball.profile.interaction.rebirth.impl.DefaultRebirthFeature
 import kinetickk.ball.profile.interaction.settings.api.SettingsFeature
@@ -36,7 +34,6 @@ import kinetickk.flow.session.impl.createAppSessionComponent
 import kinetickk.flow.session.interaction.AppSessionContent
 import kinetickk.flow.session.interaction.AppShellMemory
 import kinetickk.flow.session.interaction.audio.SessionAudioExecutor
-import kinetickk.flow.session.interaction.audio.sessionPreloadToneRequests
 import kinetickk.flow.session.interaction.codex.api.CodexFeature
 import kinetickk.flow.session.interaction.codex.impl.DefaultCodexFeature
 import kinetickk.flow.session.interaction.home.api.HomeFeature
@@ -174,7 +171,7 @@ internal class AppCompositionOwner(
     private val startupResources = AppStartupResources()
 
     private suspend fun prepareAudio() {
-        audioService.prepare(gameplayPreloadToneRequests() + profilePreloadToneRequests() + sessionPreloadToneRequests())
+        audioService.prepare()
     }
 
     @Composable

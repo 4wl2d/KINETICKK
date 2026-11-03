@@ -59,7 +59,11 @@ class PreparedPcmTonesTest {
         assertEquals(22_050, bank.sampleCount)
         assertEquals(22_050, bank.samples(request.copy(wave = ToneWave.SAW)).size)
         assertEquals(22_050, bank.sampleCount)
-        assertFailsWith<IllegalArgumentException> { PreparedPcmTones(List(65) { request }, 22_050) }
+        // The cap counts distinct waveforms: gain-only variants share one entry.
+        assertEquals(22_050, PreparedPcmTones(List(65) { request }, 22_050).sampleCount)
+        val distinct = List(65) { index -> ToneRequest(100f + index, 0.01f, 1f, ToneWave.SINE) }
+        PreparedPcmTones(distinct.take(64) + distinct.take(64).map { it.copy(gain = 0.5f) }, 22_050)
+        assertFailsWith<IllegalArgumentException> { PreparedPcmTones(distinct, 22_050) }
         assertFailsWith<IllegalArgumentException> { PreparedPcmTones(listOf(request), 192_000) }
     }
 }

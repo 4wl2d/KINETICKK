@@ -5,6 +5,7 @@ package kinetickk.resource.audio.impl
 
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
+import kinetickk.resource.audio.api.SoundId
 import kinetickk.resource.audio.api.ToneRequest
 import kinetickk.resource.audio.api.ToneRequestLimits
 import kinetickk.resource.audio.api.ToneWave
@@ -18,7 +19,7 @@ class DefaultAudioService(
     private var closed = false
 
     override suspend fun prepare(requests: List<ToneRequest>) {
-        if (!closed) platform.prepare(requests + MUSIC_TONES)
+        if (!closed) platform.prepare(ToneCatalog.effectTones + MUSIC_TONES + requests)
     }
 
     override fun updatePreferences(preferences: AudioPreferences) {
@@ -27,18 +28,27 @@ class DefaultAudioService(
 
     override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) {
         if (closed) return
-        val volume = preferences.masterVolume.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f
-        if (
-            preferences.soundEnabled &&
-            volume > 0f &&
-            requests.isNotEmpty() &&
-            requests.size <= MAX_ACCEPTED_EFFECT_REQUESTS_PER_ADVANCE
-        ) {
-            selectToneRequests(requests, MAX_SELECTED_EFFECT_REQUESTS_PER_ADVANCE).forEach { request ->
-                platform.playIfAllowed(request.copy(gain = request.gain * volume))
-            }
+        val volume = effectiveVolume()
+        if (acceptsEffects(volume, requests.size)) {
+            selectDistinct(requests, MAX_SELECTED_EFFECT_REQUESTS_PER_ADVANCE).forEach { playEffect(it, volume) }
         }
+        tick(realDeltaSeconds)
+    }
 
+    override fun play(sounds: List<SoundId>) {
+        if (closed) return
+        val volume = effectiveVolume()
+        if (!acceptsEffects(volume, sounds.size)) return
+        // A stable sort keeps the emission order among equal priorities.
+        val ranked = if (sounds.size == 1) sounds else sounds.sortedByDescending(ToneCatalog::priority)
+        selectDistinct(ranked, MAX_SELECTED_EFFECT_REQUESTS_PER_ADVANCE).forEach { sound ->
+            playEffect(ToneCatalog.request(sound), volume)
+        }
+    }
+
+    override fun tick(realDeltaSeconds: Float) {
+        if (closed) return
+        val volume = effectiveVolume()
         if (!preferences.musicEnabled || volume <= 0f) {
             musicClock = 0f
             return
@@ -63,6 +73,15 @@ class DefaultAudioService(
         closed = true
     }
 
+    private fun effectiveVolume(): Float = preferences.masterVolume.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f
+
+    private fun acceptsEffects(volume: Float, count: Int): Boolean =
+        preferences.soundEnabled && volume > 0f && count > 0 && count <= MAX_ACCEPTED_EFFECT_REQUESTS_PER_ADVANCE
+
+    private fun playEffect(request: ToneRequest, volume: Float) {
+        platform.playIfAllowed(request.copy(gain = request.gain * volume))
+    }
+
     private companion object {
         const val MAX_ACCEPTED_EFFECT_REQUESTS_PER_ADVANCE = 32
         const val MAX_SELECTED_EFFECT_REQUESTS_PER_ADVANCE = 3
@@ -83,15 +102,15 @@ internal fun selectMusicAdvanceDeltaSeconds(realDeltaSeconds: Float): Float =
         ?.coerceIn(0f, MAX_MUSIC_ADVANCE_DELTA_SECONDS)
         ?: 0f
 
-internal fun selectToneRequests(requests: List<ToneRequest>, limit: Int): List<ToneRequest> {
-    if (limit <= 0 || requests.isEmpty()) return emptyList()
-    if (requests.size == 1 || limit == 1) return listOf(requests[0])
+internal fun <T> selectDistinct(items: List<T>, limit: Int): List<T> {
+    if (limit <= 0 || items.isEmpty()) return emptyList()
+    if (items.size == 1 || limit == 1) return listOf(items[0])
     // Playback admits at most three distinct effects. Stop once they are selected instead of
     // building a set for the full input and then copying its prefix into another list.
-    val selected = ArrayList<ToneRequest>(minOf(limit, requests.size))
-    for (request in requests) {
-        if (request !in selected) {
-            selected.add(request)
+    val selected = ArrayList<T>(minOf(limit, items.size))
+    for (item in items) {
+        if (item !in selected) {
+            selected.add(item)
             if (selected.size == limit) break
         }
     }
