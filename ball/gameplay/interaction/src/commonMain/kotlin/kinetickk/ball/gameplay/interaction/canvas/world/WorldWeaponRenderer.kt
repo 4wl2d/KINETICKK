@@ -14,7 +14,6 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
-import kinetickk.ball.gameplay.nucleus.model.clamp
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kinetickk.ball.gameplay.nucleus.render.WeaponEntityProjection
@@ -228,7 +227,7 @@ private fun DrawScope.drawLens(engine: GameplayRenderModel, lens: WeaponEntityPr
 /** A gravity well (a collapsed lens, a mine's last form): dashed rings turning inward, fading with its life. */
 private fun DrawScope.drawWell(engine: GameplayRenderModel, well: WeaponEntityProjection, center: Offset, roles: KkRolePalette) {
     val gravitic = roles.element(StatusElement.GRAVITIC)
-    val life = clamp(well.life / max(0.01f, well.maxLife), 0f, 1f)
+    val life = (well.life / max(0.01f, well.maxLife)).coerceIn(0f, 1f)
     val alpha = min(1f, life * 2.5f)
     val inward = (engine.renderElapsed * 0.9f) % 1f
     drawCircle(gravitic.copy(alpha = 0.07f * alpha), well.radius, center)
@@ -251,7 +250,7 @@ private fun DrawScope.drawRift(
     if (!isOnScreen(start, rift.radius + 40f) && !isOnScreen(end, rift.radius + 40f)) return
     val void = roles.element(StatusElement.VOID)
     if (rift.phase == RIFT_SPENT) {
-        val flash = clamp(rift.life / 0.25f, 0f, 1f)
+        val flash = (rift.life / 0.25f).coerceIn(0f, 1f)
         drawLine(void.copy(alpha = flash * 0.35f), start, end, rift.radius * 2f)
         drawLine(Kk.Bone.copy(alpha = flash), start, end, 3f)
         return
@@ -283,7 +282,7 @@ private fun DrawScope.drawMissile(missile: WeaponEntityProjection, center: Offse
 
 /** An expanding weapon ring: a bell toll (cryo), a drum pulse or concussion wave (sonic), a passive bell pulse. */
 private fun DrawScope.drawWeaponRing(ring: WeaponEntityProjection, center: Offset, roles: KkRolePalette) {
-    val life = clamp(ring.life / max(0.01f, ring.maxLife), 0f, 1f)
+    val life = (ring.life / max(0.01f, ring.maxLife)).coerceIn(0f, 1f)
     val radius = max(4f, ring.radius * KkEase.Out.transform(1f - life))
     val color = when (ring.phase) {
         RING_DRUM, RING_CONCUSSION -> roles.element(StatusElement.SONIC)

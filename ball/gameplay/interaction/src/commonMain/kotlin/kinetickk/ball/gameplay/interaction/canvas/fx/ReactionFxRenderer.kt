@@ -26,7 +26,6 @@ import kinetickk.ball.gameplay.interaction.fx.ReactionFxSpecs
 import kinetickk.ball.gameplay.interaction.fx.SkillFxSpecs
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.fx.WeaponArcProjection
-import kinetickk.ball.gameplay.nucleus.model.clamp
 import kinetickk.ball.gameplay.nucleus.protocol.ReactionCueFlags
 import kinetickk.ball.gameplay.nucleus.protocol.SkillCueCodes
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -105,7 +104,7 @@ internal fun DrawScope.drawElementBursts(
         // A burst whose look also plays on the Core stays drawn while the Core is on screen.
         if (!verb && !isOnScreen(center, reach * 1.3f + 24f)) continue
         val age = engine.fxAge(burst.life, burst.maxLife)
-        val progress = clamp(age / burst.maxLife, 0f, 1f)
+        val progress = (age / burst.maxLife).coerceIn(0f, 1f)
         if (burst.secondary < 0) {
             val element = burst.primary.coerceIn(0, BreakFigureOps.lastIndex)
             // A Break the pool cannot afford keeps its opening flash and ring.
@@ -173,7 +172,7 @@ internal fun DrawScope.drawSkillBursts(
         ctx.x = center.x
         ctx.y = center.y
         ctx.reach = burst.radius
-        ctx.progress = clamp(age / burst.maxLife, 0f, 1f)
+        ctx.progress = (age / burst.maxLife).coerceIn(0f, 1f)
         ctx.age = age
         ctx.seed = burst.seed
         val directed = burst.dirX != 0f || burst.dirY != 0f
@@ -238,7 +237,7 @@ internal fun DrawScope.drawApexBursts(
         val burst = bursts[index]
         val center = world(engine, burst.x, burst.y, shakeX, shakeY)
         val age = engine.fxAge(burst.life, burst.maxLife)
-        val progress = clamp(age / burst.maxLife, 0f, 1f)
+        val progress = (age / burst.maxLife).coerceIn(0f, 1f)
         ctx.x = center.x
         ctx.y = center.y
         ctx.reach = ApexFxSpec.REACH
@@ -291,12 +290,12 @@ internal fun DrawScope.drawWeaponArcs(
         val start = world(engine, arc.fromX, arc.fromY, shakeX, shakeY)
         val end = world(engine, arc.toX, arc.toY, shakeX, shakeY)
         if (arc.style == 0) {
-            drawWeaponLink(engine, index, start, end, clamp(arc.life / 0.14f, 0f, 1f), roles)
+            drawWeaponLink(engine, index, start, end, (arc.life / 0.14f).coerceIn(0f, 1f), roles)
             continue
         }
         val look = LinkLooks[arc.style]
         val age = engine.fxAge(arc.life, arc.maxLife)
-        val progress = clamp(age / max(arc.maxLife, 0.001f), 0f, 1f)
+        val progress = (age / max(arc.maxLife, 0.001f)).coerceIn(0f, 1f)
         val alpha = (if (progress < 0.5f) 1f else (1f - progress) * 2f) * peak
         if (alpha <= 0.004f) continue
         linkColors(engine, look, arc.style, roles)

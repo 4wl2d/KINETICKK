@@ -17,7 +17,6 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.interaction.fx.InteractionFxLimits
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
-import kinetickk.ball.gameplay.nucleus.model.clamp
 import kinetickk.ball.gameplay.nucleus.render.damageNumberTier
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -259,7 +258,7 @@ internal fun DrawScope.drawMotionEchoes(
         val echo = visualFx.motionEchoes[index]
         val center = world(engine, echo.x, echo.y, shakeX, shakeY)
         if (!isOnScreen(center, 60f)) continue
-        val life = clamp(echo.life / echo.maxLife, 0f, 1f)
+        val life = (echo.life / echo.maxLife).coerceIn(0f, 1f)
         drawCircle(roles.you.copy(alpha = life * life * echo.intensity * 0.7f), 18f, center, style = kkStroke(2f))
     }
 }
@@ -279,7 +278,7 @@ internal fun DrawScope.drawShockwaves(
         val wave = visualFx.shockwaves[index]
         val center = world(engine, wave.x, wave.y, shakeX, shakeY)
         if (!isOnScreen(center, wave.maxRadius)) continue
-        val life = clamp(wave.life / wave.maxLife, 0f, 1f)
+        val life = (wave.life / wave.maxLife).coerceIn(0f, 1f)
         val radius = max(2f, wave.maxRadius * KkEase.Out.transform(1f - life))
         val color = fxColor(wave.colorIndex, roles)
         drawCircle(color.copy(alpha = life * 0.06f), radius * 0.72f, center)
@@ -300,7 +299,7 @@ private fun DrawScope.drawImpactMarks(engine: GameplayRenderModel, visualFx: Vis
     for (index in visualFx.shockwaves.indices) {
         val wave = visualFx.shockwaves[index]
         if (wave.colorIndex != 1 && wave.colorIndex != 3) continue
-        val progress = 1f - clamp(wave.life / wave.maxLife, 0f, 1f)
+        val progress = 1f - (wave.life / wave.maxLife).coerceIn(0f, 1f)
         if (progress >= 0.45f) continue
         val center = world(engine, wave.x, wave.y, shakeX, shakeY)
         if (!isOnScreen(center, wave.maxRadius)) continue
@@ -333,7 +332,7 @@ internal fun DrawScope.drawTrail(engine: GameplayRenderModel, shakeX: Float, sha
         val point = engine.trail[index]
         val location = world(engine, point.x, point.y, shakeX, shakeY)
         // A point burns for its life, then fades out over TRAIL_FADE_SECONDS.
-        val life = clamp(1f - point.age / (point.life + TRAIL_FADE_SECONDS), 0f, 1f)
+        val life = (1f - point.age / (point.life + TRAIL_FADE_SECONDS)).coerceIn(0f, 1f)
         if (hasPrevious) {
             val segmentLife = min(previousLife, life)
             if (segmentLife > 0f && (isOnScreen(previous, 50f) || isOnScreen(location, 50f))) {
@@ -441,7 +440,7 @@ internal fun DrawScope.drawWeapon(engine: GameplayRenderModel, core: Offset, sha
             if (engine.weaponBeamTime > 0f) {
                 val start = world(engine, engine.weaponBeamStartX, engine.weaponBeamStartY, shakeX, shakeY)
                 val end = world(engine, engine.weaponBeamEndX, engine.weaponBeamEndY, shakeX, shakeY)
-                val alpha = clamp(engine.weaponBeamTime / 0.18f, 0f, 1f)
+                val alpha = (engine.weaponBeamTime / 0.18f).coerceIn(0f, 1f)
                 drawLine(you.copy(alpha = alpha * 0.22f), start, end, 19f)
                 drawLine(Kk.Bone.copy(alpha = alpha), start, end, 4f)
                 drawLine(you.copy(alpha = alpha), start, end, 1.3f)
@@ -497,7 +496,7 @@ internal fun DrawScope.drawWeaponNodes(engine: GameplayRenderModel, shakeX: Floa
         if (node.type != WeaponNodeType.GRAVITY_MINE) continue
         val point = world(engine, node.x, node.y, shakeX, shakeY)
         if (!isOnScreen(point, node.radius)) continue
-        val ratio = clamp(node.life / node.maxLife, 0f, 1f)
+        val ratio = (node.life / node.maxLife).coerceIn(0f, 1f)
         val fuse = 1f - ratio
         drawCircle(roles.you.copy(alpha = fuse * fuse * 0.1f), node.radius, point)
         drawCircle(roles.you.copy(alpha = 0.5f), max(12f, node.radius * ratio), point, style = WorldStrokes.dashedThin)

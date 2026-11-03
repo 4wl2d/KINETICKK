@@ -20,7 +20,6 @@ import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
-import kinetickk.ball.gameplay.nucleus.model.clamp
 import kinetickk.ball.gameplay.interaction.fx.InteractionFxLimits
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kotlin.math.PI
@@ -696,7 +695,7 @@ private fun DrawScope.drawWindup(
     windupSeconds: Float,
 ) {
     val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
-    val charge = clamp(-enemy.actionTimer / windupSeconds, 0f, 1f)
+    val charge = (-enemy.actionTimer / windupSeconds).coerceIn(0f, 1f)
     drawLine(threat.copy(alpha = 0.2f + charge * 0.62f), center, core, 2f + charge * 2f)
     drawCircle(threat.copy(alpha = 0.72f), enemy.radius + 28f * (1f - charge), center, style = WorldStrokes.dashedMedium)
 }
@@ -984,7 +983,7 @@ internal fun DrawScope.drawParticles(
         val particle = visualFx.particles[index]
         val center = world(engine, particle.x, particle.y, shakeX, shakeY)
         if (!isOnScreen(center, 24f)) continue
-        val alpha = clamp(particle.life / particle.maxLife, 0f, 1f)
+        val alpha = (particle.life / particle.maxLife).coerceIn(0f, 1f)
         val color = fxColor(particle.colorIndex, roles)
         val speed = sqrt(particle.vx * particle.vx + particle.vy * particle.vy)
         if (particle.size >= InteractionFxLimits.SHARD_MIN_SIZE) {
