@@ -51,7 +51,6 @@ import kinetickk.flow.session.api.AppDestination
 import kinetickk.foundation.common.input.BindableKey
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -323,7 +322,6 @@ private class MemoryPersistence : ProfilePersistenceCapability {
 
 private class QuietAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

@@ -26,15 +26,6 @@ class DefaultAudioService(
         if (!closed) this.preferences = preferences
     }
 
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) {
-        if (closed) return
-        val volume = effectiveVolume()
-        if (acceptsEffects(volume, requests.size)) {
-            selectDistinct(requests, MAX_SELECTED_EFFECT_REQUESTS_PER_ADVANCE).forEach { playEffect(it, volume) }
-        }
-        tick(realDeltaSeconds)
-    }
-
     override fun play(sounds: List<SoundId>) {
         if (closed) return
         val volume = effectiveVolume()

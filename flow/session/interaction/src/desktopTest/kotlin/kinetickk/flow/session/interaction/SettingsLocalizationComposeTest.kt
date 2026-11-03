@@ -153,7 +153,6 @@ private class LanguageProfilePort(language: AppLanguage) : ProfilePort {
 
 private object LanguageSilentAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

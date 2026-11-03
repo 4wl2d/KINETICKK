@@ -123,7 +123,6 @@ private class PaletteProfilePort(colorVision: ColorVision) : ProfilePort {
 
 private object PaletteSilentAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

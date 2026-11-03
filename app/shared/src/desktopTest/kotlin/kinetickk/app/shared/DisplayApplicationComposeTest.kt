@@ -28,7 +28,6 @@ import kinetickk.ball.profile.impl.createProfileComponent
 import kinetickk.flow.session.api.AppDestination
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -301,7 +300,6 @@ private class DisplayTestPersistence : ProfilePersistenceCapability {
 
 private class DisplayTestAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

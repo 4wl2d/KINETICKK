@@ -46,7 +46,6 @@ import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -266,7 +265,6 @@ private fun PixelMap.count(center: Offset, radius: Float, color: Color): Int {
 
 private object RunModeSilentAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

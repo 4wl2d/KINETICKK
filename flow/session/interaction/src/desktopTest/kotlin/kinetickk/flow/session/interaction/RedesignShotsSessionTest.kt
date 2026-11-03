@@ -691,7 +691,6 @@ private fun ShotShell(port: ShotSessionPort, language: AppLanguage) {
 
 private object ShotSilentAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

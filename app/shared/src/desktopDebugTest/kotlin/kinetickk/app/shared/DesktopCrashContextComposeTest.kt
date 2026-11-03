@@ -32,7 +32,6 @@ import kinetickk.ball.profile.impl.createProfileComponent
 import kinetickk.foundation.design.LocalCrashDiagnostics
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -65,7 +64,6 @@ class DesktopCrashContextComposeTest {
                 assertEquals(2f, profile.query(ProfileQuery.GetPreferences).preferences.simulationSpeed)
                 val audio = object : AudioService {
                     override fun updatePreferences(preferences: AudioPreferences) = Unit
-                    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
                     override fun ensureUnlocked() = Unit
                     override fun close() = Unit
                 }

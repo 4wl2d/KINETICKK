@@ -61,9 +61,6 @@ interface AudioService {
 
     fun updatePreferences(preferences: AudioPreferences)
 
-    /** Legacy combined call; removed in Close-out. */
-    fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
-
     /** Effects only: more than 32 ids drop all (as today); stable priority sort; the first 3 distinct play. Never moves music. */
     fun play(sounds: List<SoundId>) = Unit
 

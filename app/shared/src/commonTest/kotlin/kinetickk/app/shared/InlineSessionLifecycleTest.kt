@@ -27,7 +27,6 @@ import kinetickk.flow.session.api.SessionWorkflowFailureCode
 import kinetickk.flow.session.impl.createAppSessionComponent
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -232,7 +231,6 @@ private class LifecyclePersistence : ProfilePersistenceCapability {
 
 private class LifecycleSilentAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

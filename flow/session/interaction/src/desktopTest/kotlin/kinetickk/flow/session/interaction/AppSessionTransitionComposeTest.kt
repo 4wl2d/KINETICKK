@@ -34,7 +34,6 @@ import kinetickk.flow.session.interaction.profile.api.ProfileUnavailableFeature
 import kinetickk.foundation.design.KkShutter
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -119,7 +118,6 @@ private fun TransitionShell(port: AppSessionPort) {
 
 private object TransitionSilentAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

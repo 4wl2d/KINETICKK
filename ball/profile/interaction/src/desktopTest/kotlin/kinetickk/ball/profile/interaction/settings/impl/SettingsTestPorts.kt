@@ -30,7 +30,6 @@ import kinetickk.ball.profile.interaction.settings.api.SettingsDisplaySupport
 import kinetickk.ball.profile.interaction.settings.api.SettingsLiveWindow
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 
 /**
  * Preferences-only Profile stand-in for Settings tests: applies the adjustments Settings sends the
@@ -110,7 +109,6 @@ internal class SettingsTestDisplayPort(
 
 internal object SettingsTestSilentAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

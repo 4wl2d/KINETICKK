@@ -32,7 +32,6 @@ import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.Kk
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
@@ -231,7 +230,6 @@ private class LocalizationProfilePort : ProfileReadPort {
 
 private object LocalizationSilentAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

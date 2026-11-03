@@ -34,7 +34,6 @@ import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.LocalKkRolePalette
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 import kotlin.test.Test
@@ -127,7 +126,6 @@ private fun printSessionPixelHash(scene: String, language: String, bitmap: Image
 
 private object SessionPixelSilentAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

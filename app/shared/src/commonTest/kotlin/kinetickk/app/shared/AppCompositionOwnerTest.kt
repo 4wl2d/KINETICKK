@@ -55,7 +55,6 @@ import kinetickk.flow.session.api.SessionInteractionPulse
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -312,7 +311,6 @@ private class RecordingAudioService : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) {
         preferenceUpdates += preferences
     }
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
 
     override fun close() {
