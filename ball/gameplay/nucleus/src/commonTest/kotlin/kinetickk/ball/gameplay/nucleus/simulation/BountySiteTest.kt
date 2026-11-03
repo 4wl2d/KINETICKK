@@ -252,6 +252,20 @@ class BountySiteTest {
     }
 
     @Test
+    fun aBossAtZeroIntegrityBeforeTheStepsKillSweepIsClaimedNotAbandoned() {
+        // Skills, the Core and character abilities strike before the site step; the kill resolves in the later sweep.
+        val game = game()
+        game.enterBounty()
+        game.boss().hp = 0f
+        game.hold(400f, 300f)
+        assertTrue(game.sites.singleOrNull()?.active == true, "the bounty waits for the kill sweep")
+        game.sweepKills()
+        game.hold(400f, 300f)
+        assertEquals(SiteNotice.BOUNTY_CLAIMED.english, game.message)
+        assertTrue(game.discoveredBounty())
+    }
+
+    @Test
     fun leavingTheArenaPastItsExitRemovesTheBossAndGrantsNothing() {
         val game = game()
         game.enterBounty(x = 400f, y = 300f)

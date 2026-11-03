@@ -773,6 +773,19 @@ class SecretSiteTest {
     }
 
     @Test
+    fun aCartographerAtZeroIntegrityBeforeTheStepsKillSweepBreaksTheSigil() {
+        // Skills, the Core and character abilities strike before the site step; the kill resolves in the later sweep.
+        val game = summoned()
+        game.duelBoss().hp = 0f
+        game.standAt(game.coreX, game.coreY)
+        assertTrue(game.secretSigil?.active == true, "the duel waits for the kill sweep")
+        game.sweepKills()
+        game.standAt(game.coreX, game.coreY)
+        assertNull(game.secretSigil)
+        assertTrue(game.hasSecret(RunSecretFlag.CARTOGRAPHER_DEFEATED))
+    }
+
+    @Test
     fun leavingTheDuelPastItsLeashRemovesTheCartographerForTheRunAndGrantsNothing() {
         val game = summoned()
         val sigil = game.secretSigil!!

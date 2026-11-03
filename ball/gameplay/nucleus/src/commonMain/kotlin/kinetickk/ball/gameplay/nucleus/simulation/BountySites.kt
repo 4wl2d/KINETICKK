@@ -80,9 +80,12 @@ internal fun MutableGameState.advanceBountySite(site: SiteState, delta: Float) {
     }
 }
 
-/** True while the boss of a bounty or a sigil duel (the site's first foe) is alive. */
+/**
+ * True while the boss of a bounty or a sigil duel (the site's first foe) is alive or awaits its kill: one brought to
+ * zero integrity before the site step stays until the step's kill sweep counts it, so the next step claims it.
+ */
 internal fun MutableGameState.siteBossAlive(site: SiteState): Boolean =
-    enemyById(site.foeIds.firstOrNull() ?: -1)?.alive == true
+    enemyById(site.foeIds.firstOrNull() ?: -1)?.dead == false
 
 /**
  * The boss fell: its own kill already paid its Key, Relic and Elite kill; the bounty adds its definition's reward and the
