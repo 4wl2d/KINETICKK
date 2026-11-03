@@ -62,6 +62,7 @@ private fun DrawScope.drawWorldLayer(
     // Structure floors and walls, then obstacles, lie on the backdrop, under everything that moves.
     drawStructureFloors(engine, shakeX, shakeY, roles)
     drawStructureWalls(engine, shakeX, shakeY, roles)
+    drawStructureDisintegrations(engine, visualFx, shakeX, shakeY, roles)
     drawObstacles(engine, shakeX, shakeY, roles)
     drawSites(engine, shakeX, shakeY, textMeasurer)
     drawAmbientSites(engine, shakeX, shakeY)
@@ -72,7 +73,7 @@ private fun DrawScope.drawWorldLayer(
     drawCombatFields(engine, shakeX, shakeY, roles)
     drawSkillMarkers(engine, shakeX, shakeY, roles)
     drawCharacterField(engine, shakeX, shakeY, roles)
-    drawTotem(engine, shakeX, shakeY, textMeasurer)
+    drawTotemChests(engine, shakeX, shakeY, roles)
     drawShockwaves(engine, visualFx, shakeX, shakeY, roles)
     drawMotionEchoes(engine, visualFx, shakeX, shakeY, roles)
     drawTrail(engine, shakeX, shakeY, roles)
@@ -111,7 +112,7 @@ private fun DrawScope.drawWorldLayer(
     // Decided in world units, like the marks they stand in for; the collection order is the priority order (the
     // batch keeps the first markers it receives).
     collectSiteEdgeMarkers(engine, textMeasurer, markers)
-    collectTotemEdgeMarker(engine, markers)
+    collectTotemChestEdgeMarker(engine, markers)
     collectSignalEdgeMarker(engine, markers)
     collectDimensionEdgeMarkers(engine, markers)
     collectStructureEdgeMarkers(engine, markers)

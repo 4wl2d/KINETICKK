@@ -112,6 +112,7 @@ class ItemVarietyTest {
             rebirthProgress = RebirthProgress(level = 0),
         ))
         state.unlockWeaponsForTesting(ReferenceArmory)
+        state.startingWeapon = botLoadout(BotWeaponOrder, ReferenceArmory)
         state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
         state.startRun()
         val bot = NoPoiBot(archetypeTag = shape.characterTag())

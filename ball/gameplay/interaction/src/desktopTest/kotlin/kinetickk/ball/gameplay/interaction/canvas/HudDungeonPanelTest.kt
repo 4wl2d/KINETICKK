@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
@@ -102,6 +103,47 @@ class HudDungeonPanelTest {
     }
 
     /**
+     * A rolled Totem chest joins the panel: its mark (the chest's plates and a pip per charge) sits beside the rewards,
+     * which keep their row, and the rules gain the chest's line in both languages, built once per charge count; a dungeon
+     * without a chest shows neither.
+     */
+    @Test
+    fun aRolledTotemChestJoinsThePanelBesideTheRewardsAndInTheRules() {
+        fun vault(charges: Int) = StructureFixture(templates.template(StructureTemplateId.VAULT), base.coreX, base.coreY, chestCharges = charges)
+        val chest = base.withDungeon(vault(3))
+        val none = base.withDungeon(vault(0))
+        val trial = assertNotNull(chest.activeTrial())
+        assertEquals(structureTrialRewards(none, trial, AppLanguage.English), structureTrialRewards(chest, trial, AppLanguage.English),
+            "the reward row keeps its length: the chest is drawn as a mark")
+        val rules = structureTrialRules(chest, trial, AppLanguage.English)
+        assertTrue(rules.contains("Totem chest charges: 3"), rules)
+        assertTrue(rules.contains(StructureHudText.Rules.english))
+        assertTrue(structureTrialRules(chest, trial, AppLanguage.Russian).contains("сундука тотема: 3"))
+        assertFalse(structureTrialRules(none, trial, AppLanguage.English).contains("Totem chest"))
+        val three = structureTrialRules(chest, trial, AppLanguage.English)
+        assertSame(three, structureTrialRules(chest, trial, AppLanguage.English), "built once per charge count")
+        assertTrue(structureTrialRules(base.withDungeon(vault(2)), trial, AppLanguage.English).contains("charges: 2"))
+        // The mark: the panel draws more volt with a chest than without, in every layout.
+        for ((width, height) in listOf(1_440 to 810, 844 to 390, 390 to 844)) {
+            fun volt(model: GameplayRenderModel): Int {
+                val bitmap = ImageBitmap(width, height)
+                CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(width.toFloat(), height.toFloat())) {
+                    drawTrialPanel(model, measurer(AppLanguage.English), 0f, infoOpen = false)
+                }
+                val pixels = bitmap.toPixelMap()
+                val target = KkRolePalette.Default.you.toArgb()
+                var count = 0
+                for (y in 0 until height) for (x in 0 until width) if (pixels[x, y].toArgb() == target) count++
+                return count
+            }
+            val sized = hudTestModel(width.toFloat(), height.toFloat())
+            val with = volt(sized.withDungeon(StructureFixture(templates.template(StructureTemplateId.VAULT), sized.coreX, sized.coreY, chestCharges = 3)))
+            val without = volt(sized.withDungeon(StructureFixture(templates.template(StructureTemplateId.VAULT), sized.coreX, sized.coreY)))
+            assertTrue(with > without + 20, "$width x $height: the chest mark draws ($with vs $without volt pixels)")
+        }
+    }
+
+    /**
      * The one panel shows a running site's trial, then the dungeon, then the site again in the same language: each
      * time its label, name, reward row and open rules are that engagement's own, never the previous one's cached text.
      */
@@ -167,7 +209,9 @@ class HudDungeonPanelTest {
     fun elementalRulesAndRewardsFitPortraitAndLandscapePhoneTooltips() {
         for ((width, height) in listOf(390f to 844f, 844f to 390f)) {
             for (language in AppLanguage.entries) for (template in templates.templates.filter { !it.secret }) {
-                val model = hudTestModel(width, height).withDungeon(StructureFixture(template, base.coreX, base.coreY))
+                // With the chest's rule too where the template rolls one: the longest rules.
+                val chest = if (template.totemChestChance > 0f) 3 else 0
+                val model = hudTestModel(width, height).withDungeon(StructureFixture(template, base.coreX, base.coreY, chestCharges = chest))
                 val measurer = measurer(language)
                 CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(ImageBitmap(64, 64)), Size(width, height)) {
                     drawTrialPanel(model, measurer, 0f, infoOpen = true)

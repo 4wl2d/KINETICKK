@@ -19,10 +19,10 @@ import kinetickk.ball.gameplay.nucleus.model.Ember
 import kinetickk.ball.gameplay.nucleus.model.HaloRing
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.Projectile
-import kinetickk.ball.gameplay.nucleus.model.Totem
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.PickupType
+import kinetickk.ball.gameplay.nucleus.projection.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
 import kinetickk.ball.gameplay.nucleus.simulation.director.*
@@ -181,10 +181,10 @@ class DimensionSystemTest {
         game.projectiles += Projectile(x = 50f, y = 0f, vx = 0f, vy = 0f, radius = 5f, life = 2f, hostile = true)
         game.projectiles += Projectile(x = 60f, y = 0f, vx = 0f, vy = 0f, radius = 5f, life = 2f, hostile = false)
         game.pickups += Pickup(PickupType.KEY, 400f, 300f)
-        game.totem = Totem(600f, 0f)
         val kills = game.kills
         val keys = game.keys
         val (x, y) = game.openPortalForTesting(WorldLayer.ZENITH)
+        val chest = game.placeTotemChestForTesting(x = x, y = y, charges = 2)
         game.takeVisualFxCues()
         val streams = game.streams()
 
@@ -203,7 +203,8 @@ class DimensionSystemTest {
         assertTrue(game.encounters.isEmpty(), "every encounter ends with the layer")
         assertEquals(kills, game.kills, "removed hostiles are no kills")
         assertEquals(listOf(false), game.projectiles.map { it.hostile }, "hostile shots go, the Core's stay")
-        assertNull(game.totem)
+        assertEquals(listOf(chest), game.structures.totemChests, "a realspace chest survives the entry")
+        assertTrue(game.toRenderModel().totemChests.isEmpty(), "and is not published inside")
         assertTrue(game.sites.isEmpty(), "the window's sites stay in realspace")
         assertEquals(listOf(x to y), game.pickups.map { it.x to it.y }, "pickups are drawn onto the Core")
         val visit = assertNotNull(game.dimensionRun.visit)
@@ -222,7 +223,7 @@ class DimensionSystemTest {
         game.runningStep()
         assertEquals(keys + 1, game.keys, "the drawn-in Key is collected with its usual effect")
         assertTrue(game.pickups.isEmpty())
-        assertNull(game.totem, "no Totem appears inside a dimension")
+        assertEquals(listOf(chest), game.structures.totemChests, "a chest under the Core never opens inside a dimension")
     }
 
     @Test

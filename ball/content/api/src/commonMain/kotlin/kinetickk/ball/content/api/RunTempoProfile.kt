@@ -44,6 +44,11 @@ data class RunTempoProfile(
     val matterRewardMultiplier: Float = 1.40f,
     val weaponAmplificationEveryLevels: Int = 2,
     val maximumAutomaticWeaponLevel: Int = 10,
+    /**
+     * Weapon levels every Elite-class kill (the kills that drop a Key) adds at once; 0 turns Elite resonance off.
+     * The Elite's description promises the amplification, so revise that copy when switching it off.
+     */
+    val eliteResonanceLevels: Int = 1,
     val fatigue: FatigueTuning = FatigueTuning(),
     /** The Core's flight law. */
     val steering: SteeringTuning = SteeringTuning(),
@@ -72,6 +77,7 @@ data class RunTempoProfile(
         require(matterRewardMultiplier.isFinite() && matterRewardMultiplier > 0f)
         require(weaponAmplificationEveryLevels > 0)
         require(maximumAutomaticWeaponLevel in 1..100)
+        require(eliteResonanceLevels in 0..3) { "Elite resonance must add 0..3 weapon levels" }
         require(maximumLevel in MIN_MAXIMUM_LEVEL..ContentBounds.MAX_RUN_LEVEL) {
             "Maximum run level must be within $MIN_MAXIMUM_LEVEL..${ContentBounds.MAX_RUN_LEVEL}"
         }

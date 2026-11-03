@@ -203,7 +203,8 @@ internal object ApexArchitectFightHarness {
         val strong = tier > 0
         val state = startGateRun(
             seed,
-            gateProfile(if (strong) GateMatrix.FULL else GateMatrix.NONE, tier, shape, if (strong) WeaponId.ARC_COIL else WeaponId.FLUX_WAKE),
+            // A fresh run flies the bot's loadout (harness H1), the strong one its signature Arc Coil.
+            gateProfile(if (strong) GateMatrix.FULL else GateMatrix.NONE, tier, shape, if (strong) WeaponId.ARC_COIL else botLoadout(BotWeaponOrder, ReferenceArmory)),
             relics = if (strong) DimensionProfile.STRONG_TIER_10.relics else emptyList(),
         )
         val bot = NoPoiBot()

@@ -208,16 +208,17 @@ internal fun MutableGameState.populateAdditionalRetainedState() {
     structureField = StructureField.of(
         4, -3, WorldLayer.BASE.ordinal, false,
         listOf(PlacedStructure((1L shl 63) or (5L shl 34) or (6L shl 8), StructureTemplateId.VAULT, 1,
-            2_000f, 1_500f, 600f, 400f, 0, 1, false)),
+            2_000f, 1_500f, 600f, 400f, 0, 1, chestCharges = 2)),
         listOf(Wall((1L shl 63) or (5L shl 34) or (6L shl 8), WallKind.DOOR_SEALED, 1_800f, 1_400f, 2_200f, 1_400f, 24f, door = 0)),
         listOf(StructureSignal(77L, StructureTemplateId.SPIRE, 5_000f, 4_000f, 5_100f, 4_200f)),
     )
     dungeon = DungeonState(
         structureId = (1L shl 63) or (5L shl 34) or (6L shl 8), template = StructureTemplateId.VAULT, rotation = 1,
-        x = 2_000f, y = 1_500f, clearedRooms = 0b1, engagedRoom = 2, engaged = true,
+        x = 2_000f, y = 1_500f, clearedRooms = 0b1, engagedRoom = 2, engaged = true, chestCharges = 3,
     )
     spentStructureIds = listOf(11L, 12L)
     lastAnnouncedStructureId = 13L
+    structures.totemChests = listOf(kinetickk.ball.gameplay.nucleus.model.TotemChest(14L shl 8, 2_100f, 1_600f, 2, 3f, 3.6f))
     coreStraightness = 0.25f
     gripStrength = 1.5f
     slingStrength = 0.75f
@@ -800,6 +801,7 @@ internal fun MutableGameState.exactSimulationFingerprint(): List<Pair<String, An
         value("dungeon", dungeon)
         value("spentStructureIds", spentStructureIds.toList())
         value("lastAnnouncedStructureId", lastAnnouncedStructureId)
+        value("totemChests", structures.totemChests.toList())
         float("dashBufferTime", dashBufferTime)
         value("bossSpawned", bossSpawned)
         value("keyboardBrakeActive", keyboardBrakeActive)
@@ -1088,13 +1090,6 @@ internal fun MutableGameState.exactSimulationFingerprint(): List<Pair<String, An
             float("$prefix.radius", orbital.radius)
             float("$prefix.previousX", orbital.previousX)
             float("$prefix.previousY", orbital.previousY)
-        }
-
-        value("totem.present", totem != null)
-        totem?.let { activeTotem ->
-            float("totem.x", activeTotem.x)
-            float("totem.y", activeTotem.y)
-            float("totem.pulse", activeTotem.pulse)
         }
     }.fields
 

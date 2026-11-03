@@ -193,8 +193,9 @@ Every new field that survives a step:
 
 Homes for planned mechanics. None of these mechanics exists yet; when one lands, use these places instead of
 inventing new ones:
-- Run-long state of dungeon structures and their rewards (for example a bounded list of claimable chests) goes into
-  `StructureRunState`, written only by the `structures` domain.
+- Run-long state of dungeon structures and their rewards goes into `StructureRunState`, written only by the
+  `structures` domain (landed: the run-long spent list, written through `markSpent`, and the bounded Totem chest list,
+  whose single writer `TotemChestSystem.kt` is also the only code that spends a Key, in `openTotemChest`).
 - State that tracks how the Core moves over a run (for example a meter for standing still) goes into a new holder
   `CoreStasisState` in `simulation.flight`. It is reset next to the Core motion resets in `startRun` and rebased in
   `WorldRebaseSystem.kt`.

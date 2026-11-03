@@ -175,7 +175,7 @@ class EnemyRankPresentationTest {
         val (width, height) = 1_440 to 810
         val start = hudTestModel(width.toFloat(), height.toFloat())
         val base = start.with(
-            "velocityX" to 0f, "velocityY" to 0f, "obstacles" to immutableListOf<ObstacleProjection>(), "totem" to null,
+            "velocityX" to 0f, "velocityY" to 0f, "obstacles" to immutableListOf<ObstacleProjection>(),
             "pickups" to immutableListOf<PickupProjection>(),
         )
         val dx = base.minimapRange * 0.5f

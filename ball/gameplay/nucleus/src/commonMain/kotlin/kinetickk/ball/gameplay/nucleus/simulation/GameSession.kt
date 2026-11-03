@@ -110,7 +110,6 @@ internal fun MutableGameState.startRun() {
     heirloomPending = !easyMode && heirloomCandidates.isNotEmpty() && rebirthRank >= 1
     omenPending = offersRunOmen && content.variety.omens.enabled
     volatileBursts = kinetickk.foundation.collections.immutableListOf()
-    totem = null
     nextEntityId = 1
     spawnClock = 0.2f
     nextEliteAt = rebirthProfile.eliteInterval(content.tempo.firstEliteAtSeconds)

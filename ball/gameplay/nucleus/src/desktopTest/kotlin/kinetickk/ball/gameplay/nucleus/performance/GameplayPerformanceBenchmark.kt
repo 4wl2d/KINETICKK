@@ -1535,6 +1535,7 @@ private fun worldContractFingerprint(current: Long, state: MutableGameState): Lo
     signature = mix(signature, state.dungeon.toString().hashCode())
     signature = mix(signature, state.spentStructureIds.toString().hashCode())
     signature = mixLong(signature, state.lastAnnouncedStructureId)
+    signature = mix(signature, state.structures.totemChests.toString().hashCode())
     signature = mix(signature, state.worldLayer.ordinal)
     signature = mix(signature, state.worldKeepOut.toString().hashCode())
     signature = mix(signature, state.runBoons.toString().hashCode())
@@ -1793,11 +1794,8 @@ private fun fixtureFingerprint(state: MutableGameState): Long {
     signature = mix(signature, synergy.scalingMultiplier.toRawBits())
     signature = mix(signature, synergy.masteryForms)
     signature = mix(signature, synergy.activeMasteryForm?.hashCode() ?: 0)
-    render.totem?.let { totem ->
-        signature = mix(signature, totem.x.toRawBits())
-        signature = mix(signature, totem.y.toRawBits())
-        signature = mix(signature, totem.pulse.toRawBits())
-    }
+    signature = mix(signature, render.totemChests.size)
+    for (c in render.totemChests) signature = mix(mix(mix(mix(mix(mixLong(signature, c.id), c.x.toRawBits()), c.y.toRawBits()), c.charges), c.bornAt.toRawBits()), c.armedAt.toRawBits())
     return signature
 }
 

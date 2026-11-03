@@ -150,10 +150,10 @@ class AmbientSiteRenderingTest {
             alongY.flatMap { y -> across.flatMap { d -> listOf(d to y, width - d to y) } }
     }
 
-    /** A quiet world (no enemies, totem or sites) with the Core at ([coreX], 0) and [ambient] sites. */
+    /** A quiet world (no enemies, chests or sites) with the Core at ([coreX], 0) and [ambient] sites. */
     private fun model(width: Int, height: Int, coreX: Float, vararg ambient: SiteProjection): GameplayRenderModel =
         hudTestModel(width.toFloat(), height.toFloat()).with(
-            "coreX" to coreX, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f, "totem" to null,
+            "coreX" to coreX, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f,
             "enemies" to immutableListOf<EnemyProjection>(), "sites" to immutableListOf<SiteProjection>(), "trial" to null,
             "ambientSites" to immutableListOf(*ambient),
         )

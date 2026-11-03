@@ -120,20 +120,6 @@ private fun ObstacleProjection.matches(obstacle: Obstacle): Boolean =
         fuseAt.sameBitsAs(obstacle.fuseAt) &&
         repels == obstacle.repels
 
-/** The Totem, or null; the same Totem or an equal position and pulse keeps the previous projection. */
-internal fun MutableGameState.totemProjection(
-    reusableCollections: GameplayRenderModel?,
-    identitySource: MutableGameState?,
-): TotemProjection? =
-    totem?.let { value ->
-        reusableCollections?.totem?.takeIf { previous ->
-            value === identitySource?.totem ||
-                (value.x.sameBitsAs(previous.x) &&
-                    value.y.sameBitsAs(previous.y) &&
-                    value.pulse.sameBitsAs(previous.pulse))
-        } ?: TotemProjection(value.x, value.y, value.pulse)
-    }
-
 /** The same list, an empty one or equal enemies keep the previous projection. */
 internal fun MutableGameState.enemyProjections(
     reusableCollections: GameplayRenderModel?,

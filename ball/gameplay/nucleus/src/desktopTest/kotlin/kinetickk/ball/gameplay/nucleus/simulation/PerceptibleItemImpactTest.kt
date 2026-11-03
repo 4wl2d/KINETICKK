@@ -591,12 +591,12 @@ class PerceptibleItemImpactTest {
         }.toImmutableList())
 
     /**
-     * [this] content with an empty generated obstacle field: no encounter is about the generated field (the obstacle arenas
-     * place their own test obstacles), and a scripted path whose Dashes carry it toward the start area's rim must not meet
-     * the rocks the window holds there (Addendum B2: a harness whose subject is not terrain flies an emptied field).
+     * [this] content with an empty generated obstacle field and no Elite resonance: no encounter is about the field (B2:
+     * a harness whose subject is not terrain flies an emptied field) or the weapon's level, so a Dashing path never meets
+     * the rim's rocks and an Elite target that respawns as it falls never levels the weapon up mid-measurement.
      */
     private fun GameplayContentSnapshot.withoutGeneratedObstacles(): GameplayContentSnapshot =
-        copy(obstacles = obstacles.copy(meanPerChunk = 0f))
+        copy(obstacles = obstacles.copy(meanPerChunk = 0f), tempo = tempo.copy(eliteResonanceLevels = 0))
 
     /** Thirty consecutive item offers at Reborn 10 with every item unlocked: the summed rarity of the cards. */
     private fun offers(setup: Setup, item: ItemDefinition?, content: GameplayContentSnapshot): Outcome {

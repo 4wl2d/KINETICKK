@@ -22,6 +22,7 @@ internal object ToneCatalog {
         SoundId.HURT, SoundId.OVERHEAT -> 90
         SoundId.APEX -> 85
         SoundId.DASH, SoundId.OVERDRIVE -> 80
+        SoundId.STRUCTURE_COLLAPSE -> 75
         SoundId.WEAPON_HEAVY, SoundId.IMPACT, SoundId.SKILL -> 70
         SoundId.LEVEL_UP,
         SoundId.WEAPON_ACQUIRED,
@@ -53,4 +54,5 @@ private fun createToneRequest(sound: SoundId): ToneRequest = when (sound) {
     SoundId.VICTORY -> ToneRequest(784f, 0.32f, 0.2f, ToneWave.TRIANGLE)
     SoundId.SKILL -> ToneRequest(480f, 0.09f, 0.16f, ToneWave.TRIANGLE)
     SoundId.APEX -> ToneRequest(988f, 0.3f, 0.22f, ToneWave.SAW)
+    SoundId.STRUCTURE_COLLAPSE -> ToneRequest(58f, 0.40f, 0.22f, ToneWave.SAW)
 }

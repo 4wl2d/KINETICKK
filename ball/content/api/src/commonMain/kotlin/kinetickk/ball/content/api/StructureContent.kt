@@ -189,6 +189,7 @@ enum class StructureNotice(val key: String) {
     INNER_DOORS_OPEN("INNER DOORS OPEN"),
     STRUCTURE_CLEARED("STRUCTURE CLEARED"),
     STRUCTURE_ABANDONED("STRUCTURE ABANDONED"),
+    TOTEM_CHEST_SALVAGED("TOTEM CHEST SALVAGED"),
 }
 
 /**
@@ -219,6 +220,10 @@ data class StructureTemplate(
     val trialDescription: String = "",
     /** Themed alternatives for habitat garrison entries. Fixed guardians and room counts are preserved. */
     val garrisonTypes: ImmutableList<EnemyType> = immutableListOf(),
+    /** Chance (0..1) that a placed structure of this template rolls a Totem chest; 0 for a secret template. */
+    val totemChestChance: Float = 0f,
+    /** Fewest charges its chest rolls (1..[ContentBounds.MAX_TOTEM_CHEST_CHARGES]): a lower roll is raised to this. */
+    val totemChestMinCharges: Int = 1,
 ) {
     /** Compiled walls: solid room walls, then [extraWalls], then one capsule per door in door order. */
     val walls: ImmutableList<StructureWallSpec>
@@ -280,6 +285,11 @@ data class StructureTemplate(
         require(garrisonTypes.none { it == EnemyType.ARCHITECT || it == EnemyType.ELITE || it == EnemyType.HERALD }) { "Themed garrisons cannot select a boss" }
         require(weight.isFinite() && weight >= 0f) { "$name weight must be finite and non-negative" }
         require(minimumDistance.isFinite() && minimumDistance >= 0f) { "$name minimum distance must be non-negative" }
+        require(totemChestChance.isFinite() && totemChestChance in 0f..1f) { "$name Totem chest chance must be in 0..1" }
+        require(totemChestMinCharges in 1..ContentBounds.MAX_TOTEM_CHEST_CHARGES) {
+            "$name Totem chest minimum charges must be in 1..${ContentBounds.MAX_TOTEM_CHEST_CHARGES}"
+        }
+        require(!secret || totemChestChance == 0f) { "$name is secret and pays no Totem chest" }
         require(wallHalfThickness in MIN_WALL_HALF_THICKNESS..MAX_WALL_HALF_THICKNESS) {
             "$name wall half thickness must be in 12..60"
         }
@@ -371,6 +381,7 @@ data class StructurePolicy(
     val garrisonDamageMultiplier: Float = 0.72f,
     val directorRateWhileSealed: Float = 0.35f,
     val wallDamageScale: Float = 1f,
+    val totemChest: TotemChestPolicy = TotemChestPolicy(),
     val templates: ImmutableList<StructureTemplate> = defaultStructureTemplates(),
 ) {
     fun template(id: StructureTemplateId): StructureTemplate = templates[id.ordinal]
@@ -415,6 +426,37 @@ data class StructurePolicy(
         require(templates.any { it.weight > 0f && it.minimumDistance <= minimumDistance + cellSize }) {
             "At least one weighted template must be placeable within a cell of the minimum distance"
         }
+    }
+}
+
+/**
+ * The dungeon reward chest: its charge roll, contact, re-arm and salvage. [enabled] false rolls no chest anywhere
+ * (measurement harnesses switch it off with `structures.copy(totemChest = TotemChestPolicy(enabled = false))`).
+ */
+data class TotemChestPolicy(
+    val enabled: Boolean = true,
+    /** Weights of 1, 2 and 3 charges (index + 1), before a template's minimum. */
+    val chargeWeights: ImmutableList<Float> = immutableListOf(55f, 33f, 12f),
+    /** Radius the Core's swept path must meet to open a charge (the plates at 2.2 scale are 66 u wide). */
+    val contactRadius: Float = 64f,
+    /** Run seconds after a choice closes before the next charge can open. */
+    val rearmSeconds: Float = 0.35f,
+    /** Run seconds after it materialises before a chest can open (its entrance). */
+    val materializeSeconds: Float = 0.6f,
+    /** Base Matter per charge when a chest finds the list full (Matter bonuses apply). */
+    val salvageMatterPerCharge: Int = 40,
+) {
+    init {
+        require(chargeWeights.size == ContentBounds.MAX_TOTEM_CHEST_CHARGES) {
+            "Totem chest charge weights name 1..${ContentBounds.MAX_TOTEM_CHEST_CHARGES} charges"
+        }
+        require(chargeWeights.all { it.isFinite() && it >= 0f } && chargeWeights.sum() > 0f) {
+            "Totem chest charge weights must be finite, non-negative and not all zero"
+        }
+        require(contactRadius in 24f..160f) { "Totem chest contact radius must be in 24..160" }
+        require(rearmSeconds in 0.1f..2f) { "Totem chest re-arm must be in 0.1..2 s" }
+        require(materializeSeconds in 0f..2f) { "Totem chest materialise delay must be in 0..2 s" }
+        require(salvageMatterPerCharge in 0..400) { "Totem chest salvage must be in 0..400 Matter per charge" }
     }
 }
 

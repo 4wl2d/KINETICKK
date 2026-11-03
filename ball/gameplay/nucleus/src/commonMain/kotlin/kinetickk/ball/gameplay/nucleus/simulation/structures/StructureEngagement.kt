@@ -42,7 +42,8 @@ internal fun MutableGameState.appendStructureMarks(out: FloatArray, count: Int):
 /**
  * The trial panel of the dungeon the Core holds, or null without one or for a secret template (the Doodle shows no
  * panel): the template's name, one segment per room that counts (garrisoned rooms and the final room) with the cleared
- * ones filled and counted, no clock and the template's rewards. A dungeon is no site: its family is a placeholder the
+ * ones filled and counted, no clock and the template's rewards, plus a rolled Totem chest the panel reads from the
+ * dungeon projection. A dungeon is no site: its family is a placeholder the
  * panel never reads (it names, draws and explains a dungeon by its source), so no content instruction is carried
  * either — the panel's rules for a dungeon are UI text.
  */

@@ -304,8 +304,7 @@ class StructurePlacementTest {
             expected.filter { it.first != nearest }.take(ContentBounds.MAX_STRUCTURE_SIGNALS).map { it.first },
             run.structureField.signals.map { it.id },
         )
-        val spent = run.structureField.structures.firstOrNull { it.id == nearest }
-        if (spent != null) assertTrue(spent.spent && run.wallsOf(spent).all { it.door < 0 || it.kind == WallKind.DOOR_OPEN })
+        assertTrue(run.structureField.structures.none { it.id == nearest }, "a rebuilt window leaves a spent structure out")
     }
 
     /** Every unspent structure's entrance around the absolute point with its distance, nearest first (7 × 7 cells). */
@@ -360,7 +359,7 @@ class StructurePlacementTest {
         run.applyStructureDoors(id)
         assertSame(settled, run.structureField, "an unchanged slice keeps the window")
 
-        // A rebuild agrees with the replaced slice, and a spent structure stands open with no dungeon.
+        // A rebuild agrees with the replaced slice, and a rebuild after the structure is spent leaves it out.
         run.dungeon = run.dungeon!!.copy(clearedRooms = 0, engagedRoom = 1)
         run.applyStructureDoors(id)
         val replaced = run.structureField.walls.toList()
@@ -368,36 +367,36 @@ class StructurePlacementTest {
         assertEquals(replaced, run.structureField.walls.toList())
         run.dungeon = null
         run.markSpent(id)
+        run.teleportCoreForTesting(placement.absoluteX, placement.absoluteY)
+        assertEquals(-1, run.structureField.indexOf(id))
         run.applyStructureDoors(id)
-        assertEquals(List(5) { open }, doors())
-        assertTrue(run.structureField.structures[run.structureField.indexOf(id)].spent)
         run.applyStructureDoors(structureId(WorldLayer.BASE, 999, 999))
     }
 
     @Test
-    fun spentStructuresAreRememberedInABoundedFifo() {
+    fun spentStructuresAreRememberedForTheWholeRunAndAFullSetSpendsEverything() {
         val run = state(canonicalGameplayContent)
         val bound = ContentBounds.MAX_SPENT_STRUCTURES
         val ids = List(bound + 1) { structureId(WorldLayer.BASE, 100 + it, -it) }
-        ids.take(bound).forEach { run.markSpent(it) }
-        assertEquals(bound, run.spentStructureIds.size)
-        assertTrue(ids.take(bound).all { run.isSpent(it) })
+        ids.take(bound - 1).forEach { run.markSpent(it) }
+        assertEquals(bound - 1, run.spentStructureIds.size)
+        assertTrue(ids.take(bound - 1).all { run.isSpent(it) })
+        assertFalse(run.isSpent(ids[bound - 1]))
 
+        val before = run.spentStructureIds
+        run.markSpent(ids[1])
+        run.markSpent(ids[2] or SPENT_FLAG)
+        assertSame(before, run.spentStructureIds, "re-marking keeps the list (no growth, no allocation)")
+        assertEquals(ids[0] or SPENT_FLAG, run.spentStructureIds[0], "nothing moves or is forgotten")
+
+        run.markSpent(ids[bound - 1])
+        assertEquals(bound, run.spentStructureIds.size)
+        assertTrue(run.isSpent(ids[0]), "the oldest stays spent")
+        assertTrue(run.isSpent(ids[bound]), "a full set counts every structure as spent")
         val full = run.spentStructureIds
         run.markSpent(ids[bound])
-        assertEquals(bound, run.spentStructureIds.size)
-        assertFalse(run.isSpent(ids[0]), "the oldest is forgotten")
-        assertTrue(run.isSpent(ids[1]) && run.isSpent(ids[bound]))
-        assertEquals(bound, full.size, "the published list is never mutated")
-        assertEquals(ids[0] or SPENT_FLAG, full[0])
-
-        run.markSpent(ids[1])
-        assertEquals(bound, run.spentStructureIds.size, "one entry per structure")
-        assertTrue(run.isSpent(ids[1]))
-        assertEquals(ids[1] or SPENT_FLAG, run.spentStructureIds.last())
-        run.markSpent(ids[2] or SPENT_FLAG)
-        assertEquals(ids[2] or SPENT_FLAG, run.spentStructureIds.last(), "a flagged id names the same structure")
-        assertEquals(bound, run.spentStructureIds.size)
+        assertSame(full, run.spentStructureIds, "a full set never grows")
+        assertEquals(bound - 1, before.size, "the published list is never mutated")
     }
 
     @Test

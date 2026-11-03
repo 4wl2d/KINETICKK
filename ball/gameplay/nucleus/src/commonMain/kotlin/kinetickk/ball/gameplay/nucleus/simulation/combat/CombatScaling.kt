@@ -162,7 +162,7 @@ internal fun MutableGameState.effectiveWeaponPower(): Float =
 
 /**
  * Honing of the equipped weapon: its own hits only (never [abilityPower]), read by the current weapon so the
- * bonus follows a Totem recalibration or a weapon choice.
+ * bonus follows a Totem choice's weapon change or a weapon choice.
  */
 internal fun MutableGameState.weaponUpgradePower(): Float =
     1f + content.upgrades.weaponPowerPerLevel * weaponUpgradeLevels[weapon.ordinal]

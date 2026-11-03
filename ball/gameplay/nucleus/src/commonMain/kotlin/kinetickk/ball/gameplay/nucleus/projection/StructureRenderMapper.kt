@@ -19,8 +19,7 @@ import kinetickk.foundation.collections.mapToImmutableList
 
 /**
  * Structures, walls, signals and the dungeon as presentation draws them: the window's structures with their room
- * progress (cleared rooms and the sealed room from the dungeon of the same structure, every room once spent), every
- * wall with its kind, the entrances of unspent structures within signal range, and the dungeon in progress. A run with
+ * progress (cleared rooms and the sealed room from the dungeon of the same structure), every wall with its kind, the entrances of unspent structures within signal range, and the dungeon in progress. A run with
  * none of them publishes the shared [StructureRenderProjection.EMPTY]. The same window, dungeon and spent list as the
  * [identitySource] keep [previous] whole when the dungeon reads the same; otherwise each list whose content matches
  * (raw float bits) keeps its previous instance. A pure read: nothing here writes state.
@@ -57,11 +56,13 @@ internal fun MutableGameState.structureRenderProjection(
 private fun MutableGameState.dungeonProjection(current: DungeonState, previous: DungeonProjection?): DungeonProjection {
     val panel = !content.structures.template(current.template).secret
     if (previous != null && previous.structureId == current.structureId && previous.engagedRoom == current.engagedRoom &&
-        previous.panel == panel
+        previous.panel == panel && previous.chestCharges == current.chestCharges
     ) {
         return previous
     }
-    return DungeonProjection(structureId = current.structureId, engagedRoom = current.engagedRoom, panel = panel)
+    return DungeonProjection(
+        structureId = current.structureId, engagedRoom = current.engagedRoom, panel = panel, chestCharges = current.chestCharges,
+    )
 }
 
 private fun MutableGameState.structureProjections(
@@ -82,18 +83,15 @@ private fun MutableGameState.structureProjections(
             halfHeight = structure.halfHeight,
             wallStart = structure.wallStart,
             wallEnd = structure.wallEnd,
-            spent = structure.spent,
             clearedRooms = clearedRooms(structure, current),
             engagedRoom = engagedRoom(structure, current),
+            chestCharges = structure.chestCharges,
         )
     }
 
-/** Every room bit of a spent structure, the dungeon's cleared rooms for its own structure, none otherwise. */
-private fun MutableGameState.clearedRooms(structure: PlacedStructure, current: DungeonState?): Int = when {
-    structure.spent -> (1 shl content.structures.template(structure.template).rooms.size) - 1
-    current != null && current.structureId == structure.id -> current.clearedRooms
-    else -> 0
-}
+/** The dungeon's cleared rooms for its own structure, none otherwise (a spent structure has left the window). */
+private fun clearedRooms(structure: PlacedStructure, current: DungeonState?): Int =
+    if (current != null && current.structureId == structure.id) current.clearedRooms else 0
 
 private fun engagedRoom(structure: PlacedStructure, current: DungeonState?): Int =
     if (current != null && current.structureId == structure.id) current.engagedRoom else -1
@@ -108,9 +106,9 @@ private fun StructureProjection.matches(structure: PlacedStructure, clearedRooms
         halfHeight.sameBitsAs(structure.halfHeight) &&
         wallStart == structure.wallStart &&
         wallEnd == structure.wallEnd &&
-        spent == structure.spent &&
         this.clearedRooms == clearedRooms &&
-        this.engagedRoom == engagedRoom
+        this.engagedRoom == engagedRoom &&
+        chestCharges == structure.chestCharges
 
 private fun wallProjections(walls: List<Wall>, reusable: ImmutableList<WallProjection>?): ImmutableList<WallProjection> =
     walls.reuseProjectionIfContentEqual(reusable) { wall, projected -> projected.matches(wall) }

@@ -183,7 +183,9 @@ class DungeonPilotGateTest {
         /** One gate run of [arm] on [seed]: the pilot's attempt from 90 s, then [TAIL_SECONDS] more. */
         fun fly(seed: Int, arm: Arm, content: GameplayContentSnapshot = canonicalGameplayContent): DungeonRun {
             val profile = when (arm) {
-                Arm.FRESH -> gateProfile(GateMatrix.NONE, tier = 0, content = content)
+                // Harness H2: with no world Totem to recalibrate at, the fresh arm keeps both weapon families in its
+                // attempts by loading out an orbiting weapon (Arc Coil) or a ram weapon (Flux Wake) by seed parity.
+                Arm.FRESH -> gateProfile(GateMatrix.NONE, tier = 0, weapon = if (seed % 2 == 0) WeaponId.ARC_COIL else WeaponId.FLUX_WAKE, content = content)
                 Arm.STRONG -> gateProfile(GateMatrix.FULL, tier = 3, shape = CoreShape.PENTAGON, weapon = WeaponId.ARC_COIL, content = content)
             }
             val bot = when (arm) {

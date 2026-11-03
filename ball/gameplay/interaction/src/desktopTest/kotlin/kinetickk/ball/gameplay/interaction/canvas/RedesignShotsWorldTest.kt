@@ -73,7 +73,7 @@ import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.ProjectileProjection
-import kinetickk.ball.gameplay.nucleus.render.TotemProjection
+import kinetickk.ball.gameplay.nucleus.render.TotemChestProjection
 import kinetickk.ball.gameplay.nucleus.render.TrailPointProjection
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeProjection
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
@@ -160,7 +160,7 @@ class RedesignShotsWorldTest {
                 val model = model(width.toFloat(), height.toFloat(), points = listOf(
                     SiteProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", targets[0].first, targets[0].second, false, 31f, 0, 0f, immutableListOf(), 0f, 0f),
                     SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", targets[1].first, targets[1].second, false, 31f, 0, 0f, immutableListOf(), 0f, 0f)),
-                    totem = TotemProjection(targets[2].first, targets[2].second, 1f))
+                    totem = TotemChestProjection(1L shl 8, targets[2].first, targets[2].second, 2, 0f, 0f))
                 val bitmap = ImageBitmap(width, height)
                 CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(width.toFloat(), height.toFloat())) {
                     drawRect(Kk.Ink)
@@ -234,7 +234,7 @@ class RedesignShotsWorldTest {
         if (fullShots) strip(844, 390, AppLanguage.English, 2_484, 2_474..2_483, intArrayOf(0, 0, 844, 140), "world-fix3-flyby-844x390-en.png") { frame ->
             val x = -4_000f + 3f * frame
             val model = model(844f, 390f, points = listOf(point(SiteKind.SEALED_ANOMALY, -150f to -1_400f),
-                point(SiteKind.COLLAPSING_ORBIT, 0f to -1_450f)), totem = TotemProjection(150f, -1_400f, 1f))
+                point(SiteKind.COLLAPSING_ORBIT, 0f to -1_450f)), totem = TotemChestProjection(1L shl 8, 150f, -1_400f, 2, 0f, 0f))
                 .with("coreX" to x, "coreY" to 0f, "cameraX" to x, "cameraY" to 0f)
             Triple(model, 0f, 0f)
         }
@@ -259,7 +259,7 @@ class RedesignShotsWorldTest {
             strip(flight.w, flight.h, flight.language, flight.kept.last + 1, flight.kept, flight.crop, "world-fix3-${flight.name}.png") { frame ->
                 val core = flight.speed * frame
                 val model = model(flight.w.toFloat(), flight.h.toFloat(), points = points,
-                    totem = if (flight.totem) TotemProjection(900f, -2_600f, 1f) else null)
+                    totem = if (flight.totem) TotemChestProjection(1L shl 8, 900f, -2_600f, 2, 0f, 0f) else null)
                     .with("coreX" to core * cos(course), "coreY" to core * sin(course), "cameraX" to core * cos(course), "cameraY" to core * sin(course))
                 Triple(model, 0f, 0f)
             }
@@ -280,7 +280,7 @@ class RedesignShotsWorldTest {
                 val angle = startAngle - 4.5f * frame / 300f
                 val coreX = centerX + 300f * cos(angle)
                 val coreY = centerY + 300f * sin(angle)
-                val model = model(844f, 390f, points = points, totem = TotemProjection(1_500f * cos(heading + 1.03f), 1_500f * sin(heading + 1.03f), 1f))
+                val model = model(844f, 390f, points = points, totem = TotemChestProjection(1L shl 8, 1_500f * cos(heading + 1.03f), 1_500f * sin(heading + 1.03f), 2, 0f, 0f))
                     .with("coreX" to coreX, "coreY" to coreY, "cameraX" to coreX, "cameraY" to coreY)
                 Triple(model, 0f, 0f)
             }
@@ -304,7 +304,7 @@ class RedesignShotsWorldTest {
             }
             strip(width, height, language, 18, 6..17, crop, "world-fix3-gameshake-${width}x$height-${if (language == AppLanguage.English) "en" else "ru"}.png") { frame ->
                 val model = model(width.toFloat(), height.toFloat(), points = listOf(point(SiteKind.SEALED_ANOMALY, targets[0]),
-                    point(SiteKind.COLLAPSING_ORBIT, targets[1])), totem = TotemProjection(targets[2].first, targets[2].second, 1f))
+                    point(SiteKind.COLLAPSING_ORBIT, targets[1])), totem = TotemChestProjection(1L shl 8, targets[2].first, targets[2].second, 2, 0f, 0f))
                 val time = 3f + frame / 60f
                 if (frame < 6) Triple(model, 0f, 0f) else Triple(model, sin(time * 91f) * 6f, cos(time * 77f) * 6f)
             }
@@ -372,12 +372,12 @@ class RedesignShotsWorldTest {
         add(Scene("damage", model = { w, h -> model(w, h, damageFlash = 1f) }, fx = ::damageFx))
         add(Scene("overdrive", model = { w, h -> model(w, h, overdriveTime = 3f, weapon = WeaponId.ION_SWARM, orbitals = true) }))
         add(Scene("overheat", model = { w, h -> model(w, h, overheated = true, weapon = WeaponId.MORNINGSTAR) }))
-        add(Scene("poi-offer", model = { w, h -> model(w, h, points = offers(), totem = TotemProjection(-900f, 120f, 1f)) }))
+        add(Scene("poi-offer", model = { w, h -> model(w, h, points = offers(), totem = TotemChestProjection(1L shl 8, -900f, 120f, 2, 0f, 0f)) }))
         add(Scene("poi-orbit", model = { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, 60f, 30f, 0.65f, warning = 0.5f))) }))
         add(Scene("poi-sealed", model = { w, h -> sealed(w, h) }))
         add(Scene("poi-circuit", model = { w, h -> model(w, h, points = listOf(active(SiteKind.RESONANT_CIRCUIT, -60f, -170f, 0.33f, step = 1))) }))
         // Review-fix states: the HUD drawn over the world to check labels and edge markers clear it.
-        add(Scene("poi-offer-hud", hud = true, model = { w, h -> model(w, h, points = offers(), totem = TotemProjection(-900f, 120f, 1f)) }))
+        add(Scene("poi-offer-hud", hud = true, model = { w, h -> model(w, h, points = offers(), totem = TotemChestProjection(1L shl 8, -900f, 120f, 2, 0f, 0f)) }))
         add(Scene("poi-orbit-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, 60f, 30f, 0.65f, warning = 0.5f))) }))
         add(Scene("poi-orbit-high-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, 40f, -(h * 0.5f + 150f), 0.4f))) }))
         add(Scene("poi-orbit-low-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, -60f, h * 0.5f - 120f, 0.8f))) }))
@@ -399,11 +399,11 @@ class RedesignShotsWorldTest {
             "poi-orbit-high-hud" to { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, 40f, -(h * 0.5f + 700f), 0.4f))) },
             "poi-orbit-below-hud" to { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, 40f, h * 0.5f + 700f, 0.4f))) },
             // An elite alive and the totem overhead (portrait boss row + marker).
-            "poi-boss-marker-hud" to { w, h -> model(w, h, enemies = listOf(enemy(1, EnemyType.ELITE, 150f, 120f, 38f)), totem = TotemProjection(1_040f, 1_000f - h * 0.5f - 900f, 1f)) },
+            "poi-boss-marker-hud" to { w, h -> model(w, h, enemies = listOf(enemy(1, EnemyType.ELITE, 150f, 120f, 38f)), totem = TotemChestProjection(1L shl 8, 1_040f, 1_000f - h * 0.5f - 900f, 2, 0f, 0f)) },
             // Third pass: a boss and a trial at once, the orbit far up-left (markers past the stacked top bands).
             "poi-boss-trial-marker-hud" to { w, h -> model(w, h, enemies = listOf(enemy(1, EnemyType.ELITE, 150f, 120f, 38f)),
                 points = listOf(active(SiteKind.COLLAPSING_ORBIT, -0.41f * (h * 0.5f + 900f), -(h * 0.5f + 900f), 0.4f)),
-                totem = TotemProjection(1_000f + 0.3f * (h * 0.5f + 900f), 1_000f + h * 0.5f + 900f, 1f)) },
+                totem = TotemChestProjection(1L shl 8, 1_000f + 0.3f * (h * 0.5f + 900f), 1_000f + h * 0.5f + 900f, 2, 0f, 0f)) },
             // Target beacon low in a HUD-free bottom gap: whole, place pips included, on screen.
             "poi-beacon-bottom-hud" to { w, h -> model(w, h, points = listOf(beaconAt(w, h, 0.31f * w, h - 67f))) },
         )
@@ -428,7 +428,7 @@ class RedesignShotsWorldTest {
             "poi-markers-crowded-hud" to { w, h -> model(w, h, points = listOf(
                 SiteProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 1_000f + 900f, 1_000f - 2_600f, false, 31f, 0, 0f, immutableListOf(), 0f, 0f),
                 SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_000f + 1_150f, 1_000f - 2_500f, false, 31f, 0, 0f, immutableListOf(), 0f, 0f)),
-                totem = TotemProjection(1_000f + 1_300f, 1_000f - 2_300f, 1f)) },
+                totem = TotemChestProjection(1L shl 8, 1_000f + 1_300f, 1_000f - 2_300f, 2, 0f, 0f)) },
         )
         fix3Scenes.forEach { (name, build) ->
             add(Scene("fix3-$name", hud = true, model = build))
@@ -518,7 +518,8 @@ class RedesignShotsWorldTest {
         add(Scene("site-sigil-hud", hud = true, model = { w, h -> sigil(w, h, summoned = true) }))
         // Structures: two entrances off screen (their markers, a third entrance farther unmarked), a Spire's crown with its
         // promise plates seen from outside, a sealed bay around its garrison under the scrim (in each palette), a
-        // Reliquary's locked sanctum doors with the next way to the chapels, a spent station and the Architect's Doodle.
+        // Reliquary's locked sanctum doors, a station shattering at 30 % and 70 %, Totem chests (locked; openable and
+        // re-arming), a Spire's promise plates holding a three-charge chest, and the Architect's Doodle.
         add(Scene("structure-signal", hud = true, model = { w, h -> structureSignals(w, h) }))
         add(Scene("structure-exterior", model = { w, h ->
             structureModel(model(w, h), structure(StructureTemplateId.SPIRE, -1_350f, 80f, rotation = 1))
@@ -527,9 +528,9 @@ class RedesignShotsWorldTest {
         add(Scene("dungeon-sealed-mono", roles = KkRolePalette.Mono, model = { w, h -> sealedBay(w, h) }))
         add(Scene("dungeon-sealed-protan", roles = KkRolePalette.Protan, model = { w, h -> sealedBay(w, h) }))
         add(Scene("dungeon-locked", model = { w, h -> lockedSanctum(w, h) }))
-        add(Scene("dungeon-cleared", model = { w, h ->
-            structureModel(model(w, h), structure(StructureTemplateId.DERELICT_STATION, 100f, 0f, spent = true))
-        }))
+        for (p in listOf(0.3f, 0.7f)) add(Scene("dungeon-collapse-${(p * 10).toInt()}", model = { w, h -> model(w, h) }, fx = { VisualFxProjection.EMPTY.copy(disintegrations = immutableListOf(kinetickk.ball.gameplay.interaction.fx.StructureDisintegrationProjection(StructureTemplateId.DERELICT_STATION, 0, 1_100f, 1_000f, 1.6f * (1f - p), 1.6f, 9))) }))
+        for (keys in 0..1) add(Scene("totem-chest-$keys", hud = true, model = { w, h -> model(w, h, totem = TotemChestProjection(1L shl 8, 1_240f, 920f, 3, 0f, if (keys == 0) 0f else 99f)).with("keys" to keys) }))
+        add(Scene("dungeon-promise-chest", model = { w, h -> structureModel(model(w, h), StructureFixture(Content.structures.template(StructureTemplateId.SPIRE), -350f, 1_080f, rotation = 1, chestCharges = 3)) }))
         add(Scene("doodle", model = { w, h -> doodle(w, h) }))
         // Every obstacle kind in each state it shows, beside a rock and a bumper; the HUD adds their minimap marks.
         add(Scene("terrain", model = { w, h -> terrain(w, h) }))
@@ -589,9 +590,8 @@ class RedesignShotsWorldTest {
         rotation: Int = 0,
         cleared: Int = 0,
         engaged: Int = -1,
-        spent: Boolean = false,
         id: Long = (template.ordinal + 1).toLong() shl 8,
-    ) = StructureFixture(Content.structures.template(template), 1_000f + dx, 1_000f + dy, rotation, cleared, engaged, spent, id)
+    ) = StructureFixture(Content.structures.template(template), 1_000f + dx, 1_000f + dy, rotation, cleared, engaged, id)
 
     /** [base] with [structures] in the window, [dungeon] (one of them) held, and [signals] announced. */
     private fun structureModel(
@@ -1128,7 +1128,7 @@ class RedesignShotsWorldTest {
         projectiles: List<ProjectileProjection> = emptyList(),
         pickups: List<Pair<PickupType, Pair<Float, Float>>> = emptyList(),
         points: List<SiteProjection> = emptyList(),
-        totem: TotemProjection? = null,
+        totem: TotemChestProjection? = null,
         coreShape: CoreShape = CoreShape.ORB,
         weapon: WeaponId = WeaponId.ARC_COIL,
         rebirthLevel: Int = 0,
@@ -1158,7 +1158,7 @@ class RedesignShotsWorldTest {
             weapon = weapon, weaponLevel = 5, overdriveCharge = 58f, overdriveTime = overdriveTime, rerollsRemaining = 1,
             acquiredItemCount = 0, recentItem = null, equippedRelics = immutableListOf(), morningstarAngle = 0.4f,
             morningstarX = coreX + 70f, morningstarY = coreY + 40f, weaponBeamTime = 0f, weaponBeamStartX = 0f,
-            weaponBeamStartY = 0f, weaponBeamEndX = 0f, weaponBeamEndY = 0f, totem = totem, coreShape = coreShape,
+            weaponBeamStartY = 0f, weaponBeamEndX = 0f, weaponBeamEndY = 0f, totemChests = totem?.let { immutableListOf(it) } ?: immutableListOf(), coreShape = coreShape,
             enemies = enemies.toImmutableList(), projectiles = projectiles.toImmutableList(),
             pickups = pickups.map { (type, offset) ->
                 PickupProjection(type, coreX + offset.first, coreY + offset.second, 0f, 0f, 3f, coreX + offset.first + 8f, coreY + offset.second + 5f)

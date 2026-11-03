@@ -136,7 +136,8 @@ internal fun gateProfile(
     matrix: GateMatrix,
     tier: Int,
     shape: CoreShape = CoreShape.ORB,
-    weapon: WeaponId = WeaponId.FLUX_WAKE,
+    /** The bot's loadout by default (harness H1); a gate whose statement names a start weapon passes it. */
+    weapon: WeaponId = botLoadout(BotWeaponOrder, ReferenceArmory),
     economy: PlayerEconomy = PlayerEconomy(),
     upgrades: PermanentUpgrades = PermanentUpgrades(),
     content: GameplayContentSnapshot = canonicalGameplayContent,

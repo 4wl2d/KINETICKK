@@ -12,6 +12,7 @@ import kinetickk.ball.content.api.rotateQuarterX
 import kinetickk.ball.content.api.rotateQuarterY
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.RunSecretFlag
+import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.WallKind
@@ -87,6 +88,14 @@ class DungeonTemplateTourTest {
         assertEquals(0, run.pickups.count { it.type == PickupType.DATA && after.none { old -> old === it } })
     }
 
+    /** A Reliquary always pays a chest: once it is cleared, the pilot holding a Key flies to the chest and opens it. */
+    @Test
+    fun aPilotHoldingAKeyOpensTheClearedStructuresChest() {
+        val policy = forcedStructureContent(StructureTemplateId.RELIQUARY).structures
+        val cellX = (FIRST_CELL_X until FIRST_CELL_X + MAX_CELL_SCAN).first { placeStructure(policy, TOUR_SEED, WorldLayer.BASE, it, TOUR_CELL_Y) != null }
+        tour(StructureTemplateId.RELIQUARY, cellX, keysAfterClear = 1)
+    }
+
     private fun tourEveryRotation(id: StructureTemplateId) {
         // Placement is pure: the policy and the seed alone say what each cell holds, so only a tour builds a run.
         val policy = forcedStructureContent(id).structures
@@ -105,8 +114,11 @@ class DungeonTemplateTourTest {
         }
     }
 
-    /** Flies the structure in ([cellX], [TOUR_CELL_Y]) from outside its entrance to its clear and checks every frame. */
-    private fun tour(id: StructureTemplateId, cellX: Int) {
+    /**
+     * Flies the structure in ([cellX], [TOUR_CELL_Y]) from outside its entrance to its clear and checks every frame; with
+     * [keysAfterClear] the bot then holds that many Keys and must fly to the structure's Totem chest and open a charge.
+     */
+    private fun tour(id: StructureTemplateId, cellX: Int, keysAfterClear: Int = 0) {
         val run = tourState(id)
         val placement = run.structureAtForTesting(cellX, TOUR_CELL_Y)
         val label = "$id/r${placement.rotation}"
@@ -142,18 +154,16 @@ class DungeonTemplateTourTest {
                     run.killGarrisonForTesting()
                 }
             } else if (wasHeld != null) {
-                // The finish: rewards through their channels at the final room's centre, the structure spent.
+                // The finish: rewards through their channels at the final room's centre, the structure spent and gone
+                // from the window, none of its walls colliding.
                 assertEquals(template.finalRoom, wasHeld.engagedRoom, "$label finished in its final room")
                 assertFinalRewards(run, label, template, placement.rotation, placement.absoluteX, placement.absoluteY, pickups, matter)
                 assertTrue(run.isSpent(placement.id), label)
-                val index = run.structureField.indexOf(placement.id)
-                val structure = run.structureField.structures[index]
-                assertTrue(structure.spent, label)
-                assertTrue(
-                    (structure.wallStart until structure.wallEnd).map { run.structureField.walls[it] }
-                        .filter { it.door >= 0 }.all { it.kind == WallKind.DOOR_OPEN },
-                    "$label: every door of a spent structure stands open",
-                )
+                assertEquals(-1, run.structureField.indexOf(placement.id), "$label disintegrated")
+                assertTrue(run.structureField.walls.none { it.id and 0xFFL.inv() == placement.id }, "$label: no wall of it collides")
+                // Its rolled Totem chest (when the roll paid one) waits where the rewards landed.
+                val rolled = totemChestCharges(run.content.structures, template, run.runSeed, WorldLayer.BASE, cellX, TOUR_CELL_Y)
+                assertEquals(rolled, run.structures.totemChests.singleOrNull { it.structureId == placement.id }?.charges ?: 0, "$label chest")
                 rewardsChecked = true
             }
         }
@@ -172,6 +182,25 @@ class DungeonTemplateTourTest {
             }
         }
         assertEquals(hitReadyAt, run.obstacleHitReadyAt, "$label: the route never hurts the Core on a wall")
+        if (keysAfterClear > 0) openTheChest(run, pilot, label, keysAfterClear)
+    }
+
+    /**
+     * After the clear the bot holds [keys] Keys (and any it picks up on the way): it flies to the waiting chest and opens
+     * one charge, which shows the Totem choice.
+     */
+    private fun openTheChest(run: MutableGameState, pilot: DungeonPilot, label: String, keys: Int) {
+        val chest = run.structures.totemChests.single()
+        run.keys = keys
+        val stopAt = run.elapsed + 30f
+        while (run.choiceType != ChoiceType.TOTEM && run.elapsed < stopAt) {
+            if (run.phase == GamePhase.CHOICE) pilot.choose(run) else {
+                pilot.control(run)
+                run.update(0.02f)
+            }
+        }
+        assertEquals(ChoiceType.TOTEM, run.choiceType, "$label: the bot opened the chest within 30 s")
+        assertEquals(chest.charges - 1, run.structures.totemChests.singleOrNull()?.charges ?: 0, "$label: one charge spent")
     }
 
     /**

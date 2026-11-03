@@ -6,9 +6,9 @@ package kinetickk.ball.gameplay.interaction.canvas.world
 import kinetickk.ball.gameplay.interaction.canvas.world.places.*
 
 /**
- * The off-screen targets of one frame (points of interest, the totem), collected before any is
+ * The off-screen targets of one frame (points of interest, the nearest Totem chest), collected before any is
  * drawn so [EdgeMarkerPlanner.place] can keep their markers apart. Fixed arrays; draw-thread
- * confined. The game offers at most two points at once plus the totem, well under [CAPACITY].
+ * confined. The game offers at most two points at once plus one chest marker, well under [CAPACITY].
  */
 internal class EdgeMarkerBatch {
     var count = 0

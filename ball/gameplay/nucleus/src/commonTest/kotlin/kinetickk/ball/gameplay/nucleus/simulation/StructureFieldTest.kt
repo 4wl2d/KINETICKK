@@ -21,11 +21,13 @@ import kotlin.test.assertTrue
 
 class StructureFieldTest {
     private fun structure(index: Int, wallStart: Int = 0, wallEnd: Int = 0) =
-        PlacedStructure(index.toLong() shl 8, StructureTemplateId.VAULT, 0, 0f, 0f, 100f, 100f, wallStart, wallEnd, false)
+        PlacedStructure(index.toLong() shl 8, StructureTemplateId.VAULT, 0, 0f, 0f, 100f, 100f, wallStart, wallEnd)
 
     private fun wall(index: Int) = Wall(index.toLong(), WallKind.SOLID, 0f, 0f, 10f, 0f, 24f)
 
     private fun signal(index: Int) = StructureSignal(index.toLong(), StructureTemplateId.SPIRE, 0f, 0f, 1f, 1f)
+
+    private fun signalOf(index: Int) = StructureSignal(index.toLong() shl 8, StructureTemplateId.VAULT, 0f, 0f, 1f, 1f)
 
     @Test
     fun aWindowAcceptsItsBoundsAndRejectsTheNextValue() {
@@ -57,10 +59,37 @@ class StructureFieldTest {
         assertEquals(-99f, shifted.signals[0].x)
         assertSame(StructureField.EMPTY, StructureField.EMPTY.shifted(1f, 1f))
 
-        val opened = field.withStructure(1, field.structures[1].copy(spent = true), listOf(wall(1).copy(kind = WallKind.DOOR_OPEN)))
+        val opened = field.withStructure(1, field.structures[1], listOf(wall(1).copy(kind = WallKind.DOOR_OPEN)))
         assertEquals(WallKind.DOOR_OPEN, opened.walls[1].kind)
         assertEquals(WallKind.SOLID, field.walls[1].kind, "the source window is unchanged")
         assertFailsWith<IllegalArgumentException> { field.withStructure(1, field.structures[1], listOf(wall(1), wall(2))) }
+    }
+
+    @Test
+    fun withoutStructureDropsItsSliceAndSignalAndKeepsTheKey() {
+        val walls = List(6) { wall(it) }
+        val field = StructureField.of(
+            3, -1, 0, false,
+            listOf(structure(1, 0, 2), structure(2, 2, 5), structure(3, 5, 6)),
+            walls,
+            listOf(signalOf(2), signalOf(3), signalOf(1)),
+        )
+        val without = field.withoutStructure(1)
+        assertEquals(listOf(1L shl 8, 3L shl 8), without.structures.map { it.id })
+        assertEquals(listOf(0L, 1L, 5L), without.walls.map { it.id }, "the middle slice leaves")
+        assertEquals(listOf(0 to 2, 2 to 3), without.structures.map { it.wallStart to it.wallEnd }, "later slices shift down")
+        assertEquals(listOf(3L shl 8, 1L shl 8), without.signals.map { it.id }, "its signal leaves, the order stays")
+        assertTrue(without.isCurrent(3, -1, 0, false), "the window key stays, so no refresh rebuilds it")
+        assertSame(walls[5], without.walls[2], "kept walls are the same values")
+        // The result satisfies the factory's invariants and the source window is unchanged.
+        StructureField.of(3, -1, 0, false, without.structures, without.walls, without.signals)
+        assertEquals(3, field.structures.size)
+        assertEquals(6, field.walls.size)
+        val first = field.withoutStructure(0)
+        assertEquals(listOf(0 to 3, 3 to 4), first.structures.map { it.wallStart to it.wallEnd })
+        val last = field.withoutStructure(2)
+        assertEquals(listOf(0 to 2, 2 to 5), last.structures.map { it.wallStart to it.wallEnd })
+        assertEquals(5, last.walls.size)
     }
 
     @Test

@@ -48,6 +48,8 @@ internal enum class FxPool(val ops: Int) {
     FIELDS(220),
     GLYPHS(480),
     CORE_STATES(60),
+    /** The shards of shattering structures (one line each; floors and the slabs' flash draw regardless). */
+    RUBBLE(360),
 }
 
 /**

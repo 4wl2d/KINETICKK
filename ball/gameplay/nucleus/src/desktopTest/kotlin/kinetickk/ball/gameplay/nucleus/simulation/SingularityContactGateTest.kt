@@ -70,6 +70,7 @@ class SingularityContactGateTest {
     private fun run(seed: Int, skill: SkillId?, reaction: ReactionId?, item: String?): Run {
         val state = MutableGameState(if (skill != null) NoOtherActives else NoActives, seed = seed)
         state.unlockWeaponsForTesting(ReferenceArmory)
+        state.startingWeapon = botLoadout(BotWeaponOrder, ReferenceArmory)
         state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
         state.startRun()
         skill?.let { state.acquireActive(it) }

@@ -19,7 +19,6 @@ import kinetickk.ball.gameplay.nucleus.model.DimensionVisit
 import kinetickk.ball.gameplay.nucleus.model.Ember
 import kinetickk.ball.gameplay.nucleus.model.HaloRing
 import kinetickk.ball.gameplay.nucleus.model.Projectile
-import kinetickk.ball.gameplay.nucleus.model.Totem
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
 import kinetickk.ball.gameplay.nucleus.model.WeaponNode
 import kinetickk.ball.gameplay.nucleus.model.WeaponOrbital
@@ -69,7 +68,7 @@ class GameplayReductionIsolationTest {
             pendingBindingRelic = RelicId.ECHO_CHAMBER
             pendingRelicBindAction = RelicChoiceAction.MELD
             pendingClearedRebirthLevel = 3
-            totem = Totem(81f, 29f, 0.5f)
+            placeTotemChestForTesting(81f, 29f, charges = 3)
             velocityX = -0f
             weaponBeamTime = Float.fromBits(0x7fc00001)
             populateAdditionalRetainedState()
@@ -93,7 +92,7 @@ class GameplayReductionIsolationTest {
             pendingActiveReborn = false
             pendingClearedRebirthLevel = null
             recentItem = null
-            totem = null
+            structures.totemChests = emptyList()
             characterRuntime.hasDashOrigin = false
             pendingArchitectDefeatedWith = null
             directedReward = null
@@ -140,7 +139,7 @@ class GameplayReductionIsolationTest {
                 radius = 3f,
             )
             weaponOrbitals += WeaponOrbital(index = 0, x = 120f, y = 130f, radius = 4f)
-            totem = Totem(140f, 150f, 0.25f)
+            placeTotemChestForTesting(140f, 150f, charges = 2)
         }
         val committedFingerprint = source.exactSimulationFingerprint()
         val sourceEngine = EngineState(source)

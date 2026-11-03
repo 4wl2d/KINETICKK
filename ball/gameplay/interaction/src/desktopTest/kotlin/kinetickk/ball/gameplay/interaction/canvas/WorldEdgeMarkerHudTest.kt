@@ -23,7 +23,6 @@ import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
-import kinetickk.ball.gameplay.nucleus.render.TotemProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
@@ -62,9 +61,9 @@ class WorldEdgeMarkerHudTest {
                     )
                     for (step in 0 until DIRECTIONS) {
                         val angle = step * 2f * PI.toFloat() / DIRECTIONS
-                        // The totem in this direction and, while a trial runs, its orbit on the opposite side.
+                        // A Totem chest in this direction and, while a trial runs, its orbit on the opposite side.
                         val model = base.with(
-                            "totem" to TotemProjection(cos(angle) * DISTANCE, sin(angle) * DISTANCE, 1f),
+                            "totemChests" to totemChests(cos(angle) * DISTANCE to sin(angle) * DISTANCE),
                             "sites" to (if (trial) listOf(orbit(-cos(angle) * DISTANCE, -sin(angle) * DISTANCE)) else emptyList())
                                 .toImmutableList(),
                             "trial" to (if (trial) siteTrial(orbit(0f, 0f)) else null),
@@ -93,8 +92,9 @@ class WorldEdgeMarkerHudTest {
     }
 
     /**
-     * Two window offers, the sigil, the totem and a cache within its reveal distance: five markers, apart from each
-     * other and clear of the HUD in every layout and language, collected in priority order (sites, totem, ambient).
+     * Two window offers, the sigil, an openable Totem chest and a cache within its reveal distance: five markers, apart
+     * from each other and clear of the HUD in every layout and language, collected in priority order (sites, chest,
+     * ambient).
      */
     @Test
     fun sitesOfEveryFamilyKeepTheirMarkersApartInPriorityOrder() {
@@ -105,7 +105,7 @@ class WorldEdgeMarkerHudTest {
             val spin = turn * PI.toFloat() / 4f
             fun at(angle: Float, distance: Float = DISTANCE) = cos(spin + angle) * distance to sin(spin + angle) * distance
             val model = familyModel(dpWidth, dpHeight).with(
-                "totem" to at(4.4f).let { (x, y) -> TotemProjection(x, y, 1f) },
+                "totemChests" to totemChests(at(4.4f)), "keys" to 1,
                 "sites" to immutableListOf(offer(SiteKind.GATE_RACE, at(0.2f)), offer(SiteKind.BOUNTY_ARENA, at(1.5f)),
                     offer(SiteKind.FAR_SIGIL, at(2.9f))),
                 "ambientSites" to immutableListOf(cache(at(5.6f, 1_600f))),
@@ -131,7 +131,7 @@ class WorldEdgeMarkerHudTest {
 
     /**
      * The batch keeps its first eight markers: the running site's target comes first (a race leads to its next gate),
-     * window sites before the totem, and ambient sites go first when the batch is full.
+     * window sites before the Totem chest, and ambient sites go first when the batch is full.
      */
     @Test
     fun theRunningSitesTargetLeadsAndAFullBatchDropsAmbientSites() {
@@ -153,9 +153,9 @@ class WorldEdgeMarkerHudTest {
         val batch = WorldOverlayScratch.markers
         val gateDistance = kotlin.math.hypot(race.x + gate.dx, race.y + gate.dy)
         assertEquals(gateDistance, batch.distance[0], 0.5f, "the race's marker leads to its next gate")
-        // Seven offers and the totem fill the batch: the cache within its reveal distance is dropped.
+        // Seven offers and a chest fill the batch: the cache within its reveal distance is dropped.
         val crowded = familyModel(1_440f, 810f).with(
-            "totem" to TotemProjection(-DISTANCE, 0f, 1f),
+            "totemChests" to totemChests(-DISTANCE to 0f), "keys" to 1,
             "sites" to (0 until 7).map { offer(SiteKind.UNTOUCHED_TRIAL, cos(it * 0.8f) * DISTANCE to sin(it * 0.8f) * DISTANCE) }
                 .toImmutableList(),
             "ambientSites" to immutableListOf(cache(0f to 1_600f)),
@@ -200,7 +200,7 @@ class WorldEdgeMarkerHudTest {
 
     /**
      * Structure entrances off screen: the two nearest get markers (never the dungeon the Core is in, never an entrance on
-     * screen), after the totem and before the ambient caches, apart from each other and clear of the HUD in every layout
+     * screen), after the Totem chest and before the ambient caches, apart from each other and clear of the HUD in every layout
      * and language.
      */
     @Test
@@ -221,7 +221,7 @@ class WorldEdgeMarkerHudTest {
             }
             val onScreen = entranceAt(templates.template(StructureTemplateId.LABYRINTH), 120f to 90f, id = 9L shl 8)
             val model = base.with(
-                "totem" to at(5.6f, 3_000f).let { (x, y) -> TotemProjection(x, y, 1f) },
+                "totemChests" to totemChests(at(5.6f, 3_000f)), "keys" to 1,
                 "ambientSites" to immutableListOf(cache(at(3.1f, 1_500f))),
                 "structures" to structureProjection(held, signals = listOf(held, onScreen) + entrances, dungeon = held),
             )
@@ -253,7 +253,7 @@ class WorldEdgeMarkerHudTest {
     }
 
     private fun familyModel(width: Float, height: Float) = hudTestModel(width, height).with(
-        "coreX" to 0f, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f, "totem" to null,
+        "coreX" to 0f, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f,
         "enemies" to immutableListOf<EnemyProjection>(),
     )
 

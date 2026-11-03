@@ -13,6 +13,7 @@ import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.StructureProjection
 import kinetickk.ball.gameplay.nucleus.render.StructureRenderProjection
 import kinetickk.ball.gameplay.nucleus.render.StructureSignalProjection
+import kinetickk.ball.gameplay.nucleus.render.TotemChestProjection
 import kinetickk.ball.gameplay.nucleus.render.TrialClock
 import kinetickk.ball.gameplay.nucleus.render.TrialProjection
 import kinetickk.ball.gameplay.nucleus.render.TrialReward
@@ -20,12 +21,13 @@ import kinetickk.ball.gameplay.nucleus.render.TrialSource
 import kinetickk.ball.gameplay.nucleus.render.TrialValue
 import kinetickk.ball.gameplay.nucleus.render.WallKind
 import kinetickk.ball.gameplay.nucleus.render.WallProjection
+import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
 
 /**
  * One structure of a render fixture: [template] (the model content's, so the renderer's path cache keys match) centred
- * at run-local ([x], [y]) and turned by [rotation], with its room progress. Doors follow the runtime's rules: open once
- * [spent]; sealed while their room is [engagedRoom] or while their lock waits on a room not in [clearedRooms].
+ * at run-local ([x], [y]) and turned by [rotation], with its room progress. Doors follow the runtime's rules: sealed
+ * while their room is [engagedRoom] or while their lock waits on a room not in [clearedRooms].
  */
 internal class StructureFixture(
     val template: StructureTemplate,
@@ -34,8 +36,9 @@ internal class StructureFixture(
     val rotation: Int = 0,
     val clearedRooms: Int = 0,
     val engagedRoom: Int = -1,
-    val spent: Boolean = false,
     val id: Long = (template.id.ordinal + 1).toLong() shl 8,
+    /** Totem chest charges its final room promises (0: none). */
+    val chestCharges: Int = 0,
 ) {
     /** The run-local point of the template-space point ([localX], [localY]). */
     fun at(localX: Float, localY: Float): Pair<Float, Float> =
@@ -54,7 +57,6 @@ internal class StructureFixture(
     }
 
     fun doorKind(door: Int): WallKind {
-        if (spent) return WallKind.DOOR_OPEN
         val spec = template.doors[door]
         if (engagedRoom >= 0 && (spec.roomA == engagedRoom || spec.roomB == engagedRoom)) return WallKind.DOOR_SEALED
         if (spec.lockRooms != 0 && clearedRooms and spec.lockRooms != spec.lockRooms) return WallKind.DOOR_SEALED
@@ -91,13 +93,14 @@ internal fun structureProjection(
             halfHeight = if (turned) fixture.template.halfWidth else fixture.template.halfHeight,
             wallStart = start,
             wallEnd = walls.size,
-            spent = fixture.spent,
-            clearedRooms = if (fixture.spent) (1 shl fixture.template.rooms.size) - 1 else fixture.clearedRooms,
+            clearedRooms = fixture.clearedRooms,
             engagedRoom = fixture.engagedRoom,
+            chestCharges = fixture.chestCharges,
         )
     }
     val held = dungeon?.let { fixture ->
-        DungeonProjection(structureId = fixture.id, engagedRoom = fixture.engagedRoom, panel = !fixture.template.secret)
+        DungeonProjection(structureId = fixture.id, engagedRoom = fixture.engagedRoom, panel = !fixture.template.secret,
+            chestCharges = fixture.chestCharges)
     }
     return StructureRenderProjection(
         structures = placed.toImmutableList(),
@@ -143,3 +146,10 @@ internal fun GameplayRenderModel.withDungeon(fixture: StructureFixture): Gamepla
         "structures" to structureProjection(fixture, dungeon = fixture),
         "trial" to structureTrial(fixture),
     )
+
+/**
+ * Totem chests at the run-local points [at] with [charges] each, materialised and armed from run time [armedAt]
+ * ([bornAt] 0: long since grown in); ids are distinct structure ids.
+ */
+internal fun totemChests(vararg at: Pair<Float, Float>, charges: Int = 2, bornAt: Float = 0f, armedAt: Float = 0f): ImmutableList<TotemChestProjection> =
+    at.mapIndexed { index, (x, y) -> TotemChestProjection((index + 1L) shl 8, x, y, charges, bornAt, armedAt) }.toImmutableList()

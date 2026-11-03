@@ -113,7 +113,7 @@ class BountyRenderingTest {
 
     private fun model(site: SiteProjection): GameplayRenderModel =
         hudTestModel(1_440f, 810f).with(
-            "coreX" to 0f, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f, "totem" to null,
+            "coreX" to 0f, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f,
             "enemies" to immutableListOf<EnemyProjection>(), "sites" to immutableListOf(site), "trial" to siteTrial(site),
         )
 }

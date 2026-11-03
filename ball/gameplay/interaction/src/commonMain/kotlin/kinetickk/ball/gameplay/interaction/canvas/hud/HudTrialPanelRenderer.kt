@@ -26,6 +26,7 @@ import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.TextResource
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
+import kinetickk.ball.gameplay.interaction.canvas.world.drawTotemIcon
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -138,10 +139,10 @@ internal fun DrawScope.drawTrialPanel(
     val rewardText = if (trial.reward == TrialReward.STRUCTURE_REWARDS) structureTrialRewards(engine, trial, language)
         else if (trial.source == TrialSource.DIMENSION) dimensionTrialReward(trial, language)
         else siteTrialRewardLabel(trial, language)
-    // A race's medal pips sit left of its medal label.
+    // A race's medal pips sit left of its medal label, a dungeon's rolled Totem chest left of its rewards on their row.
     val pipSize = (if (layout.compact) 6f else 7f) * unit
     val pipGap = 3f * unit
-    val pipsWidth = if (trial.reward == TrialReward.MEDAL) MEDAL_PIPS * pipSize + (MEDAL_PIPS - 1) * pipGap + 8f * unit else 0f
+    val pipsWidth = rewardPipsWidth(engine, trial, pipSize, pipGap, unit, ownRow = layout.rewardRow || progressWidth <= 0f)
     // Beside the value at the board's sizes; on its own row when the text is larger.
     val rewardRoom = (if (layout.rewardRow || progressWidth <= 0f) innerRight - innerLeft else innerRight - innerLeft - progressWidth - 12f * unit) -
         pipsWidth
@@ -150,12 +151,55 @@ internal fun DrawScope.drawTrialPanel(
     }
     drawKkText(rewardLayout, innerRight, layout.rowRewardCenter, roles.you, KkAlign.END, KkVAlign.CENTER)
     recordLine(HudBlock.TRIAL_REWARD, innerRight - rewardLayout.size.width, layout.rowRewardCenter, rewardLayout)
-    if (pipsWidth > 0f) {
-        val pipsLeft = innerRight - rewardLayout.size.width - pipsWidth
+    drawRewardPips(engine, trial, innerRight - rewardLayout.size.width - pipsWidth, innerRight, layout, pipSize, pipGap, roles)
+}
+
+/**
+ * Room the reward label gives up for the pips left of it: a race's medal pips, or a dungeon's rolled Totem chest while
+ * the rewards share the value row (on [ownRow] the chest sits at the value row's end instead).
+ */
+private fun rewardPipsWidth(engine: GameplayRenderModel, trial: TrialProjection, pipSize: Float, pipGap: Float, unit: Float, ownRow: Boolean): Float {
+    if (trial.reward == TrialReward.MEDAL) return MEDAL_PIPS * pipSize + (MEDAL_PIPS - 1) * pipGap + 8f * unit
+    val charges = trialChestCharges(engine, trial)
+    if (ownRow || charges <= 0) return 0f
+    return chestMarkWidth(charges, pipSize, pipGap) + 8f * unit
+}
+
+/**
+ * A race's medal pips left of its label at [pipsLeft], or a dungeon's rolled Totem chest: the Totem chest's stacked
+ * plates and a filled pip per charge, left of the rewards when they share the value row, else ending at [innerRight] on
+ * the value row (the rewards below keep the whole width).
+ */
+private fun DrawScope.drawRewardPips(
+    engine: GameplayRenderModel,
+    trial: TrialProjection,
+    pipsLeft: Float,
+    innerRight: Float,
+    layout: HudTrialPanelLayout,
+    pipSize: Float,
+    pipGap: Float,
+    roles: KkRolePalette,
+) {
+    if (trial.reward == TrialReward.MEDAL) {
         drawKkPips(Offset(pipsLeft, layout.rowRewardCenter - pipSize * 0.5f), MEDAL_PIPS, trial.medal.coerceIn(0, MEDAL_PIPS), roles.you,
             sizeDp = pipSize / density, gapDp = pipGap / density, emptyOutlined = true, emptyColor = roles.you)
+        return
     }
+    val charges = trialChestCharges(engine, trial)
+    if (charges <= 0) return
+    val left = if (layout.rewardRow) innerRight - chestMarkWidth(charges, pipSize, pipGap) else pipsLeft
+    drawTotemIcon(Offset(left + pipSize, layout.rowValueCenter), pipSize * 2f, roles.you)
+    drawKkPips(Offset(left + pipSize * 2.5f, layout.rowValueCenter - pipSize * 0.5f), charges, charges, roles.you,
+        sizeDp = pipSize / density, gapDp = pipGap / density)
 }
+
+/** The Totem chest the held dungeon's final room pays (0: none, or not a dungeon). */
+private fun trialChestCharges(engine: GameplayRenderModel, trial: TrialProjection): Int =
+    if (trial.source == TrialSource.STRUCTURE) engine.structures.dungeon?.chestCharges ?: 0 else 0
+
+/** The chest mark's width: its plates (two pips wide), a half-pip gap and the charge pips. */
+private fun chestMarkWidth(charges: Int, pipSize: Float, pipGap: Float): Float =
+    pipSize * 2.5f + charges * pipSize + (charges - 1) * pipGap
 
 /** A race's medal pips: gold, silver and bronze as three, two and one filled. */
 private const val MEDAL_PIPS = 3

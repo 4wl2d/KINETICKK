@@ -69,7 +69,7 @@ internal fun MutableGameState.toRenderModel(
         morningstarAngle = morningstarAngle, morningstarX = morningstarX, morningstarY = morningstarY,
         weaponBeamTime = weaponBeamTime, weaponBeamStartX = weaponBeamStartX, weaponBeamStartY = weaponBeamStartY,
         weaponBeamEndX = weaponBeamEndX, weaponBeamEndY = weaponBeamEndY,
-        totem = totemProjection(reusableCollections, identitySource),
+        totemChests = totemChestProjections(reusableCollections?.totemChests, identitySource),
         coreShape = coreShape,
         enemies = enemyProjections(reusableCollections, identitySource),
         projectiles = projectileProjections(reusableCollections, identitySource),

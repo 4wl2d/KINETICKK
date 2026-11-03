@@ -22,6 +22,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.sites.*
 import kinetickk.ball.gameplay.nucleus.simulation.skills.*
 import kinetickk.ball.gameplay.nucleus.simulation.variety.*
+import kinetickk.ball.gameplay.nucleus.simulation.structures.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
 
 /**
@@ -121,11 +122,12 @@ class NoPoiPlaythroughTest {
             if (reportAttempt != null) report("REFERENCE attempt=$reportAttempt seed=$seed simulationSpeed=1.0 inputHz=50 freshLab=true")
             val state = MutableGameState(canonicalGameplayContent, seed = seed)
             state.unlockWeaponsForTesting(ReferenceArmory)
+            state.startingWeapon = botLoadout(BotWeaponOrder, ReferenceArmory)
             state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
             state.startRun()
             assertEquals(1f, state.settings.simulationSpeed)
             assertEquals(CoreShape.ORB, state.coreShape)
-            assertEquals(WeaponId.FLUX_WAKE, state.weapon)
+            assertEquals(WeaponId.ARC_COIL, state.weapon, "the bot loads out its first owned preferred weapon")
             assertTrue((0 until state.matrixRanks.size).all { state.matrixRanks[it] == 0 })
             assertEquals(0, state.rebirthLevel)
             val bot = NoPoiBot()
@@ -262,7 +264,7 @@ internal const val ARC_BOSS_SPEED = 460f
 internal class NoPoiBot(
     private val archetypeTag: BuildTag = BuildTag.RAM,
     private val element: StatusElement? = StatusElement.ENTROPY,
-    private val weaponOrder: List<WeaponId> = listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.ENTROPY_FIELD, WeaponId.PRISM_RELAY),
+    private val weaponOrder: List<WeaponId> = BotWeaponOrder,
     /** An impact-driven player avoids liabilities that cut impacts, healing, integrity or steering. */
     private val relicTaste: Map<RelicId, Float> = mapOf(
         RelicId.ECHO_CHAMBER to -40f,
@@ -331,14 +333,15 @@ internal class NoPoiBot(
             targetY = targetEnemy.y + targetEnemy.vy * 0.3f
             radius = if (s.weapon in BotOrbitWeapons) 280f else 0f
         }
-        val totem = s.totem
+        // A waiting Totem chest while the bot holds a Key (population runs never finish a dungeon, so never there).
+        val chest = if (s.keys > 0 && s.inBaseLayer()) s.structures.totemChests.minByOrNull { distanceSquared(s.coreX, s.coreY, it.x, it.y) } else null
         val pickup = s.pickups.filter { it.type == PickupType.KEY || it.type == PickupType.RELIC || it.type == PickupType.REPAIR && s.hp < s.maxHp - 15f || it.type == PickupType.DATA && distanceSquared(s.coreX, s.coreY, it.x, it.y) < 180f * 180f }
             .minByOrNull { distanceSquared(s.coreX, s.coreY, it.x, it.y) }
         if (boss != null) {
             targetX = boss.x; targetY = boss.y
             radius = if (s.weapon == WeaponId.FLUX_WAKE) WAKE_BOSS_RADIUS else ARC_BOSS_RADIUS
-        } else if (totem != null && s.keys > 0) {
-            targetX = totem.x; targetY = totem.y; radius = 5f
+        } else if (chest != null) {
+            targetX = chest.x; targetY = chest.y; radius = 5f
         } else if (pickup != null) {
             targetX = pickup.x; targetY = pickup.y; radius = 10f
         }
@@ -884,8 +887,19 @@ internal class NoPoiBot(
 internal enum class DataPolicy { NEUTRAL, SEEK, AVOID }
 
 /**
- * The reference run owns the original twelve weapons, so its Totem recalibrations deal exactly the
- * offers they did before weapon offers were limited to owned weapons (a profile that owns only the
- * starter can amplify but never recalibrate).
+ * The reference run owns the original twelve weapons: the population bots load out from it ([botLoadout]) and its
+ * Totem chest and directed-site recalibrations deal from it (a profile that owns only the starter can amplify but
+ * never recalibrate).
  */
 internal val ReferenceArmory: List<WeaponId> = WeaponId.entries.take(12)
+
+/** The reference bot's weapon preference, best first. */
+internal val BotWeaponOrder: List<WeaponId> = listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.ENTROPY_FIELD, WeaponId.PRISM_RELAY)
+
+/**
+ * The weapon a bot preferring [weaponOrder] loads out of [owned]: the first it prefers that the profile owns, as a player
+ * with that armory picks in the Hangar ([fallback], the starter, when it owns none). The world Totem used to make this
+ * switch at its first recalibration; without it the population harnesses start on the loaded-out weapon (harness H1).
+ */
+internal fun botLoadout(weaponOrder: List<WeaponId>, owned: Collection<WeaponId>, fallback: WeaponId = WeaponId.FLUX_WAKE): WeaponId =
+    weaponOrder.firstOrNull { it in owned } ?: fallback

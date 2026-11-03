@@ -21,11 +21,12 @@ import kotlin.math.floor
 import kotlin.math.hypot
 
 /*
- * The structure window, the single writer of MutableGameState.structureField. It holds the structures whose footprint
- * meets the obstacle window, their capsule walls in run-local coordinates with door kinds from the dungeon state and
- * the spent list, and the signals of the nearest structures around the Core. It is rebuilt only when the obstacle
+ * The structure window, the single writer of MutableGameState.structureField. It holds the unspent structures whose
+ * footprint meets the obstacle window, their capsule walls in run-local coordinates with door kinds from the dungeon
+ * state, and the signals of the nearest unspent structures around the Core. It is rebuilt only when the obstacle
  * window moves to another chunk, the world layer changes or the Architect collapses the structures; a door change
- * replaces one structure's wall slice. Disabled content keeps the empty window a run starts with.
+ * replaces one structure's wall slice and a spent structure leaves at once (removeStructureFromWindow), so neither a
+ * window move nor a layer round trip can bring it back. Disabled content keeps the empty window a run starts with.
  *
  * Skipped placements: after a layer switch, those whose footprint inflated by the obstacle clearance meets the arrival
  * keep-out of the same layer (stateless, so no arrival bookkeeping exists).
@@ -74,16 +75,16 @@ private fun MutableGameState.buildStructureField(chunkX: Int, chunkY: Int, colla
     for (cellY in firstCellY until endCellY) {
         for (cellX in firstCellX until endCellX) {
             val placement = availableStructure(cellX, cellY) ?: continue
+            if (isSpent(placement.id)) continue
             if (placement.absoluteX + placement.halfWidth <= minX || placement.absoluteX - placement.halfWidth >= maxX ||
                 placement.absoluteY + placement.halfHeight <= minY || placement.absoluteY - placement.halfHeight >= maxY
             ) {
                 continue
             }
             val template = policy.template(placement.template)
-            val spent = isSpent(placement.id)
             val start = walls.size
             val specs = template.walls
-            for (index in specs.indices) walls += placedWall(placement, template, index, specs[index], spent)
+            for (index in specs.indices) walls += placedWall(placement, template, index, specs[index])
             structures += PlacedStructure(
                 id = placement.id,
                 template = placement.template,
@@ -94,7 +95,7 @@ private fun MutableGameState.buildStructureField(chunkX: Int, chunkY: Int, colla
                 halfHeight = placement.halfHeight,
                 wallStart = start,
                 wallEnd = walls.size,
-                spent = spent,
+                chestCharges = totemChestCharges(policy, template, runSeed, worldLayer, cellX, cellY),
             )
         }
     }
@@ -119,10 +120,9 @@ private fun MutableGameState.placedWall(
     template: StructureTemplate,
     index: Int,
     spec: StructureWallSpec,
-    spent: Boolean,
 ): Wall {
     val rotation = placement.rotation
-    val kind = if (spec.door < 0) WallKind.SOLID else doorKind(placement.id, template, spec.door, spent)
+    val kind = if (spec.door < 0) WallKind.SOLID else doorKind(placement.id, template, spec.door)
     return Wall(
         id = placement.id or index.toLong(),
         kind = kind,
@@ -136,11 +136,10 @@ private fun MutableGameState.placedWall(
 }
 
 /**
- * A door of a spent structure stands open. Otherwise it is sealed while the dungeon of this structure holds its room
- * engaged, or while its lock waits on a room that is not cleared yet; open in every other case.
+ * A door is sealed while the dungeon of this structure holds its room engaged, or while its lock waits on a room that
+ * is not cleared yet; open in every other case.
  */
-private fun MutableGameState.doorKind(structureId: Long, template: StructureTemplate, door: Int, spent: Boolean): WallKind {
-    if (spent) return WallKind.DOOR_OPEN
+private fun MutableGameState.doorKind(structureId: Long, template: StructureTemplate, door: Int): WallKind {
     val dungeon = dungeon?.takeIf { it.structureId == structureId }
     val spec = template.doors[door]
     val engaged = dungeon?.engagedRoom ?: -1
@@ -151,9 +150,9 @@ private fun MutableGameState.doorKind(structureId: Long, template: StructureTemp
 }
 
 /**
- * Replaces the wall slice of the windowed structure [structureId] after a seal, a clear or a spent change, keeping
- * every other wall and the window identity when nothing changed. A structure outside the window waits for the next
- * rebuild, which reads the same dungeon and spent list.
+ * Replaces the wall slice of the windowed structure [structureId] after a seal or a clear, keeping every other wall and
+ * the window identity when nothing changed. A structure outside the window waits for the next rebuild, which reads the
+ * same dungeon.
  */
 internal fun MutableGameState.applyStructureDoors(structureId: Long) {
     val field = structureField
@@ -161,12 +160,11 @@ internal fun MutableGameState.applyStructureDoors(structureId: Long) {
     if (index < 0) return
     val structure = field.structures[index]
     val template = content.structures.template(structure.template)
-    val spent = isSpent(structureId)
-    var changed = structure.spent != spent
+    var changed = false
     val slice = ArrayList<Wall>(structure.wallEnd - structure.wallStart)
     for (wallIndex in structure.wallStart until structure.wallEnd) {
         val wall = field.walls[wallIndex]
-        val kind = if (wall.door < 0) wall.kind else doorKind(structureId, template, wall.door, spent)
+        val kind = if (wall.door < 0) wall.kind else doorKind(structureId, template, wall.door)
         if (kind == wall.kind) {
             slice += wall
         } else {
@@ -175,7 +173,27 @@ internal fun MutableGameState.applyStructureDoors(structureId: Long) {
         }
     }
     if (!changed) return
-    structureField = field.withStructure(index, structure.copy(spent = spent), slice)
+    structureField = field.withStructure(index, structure, slice)
+}
+
+/**
+ * Takes the windowed structure [structureId] out of the window with its walls and signal (it was just spent) and
+ * returns it, or null when the window does not hold it (another layer's window, or already gone).
+ */
+internal fun MutableGameState.removeStructureFromWindow(structureId: Long): PlacedStructure? {
+    val field = structures.structureField
+    val index = field.indexOf(structureId)
+    if (index < 0) return null
+    structures.structureField = field.withoutStructure(index)
+    return field.structures[index]
+}
+
+/** Rebuilds the window on its current key: after the spent set fills, every placement counts as spent. */
+internal fun MutableGameState.rebuildStructureField() {
+    if (!content.structures.enabled) return
+    val field = structures.structureField
+    if (field === StructureField.EMPTY) return
+    structures.structureField = buildStructureField(field.centerChunkX, field.centerChunkY, field.bossCollapsed)
 }
 
 /**
@@ -241,43 +259,47 @@ private const val SIGNAL_CELL_REACH: Int = 2
 // Spent list: cleared or abandoned structures, oldest first, value-only.
 
 /**
- * Records [structureId] with [SPENT_FLAG] at the end of the spent list, replacing an earlier entry of the same
- * structure; past [ContentBounds.MAX_SPENT_STRUCTURES] entries the oldest is forgotten (that structure can arm again).
+ * Records [structureId] with [SPENT_FLAG] for the rest of the run. An id already recorded, or a list already at
+ * [ContentBounds.MAX_SPENT_STRUCTURES] (which counts every structure as spent), keeps the list as it is; nothing is
+ * ever forgotten, so a structure never arms twice in a run.
  */
 internal fun MutableGameState.markSpent(structureId: Long) {
-    val id = structureId and STRUCTURE_ID_MASK
-    val current = spentStructureIds
+    if (isSpent(structureId)) return
+    val current = structures.spentStructureIds
     val next = ArrayList<Long>(current.size + 1)
-    for (index in current.indices) {
-        val entry = current[index]
-        if (entry and STRUCTURE_ID_MASK != id) next += entry
-    }
-    next += id or SPENT_FLAG
-    val excess = next.size - ContentBounds.MAX_SPENT_STRUCTURES
-    spentStructureIds = if (excess > 0) next.subList(excess, next.size).toList() else next
+    next += current
+    next += (structureId and STRUCTURE_ID_MASK) or SPENT_FLAG
+    structures.spentStructureIds = next
 }
 
-/** True when the spent list holds [structureId] as cleared or abandoned. */
+/** True when the run spent [structureId] (cleared or abandoned), or the spent list is full (everything is spent). */
 internal fun MutableGameState.isSpent(structureId: Long): Boolean {
+    if (spentStructureSetFull()) return true
     val entry = (structureId and STRUCTURE_ID_MASK) or SPENT_FLAG
-    val spent = spentStructureIds
+    val spent = structures.spentStructureIds
     for (index in spent.indices) if (spent[index] == entry) return true
     return false
 }
 
+/** The conservative full-set rule: at [ContentBounds.MAX_SPENT_STRUCTURES] entries every structure counts as spent. */
+internal fun MutableGameState.spentStructureSetFull(): Boolean =
+    structures.spentStructureIds.size >= ContentBounds.MAX_SPENT_STRUCTURES
+
 // ---------------------------------------------------------------------------------------------
 // Run lifecycle.
 
-/** A new run: no structure window, no dungeon, nothing spent (the obstacle reset builds the window). */
+/** A new run: no structure window, no dungeon, nothing spent, no chest (the obstacle reset builds the window). */
 internal fun MutableGameState.resetStructures() {
     structureField = StructureField.EMPTY
     dungeon = null
     spentStructureIds = emptyList()
     lastAnnouncedStructureId = 0L
+    resetTotemChests()
 }
 
 /** Positions follow a rebase; ids and absolute cells stay. */
 internal fun MutableGameState.rebaseStructures(dx: Float, dy: Float) {
     structureField = structureField.shifted(dx, dy)
     dungeon = dungeon?.shifted(dx, dy)
+    rebaseTotemChests(dx, dy)
 }

@@ -16,14 +16,19 @@ import kotlin.math.min
 import kinetickk.ball.gameplay.interaction.canvas.look.*
 import kinetickk.ball.gameplay.interaction.layout.*
 
-/** Matter and key chips (and their phone forms). */
+/**
+ * Matter and key chips (and their phone forms). The key chip also shows at 0 Keys while a Totem chest waits (chests
+ * publish in realspace only), with a lock in place of the key: the chest needs a Key.
+ */
 internal fun DrawScope.drawEconomy(engine: GameplayRenderModel, hostMeasurer: TextMeasurer, frame: HudFrame, badgeBottom: Float) {
     val roles = hostMeasurer.roles
     val language = hostMeasurer.language
     // Chip values are UI text: they follow the text size (board size at the default).
     val measurer = HudMeasurers.ui(hostMeasurer)
     val matter = HudScratch.matter.of(language, engine.runMatter) { "+" + formatCompact(engine.runMatter, language) }
-    val keys = if (engine.keys > 0) HudScratch.keys.of(engine.keys.toLong()) else null
+    val locked = engine.keys <= 0 && engine.totemChests.isNotEmpty()
+    val keys = if (engine.keys > 0 || locked) HudScratch.keys.of(engine.keys.coerceAtLeast(0).toLong()) else null
+    val keyIcon = if (locked) KkIcon.SYSTEM_LOCKED else KkIcon.SYSTEM_KEY
     when (frame.mode) {
         GameplayLayoutMode.REGULAR -> {
             val height = frame.u(36f)
@@ -31,7 +36,7 @@ internal fun DrawScope.drawEconomy(engine: GameplayRenderModel, hostMeasurer: Te
             // Right-aligned left of the header's leftmost button: Build, or the FPS counter while it shows.
             val headerLeft = if (engine.settings.showFps) frame.buildCenterX - regularHeaderStep(frame.width, frame.density) else frame.buildCenterX
             var right = headerLeft - frame.u(20f + 10f)
-            if (keys != null) right = drawHudChip(measurer, HudPath.KEY_CHIP, HudText.KEYS, keys, right, top, height, frame.t(21f), KkIcon.SYSTEM_KEY, roles) - frame.u(8f)
+            if (keys != null) right = drawHudChip(measurer, HudPath.KEY_CHIP, HudText.KEYS, keys, right, top, height, frame.t(21f), keyIcon, roles) - frame.u(8f)
             drawHudChip(measurer, HudPath.MATTER_CHIP, HudText.MATTER, matter, right, top, height, frame.t(21f), null, roles)
         }
         GameplayLayoutMode.COMPACT_LANDSCAPE -> {
@@ -50,7 +55,7 @@ internal fun DrawScope.drawEconomy(engine: GameplayRenderModel, hostMeasurer: Te
             x += layout.size.width + frame.u(12f)
             HudScratch.economyRight = x - frame.u(12f)
             if (keys != null) {
-                drawKkIcon(KkIcon.SYSTEM_KEY, Offset(x + frame.u(7f), centerY), frame.u(14f), Kk.Bone)
+                drawKkIcon(keyIcon, Offset(x + frame.u(7f), centerY), frame.u(14f), Kk.Bone)
                 val keyLayout = HudDrawCache.layout(HudText.KEYS, measurer, keys, measurer.typography.condStyle(17f, tabular = true, lineHeightEm = 1f),
                     uppercase = true)
                 drawKkText(keyLayout, x + frame.u(19f), centerY, Kk.Bone, valign = KkVAlign.CENTER)
@@ -68,7 +73,7 @@ internal fun DrawScope.drawEconomy(engine: GameplayRenderModel, hostMeasurer: Te
             left += frame.u(6f)
             if (keys != null) {
                 HudScratch.economyRight =
-                    drawHudChipFromLeft(measurer, HudPath.KEY_CHIP, HudText.KEYS, keys, left, top, height, 15f, KkIcon.SYSTEM_KEY, roles)
+                    drawHudChipFromLeft(measurer, HudPath.KEY_CHIP, HudText.KEYS, keys, left, top, height, 15f, keyIcon, roles)
             }
         }
     }

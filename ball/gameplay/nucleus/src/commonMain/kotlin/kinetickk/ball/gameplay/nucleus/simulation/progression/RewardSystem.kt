@@ -32,11 +32,14 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     // that completes a level cannot open a choice in place of the victory.
     val victory = enemy.type == EnemyType.ARCHITECT && phase == GamePhase.RUNNING
     if (victory) phase = GamePhase.VICTORY
+    // Mini-bosses (the Herald) and secret bosses pay out like an Elite: a Key, a Relic, an Elite kill and resonance.
+    val eliteReward = enemy.isElite || enemy.isMiniBoss || enemy.isSecretBoss
+    // Resonance first, so a notice the kill's site, encounter or visit sets (a secret boss's defeat, a completed
+    // objective) replaces its announcement. It draws nothing, so its place moves no stream.
+    if (eliteReward) resonateEliteKill()
     recordSiteKill(enemy)
     onEncounterEnemyKilled(enemy)
     onDimensionEnemyKilled(enemy)
-    // Mini-bosses (the Herald) and secret bosses pay out like an Elite: a Key, a Relic and an Elite kill.
-    val eliteReward = enemy.isElite || enemy.isMiniBoss || enemy.isSecretBoss
     if (eliteReward) pendingEliteKills++
     enemy.dead = true
     kills++

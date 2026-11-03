@@ -369,8 +369,7 @@ class DungeonSystemTest {
         assertEquals(StructureNotice.STRUCTURE_CLEARED.key, run.message)
         assertNull(run.dungeon)
         assertTrue(run.isSpent(dungeon.placement.id))
-        assertTrue(dungeon.structure.spent)
-        assertEquals(List(4) { WallKind.DOOR_OPEN }, dungeon.doors())
+        assertNull(dungeon.structureOrNull, "the cleared structure disintegrated")
 
         // A spent structure is never held again and pays nothing more.
         run.pickups.clear()
@@ -597,7 +596,7 @@ class DungeonSystemTest {
         assertTrue(run.runBoons.isEmpty(), "abandonment grants no aspect")
         assertEquals(StructureNotice.STRUCTURE_ABANDONED.key, run.message)
         assertTrue(run.isSpent(dungeon.placement.id))
-        assertEquals(List(4) { WallKind.DOOR_OPEN }, dungeon.doors())
+        assertNull(dungeon.structureOrNull, "the fought structure disintegrated")
 
         dungeon.enterRoom(1)
         assertNull(run.dungeon, "an abandoned structure never re-arms")
@@ -806,24 +805,21 @@ class DungeonSystemTest {
     // Spent list, composition, the Doodle.
 
     @Test
-    fun spentStructuresAreRememberedInABoundedFifo() {
+    fun spentStructuresStayForTheWholeRun() {
         val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         dungeon.clear(2)
         assertTrue(run.isSpent(dungeon.placement.id))
-        val bound = ContentBounds.MAX_SPENT_STRUCTURES
-        // Thirty-one later structures keep it spent; the thirty-second evicts it and it arms again.
-        repeat(bound - 1) { run.markSpent(structureId(WorldLayer.BASE, 200 + it, 200)) }
-        assertEquals(bound, run.spentStructureIds.size)
+        // Every later structure up to the bound keeps it spent: nothing is ever evicted, so it never arms again.
+        repeat(ContentBounds.MAX_SPENT_STRUCTURES - 1) { run.markSpent(structureId(WorldLayer.BASE, 200 + it, 200)) }
+        assertEquals(ContentBounds.MAX_SPENT_STRUCTURES, run.spentStructureIds.size)
+        assertTrue(run.isSpent(dungeon.placement.id))
+        val full = run.spentStructureIds
+        run.markSpent(dungeon.placement.id)
+        assertSame(full, run.spentStructureIds, "re-marking adds no entry")
         dungeon.enterRoom(1)
-        assertNull(run.dungeon)
-        run.markSpent(structureId(WorldLayer.BASE, 300, 300))
-        assertEquals(bound, run.spentStructureIds.size)
-        assertFalse(run.isSpent(dungeon.placement.id))
-        dungeon.enterRoom(1)
-        assertEquals(1, run.dungeon?.engagedRoom, "an evicted structure arms again")
-        assertFalse(dungeon.structure.spent)
-        assertEquals(listOf(WallKind.DOOR_OPEN, WallKind.DOOR_SEALED, WallKind.DOOR_SEALED, WallKind.DOOR_OPEN), dungeon.doors())
+        assertNull(run.dungeon, "a spent structure never arms again")
+        assertNull(dungeon.structureOrNull)
     }
 
     @Test

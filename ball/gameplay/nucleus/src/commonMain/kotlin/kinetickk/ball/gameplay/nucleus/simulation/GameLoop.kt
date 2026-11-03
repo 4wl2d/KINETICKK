@@ -178,13 +178,13 @@ internal fun MutableGameState.simulateStep(delta: Float) {
     if (phase != GamePhase.RUNNING) return
     updateProjectiles(delta)
     updatePickups(delta)
-    updateTotem(delta)
     emitVisualFx(VisualFxCue.EffectsAdvanced(delta))
     spawnWave(delta)
     resolveCollisions(delta)
     updateVolatileRemains()
     if (phase != GamePhase.RUNNING) return
     rebaseWorldIfNeeded()
+    updateTotemChests()
 
     openNextPendingChoice()
 

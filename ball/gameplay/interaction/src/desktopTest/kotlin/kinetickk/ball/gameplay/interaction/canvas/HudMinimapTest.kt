@@ -144,7 +144,7 @@ class HudMinimapTest {
     fun siteFamiliesPinTheirOwnMarksInsideTheMapAndEasterEggsNeverShow() {
         val roles = KkRolePalette.Default
         val base = hudTestModel().with(
-            "velocityX" to 0f, "velocityY" to 0f, "obstacles" to immutableListOf<ObstacleProjection>(), "totem" to null,
+            "velocityX" to 0f, "velocityY" to 0f, "obstacles" to immutableListOf<ObstacleProjection>(),
             "enemies" to immutableListOf<EnemyProjection>(), "pickups" to immutableListOf<kinetickk.ball.gameplay.nucleus.render.PickupProjection>(),
         )
         val range = base.minimapRange
@@ -192,7 +192,7 @@ class HudMinimapTest {
         val roles = KkRolePalette.Default
         val range = 2_400f
         val base = hudTestModel().with(
-            "velocityX" to 0f, "velocityY" to 0f, "obstacles" to immutableListOf<ObstacleProjection>(), "totem" to null,
+            "velocityX" to 0f, "velocityY" to 0f, "obstacles" to immutableListOf<ObstacleProjection>(),
             "enemies" to immutableListOf<EnemyProjection>(), "pickups" to immutableListOf<kinetickk.ball.gameplay.nucleus.render.PickupProjection>(),
             "minimapRange" to range,
         )
@@ -239,6 +239,28 @@ class HudMinimapTest {
         assertFalse(pinned.inside(rim).contentEquals(empty.inside(rim)), "the entrance sits on the east rim")
         val inner = Rect(minimap.left + 2f, minimap.top + 2f, minimap.center.x + half * 0.6f, minimap.bottom - 2f)
         assertTrue(pinned.inside(inner).contentEquals(empty.inside(inner)), "only the pinned entrance draws")
+    }
+
+    /** Totem chests: a filled volt square while a Key opens them, a hollow bone one while they are locked. */
+    @Test
+    fun totemChestsPinFilledWhileOpenableAndHollowWhileLocked() {
+        val roles = KkRolePalette.Default
+        val base = hudTestModel().with(
+            "velocityX" to 0f, "velocityY" to 0f, "obstacles" to immutableListOf<ObstacleProjection>(),
+            "enemies" to immutableListOf<EnemyProjection>(), "pickups" to immutableListOf<kinetickk.ball.gameplay.nucleus.render.PickupProjection>(),
+        )
+        val chests = totemChests(base.coreX + base.minimapRange * 0.5f to base.coreY)
+        val open = render(base.with("totemChests" to chests, "keys" to 1), 1_440, 810)
+        val minimap = assertNotNull(HudLayoutProbe.rect(HudBlock.MINIMAP))
+        val pinX = minimap.center.x + minimap.width * 0.25f
+        val pinY = minimap.center.y
+        assertTrue(tinted(open.at(pinX, pinY), roles.you), "an openable chest pins a filled volt square")
+        val locked = render(base.with("totemChests" to chests, "keys" to 0), 1_440, 810)
+        assertFalse(tinted(locked.at(pinX, pinY), roles.you), "a locked chest pins no volt")
+        val around = Rect(pinX - 6f, pinY - 6f, pinX + 6f, pinY + 6f)
+        assertTrue(locked.anyNearest(around, Kk.Bone, listOf(Kk.Bone, roles.you, Kk.Ink)), "its hollow square is bone")
+        val none = render(base, 1_440, 810)
+        assertFalse(none.anyNearest(around, Kk.Bone, listOf(Kk.Bone, roles.you, Kk.Ink)), "no chest, no pin")
     }
 
     @Test

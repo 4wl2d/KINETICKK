@@ -189,7 +189,7 @@ class RunVarietyRenderingTest {
                 // The Core and camera at the origin; the signal at screen (x, y).
                 val signal = EventSignalProjection(7, SignalKind.MERCHANT, x - width * 0.5f, y - height * 0.5f, expiresAt = 20f)
                 val model = hudTestModel(width.toFloat(), height.toFloat()).with(
-                    "coreX" to 0f, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f, "totem" to null, "elapsed" to 10f,
+                    "coreX" to 0f, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f, "elapsed" to 10f,
                     "enemies" to immutableListOf<EnemyProjection>(), "sites" to immutableListOf<SiteProjection>(),
                     "ambientSites" to immutableListOf<SiteProjection>(), "trial" to null,
                     "eventSignals" to immutableListOf(signal),
@@ -235,7 +235,7 @@ class RunVarietyRenderingTest {
                 textScale, language, HudTestFonts.typography)
             val signal = EventSignalProjection(5, SignalKind.MERCHANT, width * 0.22f, -height * 0.12f, expiresAt = 21f)
             val model = hudTestModel(width.toFloat(), height.toFloat()).with(
-                "coreX" to 0f, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f, "totem" to null, "elapsed" to 3f,
+                "coreX" to 0f, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f, "elapsed" to 3f,
                 "enemies" to immutableListOf<EnemyProjection>(), "sites" to immutableListOf<SiteProjection>(),
                 "ambientSites" to immutableListOf<SiteProjection>(), "trial" to null, "eventSignals" to immutableListOf(signal),
             )

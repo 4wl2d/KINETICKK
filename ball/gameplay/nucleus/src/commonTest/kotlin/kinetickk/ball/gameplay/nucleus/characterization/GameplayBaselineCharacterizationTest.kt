@@ -428,6 +428,7 @@ private fun cueToken(cue: VisualFxCue): String = when (cue) {
     is VisualFxCue.WeaponArcAdded -> "W"
     is VisualFxCue.SkillCast -> "Z"
     is VisualFxCue.ApexActivated -> "V"
+    is VisualFxCue.StructureDisintegrated -> "G"
     is VisualFxCue.WorldRebased -> "R"
     is VisualFxCue.VisualCuesDropped -> "X"
 }

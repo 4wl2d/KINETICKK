@@ -385,6 +385,7 @@ private class FuzzSession(private val plan: FuzzPlan, private val options: FuzzO
 
     // Invariant trackers (run seconds since a condition first held; NaN while it does not).
     private var lastElapsed = 0f
+    private val chestWatch = FuzzChestWatch()
     private var queuedSince = Float.NaN
     private var sealOutsideSince = Float.NaN
     private var sealEmptySince = Float.NaN
@@ -901,6 +902,7 @@ private class FuzzSession(private val plan: FuzzPlan, private val options: FuzzO
         checkDimension(m)
         checkQueue(m)
         checkEasy(m)
+        chestWatch.check(m) { invariant, detail -> record(invariant, detail) }
         coverage(m)
     }
 
@@ -952,10 +954,8 @@ private class FuzzSession(private val plan: FuzzPlan, private val options: FuzzO
         bound("run boons", m.runBoons.size, ContentBounds.MAX_RUN_BOONS)
         bound("pending dimension rewards", m.dimensionRun.pendingRewards.size, ContentBounds.MAX_PENDING_DIMENSION_REWARDS)
         bound("portal offers", m.dimensionRun.portalOffers, min(content.dimensions.maxPortalOffersPerRun, ContentBounds.MAX_PORTAL_OFFERS))
-        m.dimensionRun.visit?.let { visit ->
-            bound("halo rings", visit.halos.size, ContentBounds.MAX_HALO_RINGS)
-            bound("embers", visit.embers.size, ContentBounds.MAX_EMBERS)
-        }
+        m.dimensionRun.visit?.let { bound("halo rings", it.halos.size, ContentBounds.MAX_HALO_RINGS) }
+        m.dimensionRun.visit?.let { bound("embers", it.embers.size, ContentBounds.MAX_EMBERS) }
         bound("structures in window", m.structureField.structures.size, ContentBounds.MAX_STRUCTURES_IN_WINDOW)
         bound("structure walls", m.structureField.walls.size, ContentBounds.MAX_STRUCTURE_WALLS)
         bound("structure signals", m.structureField.signals.size, ContentBounds.MAX_STRUCTURE_SIGNALS)
