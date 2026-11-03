@@ -143,3 +143,48 @@ internal fun MutableGameState.effectiveDamageReduction(): Float {
     return (damageReduction + buffAmount(BuffStat.DAMAGE_REDUCTION) + whileAmount(BuffStat.DAMAGE_REDUCTION, null))
         .coerceIn(0f, 0.65f)
 }
+
+/**
+ * Power of the equipped weapon's own hits: item weapon power, Rebirth, level, generic mastery, run growth
+ * (1 + 1.6p plus the Matrix bonus), Overdrive and the synergies ([weaponSynergyPower]: tag resonance,
+ * signature, Relic key harmony, scaling stat) and Honing ([weaponUpgradePower]). An OVERDRIVE-scaling weapon
+ * takes Overdrive through its scaling only, so no input counts twice.
+ */
+internal fun MutableGameState.effectiveWeaponPower(): Float =
+    weaponPower *
+        rebirthProfile.playerPowerMultiplier *
+        (1f + (weaponLevel - 1) * 0.08f) *
+        (1f + currentWeaponMastery.damageBonus) *
+        weaponRunGrowth() *
+        weaponSynergyPower() *
+        weaponOverdriveFactor() *
+        weaponUpgradePower()
+
+/**
+ * Honing of the equipped weapon: its own hits only (never [abilityPower]), read by the current weapon so the
+ * bonus follows a Totem recalibration or a weapon choice.
+ */
+internal fun MutableGameState.weaponUpgradePower(): Float =
+    1f + content.upgrades.weaponPowerPerLevel * weaponUpgradeLevels[weapon.ordinal]
+
+/**
+ * Power of character abilities and weapon-based item effects. It shares the weapon's level, mastery and
+ * Overdrive factors but grows with [kinetickk.ball.content.api.RunTempoProfile.abilityRunGrowth], so
+ * equipped-weapon bonuses applied only to [effectiveWeaponPower] never leak into abilities.
+ */
+internal fun MutableGameState.abilityPower(): Float =
+    weaponPower *
+        rebirthProfile.playerPowerMultiplier *
+        (1f + (weaponLevel - 1) * 0.08f) *
+        (1f + currentWeaponMastery.damageBonus) *
+        content.tempo.abilityRunGrowth(elapsed) *
+        if (overdriveTime > 0f) 1.45f else 1f
+
+internal fun MutableGameState.cooldown(base: Float): Float =
+    base / (
+        attackSpeed *
+            (1f + currentWeaponMastery.activationSpeedBonus) *
+            buildActivationBonus() *
+            characterActivationMultiplier() *
+            (if (overdriveTime > 0f) 1.35f else 1f)
+        ).coerceAtLeast(0.2f)
