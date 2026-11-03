@@ -94,6 +94,27 @@ import kinetickk.ball.gameplay.nucleus.simulation.pendingActiveReborn
 import kinetickk.ball.gameplay.nucleus.simulation.skillBufferTime
 import kinetickk.ball.gameplay.nucleus.simulation.apexBufferTime
 import kinetickk.ball.gameplay.nucleus.simulation.skillBufferMask
+import kinetickk.ball.gameplay.nucleus.simulation.ablazeUntil
+import kinetickk.ball.gameplay.nucleus.simulation.blastJumpUntil
+import kinetickk.ball.gameplay.nucleus.simulation.coreImpulseReadyAt
+import kinetickk.ball.gameplay.nucleus.simulation.dashHeatBank
+import kinetickk.ball.gameplay.nucleus.simulation.erasureLatchId
+import kinetickk.ball.gameplay.nucleus.simulation.flameRefundReadyAt
+import kinetickk.ball.gameplay.nucleus.simulation.frictionlessUntil
+import kinetickk.ball.gameplay.nucleus.simulation.guardDamage
+import kinetickk.ball.gameplay.nucleus.simulation.guardShards
+import kinetickk.ball.gameplay.nucleus.simulation.guardUntil
+import kinetickk.ball.gameplay.nucleus.simulation.markDispatches
+import kinetickk.ball.gameplay.nucleus.simulation.overcurrentReadyAt
+import kinetickk.ball.gameplay.nucleus.simulation.phaseUntil
+import kinetickk.ball.gameplay.nucleus.simulation.primedDashUntil
+import kinetickk.ball.gameplay.nucleus.simulation.shotErasedDispatches
+import kinetickk.ball.gameplay.nucleus.simulation.shotsErased
+import kinetickk.ball.gameplay.nucleus.simulation.voidAnchorId
+import kinetickk.ball.gameplay.nucleus.simulation.voidAnchorUntil
+import kinetickk.ball.gameplay.nucleus.simulation.weaveDamage
+import kinetickk.ball.gameplay.nucleus.simulation.weaveRange
+import kinetickk.ball.gameplay.nucleus.simulation.weaveUntil
 
 internal const val GAMEPLAY_BENCHMARK_SUITE_VERSION = "gameplay-core-v6"
 private const val DEFAULT_SEED = 731_991

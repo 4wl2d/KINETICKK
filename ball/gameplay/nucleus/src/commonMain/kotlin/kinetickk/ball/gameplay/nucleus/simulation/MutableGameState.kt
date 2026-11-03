@@ -46,6 +46,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.structures.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
 import kinetickk.ball.gameplay.nucleus.simulation.skills.SkillCastState
+import kinetickk.ball.gameplay.nucleus.simulation.elements.CoreReactionState
 
 
 /**
@@ -106,6 +107,8 @@ internal class MutableGameState(
     internal val pendingChoice: PendingChoiceState = PendingChoiceState(copySource?.pendingChoice)
     /** Skill and Apex input buffers and the running cast's scratch. */
     internal val skillCast: SkillCastState = SkillCastState(copySource?.skillCast)
+    /** Lingering reaction effects on the Core. */
+    internal val coreReactions: CoreReactionState = CoreReactionState(copySource?.coreReactions)
 
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
@@ -212,44 +215,6 @@ internal class MutableGameState(
     internal var coreFieldMask: Int = copySource?.coreFieldMask ?: 0
     /** When entering a field may next count as a field entry. */
     internal var fieldEnterReadyAt: Float = copySource?.fieldEnterReadyAt ?: 0f
-    // Core reaction state: lingering effects reactions leave on the Core (absolute run times).
-    internal var ablazeUntil: Float = copySource?.ablazeUntil ?: 0f
-    internal var frictionlessUntil: Float = copySource?.frictionlessUntil ?: 0f
-    internal var blastJumpUntil: Float = copySource?.blastJumpUntil ?: 0f
-    internal var weaveUntil: Float = copySource?.weaveUntil ?: 0f
-    internal var weaveDamage: Float = copySource?.weaveDamage ?: 0f
-    internal var weaveRange: Float = copySource?.weaveRange ?: 0f
-    /** Ice shards orbiting the Core (at most [MAX_GUARD_SHARDS]), until when and what each strikes for. */
-    internal var guardShards: Int = copySource?.guardShards ?: 0
-    internal var guardUntil: Float = copySource?.guardUntil ?: 0f
-    internal var guardDamage: Float = copySource?.guardDamage ?: 0f
-    /** The one Void Anchor (enemy id, -1 for none) and when it lapses. */
-    internal var voidAnchorId: Int = copySource?.voidAnchorId ?: -1
-    internal var voidAnchorUntil: Float = copySource?.voidAnchorUntil ?: 0f
-    internal var overcurrentReadyAt: Float = copySource?.overcurrentReadyAt ?: 0f
-    internal var flameRefundReadyAt: Float = copySource?.flameRefundReadyAt ?: 0f
-    /** The enemy whose execute is under way, so its Data latches to the Core; -1 between executes. */
-    internal var erasureLatchId: Int = copySource?.erasureLatchId ?: -1
-    /** When a reaction or item may next push the Core. */
-    internal var coreImpulseReadyAt: Float = copySource?.coreImpulseReadyAt ?: 0f
-    internal var primedDashUntil: Float = copySource?.primedDashUntil ?: 0f
-    /** Dash heat spent toward the next Dash-heat-to-skills refund (below its step of 10). */
-    internal var dashHeatBank: Float = copySource?.dashHeatBank ?: 0f
-    internal var phaseUntil: Float = copySource?.phaseUntil ?: 0f
-    /** Seismic's keystone keeps two pending aftershocks: when each strikes (negative when free), where and how hard. */
-    internal var aftershockAt0: Float = copySource?.aftershockAt0 ?: -1f
-    internal var aftershockX0: Float = copySource?.aftershockX0 ?: 0f
-    internal var aftershockY0: Float = copySource?.aftershockY0 ?: 0f
-    internal var aftershockDamage0: Float = copySource?.aftershockDamage0 ?: 0f
-    internal var aftershockAt1: Float = copySource?.aftershockAt1 ?: -1f
-    internal var aftershockX1: Float = copySource?.aftershockX1 ?: 0f
-    internal var aftershockY1: Float = copySource?.aftershockY1 ?: 0f
-    internal var aftershockDamage1: Float = copySource?.aftershockDamage1 ?: 0f
-    /** Erased bolts and cashed marks announced within the current fixed step; zero between steps. */
-    internal var shotErasedDispatches: Int = copySource?.shotErasedDispatches ?: 0
-    internal var markDispatches: Int = copySource?.markDispatches ?: 0
-    /** Hostile bolts erased this run (a run statistic). */
-    internal var shotsErased: Long = copySource?.shotsErased ?: 0L
     /** What the skill slots hold: the owned active items' effects; immutable, replaced when an active item binds, ranks or is replaced. */
     internal var skillLoadout: SkillLoadout = copySource?.skillLoadout ?: SkillLoadout.EMPTY
     /** Skill and Apex timing; a deep copy forks it. */

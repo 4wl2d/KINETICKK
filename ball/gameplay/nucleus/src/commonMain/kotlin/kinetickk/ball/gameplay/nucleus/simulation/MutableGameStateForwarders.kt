@@ -89,3 +89,121 @@ internal var MutableGameState.castBossHitFirst: Int
 internal var MutableGameState.castBossHitSecond: Int
     get() = skillCast.castBossHitSecond
     set(value) { skillCast.castBossHitSecond = value }
+
+// CoreReactionState
+
+internal var MutableGameState.ablazeUntil: Float
+    get() = coreReactions.ablazeUntil
+    set(value) { coreReactions.ablazeUntil = value }
+
+internal var MutableGameState.frictionlessUntil: Float
+    get() = coreReactions.frictionlessUntil
+    set(value) { coreReactions.frictionlessUntil = value }
+
+internal var MutableGameState.blastJumpUntil: Float
+    get() = coreReactions.blastJumpUntil
+    set(value) { coreReactions.blastJumpUntil = value }
+
+internal var MutableGameState.weaveUntil: Float
+    get() = coreReactions.weaveUntil
+    set(value) { coreReactions.weaveUntil = value }
+
+internal var MutableGameState.weaveDamage: Float
+    get() = coreReactions.weaveDamage
+    set(value) { coreReactions.weaveDamage = value }
+
+internal var MutableGameState.weaveRange: Float
+    get() = coreReactions.weaveRange
+    set(value) { coreReactions.weaveRange = value }
+
+internal var MutableGameState.guardShards: Int
+    get() = coreReactions.guardShards
+    set(value) { coreReactions.guardShards = value }
+
+internal var MutableGameState.guardUntil: Float
+    get() = coreReactions.guardUntil
+    set(value) { coreReactions.guardUntil = value }
+
+internal var MutableGameState.guardDamage: Float
+    get() = coreReactions.guardDamage
+    set(value) { coreReactions.guardDamage = value }
+
+internal var MutableGameState.voidAnchorId: Int
+    get() = coreReactions.voidAnchorId
+    set(value) { coreReactions.voidAnchorId = value }
+
+internal var MutableGameState.voidAnchorUntil: Float
+    get() = coreReactions.voidAnchorUntil
+    set(value) { coreReactions.voidAnchorUntil = value }
+
+internal var MutableGameState.overcurrentReadyAt: Float
+    get() = coreReactions.overcurrentReadyAt
+    set(value) { coreReactions.overcurrentReadyAt = value }
+
+internal var MutableGameState.flameRefundReadyAt: Float
+    get() = coreReactions.flameRefundReadyAt
+    set(value) { coreReactions.flameRefundReadyAt = value }
+
+internal var MutableGameState.erasureLatchId: Int
+    get() = coreReactions.erasureLatchId
+    set(value) { coreReactions.erasureLatchId = value }
+
+internal var MutableGameState.coreImpulseReadyAt: Float
+    get() = coreReactions.coreImpulseReadyAt
+    set(value) { coreReactions.coreImpulseReadyAt = value }
+
+internal var MutableGameState.primedDashUntil: Float
+    get() = coreReactions.primedDashUntil
+    set(value) { coreReactions.primedDashUntil = value }
+
+internal var MutableGameState.dashHeatBank: Float
+    get() = coreReactions.dashHeatBank
+    set(value) { coreReactions.dashHeatBank = value }
+
+internal var MutableGameState.phaseUntil: Float
+    get() = coreReactions.phaseUntil
+    set(value) { coreReactions.phaseUntil = value }
+
+internal var MutableGameState.aftershockAt0: Float
+    get() = coreReactions.aftershockAt0
+    set(value) { coreReactions.aftershockAt0 = value }
+
+internal var MutableGameState.aftershockX0: Float
+    get() = coreReactions.aftershockX0
+    set(value) { coreReactions.aftershockX0 = value }
+
+internal var MutableGameState.aftershockY0: Float
+    get() = coreReactions.aftershockY0
+    set(value) { coreReactions.aftershockY0 = value }
+
+internal var MutableGameState.aftershockDamage0: Float
+    get() = coreReactions.aftershockDamage0
+    set(value) { coreReactions.aftershockDamage0 = value }
+
+internal var MutableGameState.aftershockAt1: Float
+    get() = coreReactions.aftershockAt1
+    set(value) { coreReactions.aftershockAt1 = value }
+
+internal var MutableGameState.aftershockX1: Float
+    get() = coreReactions.aftershockX1
+    set(value) { coreReactions.aftershockX1 = value }
+
+internal var MutableGameState.aftershockY1: Float
+    get() = coreReactions.aftershockY1
+    set(value) { coreReactions.aftershockY1 = value }
+
+internal var MutableGameState.aftershockDamage1: Float
+    get() = coreReactions.aftershockDamage1
+    set(value) { coreReactions.aftershockDamage1 = value }
+
+internal var MutableGameState.shotErasedDispatches: Int
+    get() = coreReactions.shotErasedDispatches
+    set(value) { coreReactions.shotErasedDispatches = value }
+
+internal var MutableGameState.markDispatches: Int
+    get() = coreReactions.markDispatches
+    set(value) { coreReactions.markDispatches = value }
+
+internal var MutableGameState.shotsErased: Long
+    get() = coreReactions.shotsErased
+    set(value) { coreReactions.shotsErased = value }
