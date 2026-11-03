@@ -42,7 +42,9 @@ import kinetickk.ball.gameplay.interaction.canvas.drawGameplay
 import kinetickk.ball.gameplay.interaction.canvas.drawHud
 import kinetickk.ball.gameplay.interaction.canvas.drawScreenFx
 import kinetickk.ball.gameplay.interaction.canvas.drawWorld
+import kinetickk.ball.gameplay.interaction.canvas.FrozenPoses
 import kinetickk.ball.gameplay.interaction.canvas.HudPresentationMemory
+import kinetickk.ball.gameplay.interaction.canvas.WorldOverlayScratch
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.runningBuildButtonBounds
@@ -194,6 +196,7 @@ class RenderPixelCharacterizationTest {
                 }
                 for ((name, content) in scenes) {
                     // The second composition of the scene is the one hashed, after the first warmed every cache.
+                    forgetWorldDrawMemory()
                     current.value = content
                     waitForIdle()
                     onNodeWithTag("shot").captureToImage()
@@ -238,8 +241,22 @@ private fun DrawScope.outlineBuildButton() {
     drawRect(Kk.Ink3, build.topLeft + Offset(4f, 6f), Size(build.width - 8f, build.height - 12f))
 }
 
-/** Draws [draw] twice on fresh bitmaps and prints the SHA-256 of the second frame. */
+/**
+ * Forgets the world renderer's cross-frame memories (frozen enemy poses by id, the edge-marker arrangement), so a scene's
+ * pixels never depend on what an earlier test drew in the same JVM.
+ */
+internal fun forgetWorldDrawMemory() {
+    // A frozen pose stamped at a run time no scene reaches is never "known" again.
+    for (id in 0 until FROZEN_POSE_SLOTS) FrozenPoses.rotation(id, frozen = true, elapsed = FORGOTTEN_RUN_TIME, turning = 0f)
+    WorldOverlayScratch.planner.forget()
+}
+
+private const val FROZEN_POSE_SLOTS = 256
+private const val FORGOTTEN_RUN_TIME = -1.0e9f
+
+/** Draws [draw] twice on fresh bitmaps, after [forgetWorldDrawMemory], and prints the SHA-256 of the second frame. */
 private fun printCanvasHash(scene: String, language: String, draw: DrawScope.() -> Unit) {
+    forgetWorldDrawMemory()
     fun drawFrame(): ImageBitmap = ImageBitmap(PIXEL_WIDTH, PIXEL_HEIGHT).also { frame ->
         val size = Size(PIXEL_WIDTH.toFloat(), PIXEL_HEIGHT.toFloat())
         CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(frame), size) { draw() }

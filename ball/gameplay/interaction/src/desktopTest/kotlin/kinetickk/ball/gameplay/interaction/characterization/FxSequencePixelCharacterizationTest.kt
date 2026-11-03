@@ -73,6 +73,7 @@ class FxSequencePixelCharacterizationTest {
                 1.25f, language, HudTestFonts.typography.copy(localeList = language.localeList()), KkRolePalette.Default,
             )
             val reducer = InteractionFxReducer(FX_SEQUENCE_SEED)
+            forgetWorldDrawMemory()
             for (frame in 0 until FX_SEQUENCE_FRAMES) {
                 reducer.apply(sequenceCues(frame))
                 val fx = reducer.snapshot()
@@ -140,6 +141,7 @@ private fun sequenceCues(frame: Int): List<VisualFxCue> = buildList {
 
 /** Draws a language-free FX look sheet twice through [FxTestScenes.render] and prints the second frame's SHA-256. */
 private fun printFxSheetHash(scene: String, block: DrawScope.() -> Unit) {
+    forgetWorldDrawMemory()
     FxTestScenes.render(FX_WIDTH, FX_HEIGHT, block = block)
     printFxPixelHash(scene, "any", FxTestScenes.render(FX_WIDTH, FX_HEIGHT, block = block))
 }
