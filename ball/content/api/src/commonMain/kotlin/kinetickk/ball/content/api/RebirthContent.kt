@@ -6,9 +6,13 @@ package kinetickk.ball.content.api
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
+import kotlin.math.abs
 import kotlin.math.floor
+import kotlin.math.log10
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
+import kotlin.math.round
 
 /**
  * A named rule a Rebirth tier adds to the run. Tier n activates entry n - 1 and every entry before
@@ -61,6 +65,11 @@ data class RebirthProfile(
      * level, [dataRequirement]); 1 keeps the base curve.
      */
     val dataRequirementScale: Float = 1f,
+    /**
+     * Display scale of every absolute number a run shows at this tier: damage, integrity and shield read as
+     * power units × this ([rebirthNumberScale]); the simulation keeps computing in power units.
+     */
+    val numberScale: Double = rebirthNumberScale(tier),
 ) {
     init {
         require(tier >= 0) { "Rebirth tier must be non-negative" }
@@ -80,6 +89,7 @@ data class RebirthProfile(
         require(dataRequirementScale.isFinite() && dataRequirementScale >= 1f) {
             "Data requirement scale must be finite and at least 1"
         }
+        require(numberScale.isFinite() && numberScale >= 1.0) { "Number scale must be finite and at least 1" }
     }
 
     private val mutatorMask: Int = mutators.fold(0) { mask, mutator -> mask or (1 shl mutator.ordinal) }
@@ -170,6 +180,25 @@ fun defaultRebirthProfile(
         dataRequirementScale = 1f + t * REBIRTH_DATA_REQUIREMENT_SCALE_PER_TIER,
     )
 }
+
+/**
+ * The display scale of Rebirth tier [tier]: `10^(0.0211t + 0.03345t²)` rounded to two significant digits (t0 1, t1 1.1,
+ * t2 1.5, t3 2.3, t4 4.2, t5 8.7, t6 21, t7 61, t8 200, t9 790, t10 3600), so a tier-0 hit reads 10–20 and a tier-10
+ * hit reads in the hundreds of thousands. Only presentation reads it.
+ */
+fun rebirthNumberScale(tier: Int): Double {
+    require(tier >= 0) { "Rebirth tier must be non-negative" }
+    val t = tier.toDouble()
+    val raw = 10.0.pow(REBIRTH_NUMBER_SCALE_LINEAR * t + REBIRTH_NUMBER_SCALE_QUADRATIC * t * t)
+    // Two significant digits; the power of ten is built exactly so 200 and 3600 stay whole.
+    val exponent = floor(log10(raw)).toInt() - 1
+    var step = 1.0
+    repeat(abs(exponent)) { step *= 10.0 }
+    return if (exponent >= 0) round(raw / step) * step else round(raw * step) / step
+}
+
+private const val REBIRTH_NUMBER_SCALE_LINEAR = 0.0211
+private const val REBIRTH_NUMBER_SCALE_QUADRATIC = 0.03345
 
 /**
  * Content a Rebirth rank opens, derived from the content gates: weapons, characters (a Reborn-rank
