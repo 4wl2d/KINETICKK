@@ -7,7 +7,7 @@
 
 ```bash
 ./gradlew :ball:gameplay:nucleus:performanceBenchmark -PbenchmarkProfile=smoke
-./gradlew :ball:profile:resource:profilePerformanceBenchmark -PbenchmarkProfile=smoke
+./gradlew :ball:profile:impl:profilePerformanceBenchmark -PbenchmarkProfile=smoke
 ./gradlew :ball:gameplay:interaction:performanceTelemetryBenchmark -PbenchmarkProfile=smoke
 ```
 

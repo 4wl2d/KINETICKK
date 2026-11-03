@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package kinetickk.ball.profile.resource
+package kinetickk.ball.profile.impl
 
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerProfile
@@ -11,6 +11,8 @@ import kinetickk.ball.profile.api.ProfileSnapshotRejection
 import kinetickk.ball.profile.api.ProfileWriteFailure
 import kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
 import kinetickk.ball.profile.api.ProfileWriteResult
+import kinetickk.ball.profile.impl.storage.requireEncoded
+import kinetickk.ball.profile.impl.storage.testSnapshot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

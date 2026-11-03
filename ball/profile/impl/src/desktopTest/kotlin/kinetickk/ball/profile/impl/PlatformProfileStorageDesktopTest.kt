@@ -1,12 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package kinetickk.ball.profile.resource
+package kinetickk.ball.profile.impl
 
 import java.util.UUID
 import java.util.prefs.Preferences
 import kinetickk.ball.profile.api.ProfileSnapshotReadResult
 import kinetickk.ball.profile.api.ProfileWriteResult
+import kinetickk.ball.profile.impl.storage.requireEncoded
+import kinetickk.ball.profile.impl.storage.testSnapshot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

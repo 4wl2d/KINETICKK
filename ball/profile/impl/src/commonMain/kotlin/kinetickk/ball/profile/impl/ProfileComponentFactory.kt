@@ -9,10 +9,6 @@ import kinetickk.ball.profile.api.ProfileSettings
 import kinetickk.ball.profile.api.ProfileLoadout
 import kinetickk.ball.profile.api.ProfileRebirth
 import kinetickk.ball.profile.api.ProfileProgress
-import kinetickk.ball.profile.resource.ExactProfilePersistence
-import kinetickk.ball.profile.resource.ProfileProviderMutationResult
-import kinetickk.ball.profile.resource.ProfileProviderReadResult
-import kinetickk.ball.profile.resource.createProfileResource
 
 /** Exact persistence operations supplied by the platform composition broker. */
 interface ProfilePersistenceCapability {

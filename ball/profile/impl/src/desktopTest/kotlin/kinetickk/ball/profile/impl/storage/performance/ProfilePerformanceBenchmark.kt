@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package kinetickk.ball.profile.resource.performance
+package kinetickk.ball.profile.impl.storage.performance
 
 import java.security.MessageDigest
 import kinetickk.ball.content.api.ContentBounds
@@ -42,14 +42,14 @@ import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.ball.profile.api.WindowMode
 import kinetickk.ball.profile.api.WindowSizePreset
-import kinetickk.ball.profile.resource.ExactProfilePersistence
-import kinetickk.ball.profile.resource.MAX_PROFILE_PAYLOAD_BYTES
-import kinetickk.ball.profile.resource.ProfileCodec
-import kinetickk.ball.profile.resource.ProfileDecodeResult
-import kinetickk.ball.profile.resource.ProfileEncodeResult
-import kinetickk.ball.profile.resource.ProfileProviderMutationResult
-import kinetickk.ball.profile.resource.ProfileProviderReadResult
-import kinetickk.ball.profile.resource.createProfileResource
+import kinetickk.ball.profile.impl.ExactProfilePersistence
+import kinetickk.ball.profile.impl.storage.MAX_PROFILE_PAYLOAD_BYTES
+import kinetickk.ball.profile.impl.storage.ProfileCodec
+import kinetickk.ball.profile.impl.storage.ProfileDecodeResult
+import kinetickk.ball.profile.impl.storage.ProfileEncodeResult
+import kinetickk.ball.profile.impl.ProfileProviderMutationResult
+import kinetickk.ball.profile.impl.ProfileProviderReadResult
+import kinetickk.ball.profile.impl.createProfileResource
 import kinetickk.performance.BenchmarkScenario
 import kinetickk.performance.BenchmarkSuiteIdentity
 import kinetickk.performance.BenchmarkValidation

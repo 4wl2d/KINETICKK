@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package kinetickk.ball.profile.resource
+package kinetickk.ball.profile.impl.storage
 
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape

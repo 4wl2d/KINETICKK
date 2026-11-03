@@ -34,7 +34,6 @@ import kinetickk.ball.profile.nucleus.ProfileNucleus
 import kinetickk.ball.profile.nucleus.ProfileNucleusPulse
 import kinetickk.ball.profile.nucleus.ProfileOutput
 import kinetickk.ball.profile.nucleus.ProfileState
-import kinetickk.ball.profile.resource.ProfileResource
 import kinetickk.foundation.dispatch.BoundedCompletionDeque
 import kinetickk.foundation.dispatch.InlineAcceptance
 import kinetickk.foundation.dispatch.InlineReply

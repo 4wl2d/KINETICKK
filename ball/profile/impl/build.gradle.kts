@@ -1,8 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import kinetickk.gradle.benchmarkSourceContract
+import kinetickk.gradle.isolatedProjectsProfileEnabled
+
 plugins {
     id("kinetickk.kmp-shared")
+    alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
@@ -11,7 +15,68 @@ kotlin {
             api(projects.ball.profile.api)
             api(projects.ball.content.api)
             implementation(projects.ball.profile.nucleus)
-            implementation(projects.ball.profile.resource)
+            implementation(libs.kotlinx.serialization.json)
         }
+        if (!isolatedProjectsProfileEnabled()) {
+            wasmJsTest.dependencies {
+                implementation(libs.kotlinx.browser)
+            }
+        }
+        desktopTest {
+            kotlin.srcDir(rootDir.resolve("tools/performance/harness/src/main/kotlin"))
+        }
+    }
+}
+
+val profileDesktopBenchmarkCompilation = kotlin.targets
+    .getByName("desktop")
+    .compilations
+    .getByName("test")
+
+tasks.register<JavaExec>("profilePerformanceBenchmark") {
+    group = "verification"
+    description = "Runs deterministic profile codec and persistence benchmarks and writes raw JSON samples."
+    dependsOn(profileDesktopBenchmarkCompilation.compileTaskProvider)
+    mainClass.set("kinetickk.ball.profile.impl.storage.performance.ProfilePerformanceBenchmarkKt")
+    classpath(
+        profileDesktopBenchmarkCompilation.output.allOutputs,
+        profileDesktopBenchmarkCompilation.runtimeDependencyFiles,
+    )
+    benchmarkSourceContract(
+        rootDir,
+        "ball/profile/impl/src/desktopTest/kotlin/kinetickk/ball/profile/impl/storage/performance/ProfilePerformanceBenchmark.kt",
+        "ball/profile/impl/build.gradle.kts",
+    )
+    jvmArgs(
+        "-Xms1g",
+        "-Xmx1g",
+        "-XX:+AlwaysPreTouch",
+        "-XX:+UseG1GC",
+        "-Dfile.encoding=UTF-8",
+    )
+
+    val defaults = mapOf(
+        "benchmarkProfile" to "standard",
+        "benchmarkOutput" to rootDir.resolve("build/performance/profile-result.json").absolutePath,
+        "benchmarkLabel" to project.name,
+        "benchmarkRevision" to "unknown",
+        "benchmarkDirty" to "false",
+        "benchmarkFork" to "1",
+    )
+    val propertyMappings = mapOf(
+        "benchmarkProfile" to "kinetickk.benchmark.profile",
+        "benchmarkOutput" to "kinetickk.benchmark.output",
+        "benchmarkLabel" to "kinetickk.benchmark.label",
+        "benchmarkRevision" to "kinetickk.benchmark.revision",
+        "benchmarkDirty" to "kinetickk.benchmark.dirty",
+        "benchmarkFork" to "kinetickk.benchmark.fork",
+        "benchmarkScenarios" to "kinetickk.benchmark.scenarios",
+        "benchmarkWarmups" to "kinetickk.benchmark.warmups",
+        "benchmarkMeasurements" to "kinetickk.benchmark.measurements",
+        "benchmarkIterationMillis" to "kinetickk.benchmark.iterationMillis",
+    )
+    propertyMappings.forEach { (gradleName, systemName) ->
+        val value = providers.gradleProperty(gradleName).orNull ?: defaults[gradleName]
+        if (value != null) systemProperty(systemName, value)
     }
 }

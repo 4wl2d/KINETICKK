@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package kinetickk.ball.profile.resource.performance
+package kinetickk.ball.profile.impl.storage.performance
 
-import kinetickk.ball.profile.resource.MAX_PROFILE_PAYLOAD_BYTES
+import kinetickk.ball.profile.impl.storage.MAX_PROFILE_PAYLOAD_BYTES
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.ReactionId
@@ -26,9 +26,9 @@ import kinetickk.ball.profile.api.ProfileSnapshot
 import kinetickk.ball.profile.api.REFRESH_RATE_RANGE
 import kinetickk.ball.profile.api.ReactionEffectsLevel
 import kinetickk.ball.profile.api.WindowMode
-import kinetickk.ball.profile.resource.ProfileCodec
-import kinetickk.ball.profile.resource.ProfileDecodeResult
-import kinetickk.ball.profile.resource.ProfileEncodeResult
+import kinetickk.ball.profile.impl.storage.ProfileCodec
+import kinetickk.ball.profile.impl.storage.ProfileDecodeResult
+import kinetickk.ball.profile.impl.storage.ProfileEncodeResult
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.common.input.BindableKey

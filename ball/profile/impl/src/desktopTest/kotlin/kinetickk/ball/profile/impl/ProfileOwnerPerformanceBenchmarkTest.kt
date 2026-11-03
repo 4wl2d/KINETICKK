@@ -12,11 +12,6 @@ import kinetickk.ball.profile.api.ProfileSettingsChanged
 import kinetickk.ball.profile.api.ProfileSnapshot
 import kinetickk.ball.profile.api.ProfileSnapshotReadResult
 import kinetickk.ball.profile.api.ProfileWriteResult
-import kinetickk.ball.profile.resource.ExactProfilePersistence
-import kinetickk.ball.profile.resource.ProfileProviderMutationResult
-import kinetickk.ball.profile.resource.ProfileProviderReadResult
-import kinetickk.ball.profile.resource.ProfileResource
-import kinetickk.ball.profile.resource.createProfileResource
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.dispatch.BoundedCompletionDeque
 import kinetickk.foundation.dispatch.InlineAcceptance
