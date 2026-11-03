@@ -10,6 +10,7 @@ import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.ContentVersion
 import kinetickk.ball.content.api.DamageBasis
 import kinetickk.ball.content.api.DirectorPersonalityId
+import kinetickk.ball.content.api.CoreStasisTuning
 import kinetickk.ball.content.api.EasyModeTuning
 import kinetickk.ball.content.api.EffectAction
 import kinetickk.ball.content.api.EffectClause
@@ -555,6 +556,7 @@ class ContentBootstrapValidationTest {
         assertEquals(data.boons, gameplay.boons)
         assertEquals(StructurePolicy(), gameplay.structures)
         assertEquals(EasyModeTuning(), gameplay.easyMode)
+        assertEquals(CoreStasisTuning(), gameplay.coreStasis)
         assertEquals(WorldDiscovery.entries, catalog.uiCatalog().worldDiscoveries.map { it.id })
         assertEquals(data.boons.first(), gameplay.boon(32))
         assertEquals(null, gameplay.boon(42))

@@ -3,6 +3,7 @@
 
 package kinetickk.ball.content.impl
 
+import kinetickk.ball.content.api.CoreStasisNotices
 import kinetickk.ball.content.api.DimensionNotices
 import kinetickk.ball.content.api.EnemyNotices
 import kinetickk.ball.content.api.EnemyType
@@ -251,7 +252,7 @@ class ContentLocalizationTest {
             "CATALOG COMPLETE // MATTER SALVAGED", "CORE FRACTURED", "ELITE KEY ACQUIRED",
             "RELIC RESONANCE", "TOTEM DETECTED", "ELITE SIGNAL", "HERALD APPROACHES",
             "TWO ANOMALIES DETECTED // CHOOSE A COURSE", "ANOMALY LOST", "ANOMALY RESOLVED",
-            "SECOND WIND", "OBSTACLE COLLISION", "APEX ONLINE",
+            "SECOND WIND", "OBSTACLE COLLISION", "APEX ONLINE", "CORE FROZEN",
             "BOOP",
         ).forEach(::assertFullyLocalized)
     }
@@ -319,6 +320,13 @@ class ContentLocalizationTest {
         }
         assertEquals("ТАКТИКА ВРАГА // ПРИЛИВНАЯ ВОЛНА", "HOSTILE PATTERN // TIDEWAVE".localizedContent(AppLanguage.Russian))
         assertEquals("ЗНАМЕНИЕ // СТЕКЛЯННОЕ СОЛНЦЕ", "OMEN // GLASS SUN".localizedContent(AppLanguage.Russian))
+    }
+
+    @Test
+    fun everyCoreStasisNoticeIsLocalizedAndDistinctFromTheGenericFracture() {
+        CoreStasisNotices.all.forEach(::assertFullyLocalized)
+        assertEquals("ЯДРО ЗАМЁРЗЛО", CoreStasisNotices.FROZEN.localizedContent(AppLanguage.Russian))
+        assertDistinctInRussian(listOf(CoreStasisNotices.FROZEN, "CORE FRACTURED", "SCORCHED"))
     }
 
     @Test

@@ -95,6 +95,8 @@ data class GameplayContentSnapshot(
     val variety: RunVarietyContent = RunVarietyContent(),
     /** Baby mode rules; STANDARD runs never read them. */
     val easyMode: EasyModeTuning = EasyModeTuning(),
+    /** Core Stasis (anti-AFK); harnesses that script slow hovers set [CoreStasisTuning.DISABLED]. */
+    val coreStasis: CoreStasisTuning = CoreStasisTuning(),
 ) {
     init {
         require(enemies.size == EnemyType.entries.size && enemies.withIndex().all { (index, enemy) -> enemy.type.ordinal == index }) {
