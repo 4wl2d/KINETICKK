@@ -398,6 +398,32 @@ class DimensionRewardsTest {
     }
 
     @Test
+    fun anObjectiveBossIsNeverAbandonedByDistanceAndItsDeathStillCompletesTheVisit() {
+        val cases = listOf(
+            Triple(WorldLayer.ZENITH, DimensionObjective.JUDGEMENT, tuning.bossDelaySeconds),
+            Triple(WorldLayer.ARCHIVE, DimensionObjective.ANTECEDENT, tuning.antecedentDelaySeconds),
+        )
+        for ((layer, objective, delay) in cases) {
+            val state = game(openWorld).apply { enterDimensionForTesting(layer, objective) }
+            state.elapsed = 200f + delay
+            state.updateDimension(step)
+            val type = checkNotNull(objective.boss)
+            val boss = state.enemies.single { it.type == type }
+            val tag = dimensionEncounterTag(state.visit())
+            val encounter = assertNotNull(state.encounter(tag))
+            // Past the widest abandon distance an ordinary encounter may use.
+            state.coreX = encounter.centerX + 7_000f
+            state.coreY = encounter.centerY
+            state.updateEncounters()
+            assertEquals(boss.id, state.enemies.single { it.type == type }.id, "$objective: its boss stays however far the Core flies")
+            assertNotNull(state.encounter(tag), "$objective: its encounter goes on")
+            assertNotEquals(EnemyNotices.SECRET_SIGNAL_LOST, state.message)
+            state.onEnemyKilled(boss)
+            assertTrue(state.visit().completed, "$objective: its boss's death still completes the visit")
+        }
+    }
+
+    @Test
     fun aFullArenaMakesRoomForTheObjectiveBoss() {
         val state = game(openWorld).apply { enterDimensionForTesting(WorldLayer.ZENITH, DimensionObjective.JUDGEMENT) }
         val cap = state.content.rebirth.maxActiveEnemies

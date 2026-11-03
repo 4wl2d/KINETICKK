@@ -1154,10 +1154,9 @@ Balance decisions and accepted trade-offs:
   an untimed bounty failed only by dying (2026-11-03 repairs below).
 - Accepted as shipped: a far sigil spawn counts as engagement; bounty guards
   stay as ordinary enemies after a claim; the Sigil panel's reward reads
-  UNKNOWN; an objective boss abandoned past 6,000 u ends that visit's
-  objective; a fresh run spends 60 % more seconds at ambush speed; Grace
-  lowers drag by 15.61 % (band top 16 %); structure walls collapse at the
-  Architect and an abandoned dungeon is spent; omens are offered in Easy runs.
+  UNKNOWN; a fresh run spends 60 % more seconds at ambush speed; Grace lowers
+  drag by 15.61 % (band top 16 %); structure walls collapse at the Architect
+  and an abandoned dungeon is spent; omens are offered in Easy runs.
 - The strong tier-10 ricochet pace is far below 0.5.0's (0.034 against 0.58
   per minute on i = 2,501..2,800): the old pace came from the old bot's
   Dash-chain slams, and `ricochetReach` stays 0.45.

@@ -51,7 +51,10 @@ private const val PORTAL_CLEARANCE: Float = 30f
 private const val OBJECTIVE_BOSS_CLEARANCE: Float = 40f
 /** An objective boss fights inside the widest encounter area around its arrival point. */
 private const val OBJECTIVE_BOSS_AREA_RADIUS: Float = 2_400f
-/** The widest encounter abandon distance: the visit's end, not distance, ends an objective boss's encounter. */
+/**
+ * The widest encounter abandon distance, never applied: updateEncounters does not abandon a dimension's encounter, so
+ * only the visit's end, the boss's death or the Architect ends an objective boss's encounter.
+ */
 private const val OBJECTIVE_BOSS_ABANDON_DISTANCE: Float = 6_000f
 
 /** How a visit ended: through its exit rift, by its timer, or forced before the Architect. */

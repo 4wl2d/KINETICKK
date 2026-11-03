@@ -238,12 +238,14 @@ internal fun MutableGameState.endAllEncounters(despawn: Boolean) {
     for (index in current.indices) endEncounter(current[index].tag, despawn)
 }
 
-/** Per step, at the end of updateEnemies: abandonment, then the area clamp. */
+/** Per step, at the end of updateEnemies: abandonment (never of a dimension's encounter), then the area clamp. */
 internal fun MutableGameState.updateEncounters() {
     if (encounters.isEmpty()) return
     val current = encounters
     for (index in current.indices) {
         val state = current[index]
+        // A dimension's objective boss is ended by its visit, its death or the Architect, never by distance.
+        if (encounterOwner(state.tag) == EncounterOwner.DIMENSION) continue
         val dx = coreX - state.centerX
         val dy = coreY - state.centerY
         if (dx * dx + dy * dy <= state.abandonDistance * state.abandonDistance) continue
