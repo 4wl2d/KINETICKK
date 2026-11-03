@@ -3,7 +3,6 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
@@ -277,7 +276,6 @@ internal fun MutableGameState.choose(index: Int) {
     val option = choices[index]
     option.rewardFocus?.let { selectRewardFocus(it); return }
     val before = captureBuildChange()
-    var legendary = false
     val sound = when (option.type) {
         ChoiceType.ITEM -> {
             val itemId = option.itemId ?: return
@@ -291,9 +289,7 @@ internal fun MutableGameState.choose(index: Int) {
                 emitSound(GameplayAudioCue.UI_CLICK)
                 return
             }
-            legendary = item.rarity == ItemRarity.LEGENDARY && itemStacks[itemId] == 0
-            acquireItem(itemId, option.reborn)
-            if (legendary) GameplayAudioCue.LEGENDARY_ACQUIRED else GameplayAudioCue.LEVEL_UP
+            if (acquireItem(itemId, option.reborn)) GameplayAudioCue.LEGENDARY_ACQUIRED else GameplayAudioCue.LEVEL_UP
         }
         ChoiceType.TOTEM -> when (option.totemAction ?: return) {
             TotemAction.AMPLIFY_CURRENT -> {
@@ -380,7 +376,7 @@ internal fun MutableGameState.choose(index: Int) {
             GameplayAudioCue.WEAPON_ACQUIRED
         }
     }
-    emitBuildChange(before, option.title, legendary)
+    emitBuildChange(before, option.title, legendary = sound == GameplayAudioCue.LEGENDARY_ACQUIRED)
     finishChoice(sound)
 }
 
