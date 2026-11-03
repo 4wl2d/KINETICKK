@@ -5,7 +5,6 @@ package kinetickk.ball.gameplay.interaction
 
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.foundation.common.localization.text
-import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.LocalKkRolePalette
 import kinetickk.foundation.design.KkFramePacer
@@ -21,7 +20,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.IntState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -56,8 +54,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.text
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.TextMeasurer as ComposeTextMeasurer
 import androidx.compose.ui.unit.Density
@@ -111,11 +107,6 @@ import kinetickk.ball.gameplay.interaction.overlay.terminalActionsReady
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kotlin.time.TimeSource
-
-internal const val MAX_GAMEPLAY_PRESENTATION_DELTA_SECONDS: Float = 0.1f
-
-internal fun selectGameplayPresentationDelta(realDeltaSeconds: Float): Float =
-    realDeltaSeconds.coerceAtMost(MAX_GAMEPLAY_PRESENTATION_DELTA_SECONDS)
 
 @Composable
 fun GameplayContent(
@@ -798,30 +789,7 @@ fun GameplayContent(
     }
 }
 
-private fun Modifier.fpsReadoutSemantics(language: AppLanguage, fps: IntState): Modifier =
-    testTag("kinetickk.gameplay.performance").semantics {
-        contentDescription = language.text(GameplayText.PerformanceDescription)
-        text = fpsReadoutText(language, fps.intValue)
-    }
-
-/** The Show FPS readout's spoken text: the measured value, or a dash until the first window closes. */
-internal fun fpsReadoutText(language: AppLanguage, fps: Int): AnnotatedString =
-    AnnotatedString(language.text(GameplayText.FpsReadout, if (fps < 0) "–" else fps))
-
 private const val GAMEPLAY_ROOT_TAG = "kinetickk.gameplay"
-
-/** The last laid-out gameplay size in device pixels and the density it was sent with. */
-private class GameplayViewportPixels {
-    var width: Int = 0
-    var height: Int = 0
-    var density: Float = 0f
-}
-
-private class GameplayLayoutDimensions(
-    val width: Float,
-    val height: Float,
-    val scale: Float,
-)
 
 private inline fun keyDown(type: KeyEventType, action: () -> Unit): Boolean {
     if (type == KeyEventType.KeyDown) action()

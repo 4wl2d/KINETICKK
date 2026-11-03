@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import kinetickk.ball.content.api.SkillId
@@ -382,3 +383,13 @@ private inline fun activateSemanticButtonFromKey(
         else -> false
     }
 }
+
+internal fun Modifier.fpsReadoutSemantics(language: AppLanguage, fps: IntState): Modifier =
+    testTag("kinetickk.gameplay.performance").semantics {
+        contentDescription = language.text(GameplayText.PerformanceDescription)
+        text = fpsReadoutText(language, fps.intValue)
+    }
+
+/** The Show FPS readout's spoken text: the measured value, or a dash until the first window closes. */
+internal fun fpsReadoutText(language: AppLanguage, fps: Int): AnnotatedString =
+    AnnotatedString(language.text(GameplayText.FpsReadout, if (fps < 0) "–" else fps))

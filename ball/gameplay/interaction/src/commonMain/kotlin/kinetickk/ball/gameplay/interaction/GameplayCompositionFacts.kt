@@ -93,3 +93,9 @@ internal fun GameplayRenderModel.compositionFacts(): GameplayCompositionFacts {
         apexActive = apex.active01 > 0f,
     )
 }
+
+internal class GameplayLayoutDimensions(
+    val width: Float,
+    val height: Float,
+    val scale: Float,
+)

@@ -22,3 +22,10 @@ internal fun pausesOnFocusLoss(
 internal class GameplayWindowFocus {
     var focused: Boolean = false
 }
+
+/** The last laid-out gameplay size in device pixels and the density it was sent with. */
+internal class GameplayViewportPixels {
+    var width: Int = 0
+    var height: Int = 0
+    var density: Float = 0f
+}
