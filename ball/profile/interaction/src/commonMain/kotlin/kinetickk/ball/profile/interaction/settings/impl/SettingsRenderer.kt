@@ -31,6 +31,7 @@ import kinetickk.foundation.design.KkPathCache
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.KkVAlign
 import kinetickk.foundation.design.condStyle
+import kinetickk.foundation.design.d
 import kinetickk.foundation.design.drawKkButton
 import kinetickk.foundation.design.drawKkGrid
 import kinetickk.foundation.design.drawKkInfoButton
@@ -513,5 +514,3 @@ internal fun settingsRoleSwatches(palette: KkRolePalette): List<Pair<SettingsRed
     SettingsRedesignText.RoleShield to palette.shield,
     SettingsRedesignText.RolePolarity to palette.pol,
 )
-
-private fun DrawScope.d(value: Float): Float = value * density
