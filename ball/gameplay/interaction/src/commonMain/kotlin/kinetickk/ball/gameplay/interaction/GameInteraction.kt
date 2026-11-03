@@ -259,12 +259,14 @@ private fun GameplayHostEffects(
     SideEffect(component, inputEnabled, phase) {
         if (inputEnabled) host.focusRequester.requestFocus()
     }
-    // A session workflow landing takes the player's input while frames still run: the run is told, so Core Freeze
-    // holds. Nothing is sent while input stays available (the run's default); a held state is resent on each phase.
+    // A session workflow landing takes the player's input while the run still runs: the run is told, so Core Freeze
+    // holds, and told again once input is back or the run stops. Only those changes are sent (available is the run's
+    // default); a paused run with an overlay open hears nothing.
     LaunchedEffect(component, inputEnabled, phase) {
-        if (inputEnabled && !host.inputHeldReported) return@LaunchedEffect
-        host.inputHeldReported = !inputEnabled
-        pulses.dispatch(GameplayInteractionPulse.InputAvailabilityChanged(available = inputEnabled))
+        val held = !inputEnabled && phase == GamePhase.RUNNING
+        if (held == host.inputHeldReported) return@LaunchedEffect
+        host.inputHeldReported = held
+        pulses.dispatch(GameplayInteractionPulse.InputAvailabilityChanged(available = !held))
     }
 
     // The frame limit paces the loop; the fixed-step simulation plays the same at any frame rate.

@@ -70,7 +70,7 @@ internal class GameplayHostState(component: GameplayInteractionPort) {
     val windowFocus = GameplayWindowFocus()
     val viewport = GameplayViewportPixels()
 
-    /** The run was last told that the host takes no input (see the input availability effect). */
+    /** The running run was last told that the host takes no input (see the input availability effect). */
     var inputHeldReported = false
 }
 

@@ -262,6 +262,37 @@ class GameplayWindowPreferencesTest {
         assertFalse(GameplayInteractionPulse.PauseToggled in run.pulses)
     }
 
+    /**
+     * A session workflow that takes the input from a running run is reported to it (Core Freeze holds), and so is the
+     * input's return; while input stays available, or the run is paused under an overlay, nothing is sent.
+     */
+    @Test
+    fun takingInputFromARunningRunIsReportedAndAPausedRunHearsNothing() = runComposeUiTest {
+        mainClock.autoAdvance = false
+        val run = TestRun(1_440f, 810f, english)
+        var input by mutableStateOf(true)
+        setContent { Host(run, TestWindow(focused = true), 1_440, 810, inputEnabled = input) }
+        fun reports() = run.pulses.filterIsInstance<GameplayInteractionPulse.InputAvailabilityChanged>().map { it.available }
+        fun frame() {
+            mainClock.advanceTimeByFrame()
+            waitForIdle()
+        }
+        repeat(3) { frame() }
+        assertEquals(emptyList(), reports(), "input available: nothing is sent")
+        input = false
+        frame()
+        assertEquals(listOf(false), reports(), "a running run hears that input is gone")
+        input = true
+        frame()
+        assertEquals(listOf(false, true), reports(), "and that it is back")
+        runOnIdle { run.publish(english, phase = GamePhase.PAUSED) }
+        mainClock.advanceTimeBy(240)
+        waitForIdle()
+        input = false
+        repeat(2) { frame() }
+        assertEquals(listOf(false, true), reports(), "a paused run under an overlay hears nothing")
+    }
+
     @Test
     fun theFocusEdgeRuleNeedsAFocusedRunningRunWithInput() {
         assertTrue(pausesOnFocusLoss(true, false, GamePhase.RUNNING, pauseOnFocusLoss = true, inputEnabled = true))
@@ -275,14 +306,21 @@ class GameplayWindowPreferencesTest {
     }
 
     @androidx.compose.runtime.Composable
-    private fun Host(run: TestRun, window: WindowInfo, width: Int, height: Int, diagnostics: CrashDiagnostics = CrashDiagnostics.None) {
+    private fun Host(
+        run: TestRun,
+        window: WindowInfo,
+        width: Int,
+        height: Int,
+        diagnostics: CrashDiagnostics = CrashDiagnostics.None,
+        inputEnabled: Boolean = true,
+    ) {
         CompositionLocalProvider(
             LocalDensity provides Density(1f),
             LocalAppLanguage provides AppLanguage.English,
             LocalWindowInfo provides window,
             LocalCrashDiagnostics provides diagnostics,
         ) {
-            Box(Modifier.requiredSize(width.dp, height.dp)) { GameplayContent(run, inputEnabled = true) {} }
+            Box(Modifier.requiredSize(width.dp, height.dp)) { GameplayContent(run, inputEnabled = inputEnabled) {} }
         }
     }
 
