@@ -29,6 +29,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.referentialEqualityPolicy
 import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -126,12 +127,14 @@ fun GameplayContent(
         if (hudDensity === localDensity) composeTextMeasurer else ComposeTextMeasurer(fontFamilyResolver, hudDensity, layoutDirection, 64)
     }
     val interactionValidator = remember(component) { GameInteractionValidator() }
+    // The owner republishes the same snapshot instances while nothing changed, so a reference check
+    // stands in for a structural comparison of the whole model on every frame.
     val renderModel = remember(component) {
-        mutableStateOf(requireNotNull(component.renderSnapshot().renderModel))
+        mutableStateOf(requireNotNull(component.renderSnapshot().renderModel), referentialEqualityPolicy())
     }
     var renderModelValue by renderModel
     var visualFxProjectionValue by remember(component) {
-        mutableStateOf(component.visualFxSnapshot())
+        mutableStateOf(component.visualFxSnapshot(), referentialEqualityPolicy())
     }
     val renderTimeSeconds = remember(component) { mutableFloatStateOf(0f) }
     var renderTimeSecondsValue by renderTimeSeconds
@@ -165,7 +168,7 @@ fun GameplayContent(
             }
             // A target can publish atomically and then surface a deferred side-effect fault.
             // Republishing the immutable values is also harmless for a pre-commit fault because
-            // Compose suppresses equal assignments, so the hot success path needs no pre-query.
+            // Compose suppresses assigning the same instance, so the hot success path needs no pre-query.
             try {
                 val committed = component.renderSnapshot()
                 renderModelValue = requireNotNull(committed.renderModel)
