@@ -33,16 +33,16 @@ import kinetickk.ball.gameplay.nucleus.simulation.world.*
  * the reference seed 2026 alone won as the reference does with probability 0.53, and the ten further probe seeds
  * reached five POI-free wins with probability 0.70, so both re-rolled with every change to the reward stream. Each
  * threshold is the lower of the seeded rule (the reference seed wins so; five of the ten seeds win without a POI) and
- * the 0.6.0 base share minus two standard errors, rounded down. The reference seed is still flown twice to show the run
- * is deterministic, and every choice of every run keeps the loadout invariant.
+ * the Elite-resonance base share minus two standard errors, rounded down. The reference seed is still flown twice to
+ * show the run is deterministic, and every choice of every run keeps the loadout invariant.
  */
 class NoPoiPlaythroughTest {
     /**
      * A fresh run wins as the reference did: VICTORY within 720-900 s with the Architect arriving at 720 s, every POI
      * skipped, no completed orbit pending, the foundation at 180 s (weapon level 3, three items, a Relic slot) and the
      * opportunity at 360 s (four Elites seen, four Relic slots), and weapon level 10 with four Relics, two of them
-     * ranked, at the end. On the 0.6.0 base 186 of the 300 runs win so (0.620, SE 0.028; base - 2 SE 0.564); at least
-     * [MIN_REFERENCE_SHARE] must.
+     * ranked, at the end. On the Elite-resonance base 221 of the 300 runs win so (0.737, SE 0.025; base - 2 SE 0.686;
+     * 0.717 on the tree before it); at least [MIN_REFERENCE_SHARE] must.
      */
     @Test fun freshProfilesWinNoPoiRunsWithinTwelveToFifteenActiveMinutes() {
         java.io.File(System.getProperty("java.io.tmpdir"), "kinetickk-nopoi-evidence.txt").writeText("")
@@ -58,9 +58,10 @@ class NoPoiPlaythroughTest {
     /**
      * The reference win is not a knife-edge seed: other fresh-profile runs win without a POI. Only a victory that
      * skipped every POI is a no-POI win (the bot's avoidance is a heuristic), and each one lasts 720-900 s and ends
-     * with four Relics. On the 0.6.0 base 192 of the 300 runs win so (0.640, SE 0.028); at least [MIN_NO_POI_WIN_SHARE]
-     * must, the seeded five of ten, since the base minus two standard errors (0.585) lies above it. Earlier, on the ten
-     * fixed probe seeds: 6 wins after wave A, 7 after the second wave, all 10 after the final weapon balance (floor 5).
+     * with four Relics. On the Elite-resonance base 248 of the 300 runs win so (0.827, SE 0.022; 0.720 on the tree
+     * before it); at least [MIN_NO_POI_WIN_SHARE] must, the seeded five of ten, since the base minus two standard errors
+     * (0.783) lies above it. Earlier, on the ten fixed probe seeds: 6 wins after wave A, 7 after the second wave, all 10
+     * after the final weapon balance (floor 5).
      */
     @Test fun freshProfileAlsoWinsFurtherReferenceNoPoiSeeds() {
         population.filter { it.noPoiWin }.forEach { run ->
@@ -105,10 +106,10 @@ class NoPoiPlaythroughTest {
     internal companion object {
         const val REFERENCE_SEED = 2026
 
-        /** The least share of [PopulationSeeds] runs that win as the reference does (0.6.0 base 0.620, SE 0.028). */
-        const val MIN_REFERENCE_SHARE = 0.56
+        /** The least share of [PopulationSeeds] runs that win as the reference does (Elite-resonance base 0.737, SE 0.025). */
+        const val MIN_REFERENCE_SHARE = 0.68
 
-        /** The least share of [PopulationSeeds] runs that win without a POI (seeded 5 of 10; 0.6.0 base 0.640, SE 0.028). */
+        /** The least share of [PopulationSeeds] runs that win without a POI (seeded 5 of 10; Elite-resonance base 0.827, SE 0.022). */
         const val MIN_NO_POI_WIN_SHARE = 0.50
 
         /** One fresh run per [PopulationSeeds] seed, shared by both rules. */

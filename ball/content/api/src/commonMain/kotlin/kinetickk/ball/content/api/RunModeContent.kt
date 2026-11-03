@@ -48,7 +48,7 @@ data class CoreStasisTuning(
     val enabled: Boolean = true,
     val applyEffects: Boolean = true,
     val anchorRadius: Float = 240f,
-    val stillSpeed: Float = 220f,
+    val stillSpeed: Float = 120f,
     /** A leash drag counts as travel only at this speed EMA or faster; a slower crawl stays still. */
     val travelSpeed: Float = 30f,
     val speedEmaSeconds: Float = 1.5f,
