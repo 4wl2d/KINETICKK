@@ -84,6 +84,39 @@ class CoreStasisRenderingTest {
     }
 
     /**
+     * A freeze that grows every frame (new crystals, cracks and countdown digits) and a thaw that recedes allocate
+     * nothing once their digits and strokes are cached, nor does the death frame while its ice bursts.
+     */
+    @Test
+    fun aGrowingFreezeAndTheDeathFrameAllocateNothing() {
+        val (w, h) = 1_440 to 810
+        val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1.25f,
+            AppLanguage.Russian)
+        val base = hudTestModel(w.toFloat(), h.toFloat())
+        for (motion in listOf(CoreStasisMotion.FREEZING, CoreStasisMotion.THAWING)) {
+            val frames = List(FRAMES) { frame ->
+                base.with("elapsed" to 20f + frame * 0.021f, "coreStasis" to 0.02f + 0.97f * frame / FRAMES, "coreStasisMotion" to motion)
+            }
+            val memory = HudPresentationMemory()
+            val perFrame = steadyFrameBytes(w, h, cycles = 3) { frame ->
+                drawGameplay(frames[frame], VisualFxProjection.EMPTY, measurer, 10f + frame * 0.021f, null, hudMemory = memory)
+            }
+            val plain = steadyFrameBytes(w, h, cycles = 3) { frame ->
+                drawGameplay(frames[frame].with("coreStasis" to 0f, "coreStasisMotion" to CoreStasisMotion.CLEAR), VisualFxProjection.EMPTY,
+                    measurer, 10f + frame * 0.021f, null, hudMemory = memory)
+            }
+            assertTrue(perFrame - plain <= 64, "a $motion freeze allocates ${perFrame - plain} bytes per frame")
+        }
+        val shattered = base.with("phase" to GamePhase.GAME_OVER)
+        val frozen = shattered.with("coreStasis" to 1f, "coreStasisMotion" to CoreStasisMotion.FROZEN)
+        fun death(model: GameplayRenderModel) = steadyFrameBytes(w, h, cycles = 3) { frame ->
+            drawGameplay(model, VisualFxProjection.EMPTY, measurer, 10f, null, terminalElapsed = 1.1f * frame / FRAMES)
+        }
+        val extra = death(frozen) - death(shattered)
+        assertTrue(extra <= 64, "the frozen death frame allocates $extra bytes per frame more than the shatter")
+    }
+
+    /**
      * The stamp is cryo while the Core freezes and turns threat over the last stretch of a freeze that can kill, in every
      * preset with a threat hue of its own; Easy mode never shows threat, a thawing Core shows bone, Mono hatches the
      * urgent plate, and the edge frost never takes the threat colour.

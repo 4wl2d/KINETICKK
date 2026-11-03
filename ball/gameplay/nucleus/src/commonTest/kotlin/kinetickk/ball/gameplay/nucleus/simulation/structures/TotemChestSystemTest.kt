@@ -382,7 +382,10 @@ class TotemChestSystemTest {
     }
 
     /** A quiet started run in a world without structures, the Core at rest. */
-    private fun chestRun(): MutableGameState = buildTestState(content = structuresDisabledContent, seed = 61).apply {
+    /** The chest tests hold the Core still on the chest ([restOn]), so Core Freeze is off (a scripted still Core). */
+    private fun chestRun(): MutableGameState = buildTestState(
+        content = structuresDisabledContent.copy(coreStasis = kinetickk.ball.content.api.CoreStasisTuning.DISABLED), seed = 61,
+    ).apply {
         quietArenaForTesting()
         setVelocityForTesting(0f, 0f)
         previousCoreX = coreX

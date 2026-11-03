@@ -294,6 +294,7 @@ private fun GameplayInteractionPulse.traceName(): String = when (this) {
     GameplayInteractionPulse.UserGestureObserved -> "gesture"
     is GameplayInteractionPulse.SkillRequested -> "skill=$slot"
     GameplayInteractionPulse.ApexRequested -> "apex"
+    is GameplayInteractionPulse.InputAvailabilityChanged -> "input=${if (available) "on" else "off"}"
 }
 
 /**
