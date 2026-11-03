@@ -21,6 +21,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableIntState
+import androidx.compose.runtime.NonRestartableComposable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -69,6 +72,7 @@ import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.flow.session.interaction.audio.SessionAudioExecutor
 import kinetickk.flow.session.interaction.home.api.HomeFeature
 import kinetickk.flow.session.interaction.home.api.HomeOutput
+import kinetickk.flow.session.interaction.home.api.HomeUiModel
 import kinetickk.flow.session.interaction.toggled
 import kinetickk.resource.audio.api.AudioService
 import kotlin.math.roundToInt
@@ -99,19 +103,11 @@ class DefaultHomeFeature(
         val density = localDensity.density
         val roles = LocalKkRolePalette.current
         val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
-        var revisionValue by remember { mutableIntStateOf(0) }
-        var viewportValue by remember { mutableStateOf(HomeViewport(0f, 0f, density, quitAvailable)) }
-        var renderTimeSecondsValue by remember { mutableFloatStateOf(0f) }
-        var activeTargetValue by remember { mutableStateOf(HomeLayoutTarget.START) }
-        var focusedTargetValue by remember { mutableStateOf<HomeLayoutTarget?>(null) }
-        var openInfoValue by remember { mutableStateOf<HomeInfoTarget?>(null) }
-        var activeInfoValue by remember { mutableStateOf<HomeInfoTarget?>(null) }
-        var quitActiveValue by remember { mutableStateOf(false) }
-        // The Baby mode toggle: hovered or focused, and whether a tap on it left its tooltip open.
-        var runModeActiveValue by remember { mutableStateOf(false) }
-        var runModeTipValue by remember { mutableStateOf(false) }
-        val menuMotion = remember { HomeMenuMotion() }
-        val actionFocus = remember { HomeLayoutTarget.entries.associateWith { FocusRequester() } }
+        val home = remember { HomeContentState(density, quitAvailable) }
+        val revisionValue by home.revision
+        val viewportValue by home.viewport
+        val activeTargetValue by home.activeTarget
+        val actionFocus = home.actionFocus
         val actionsReady = inputEnabled && viewportValue.width > 0f && viewportValue.height > 0f
         LaunchedEffect(actionsReady) {
             if (actionsReady) actionFocus.getValue(activeTargetValue).requestFocus()
@@ -134,17 +130,7 @@ class DefaultHomeFeature(
                 roles = roles,
             )
         }
-
-        fun dispatch(action: HomeAction) {
-            val reduction = reducer.reduce(action)
-            revisionValue++
-            reduction.effects.forEach { effect ->
-                when (effect) {
-                    is HomeEffect.PlayAudio -> audioExecutor.play(effect.cue)
-                    is HomeEffect.Emit -> onOutput(effect.output)
-                }
-            }
-        }
+        val dispatcher = remember(onOutput) { HomeDispatch(reducer, audioExecutor, onOutput, home.revision) }
 
         val layout = remember(viewportValue) {
             homeLayoutGeometry(
@@ -155,145 +141,240 @@ class DefaultHomeFeature(
             )
         }
 
-        val currentTapHandlerValue by rememberUpdatedState<(Offset) -> Unit> { position ->
-            if (inputEnabled) {
-                val press = resolveHomePress(viewportValue, position.x, position.y, runMode)
-                // A tap on the toggle asks Session for the other mode and leaves its tooltip open; any other tap closes it.
-                val toggle = press as? HomeAction.SelectRunMode
-                // The slip covers menu rows: a tap on it only closes it and presses nothing hidden under it.
-                val onTip = toggle == null &&
-                    homeShowsRunModeTip(layout, openInfoValue, activeInfoValue, runModeActiveValue, runModeTipValue) &&
-                    position in homeRunModeTipRect(textMeasurer, layout, viewportValue)
-                runModeTipValue = toggle != null
-                val info = if (toggle != null || onTip) null else resolveHomeInfoPress(viewportValue, position.x, position.y)
-                when {
-                    toggle != null -> {
-                        openInfoValue = null
-                        dispatch(toggle)
-                    }
-                    onTip -> Unit
-                    info != null -> openInfoValue = if (openInfoValue == info) null else info
-                    else -> {
-                        openInfoValue = null
-                        press?.let(::dispatch)
-                    }
-                }
-            }
+        val currentTapHandler = rememberUpdatedState<(Offset) -> Unit> { position ->
+            if (inputEnabled) homeTap(home, dispatcher, position, runMode, layout, textMeasurer)
         }
+        HomeFrameLoop(home, roles)
 
-        val elementHuesValue by rememberUpdatedState(roles.elements)
-        val frameRateCap = LocalKkFrameRateCap.current
-        LaunchedEffect(frameRateCap) {
-            val pacer = KkFramePacer(frameRateCap)
-            var previousFrame = pacer.awaitFrame()
-            while (true) {
-                val frame = pacer.awaitFrame()
-                val delta = selectHomePresentationFrameDeltaSeconds((frame - previousFrame) / 1_000_000_000f)
-                renderTimeSecondsValue += delta
-                menuMotion.advance(activeTargetValue, delta, elementHuesValue)
-                previousFrame = frame
-            }
+        Box(modifier = homeRootModifier(home, inputEnabled, language, density, quitAvailable, currentTapHandler)) {
+            HomeCanvas(uiModel, textMeasurer, home, layout, textScale, runMode)
+            if (actionsReady) HomeSemanticControls(layout, home, dispatcher, localDensity, uiModel, language, textScale, runMode)
         }
+    }
+}
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Kk.Ink)
-                .testTag(HOME_ROOT_TAG)
-                .onPreviewKeyEvent { event ->
-                    if (!inputEnabled || event.type != KeyEventType.KeyDown ||
-                        (event.key != Key.DirectionDown && event.key != Key.DirectionUp)) false
-                    else {
-                        val step = if (event.key == Key.DirectionDown) 1 else -1
-                        val targets = HomeMenuTargets
-                        val index = targets.indexOf(activeTargetValue)
-                        activeTargetValue = targets[(index + step + targets.size) % targets.size]
-                        actionFocus.getValue(activeTargetValue).requestFocus()
-                        true
-                    }
-                }
-                .semantics {
-                    contentDescription = language.text(SessionText.HOME_DESCRIPTION)
-                }
-                .onSizeChanged { size ->
-                    viewportValue = HomeViewport(size.width.toFloat(), size.height.toFloat(), density, quitAvailable)
-                }
-                .pointerInput(Unit) {
-                    detectTapGestures { position -> currentTapHandlerValue(position) }
-                },
-        ) {
-            Canvas(Modifier.fillMaxSize()) {
-                drawHome(
-                    uiModel, textMeasurer, renderTimeSecondsValue, layout,
-                    HomeDrawState(
-                        activeTarget = activeTargetValue,
-                        focusedTarget = focusedTargetValue,
-                        openInfo = openInfoValue,
-                        activeInfo = activeInfoValue,
-                        textScale = textScale,
-                        quitActive = quitActiveValue,
-                        easy = runMode == RunMode.EASY,
-                        runModeActive = runModeActiveValue,
-                        runModeTip = runModeTipValue,
-                    ),
-                    menuMotion,
-                )
-            }
-            if (actionsReady) {
-                layout.actions.forEach { action ->
-                    key(action.target) {
-                        HomeSemanticAction(
-                            action = action,
-                            density = localDensity,
-                            focusRequester = actionFocus.getValue(action.target),
-                            onFocus = { focused ->
-                                if (focused) focusedTargetValue = action.target
-                                else if (focusedTargetValue == action.target) focusedTargetValue = null
-                                if (focused) activeTargetValue = action.target
-                            },
-                            onHover = {
-                                actionFocus.getValue(action.target).requestFocus()
-                                activeTargetValue = action.target
-                            },
-                            onClick = { dispatch(action.target.toHomeAction()) },
-                        )
-                    }
-                }
-                layout.infos.forEach { info ->
-                    key(info.target) {
-                        HomeInfoAction(
-                            info = info,
-                            density = localDensity,
-                            description = when (info.target) {
-                                HomeInfoTarget.FACTS -> menuMotion.facts(uiModel, activeTargetValue, language, textScale).info
-                                HomeInfoTarget.FORM -> homeFormInfo(uiModel, language)
-                            },
-                            onActive = { active ->
-                                if (active) activeInfoValue = info.target
-                                else if (activeInfoValue == info.target) activeInfoValue = null
-                            },
-                            onToggle = { openInfoValue = if (openInfoValue == info.target) null else info.target },
-                        )
-                    }
-                }
-                layout.quit?.let { quit ->
-                    HomeQuitAction(
-                        quit = quit,
-                        density = localDensity,
-                        onActive = { active -> quitActiveValue = active },
-                        onClick = { dispatch(HomeAction.Quit) },
-                    )
-                }
-                HomeRunModeAction(
-                    toggle = layout.runModeToggle,
-                    density = localDensity,
-                    easy = runMode == RunMode.EASY,
-                    onActive = { active -> runModeActiveValue = active },
-                    onClick = { dispatch(HomeAction.SelectRunMode(runMode.toggled())) },
-                )
+/** The Home screen's state for one composition of [DefaultHomeFeature.Content]: viewport, clock, selection and tooltips. */
+private class HomeContentState(density: Float, quitAvailable: Boolean) {
+    val revision = mutableIntStateOf(0)
+    val viewport = mutableStateOf(HomeViewport(0f, 0f, density, quitAvailable))
+    val renderTimeSeconds = mutableFloatStateOf(0f)
+    val activeTarget = mutableStateOf(HomeLayoutTarget.START)
+    val focusedTarget = mutableStateOf<HomeLayoutTarget?>(null)
+    val openInfo = mutableStateOf<HomeInfoTarget?>(null)
+    val activeInfo = mutableStateOf<HomeInfoTarget?>(null)
+    val quitActive = mutableStateOf(false)
+
+    // The Baby mode toggle: hovered or focused, and whether a tap on it left its tooltip open.
+    val runModeActive = mutableStateOf(false)
+    val runModeTip = mutableStateOf(false)
+    val menuMotion = HomeMenuMotion()
+    val actionFocus = HomeLayoutTarget.entries.associateWith { FocusRequester() }
+}
+
+/** Runs a Home action through the reducer, bumps [revision] and executes its effects (audio, outputs). */
+private class HomeDispatch(
+    private val reducer: HomeReducer,
+    private val audioExecutor: SessionAudioExecutor,
+    private val onOutput: (HomeOutput) -> Unit,
+    private val revision: MutableIntState,
+) {
+    fun dispatch(action: HomeAction) {
+        val reduction = reducer.reduce(action)
+        revision.intValue++
+        reduction.effects.forEach { effect ->
+            when (effect) {
+                is HomeEffect.PlayAudio -> audioExecutor.play(effect.cue)
+                is HomeEffect.Emit -> onOutput(effect.output)
             }
         }
     }
+}
+
+/** A tap on the Home screen at [position]: the run-mode toggle, its tooltip, an info button or a menu row. */
+private fun homeTap(
+    home: HomeContentState,
+    dispatcher: HomeDispatch,
+    position: Offset,
+    runMode: RunMode,
+    layout: HomeLayoutGeometry,
+    textMeasurer: CanvasTextMeasurer,
+) {
+    val viewport = home.viewport.value
+    val press = resolveHomePress(viewport, position.x, position.y, runMode)
+    // A tap on the toggle asks Session for the other mode and leaves its tooltip open; any other tap closes it.
+    val toggle = press as? HomeAction.SelectRunMode
+    // The slip covers menu rows: a tap on it only closes it and presses nothing hidden under it.
+    val onTip = toggle == null &&
+        homeShowsRunModeTip(layout, home.openInfo.value, home.activeInfo.value, home.runModeActive.value, home.runModeTip.value) &&
+        position in homeRunModeTipRect(textMeasurer, layout, viewport)
+    home.runModeTip.value = toggle != null
+    val info = if (toggle != null || onTip) null else resolveHomeInfoPress(viewport, position.x, position.y)
+    when {
+        toggle != null -> {
+            home.openInfo.value = null
+            dispatcher.dispatch(toggle)
+        }
+        onTip -> Unit
+        info != null -> home.openInfo.value = if (home.openInfo.value == info) null else info
+        else -> {
+            home.openInfo.value = null
+            press?.let(dispatcher::dispatch)
+        }
+    }
+}
+
+/** Advances the Home clock and the menu motion once per paced frame. */
+@Composable
+@NonRestartableComposable
+private fun HomeFrameLoop(home: HomeContentState, roles: KkRolePalette) {
+    val elementHuesValue by rememberUpdatedState(roles.elements)
+    val frameRateCap = LocalKkFrameRateCap.current
+    LaunchedEffect(frameRateCap) {
+        val pacer = KkFramePacer(frameRateCap)
+        var previousFrame = pacer.awaitFrame()
+        while (true) {
+            val frame = pacer.awaitFrame()
+            val delta = selectHomePresentationFrameDeltaSeconds((frame - previousFrame) / 1_000_000_000f)
+            home.renderTimeSeconds.floatValue += delta
+            home.menuMotion.advance(home.activeTarget.value, delta, elementHuesValue)
+            previousFrame = frame
+        }
+    }
+}
+
+/** The Home root: arrow keys walk the menu, its description, the viewport it reports and its taps. */
+@Composable
+private fun homeRootModifier(
+    home: HomeContentState,
+    inputEnabled: Boolean,
+    language: AppLanguage,
+    density: Float,
+    quitAvailable: Boolean,
+    tapHandler: State<(Offset) -> Unit>,
+): Modifier {
+    val actionFocus = home.actionFocus
+    return Modifier
+        .fillMaxSize()
+        .background(Kk.Ink)
+        .testTag(HOME_ROOT_TAG)
+        .onPreviewKeyEvent { event ->
+            if (!inputEnabled || event.type != KeyEventType.KeyDown ||
+                (event.key != Key.DirectionDown && event.key != Key.DirectionUp)) false
+            else {
+                val step = if (event.key == Key.DirectionDown) 1 else -1
+                val targets = HomeMenuTargets
+                val index = targets.indexOf(home.activeTarget.value)
+                home.activeTarget.value = targets[(index + step + targets.size) % targets.size]
+                actionFocus.getValue(home.activeTarget.value).requestFocus()
+                true
+            }
+        }
+        .semantics {
+            contentDescription = language.text(SessionText.HOME_DESCRIPTION)
+        }
+        .onSizeChanged { size ->
+            home.viewport.value = HomeViewport(size.width.toFloat(), size.height.toFloat(), density, quitAvailable)
+        }
+        .pointerInput(Unit) {
+            detectTapGestures { position -> tapHandler.value(position) }
+        }
+}
+
+/** The Home screen drawn in one canvas from the presentation state. */
+@Composable
+@NonRestartableComposable
+private fun HomeCanvas(
+    uiModel: HomeUiModel,
+    textMeasurer: CanvasTextMeasurer,
+    home: HomeContentState,
+    layout: HomeLayoutGeometry,
+    textScale: Float,
+    runMode: RunMode,
+) {
+    Canvas(Modifier.fillMaxSize()) {
+        drawHome(
+            uiModel, textMeasurer, home.renderTimeSeconds.floatValue, layout,
+            HomeDrawState(
+                activeTarget = home.activeTarget.value,
+                focusedTarget = home.focusedTarget.value,
+                openInfo = home.openInfo.value,
+                activeInfo = home.activeInfo.value,
+                textScale = textScale,
+                quitActive = home.quitActive.value,
+                easy = runMode == RunMode.EASY,
+                runModeActive = home.runModeActive.value,
+                runModeTip = home.runModeTip.value,
+            ),
+            home.menuMotion,
+        )
+    }
+}
+
+/** The menu rows, info buttons, Quit plate and run-mode toggle as focusable semantic controls over the canvas. */
+@Composable
+@NonRestartableComposable
+private fun HomeSemanticControls(
+    layout: HomeLayoutGeometry,
+    home: HomeContentState,
+    dispatcher: HomeDispatch,
+    localDensity: Density,
+    uiModel: HomeUiModel,
+    language: AppLanguage,
+    textScale: Float,
+    runMode: RunMode,
+) {
+    val actionFocus = home.actionFocus
+    layout.actions.forEach { action ->
+        key(action.target) {
+            HomeSemanticAction(
+                action = action,
+                density = localDensity,
+                focusRequester = actionFocus.getValue(action.target),
+                onFocus = { focused ->
+                    if (focused) home.focusedTarget.value = action.target
+                    else if (home.focusedTarget.value == action.target) home.focusedTarget.value = null
+                    if (focused) home.activeTarget.value = action.target
+                },
+                onHover = {
+                    actionFocus.getValue(action.target).requestFocus()
+                    home.activeTarget.value = action.target
+                },
+                onClick = { dispatcher.dispatch(action.target.toHomeAction()) },
+            )
+        }
+    }
+    layout.infos.forEach { info ->
+        key(info.target) {
+            HomeInfoAction(
+                info = info,
+                density = localDensity,
+                description = when (info.target) {
+                    HomeInfoTarget.FACTS -> home.menuMotion.facts(uiModel, home.activeTarget.value, language, textScale).info
+                    HomeInfoTarget.FORM -> homeFormInfo(uiModel, language)
+                },
+                onActive = { active ->
+                    if (active) home.activeInfo.value = info.target
+                    else if (home.activeInfo.value == info.target) home.activeInfo.value = null
+                },
+                onToggle = { home.openInfo.value = if (home.openInfo.value == info.target) null else info.target },
+            )
+        }
+    }
+    layout.quit?.let { quit ->
+        HomeQuitAction(
+            quit = quit,
+            density = localDensity,
+            onActive = { active -> home.quitActive.value = active },
+            onClick = { dispatcher.dispatch(HomeAction.Quit) },
+        )
+    }
+    HomeRunModeAction(
+        toggle = layout.runModeToggle,
+        density = localDensity,
+        easy = runMode == RunMode.EASY,
+        onActive = { active -> home.runModeActive.value = active },
+        onClick = { dispatcher.dispatch(HomeAction.SelectRunMode(runMode.toggled())) },
+    )
 }
 
 @Composable
