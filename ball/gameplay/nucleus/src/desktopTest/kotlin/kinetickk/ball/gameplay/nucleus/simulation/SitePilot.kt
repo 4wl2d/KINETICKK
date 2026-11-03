@@ -270,6 +270,8 @@ internal fun flySiteRun(seed: Int, arm: SiteArm, setup: SiteRunSetup = SiteRunSe
     val content = arm.content(setup.base)
     val state = MutableGameState(content, seed = seed, bootstrapProgress = setup.profile)
     state.unlockWeaponsForTesting(ReferenceArmory)
+    // The fresh Orb loads out the bot's weapon (harness H1); a given profile keeps its own.
+    if (setup.profile == null) state.startingWeapon = botLoadout(BotWeaponOrder, ReferenceArmory)
     state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
     state.resize(setup.width, setup.height)
     state.startRun()
@@ -324,6 +326,7 @@ internal fun flySiteRun(seed: Int, arm: SiteArm, setup: SiteRunSetup = SiteRunSe
 internal fun flyNoPoiRun(seed: Int, base: GameplayContentSnapshot = canonicalGameplayContent): SiteRun {
     val state = MutableGameState(base, seed = seed)
     state.unlockWeaponsForTesting(ReferenceArmory)
+    state.startingWeapon = botLoadout(BotWeaponOrder, ReferenceArmory)
     state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
     state.resize(1_280f, 800f)
     state.startRun()

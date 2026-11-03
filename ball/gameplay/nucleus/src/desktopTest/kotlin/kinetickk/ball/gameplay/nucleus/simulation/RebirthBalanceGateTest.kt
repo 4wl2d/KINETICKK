@@ -338,10 +338,10 @@ class RebirthBalanceGateTest {
 
         /** The shipped content without its active items: no run here owns one, and its deck and offers are the 0.5.0 ones. */
         val NoActives: GameplayContentSnapshot = withoutActiveItemCatalog()
-        val BotWeapons: List<WeaponId> = listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.ENTROPY_FIELD, WeaponId.PRISM_RELAY)
+        val BotWeapons: List<WeaponId> = BotWeaponOrder
 
-        /** No Matrix ranks, the Orb and the starter weapon. */
-        val Fresh = Setup(MatrixPlan.NONE, shape = CoreShape.ORB, weapon = WeaponId.FLUX_WAKE, weaponOrder = BotWeapons)
+        /** No Matrix ranks, the Orb and the bot's loadout from the reference armory (harness H1). */
+        val Fresh = Setup(MatrixPlan.NONE, shape = CoreShape.ORB, weapon = botLoadout(BotWeapons, ReferenceArmory), weaponOrder = BotWeapons)
 
         /**
          * Every Matrix rank and the Pentagon with its signature Arc Coil from the start, measured without key harmony
@@ -354,7 +354,7 @@ class RebirthBalanceGateTest {
         )
 
         /** Half the Matrix (see [halfMatrixRanks]), the Orb and the starter weapon. */
-        val Half = Setup(MatrixPlan.HALF, shape = CoreShape.ORB, weapon = WeaponId.FLUX_WAKE, weaponOrder = BotWeapons)
+        val Half = Setup(MatrixPlan.HALF, shape = CoreShape.ORB, weapon = botLoadout(BotWeapons, ReferenceArmory), weaponOrder = BotWeapons)
 
         /**
          * The strong build: the signature Arc Coil, a Charge-key Relic (Stormheart Capacitor) in harmony with

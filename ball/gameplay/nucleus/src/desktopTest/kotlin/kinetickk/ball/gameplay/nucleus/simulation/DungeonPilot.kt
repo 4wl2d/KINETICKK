@@ -86,7 +86,8 @@ internal data class DungeonAttempt(
  *   uncleared room with a garrison, or the final room once its locks are open), through door waypoints 160 u on each
  *   side of every door centre. Held from outside the walls (a notch of the footprint), it first leaves the footprint
  *   and rounds it to the entrance.
- * - After the outcome the bot flies as before (footprint avoidance on).
+ * - After the outcome the bot flies as before (footprint avoidance on), opening a waiting Totem chest while it holds
+ *   a Key.
  *
  * The attempt starts the moment the Core holds a dungeon and ends in one [DungeonOutcome]; [observe] reads it after
  * every simulated input frame.

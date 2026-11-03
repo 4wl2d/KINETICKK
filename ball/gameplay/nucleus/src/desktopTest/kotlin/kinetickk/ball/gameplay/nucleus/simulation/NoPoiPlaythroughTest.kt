@@ -122,11 +122,12 @@ class NoPoiPlaythroughTest {
             if (reportAttempt != null) report("REFERENCE attempt=$reportAttempt seed=$seed simulationSpeed=1.0 inputHz=50 freshLab=true")
             val state = MutableGameState(canonicalGameplayContent, seed = seed)
             state.unlockWeaponsForTesting(ReferenceArmory)
+            state.startingWeapon = botLoadout(BotWeaponOrder, ReferenceArmory)
             state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
             state.startRun()
             assertEquals(1f, state.settings.simulationSpeed)
             assertEquals(CoreShape.ORB, state.coreShape)
-            assertEquals(WeaponId.FLUX_WAKE, state.weapon)
+            assertEquals(WeaponId.ARC_COIL, state.weapon, "the bot loads out its first owned preferred weapon")
             assertTrue((0 until state.matrixRanks.size).all { state.matrixRanks[it] == 0 })
             assertEquals(0, state.rebirthLevel)
             val bot = NoPoiBot()
@@ -263,7 +264,7 @@ internal const val ARC_BOSS_SPEED = 460f
 internal class NoPoiBot(
     private val archetypeTag: BuildTag = BuildTag.RAM,
     private val element: StatusElement? = StatusElement.ENTROPY,
-    private val weaponOrder: List<WeaponId> = listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.ENTROPY_FIELD, WeaponId.PRISM_RELAY),
+    private val weaponOrder: List<WeaponId> = BotWeaponOrder,
     /** An impact-driven player avoids liabilities that cut impacts, healing, integrity or steering. */
     private val relicTaste: Map<RelicId, Float> = mapOf(
         RelicId.ECHO_CHAMBER to -40f,
@@ -886,8 +887,19 @@ internal class NoPoiBot(
 internal enum class DataPolicy { NEUTRAL, SEEK, AVOID }
 
 /**
- * The reference run owns the original twelve weapons, so its Totem recalibrations deal exactly the
- * offers they did before weapon offers were limited to owned weapons (a profile that owns only the
- * starter can amplify but never recalibrate).
+ * The reference run owns the original twelve weapons: the population bots load out from it ([botLoadout]) and its
+ * Totem chest and directed-site recalibrations deal from it (a profile that owns only the starter can amplify but
+ * never recalibrate).
  */
 internal val ReferenceArmory: List<WeaponId> = WeaponId.entries.take(12)
+
+/** The reference bot's weapon preference, best first. */
+internal val BotWeaponOrder: List<WeaponId> = listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.ENTROPY_FIELD, WeaponId.PRISM_RELAY)
+
+/**
+ * The weapon a bot preferring [weaponOrder] loads out of [owned]: the first it prefers that the profile owns, as a player
+ * with that armory picks in the Hangar ([fallback], the starter, when it owns none). The world Totem used to make this
+ * switch at its first recalibration; without it the population harnesses start on the loaded-out weapon (harness H1).
+ */
+internal fun botLoadout(weaponOrder: List<WeaponId>, owned: Collection<WeaponId>, fallback: WeaponId = WeaponId.FLUX_WAKE): WeaponId =
+    weaponOrder.firstOrNull { it in owned } ?: fallback

@@ -251,7 +251,7 @@ class EncounterDuelGateTest {
     private companion object {
         val MiniBosses = listOf(EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN, EnemyType.THRONE, EnemyType.PYRE_HERALD)
         val SecretBosses = listOf(EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT)
-        val BotWeapons = listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.ENTROPY_FIELD, WeaponId.PRISM_RELAY)
+        val BotWeapons = BotWeaponOrder
         /** Gate D's strong build: Stormheart Capacitor in key harmony with Arc Coil and three proven Relics. */
         val StrongRelics =
             listOf(RelicId.STORMHEART_CAPACITOR, RelicId.PANDEMIC_CODEX, RelicId.THUNDER_CHOIR, RelicId.CINDER_CROWN)

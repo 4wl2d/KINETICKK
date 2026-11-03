@@ -120,6 +120,7 @@ class SkillShareGateTest {
     private fun play(seed: Int, shape: CoreShape): Run {
         val state = MutableGameState(canonicalGameplayContent, seed = seed)
         state.unlockWeaponsForTesting(ReferenceArmory)
+        state.startingWeapon = botLoadout(BotWeaponOrder, ReferenceArmory)
         state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
         state.coreShape = shape
         state.startRun()
