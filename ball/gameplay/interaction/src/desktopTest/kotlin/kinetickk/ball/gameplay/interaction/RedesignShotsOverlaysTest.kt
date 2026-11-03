@@ -357,6 +357,12 @@ class RedesignShotsOverlaysTest {
                 TerminalShot(rewardFixtureModel(phase = GamePhase.GAME_OVER, relics = relics4, language = l, width = w, height = h, textScale = textScale,
                     message = "SINGULARITY CONTACT", runMatter = 640L, totalMatter = 1_284L, kills = 901, elapsed = 554f, level = 16, weaponLevel = 8))
             },
+            // Core Freeze ended the run: the cause stamp and shatter in ice, the rule under the stamp.
+            Scene("report-defeat-frozen") { w, h, l ->
+                TerminalShot(rewardFixtureModel(phase = GamePhase.GAME_OVER, relics = relics4, language = l, width = w, height = h, textScale = textScale,
+                    message = "CORE FROZEN", runMatter = 640L, totalMatter = 1_284L, kills = 901, elapsed = 554f, level = 16, weaponLevel = 8)
+                    .with("coreStasis" to 1f, "coreStasisMotion" to kinetickk.ball.gameplay.nucleus.render.CoreStasisMotion.FROZEN))
+            },
             // Baby mode counts nothing: the soft Not counted stamp, the matter not banked, no bank or Rebirth lines.
             Scene("report-victory-easy") { w, h, l ->
                 TerminalShot(rewardFixtureModel(phase = GamePhase.VICTORY, relics = relics4, language = l, width = w, height = h, textScale = textScale,

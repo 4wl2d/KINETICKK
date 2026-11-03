@@ -12,8 +12,8 @@ import kotlin.math.sqrt
 
 /*
  * Baby mode (RunMode.EASY) rules of one run, read from the immutable [MutableGameState.easyMode] and the content's
- * EasyModeTuning. Shared systems call these through one-line hooks: the singularity contact in updateCore, the damage
- * factor and obstacle floor in PlayerDamageSystem, the Heirloom offer at the run start, the Profile outbox guards
+ * EasyModeTuning. Shared systems call these through one-line hooks: the singularity contact in updateCore, a Core
+ * frozen solid in updateCoreStasis, the damage factor and obstacle floor in PlayerDamageSystem, the Heirloom offer at the run start, the Profile outbox guards
  * in ProgressionSystem and the first-discovery announcements in ReactionSystem and RelicRules. A STANDARD run reads
  * none of the tuning and multiplies by exactly 1.
  */
@@ -95,6 +95,20 @@ internal fun MutableGameState.boopOffSingularity(targetX: Float, targetY: Float)
     shockwave(coreX, coreY, 0.35f, 70f, EASY_SOFT_COLOR_INDEX)
     burst(coreX, coreY, 6, EASY_SOFT_COLOR_INDEX)
     emitSound(GameplayAudioCue.UI_CLICK)
+    showBoop()
+}
+
+/**
+ * Baby mode: a Core frozen solid by Core Freeze shatters its ice with a soft bounce instead of ending the run (the
+ * freeze system has already reset the freeze and shed the ice): a soft shockwave and, when the feed is free, BOOP.
+ */
+internal fun MutableGameState.shatterFrozenCoreSoftly() {
+    shockwave(coreX, coreY, 0.35f, 70f, EASY_SOFT_COLOR_INDEX)
+    showBoop()
+}
+
+/** The BOOP message, when no other message holds the feed. */
+private fun MutableGameState.showBoop() {
     if (messageTime <= 0f) {
         message = EASY_BOOP_MESSAGE
         messageTime = EASY_BOOP_MESSAGE_SECONDS

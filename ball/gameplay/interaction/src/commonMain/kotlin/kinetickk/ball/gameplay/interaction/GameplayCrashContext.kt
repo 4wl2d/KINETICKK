@@ -24,7 +24,7 @@ internal fun GameplayRenderSnapshot.crashContext(): String = buildString {
         appendLine("screen=${screenWidth}x${screenHeight}dp density=$viewportDensity uiScale=$uiScale alpha=$interpolationAlpha")
         appendLine("core=$coreShape position=($coreX,$coreY) velocity=($velocityX,$velocityY) camera=($cameraX,$cameraY)")
         appendLine("pointer=($pointerX,$pointerY) active=$pointerActive braking=$braking")
-        appendLine("hp=$hp/$maxHp shield=$shield/$maxShield heat=$heat overheated=$overheated dashPhase=$dashPhaseTime polarity=$polarityStability stasis=$coreStasis fracturing=$coreStasisFracturing")
+        appendLine("hp=$hp/$maxHp shield=$shield/$maxShield heat=$heat overheated=$overheated dashPhase=$dashPhaseTime polarity=$polarityStability stasis=$coreStasis motion=$coreStasisMotion")
         appendLine("level=$level data=$data/$nextLevelData keys=$keys kills=$kills combo=$combo comboTime=$comboTime")
         appendLine("runMatter=$runMatter totalMatter=$totalMatter rebirth=$rebirthLevel grace=$runGrace easy=$easyMode")
         appendLine("weapon=$weapon level=$weaponLevel power=$weaponPower effectivePower=$effectiveWeaponPower overdrive=$overdriveCharge time=$overdriveTime")

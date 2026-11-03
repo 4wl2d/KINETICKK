@@ -8,9 +8,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.scale
 import kinetickk.ball.gameplay.interaction.canvas.fx.*
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.interaction.canvas.look.drawCore
+import kinetickk.ball.gameplay.interaction.canvas.renderElapsed
+import kinetickk.ball.gameplay.nucleus.render.CoreStasisMotion
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.profile.api.ParticleDensity
+import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkEase
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.KkStrokeWidth
@@ -22,10 +26,14 @@ internal const val CoreDeathDuration = 1.1f
 
 private const val SwellSeconds = 0.12f
 
+/** A Core frozen solid stays encased this long before the ice bursts. */
+private const val EncaseSeconds = 0.38f
+
 /**
  * Bounded presentation only: the accepted run is already finished and cannot gain rewards.
  * The Core swells, then shatters into threat-colored wedges around a black singularity with a
- * flash ring and debris; everything fades out by [CoreDeathDuration].
+ * flash ring and debris; everything fades out by [CoreDeathDuration]. A Core frozen solid by Core
+ * Freeze dies its own way instead ([drawCoreFreezeDeath]).
  */
 internal fun DrawScope.drawCoreDeath(
     engine: GameplayRenderModel,
@@ -34,6 +42,10 @@ internal fun DrawScope.drawCoreDeath(
 ) {
     val core = Offset(engine.coreX - engine.cameraX + size.width * 0.5f,
         engine.coreY - engine.cameraY + size.height * 0.5f)
+    if (engine.coreStasisMotion == CoreStasisMotion.FROZEN) {
+        drawCoreFreezeDeath(engine, core, elapsed, roles)
+        return
+    }
     if (elapsed < SwellSeconds) {
         scale(1f + elapsed * 2.5f, pivot = core) { drawCore(engine, core, roles) }
         return
@@ -75,3 +87,36 @@ internal fun DrawScope.drawCoreDeath(
 // Glow (0 0 36px 8px threat @45 %) as stacked translucent discs, no blur.
 private val GlowWidths = floatArrayOf(3f, 6f, 10f, 15f)
 private val GlowAlphas = floatArrayOf(0.22f, 0.14f, 0.08f, 0.04f)
+
+/**
+ * A Core frozen solid: the iced Core stays in the middle while an ice block clouds over it for [EncaseSeconds], then
+ * the block bursts into cryo wedges and bone debris with a cryo ring; everything fades out by [CoreDeathDuration].
+ */
+private fun DrawScope.drawCoreFreezeDeath(engine: GameplayRenderModel, core: Offset, elapsed: Float, roles: KkRolePalette) {
+    if (elapsed >= CoreDeathDuration) return
+    val fade = ((CoreDeathDuration - elapsed) / 0.3f).coerceIn(0f, 1f)
+    val radius = engine.coreRadius
+    drawCore(engine, core, roles)
+    drawCoreFrostAt(core, radius, 1f, engine.renderElapsed, roles, thawing = false)
+    if (elapsed < EncaseSeconds) {
+        drawCoreEncased(core, radius, elapsed / EncaseSeconds, roles)
+        return
+    }
+    val t = elapsed - EncaseSeconds
+    val cryo = roles.element(StatusElement.CRYO.ordinal)
+    drawCoreEncased(core, radius, 1f, roles, alpha = (1f - t / 0.18f).coerceIn(0f, 1f))
+    val ring = (t / 0.6f).coerceIn(0f, 1f)
+    if (ring < 1f) {
+        val eased = KkEase.Out.transform(ring)
+        drawCircle(cryo.copy(alpha = (1f - eased) * fade), kkLerp(24f, 170f, eased), core, style = kkStroke(KkStrokeWidth.Heavy))
+    }
+    val art = reportShatterArt(victory = false)
+    val shardTime = 0.32f + t * 1.4f
+    drawShatterShards(art.shape, art.paths, core, 0.26f, shardTime, cryo, spread = 2.4f, alpha = fade, floating = false)
+    val debris = when (engine.settings.particleDensity) {
+        ParticleDensity.LOW -> 6
+        ParticleDensity.NORMAL -> 12
+        ParticleDensity.HIGH -> 18
+    }
+    drawShatterDebris(art.shape, core, 0.36f, shardTime, Kk.Bone, debris, alpha = fade)
+}

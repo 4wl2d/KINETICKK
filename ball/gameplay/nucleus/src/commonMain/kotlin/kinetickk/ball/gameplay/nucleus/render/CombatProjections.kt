@@ -150,6 +150,13 @@ data class CoreStateProjection(
     }
 }
 
+/**
+ * Where Core Freeze ([GameplayRenderModel.coreStasis]) is heading: [CLEAR] with no freeze (or the system off), [FREEZING]
+ * below the freeze speed, [HOLDING] between the freeze and thaw speeds or while control is unavailable, [THAWING] at or
+ * above the thaw speed, and [FROZEN] once the Core froze solid (the run's end).
+ */
+enum class CoreStasisMotion { CLEAR, FREEZING, HOLDING, THAWING, FROZEN }
+
 /** Bits of [EnemyProjection.controlBits]. */
 object EnemyControlBits {
     const val STOPPED: Int = 1

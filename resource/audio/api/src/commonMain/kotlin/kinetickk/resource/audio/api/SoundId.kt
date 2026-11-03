@@ -28,4 +28,6 @@ enum class SoundId {
     STRUCTURE_COLLAPSE,
     /** A Legendary item joins the build: a bright rising chime. */
     LEGENDARY_ACQUIRED,
+    /** The Core freezes solid: a glassy crack over the defeat (or Easy mode's shattering ice). */
+    CORE_FROZEN,
 }

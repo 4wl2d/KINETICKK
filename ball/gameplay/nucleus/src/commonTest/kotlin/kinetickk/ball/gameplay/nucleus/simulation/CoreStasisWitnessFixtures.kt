@@ -3,23 +3,19 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-/** Non-default Core Stasis facts for the retained-state witnesses ([populateAdditionalRetainedState]). */
+/** Non-default Core Freeze facts for the retained-state witnesses ([populateAdditionalRetainedState]). */
 internal fun MutableGameState.populateCoreStasisRetainedState() {
-    coreStasis.anchorX = 12.5f
-    coreStasis.anchorY = -7.25f
-    coreStasis.speedEma = 133f
-    coreStasis.stillSeconds = 11.5f
-    coreStasis.frozenSeconds = 2.25f
-    coreStasis.fractureClock = 0.75f
+    coreStasis.speedFilter = 133f
+    coreStasis.freeze = 0.45f
+    coreStasis.holdSeconds = 0.25f
+    coreStasis.inputHeld = true
 }
 
-/** Every Core Stasis field by its bits, for [exactSimulationFingerprint]. */
+/** Every Core Freeze field by its bits, for [exactSimulationFingerprint]. */
 internal fun ExactFingerprint.coreStasisFingerprint(state: MutableGameState) {
     val stasis = state.coreStasis
-    float("coreStasis.anchorX", stasis.anchorX)
-    float("coreStasis.anchorY", stasis.anchorY)
-    float("coreStasis.speedEma", stasis.speedEma)
-    float("coreStasis.stillSeconds", stasis.stillSeconds)
-    float("coreStasis.frozenSeconds", stasis.frozenSeconds)
-    float("coreStasis.fractureClock", stasis.fractureClock)
+    float("coreStasis.speedFilter", stasis.speedFilter)
+    float("coreStasis.freeze", stasis.freeze)
+    float("coreStasis.holdSeconds", stasis.holdSeconds)
+    value("coreStasis.inputHeld", stasis.inputHeld)
 }

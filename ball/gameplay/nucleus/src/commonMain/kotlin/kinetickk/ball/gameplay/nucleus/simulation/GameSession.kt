@@ -352,6 +352,7 @@ internal fun MutableGameState.finishChoice(sound: GameplayAudioCue) {
     phase = GamePhase.RUNNING
     interpolationPrimed = false
     runGrace = max(runGrace, 0.5f)
+    holdCoreStasis(content.coreStasis.choiceHoldSeconds)
     vacuumOnScreenData()
     emitSound(sound)
     openNextPendingChoice()

@@ -61,6 +61,8 @@ internal fun DrawScope.drawGameplay(
     drawWorld(engine, visualFx, shakeX, shakeY, textMeasurer, hudScreenDensity)
     if (engine.phase == GamePhase.GAME_OVER) {
         withWorldUnits(engine.worldScale) { drawCoreDeath(engine, terminalElapsed, textMeasurer.roles) }
+        // The frost stays where the run ended; a Core frozen solid leaves the screen frozen over under the report.
+        drawCoreStasisFrost(engine, textMeasurer.roles, renderTime)
     } else {
         drawScreenFx(engine, renderTime, textMeasurer.roles)
     }

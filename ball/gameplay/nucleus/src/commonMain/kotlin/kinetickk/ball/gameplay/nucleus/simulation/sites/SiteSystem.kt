@@ -157,7 +157,7 @@ private fun MutableGameState.advanceAnomalySite(active: SiteState, delta: Float)
         SiteKind.COLLAPSING_ORBIT -> {
             val distance = length(coreX - trial.x, coreY - trial.y)
             val moved = length(coreX - previousCoreX, coreY - previousCoreY)
-            val earned = if (distance in 120f..190f && moved >= 80f * delta) delta else 0f
+            val earned = if (distance in 120f..190f && moved >= policy.orbitMinimumSpeed * delta) delta else 0f
             trial = trial.copy(meter = min(policy.orbitRequiredSeconds, trial.meter + earned))
             completed = trial.meter >= policy.orbitRequiredSeconds
             if (trial.warningRemaining > 0f) {

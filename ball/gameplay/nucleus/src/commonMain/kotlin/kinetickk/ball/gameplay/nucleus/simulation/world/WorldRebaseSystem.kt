@@ -20,7 +20,6 @@ internal fun MutableGameState.rebaseWorldIfNeeded() {
     coreY -= shiftY
     previousCoreX -= shiftX
     previousCoreY -= shiftY
-    coreStasis.rebase(shiftX, shiftY)
     previousSingularityX -= shiftX
     previousSingularityY -= shiftY
     cameraX -= shiftX

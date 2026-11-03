@@ -16,11 +16,13 @@ import kinetickk.ball.gameplay.interaction.canvas.look.overlayLevel
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
 import kinetickk.ball.gameplay.nucleus.render.formatRunTime
+import kinetickk.ball.gameplay.nucleus.render.CoreStasisMotion
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.KkIcon
+import kinetickk.foundation.design.formatOneDecimal
 import kotlin.math.roundToLong
 
 internal fun terminalRevealProgress(elapsed: Float, delay: Float, duration: Float = 0.38f): Float {
@@ -66,6 +68,8 @@ internal data class TerminalPresentation(
     val rebirthEarned: ReportRebirthLines? = null,
     /** A Baby mode run: nothing is counted (no bank line, no Rebirth lines, a "Not counted" stamp). */
     val easy: Boolean = false,
+    /** Core Freeze ended the run: the rule that ended it ("Speed stayed under 100 for 4.2 s"), or null. */
+    val frozenCause: String? = null,
 )
 
 /** A leading archetype of the run: the tag, its name and the resonance tier it reached. */
@@ -138,5 +142,9 @@ internal fun GameplayRenderModel.terminalPresentation(
         },
         rebirthEarned = if (easyMode) null else reportRebirthLines(language),
         easy = easyMode,
+        frozenCause = if (coreStasisMotion == CoreStasisMotion.FROZEN) {
+            language.text(OverlayRedesignText.CoreFrozenCause, content.coreStasis.freezeSpeed.roundToLong(),
+                formatOneDecimal(content.coreStasis.freezeSeconds, language))
+        } else null,
     )
 }

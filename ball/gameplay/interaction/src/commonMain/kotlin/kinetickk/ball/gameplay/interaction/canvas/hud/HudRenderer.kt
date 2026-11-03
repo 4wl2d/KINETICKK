@@ -85,6 +85,7 @@ internal object HudScratch {
     val brakeLabel = HudKeyedText()
     val overheat = HudKeyedText()
     val coreStasis = HudKeyedText()
+    val coreThaw = HudKeyedText()
 
     /** The skill row's fade while it slides in with the first bound active item. */
     val skillRowPaint = androidx.compose.ui.graphics.Paint()

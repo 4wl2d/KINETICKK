@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.projection
 
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.CoreStasisTuning
+import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.DirectorPersonalityId
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.OmenId
@@ -34,6 +35,7 @@ import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
 import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
+import kinetickk.ball.gameplay.nucleus.render.CoreStasisMotion
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.DimensionProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
@@ -551,27 +553,26 @@ class GameplayRenderModelMapperTest {
     }
 
     @Test
-    fun coreStasisProjectsItsLevelAndFractureFlagAndNothingWhenMeasureOnly() {
-        val thawed = fullyPopulatedState().toRenderModel()
-        assertEquals(0f, thawed.coreStasis)
-        assertFalse(thawed.coreStasisFracturing)
-        val frozen = fullyPopulatedState().apply {
-            coreStasis.stillSeconds = 16f
-        }.toRenderModel()
-        assertEquals(0.5f, frozen.coreStasis)
-        assertFalse(frozen.coreStasisFracturing)
-        val fracturing = fullyPopulatedState().apply {
-            coreStasis.stillSeconds = content.coreStasis.fullStasisSeconds
-            coreStasis.frozenSeconds = content.coreStasis.fractureDelaySeconds
-        }
-        assertEquals(1f, fracturing.toRenderModel().coreStasis)
-        assertTrue(fracturing.toRenderModel().coreStasisFracturing)
-        val measured = MutableGameState(canonicalGameplayContent.copy(coreStasis = CoreStasisTuning.MEASURE_ONLY)).apply {
-            coreStasis.stillSeconds = 22f
-            coreStasis.frozenSeconds = 6f
-        }.toRenderModel()
+    fun coreFreezeProjectsItsLevelAndMotionAndNothingWhenMeasureOnly() {
+        fun projected(content: GameplayContentSnapshot = canonicalGameplayContent, setup: MutableGameState.() -> Unit) =
+            MutableGameState(content).apply {
+                coreStasis.holdSeconds = 0f
+                setup()
+            }.toRenderModel()
+        val clear = projected { }
+        assertEquals(0f, clear.coreStasis)
+        assertEquals(CoreStasisMotion.CLEAR, clear.coreStasisMotion)
+        val freezing = projected { coreStasis.freeze = 0.5f }
+        assertEquals(0.5f, freezing.coreStasis)
+        assertEquals(CoreStasisMotion.FREEZING, freezing.coreStasisMotion)
+        assertEquals(CoreStasisMotion.THAWING, projected { coreStasis.freeze = 0.5f; coreStasis.speedFilter = 600f }.coreStasisMotion)
+        assertEquals(CoreStasisMotion.HOLDING, projected { coreStasis.freeze = 0.5f; coreStasis.inputHeld = true }.coreStasisMotion)
+        val frozen = projected { coreStasis.freeze = 1f }
+        assertEquals(1f, frozen.coreStasis)
+        assertEquals(CoreStasisMotion.FROZEN, frozen.coreStasisMotion)
+        val measured = projected(canonicalGameplayContent.copy(coreStasis = CoreStasisTuning.MEASURE_ONLY)) { coreStasis.freeze = 1f }
         assertEquals(0f, measured.coreStasis)
-        assertFalse(measured.coreStasisFracturing)
+        assertEquals(CoreStasisMotion.CLEAR, measured.coreStasisMotion)
     }
 
     @Test
@@ -748,7 +749,7 @@ class GameplayRenderModelMapperTest {
         "coreStraightness" to coreStraightness.toRawBits(),
         "easyMode" to easyMode,
         "coreStasis" to coreStasis.toRawBits(),
-        "coreStasisFracturing" to coreStasisFracturing,
+        "coreStasisMotion" to coreStasisMotion,
         "ambientSites" to ambientSites.map { it.exactFacts() },
         "trial" to trial,
         "secretFlags" to secretFlags,

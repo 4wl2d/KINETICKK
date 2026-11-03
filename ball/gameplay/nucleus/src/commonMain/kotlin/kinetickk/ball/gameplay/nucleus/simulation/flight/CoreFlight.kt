@@ -253,7 +253,7 @@ internal fun MutableGameState.updateCore(delta: Float) {
 
 /**
  * Forgets how the Core has moved at a run start: the saturation heading, the smoothed velocity, the turn hold, the
- * straightness and Core Stasis (its anchor on the Core, which the start has already placed).
+ * straightness and Core Freeze (at rest, holding for the run-start window while the system is on).
  */
 internal fun MutableGameState.resetCoreMotionMemory() {
     saturationHeadingX = 1f
@@ -265,7 +265,7 @@ internal fun MutableGameState.resetCoreMotionMemory() {
     turnRecoveryCooldown = 0f
     turnDirection = 0
     coreStraightness = 0f
-    coreStasis.reset(coreX, coreY)
+    coreStasis.reset(if (content.coreStasis.enabled) content.coreStasis.runStartHoldSeconds else 0f)
 }
 
 internal fun MutableGameState.updatePolarityStability(delta: Float) {

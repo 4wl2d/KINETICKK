@@ -26,4 +26,6 @@ enum class GameplayAudioCue {
     STRUCTURE_COLLAPSE,
     /** A Legendary item joins the build. */
     LEGENDARY_ACQUIRED,
+    /** Core Freeze froze the Core solid (the run ends, or Easy mode's ice shatters). */
+    CORE_FROZEN,
 }

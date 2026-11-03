@@ -41,7 +41,8 @@ import kotlin.math.sin
  * (the next course ring, the nearest ember, the objective boss, the exit rift). It reads the visit through the render
  * projection a player sees and inverts its wanted acceleration through the production steering inverse, so it follows
  * the flight law the run uses. It steers around obstacles, hostile shots and every skipped optional site as the bot
- * does, and around nothing a dimension gate measures.
+ * does, and around nothing a dimension gate measures; when its course crawls it keeps the bot's unstick rule
+ * ([PilotStallBreaker]), as a player who sees Core Freeze's frost does.
  */
 
 /** How fast the pilot flies at a rift it was sent through (a gentle cruise: the rift is 560 u ahead). */
@@ -107,6 +108,7 @@ internal class DimensionPilot(
     private var steering = false
     private var cursorAngle = 0f
     private var braking = false
+    private val stall = PilotStallBreaker()
 
     // The goal of this input: a point to fly through (orbit 0) or to circle, the wanted speed, and whether the point is
     // the rift the pilot was sent through (its optional-site mark is then no berth).
@@ -261,6 +263,11 @@ internal class DimensionPilot(
         } else {
             desiredX = toX / distance * goalSpeed
             desiredY = toY / distance * goalSpeed
+        }
+        if (stall.stalled(s)) stall.sideStep(s, goalX, goalY)
+        if (stall.escaping(s)) {
+            desiredX = stall.escapeX
+            desiredY = stall.escapeY
         }
         val siteCount = s.optionalSiteMarks(marks)
         for (mark in 0 until siteCount) {

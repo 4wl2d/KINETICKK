@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.interaction.input.GameplayInput
 import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -97,7 +98,12 @@ internal fun TerminalContent(
     val reveal = terminalRevealProgress(elapsed, delay)
     val actionsEnabled = enabled && terminalActionsReady(elapsed, presentation.victory)
     val roles = LocalKkRolePalette.current
-    val accent = if (presentation.victory) roles.you else roles.threat
+    // A Core frozen solid reads in ice; every other defeat in threat.
+    val accent = when {
+        presentation.victory -> roles.you
+        presentation.frozenCause != null -> roles.element(StatusElement.CRYO.ordinal)
+        else -> roles.threat
+    }
     val shatter = reportShatterArt(presentation.victory)
     val t = elapsed - delay
     BoxWithConstraints(

@@ -141,7 +141,10 @@ internal val UntimedFamilies: Set<SiteFamily> =
 internal val AmbientSiteKinds: Set<SiteKind> =
     setOf(SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL)
 
-/** The optional-site schedule; all clocks use active simulation seconds. */
+/**
+ * The optional-site schedule; all clocks use active simulation seconds. The collapsing orbit earns only while the Core
+ * moves at [orbitMinimumSpeed] or faster, above the speed at which Core Freeze thaws (checked by the snapshot).
+ */
 data class SiteWindowPolicy(
     val firstOfferAt: Float = 45f,
     val offerInterval: Float = 180f,
@@ -149,6 +152,7 @@ data class SiteWindowPolicy(
     val offerLifetime: Float = 40f,
     val trialDuration: Float = 25f,
     val orbitRequiredSeconds: Float = 8f,
+    val orbitMinimumSpeed: Float = 140f,
 ) {
     init {
         require(firstOfferAt.isFinite() && firstOfferAt >= 0f)
@@ -157,6 +161,7 @@ data class SiteWindowPolicy(
         require(offerLifetime.isFinite() && offerLifetime in 1f..40f)
         require(trialDuration.isFinite() && trialDuration in 1f..25f)
         require(orbitRequiredSeconds.isFinite() && orbitRequiredSeconds in 1f..trialDuration)
+        require(orbitMinimumSpeed.isFinite() && orbitMinimumSpeed in 0f..1_000f)
         require((lastOfferAt - firstOfferAt) / offerInterval < 6f)
     }
 }

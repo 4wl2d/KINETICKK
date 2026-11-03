@@ -47,11 +47,11 @@ import kotlin.math.sin
  * (decisions B2). Its own Dashes keep a human cadence (none while a Dash phase runs), leave only once the cursor points
  * their way and never drive the Core into a solid body at a hurting speed.
  *
- * The sigil arm, while it flies far, approaches the sigil or duels its boss, keeps the unstick rule of
- * [PilotStallBreaker]: after 3 s of crawling it flies 1.5 s at 600 u/s at right angles to what it chases (the boss,
- * the sigil, its far heading), with the usual avoidance. A duel's return leash can hold the Core against a boss that
- * keeps its range, or against a skipped structure's berth; the other arms fly scripted courses that never crawl that
- * long.
+ * Every arm, while it plays its site, and the sigil arm, while it flies far, approaches the sigil or duels its boss,
+ * keeps the unstick rule of [PilotStallBreaker]: after 1.2 s of crawling it flies 1.5 s at 600 u/s at right angles to
+ * what it chases (the site, the boss, the sigil, its far heading), with the usual avoidance. A duel's return leash can
+ * hold the Core against a boss that keeps its range or against a skipped structure's berth, and a course can press the
+ * Core into a rock; Core Freeze ends a Core that crawls for 4.2 s.
  */
 
 /** The family of window sites (or the sigil) an arm engages; every other optional site stays avoided. */
@@ -472,7 +472,7 @@ internal class SitePilot(
     private fun decide(s: MutableGameState) {
         val active = s.activeWindowSite()
         if (active != null) {
-            if (active.kind in arm.kinds) play(s, active)
+            if (active.kind in arm.kinds && !unstick(s, active, active.x, active.y)) play(s, active)
             return
         }
         if (arm == SiteArm.SIGIL) {
@@ -621,6 +621,19 @@ internal class SitePilot(
     }
 
     /**
+     * The unstick rule ([PilotStallBreaker]): on a stall, a side step away from the way to ([x], [y]); true while it
+     * steers (with the usual berths of everything but [site]).
+     */
+    private fun unstick(s: MutableGameState, site: SiteState?, x: Float, y: Float): Boolean {
+        if (stall.stalled(s)) stall.sideStep(s, x, y)
+        if (!stall.escaping(s)) return false
+        wantX = stall.escapeX
+        wantY = stall.escapeY
+        steer(s, site, dodge = true, brake = false)
+        return true
+    }
+
+    /**
      * Far travel: from [SitePilotTuning.farFlightAt] the pilot flies straight away from the spawn until the sigil appears,
      * then into it, then duels its boss.
      */
@@ -628,13 +641,7 @@ internal class SitePilot(
         val sigil = s.secretSigil
         val farFlight = sigil == null && !s.hasSecret(RunSecretFlag.FAR_TRAVEL) && s.elapsed >= tuning.farFlightAt
         val steering = farFlight || sigil != null && (sigil.active || !s.engagementActive())
-        if (steering && stall.stalled(s)) stall.sideStep(s, chaseX, chaseY)
-        if (steering && stall.escaping(s)) {
-            wantX = stall.escapeX
-            wantY = stall.escapeY
-            steer(s, sigil, dodge = true, brake = false)
-            return
-        }
+        if (steering && unstick(s, sigil, chaseX, chaseY)) return
         when {
             sigil != null && sigil.active -> duel(s, sigil, sigil.foeIds.firstOrNull(), tuning.duelReturn)
             sigil != null -> {
