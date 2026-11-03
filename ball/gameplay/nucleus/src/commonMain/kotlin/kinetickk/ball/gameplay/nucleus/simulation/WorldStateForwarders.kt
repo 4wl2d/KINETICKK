@@ -10,7 +10,9 @@ import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.OmenId
 import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.model.AmbientSiteWindow
+import kinetickk.ball.gameplay.nucleus.model.DimensionRunState
 import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kinetickk.ball.gameplay.nucleus.model.SignalPrompt
 import kinetickk.ball.gameplay.nucleus.model.SiteState
@@ -239,3 +241,25 @@ internal var MutableGameState.slingEntryHeading: Float
 internal var MutableGameState.reviveInvulnerableUntil: Float
     get() = worldRun.reviveInvulnerableUntil
     set(value) { worldRun.reviveInvulnerableUntil = value }
+
+// DimensionVisitState
+
+internal var MutableGameState.dimensionRun: DimensionRunState
+    get() = dimensionVisits.dimensionRun
+    set(value) { dimensionVisits.dimensionRun = value }
+
+internal var MutableGameState.dimensionSlowSeconds: Float
+    get() = dimensionVisits.dimensionSlowSeconds
+    set(value) { dimensionVisits.dimensionSlowSeconds = value }
+
+internal var MutableGameState.dimensionScorchClock: Float
+    get() = dimensionVisits.dimensionScorchClock
+    set(value) { dimensionVisits.dimensionScorchClock = value }
+
+internal var MutableGameState.dimensionLocalClock: Float
+    get() = dimensionVisits.dimensionLocalClock
+    set(value) { dimensionVisits.dimensionLocalClock = value }
+
+internal var MutableGameState.dimensionRewardLayer: WorldLayer?
+    get() = dimensionVisits.dimensionRewardLayer
+    set(value) { dimensionVisits.dimensionRewardLayer = value }

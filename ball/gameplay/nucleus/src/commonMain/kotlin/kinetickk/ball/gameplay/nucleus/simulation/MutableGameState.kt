@@ -163,6 +163,9 @@ internal class MutableGameState(
     /** World origin, obstacle window, layer and contact gates. */
     internal val worldRun: WorldRunState = WorldRunState(copySource?.worldRun)
 
+    /** Rifts, the visit, its clocks and its reward. */
+    internal val dimensionVisits: DimensionVisitState = DimensionVisitState(copySource?.dimensionVisits)
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -257,16 +260,6 @@ internal class MutableGameState(
     internal var worldLayer: WorldLayer = copySource?.worldLayer ?: WorldLayer.BASE
     /** Run boons owned, in grant order, at most [ContentBounds.MAX_RUN_BOONS]. */
     internal var runBoons: ImmutableList<Int> = copySource?.runBoons ?: immutableListOf()
-    /** Rift offers, visited and completed layers, the open glitch rift, the visit and its pending rewards; a value. */
-    internal var dimensionRun: DimensionRunState = copySource?.dimensionRun ?: DimensionRunState.EMPTY
-    /** Seconds the Core has flown below the layer's pace without a break (Nadir heat). */
-    internal var dimensionSlowSeconds: Float = copySource?.dimensionSlowSeconds ?: 0f
-    /** Seconds toward the next scorch tick once the heat grace ran out. */
-    internal var dimensionScorchClock: Float = copySource?.dimensionScorchClock ?: 0f
-    /** Visit time on the layer's own clock (the Archive's runs with the Core's speed). */
-    internal var dimensionLocalClock: Float = copySource?.dimensionLocalClock ?: 0f
-    /** The layer whose reward the open choice is (null: the open choice is no dimension reward). */
-    internal var dimensionRewardLayer: WorldLayer? = copySource?.dimensionRewardLayer
     internal var dashBufferTime: Float = copySource?.dashBufferTime ?: 0f
     internal var bossSpawned: Boolean = copySource?.bossSpawned ?: false
     internal var keyboardBrakeActive: Boolean = copySource?.keyboardBrakeActive ?: false
