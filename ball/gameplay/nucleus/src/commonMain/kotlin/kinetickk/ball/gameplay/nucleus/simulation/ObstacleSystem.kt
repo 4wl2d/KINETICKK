@@ -593,17 +593,11 @@ private fun MutableGameState.respondToObstacle(
             bounceOffBumper(index, obstacle, nx, ny, normalSpeed, contactX, contactY)
             return false
         }
-        ObstacleKind.UNSTABLE -> {
+        ObstacleKind.UNSTABLE, ObstacleKind.CRYSTAL -> {
             val impact = obstacleImpactSpeed(normalSpeed, length(velocityX + normalSpeed * nx, velocityY + normalSpeed * ny))
             if (impact >= obstacleDamageStartSpeed()) {
-                explodeUnstable(index, obstacle, impact)
-                return true
-            }
-        }
-        ObstacleKind.CRYSTAL -> {
-            val impact = obstacleImpactSpeed(normalSpeed, length(velocityX + normalSpeed * nx, velocityY + normalSpeed * ny))
-            if (impact >= obstacleDamageStartSpeed()) {
-                shatterCrystal(index, obstacle, impact, byCore = true)
+                if (obstacle.kind == ObstacleKind.UNSTABLE) explodeUnstable(index, obstacle, impact)
+                else shatterCrystal(index, obstacle, impact, byCore = true)
                 return true
             }
         }

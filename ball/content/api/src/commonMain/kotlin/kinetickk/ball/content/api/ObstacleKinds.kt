@@ -19,26 +19,22 @@ enum class ObstacleKind(
     val phased: Boolean,
     /** Spends shots and stops lens, shard and missile entities on its body (a phased kind only while materialised). */
     val stopsShots: Boolean,
-    /** A hard Core contact uses the asteroid damage band and lethal speed. */
-    val hurtsOnImpact: Boolean,
     /** Near Miss and GRAZE count skimming its body. */
     val grazeable: Boolean,
     /** Seismic's Rock Echo may repeat a quake from it. */
     val echoes: Boolean,
-    /** Breaks for good: removed and its id kept in the destroyed memory. */
-    val breakable: Boolean,
     /** Has an area effect the field pass resolves (pull, crossing, plume, arming). */
     val field: Boolean,
 ) {
-    ASTEROID(solid = true, phased = false, stopsShots = true, hurtsOnImpact = true, grazeable = true, echoes = true, breakable = false, field = false),
-    BUMPER(solid = true, phased = false, stopsShots = false, hurtsOnImpact = false, grazeable = false, echoes = true, breakable = false, field = false),
-    UNSTABLE(solid = true, phased = false, stopsShots = true, hurtsOnImpact = true, grazeable = true, echoes = true, breakable = true, field = false),
-    GRAVITY_WELL(solid = true, phased = false, stopsShots = true, hurtsOnImpact = true, grazeable = true, echoes = true, breakable = false, field = true),
-    ACCEL_GATE(solid = false, phased = false, stopsShots = false, hurtsOnImpact = false, grazeable = false, echoes = false, breakable = false, field = true),
-    CRYSTAL(solid = true, phased = false, stopsShots = true, hurtsOnImpact = false, grazeable = true, echoes = true, breakable = true, field = false),
-    DERELICT_MINE(solid = false, phased = false, stopsShots = false, hurtsOnImpact = false, grazeable = false, echoes = false, breakable = true, field = true),
-    PHASE_SHARD(solid = true, phased = true, stopsShots = true, hurtsOnImpact = true, grazeable = true, echoes = false, breakable = false, field = false),
-    THERMAL_VENT(solid = false, phased = false, stopsShots = false, hurtsOnImpact = false, grazeable = false, echoes = false, breakable = false, field = true),
+    ASTEROID(solid = true, phased = false, stopsShots = true, grazeable = true, echoes = true, field = false),
+    BUMPER(solid = true, phased = false, stopsShots = false, grazeable = false, echoes = true, field = false),
+    UNSTABLE(solid = true, phased = false, stopsShots = true, grazeable = true, echoes = true, field = false),
+    GRAVITY_WELL(solid = true, phased = false, stopsShots = true, grazeable = true, echoes = true, field = true),
+    ACCEL_GATE(solid = false, phased = false, stopsShots = false, grazeable = false, echoes = false, field = true),
+    CRYSTAL(solid = true, phased = false, stopsShots = true, grazeable = true, echoes = true, field = false),
+    DERELICT_MINE(solid = false, phased = false, stopsShots = false, grazeable = false, echoes = false, field = true),
+    PHASE_SHARD(solid = true, phased = true, stopsShots = true, grazeable = true, echoes = false, field = false),
+    THERMAL_VENT(solid = false, phased = false, stopsShots = false, grazeable = false, echoes = false, field = true),
 }
 
 /** Farthest surface gap a [EffectCondition.NearObstacle] may name. */

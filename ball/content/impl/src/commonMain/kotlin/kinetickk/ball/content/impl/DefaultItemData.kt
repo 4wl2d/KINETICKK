@@ -50,7 +50,7 @@ import kinetickk.foundation.collections.toImmutableList
 // Compact authoring vocabulary. Every value is validated by the api constructors.
 private fun stat(effect: ItemEffect, amount: Float) = StatDelta(effect, amount)
 
-private fun on(
+internal fun on(
     trigger: EffectTrigger,
     vararg actions: EffectAction,
     given: List<EffectCondition> = emptyList(),
@@ -58,7 +58,7 @@ private fun on(
     every: Int = 1,
 ) = EffectClause(trigger, given.toImmutableList(), actions.toList().toImmutableList(), cooldown, every)
 
-private fun apply(element: StatusElement, stacks: Int, radius: Float = 0f) =
+internal fun apply(element: StatusElement, stacks: Int, radius: Float = 0f) =
     EffectAction.ApplyStatus(ElementPick.of(element), stacks, radius)
 
 private fun applyPick(pick: ElementPick, stacks: Int, radius: Float = 0f) =

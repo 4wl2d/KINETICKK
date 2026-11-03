@@ -14,7 +14,6 @@ import kinetickk.ball.content.api.BuildTag.PRECISION
 import kinetickk.ball.content.api.BuildTag.RAM
 import kinetickk.ball.content.api.DamageBasis
 import kinetickk.ball.content.api.EffectAction
-import kinetickk.ball.content.api.EffectClause
 import kinetickk.ball.content.api.EffectCondition
 import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.ElementPick
@@ -26,18 +25,6 @@ import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.ObstacleAspect
 import kinetickk.ball.content.api.ObstacleKind
 import kinetickk.ball.content.api.StatusElement
-import kinetickk.foundation.collections.toImmutableList
-
-// The same compact authoring vocabulary as the default items; every value is validated by the api constructors.
-private fun on(
-    trigger: EffectTrigger,
-    vararg actions: EffectAction,
-    given: List<EffectCondition> = emptyList(),
-    cooldown: Float = 0f,
-) = EffectClause(trigger, given.toImmutableList(), actions.toList().toImmutableList(), cooldown)
-
-private fun apply(element: StatusElement, stacks: Int, radius: Float) =
-    EffectAction.ApplyStatus(ElementPick.of(element), stacks, radius)
 
 /** The trigger is about an obstacle of [kind]. */
 private fun about(kind: ObstacleKind): List<EffectCondition> = listOf(EffectCondition.ObstacleIs(kind))

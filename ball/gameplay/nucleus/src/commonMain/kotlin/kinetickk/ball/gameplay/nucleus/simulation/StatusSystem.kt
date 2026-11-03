@@ -652,11 +652,7 @@ private fun MutableGameState.burnBlackfire(enemy: Enemy, delta: Float) {
  * The target stops, turns Brittle and resists the next Freeze for a while.
  */
 internal fun MutableGameState.freeze(enemy: Enemy, seconds: Float) {
-    val immunity = when {
-        enemy.isBoss || enemy.isSecretBoss -> ARCHITECT_FREEZE_IMMUNITY_SECONDS
-        enemy.isElite -> ELITE_FREEZE_IMMUNITY_SECONDS
-        else -> FREEZE_IMMUNITY_SECONDS
-    }
+    val immunity = freezeImmunitySeconds(enemy)
     val duration = if (enemy.isMiniBoss) 0f else if (enemy.isBoss || enemy.isSecretBoss) 0.5f else seconds
     enemy.status[StatusCell.FROZEN_UNTIL] = elapsed + duration
     enemy.status[StatusCell.FREEZE_IMMUNE_UNTIL] = elapsed + duration + immunity
@@ -670,14 +666,17 @@ internal fun MutableGameState.freeze(enemy: Enemy, seconds: Float) {
 /** Ends a Freeze early (a shatter) while keeping the post-thaw immunity. */
 internal fun MutableGameState.thaw(enemy: Enemy) {
     if (!isFrozen(enemy)) return
-    val immunity = when {
-        enemy.isBoss || enemy.isSecretBoss -> ARCHITECT_FREEZE_IMMUNITY_SECONDS
-        enemy.isElite -> ELITE_FREEZE_IMMUNITY_SECONDS
-        else -> FREEZE_IMMUNITY_SECONDS
-    }
+    val immunity = freezeImmunitySeconds(enemy)
     enemy.status[StatusCell.FROZEN_UNTIL] = elapsed
     enemy.status[StatusCell.FREEZE_IMMUNE_UNTIL] = elapsed + immunity
     enemy.status[StatusCell.REARM_AT + StatusElement.CRYO.ordinal] = elapsed + BREAK_REARM_SECONDS
+}
+
+/** How long [enemy] resists the next Freeze once a Freeze ends. */
+private fun freezeImmunitySeconds(enemy: Enemy): Float = when {
+    enemy.isBoss || enemy.isSecretBoss -> ARCHITECT_FREEZE_IMMUNITY_SECONDS
+    enemy.isElite -> ELITE_FREEZE_IMMUNITY_SECONDS
+    else -> FREEZE_IMMUNITY_SECONDS
 }
 
 /** Ion arcs from direct hits on charged targets; bounded by a per-enemy cooldown. */

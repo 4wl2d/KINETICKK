@@ -94,6 +94,12 @@ internal fun GameplayContentSnapshot.withProbes(vararg probes: ItemDefinition): 
 /** A quiet run with no generated obstacles at all (the window is empty but current). */
 internal fun MutableGameState.clearObstaclesForTesting() = placeObstaclesForTesting()
 
+/** An impact speed [fraction] of the way from the obstacle damage start to the lethal speed. */
+internal fun MutableGameState.bandSpeed(fraction: Float): Float {
+    val start = obstacleDamageStartSpeed()
+    return start + (obstacleLethalSpeed() - start) * fraction
+}
+
 /**
  * Moves the Core to ([x], [y]) at velocity ([vx], [vy]) as if the last step started at
  * (`x - vx·dt`, `y - vy·dt`), then resolves obstacles exactly as the fixed step does after the Core moves.

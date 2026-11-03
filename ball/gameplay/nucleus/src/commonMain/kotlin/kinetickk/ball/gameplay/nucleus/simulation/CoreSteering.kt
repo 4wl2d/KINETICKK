@@ -141,13 +141,17 @@ private fun MutableGameState.launchAssist(tuning: SteeringTuning, magnetism: Flo
 
 private fun MutableGameState.longHalfAxis(): Float = max(screenWidth, screenHeight) * 0.5f
 
+/** The build's permanent drag: the drag coefficient, cut by Perpetual Vector. */
+private fun MutableGameState.permanentDrag(): Float =
+    if (build.upside(RelicId.PERPETUAL_VECTOR)) dragCoefficient * 0.15f else dragCoefficient
+
 /**
  * Exponential drag per second this step (the Brake's damping replaces it while braking). Straight flight adds
  * up to `straightDrag` of it through [MutableGameState.coreStraightness]; multiplicative, so a low-drag build
  * keeps its identity.
  */
 internal fun MutableGameState.steeringDrag(): Float {
-    var drag = if (build.upside(RelicId.PERPETUAL_VECTOR)) dragCoefficient * 0.15f else dragCoefficient
+    var drag = permanentDrag()
     // Frictionless: Superconduct strips most of the drag (the Brake still damps as before).
     if (frictionlessUntil > elapsed && hasVerb(ReactionId.SUPERCONDUCT)) {
         drag *= reactionValue(ReactionId.SUPERCONDUCT, FRICTIONLESS_DRAG_VALUE)
@@ -290,8 +294,7 @@ internal fun MutableGameState.steadyCursorSpeedAtOffset(offset: Float): Float {
 internal fun MutableGameState.buildSteadyCursorSpeed(reach: Float): Float {
     val tuning = content.tempo.steering
     val magnetism = effectiveMagnetism()
-    val drag = (if (build.upside(RelicId.PERPETUAL_VECTOR)) dragCoefficient * 0.15f else dragCoefficient) *
-        (1f + tuning.straightDrag)
+    val drag = permanentDrag() * (1f + tuning.straightDrag)
     return tuning.forwardThrustScale * (tuning.basePull + magnetism * reach * longHalfAxis()) /
         (drag + tuning.forwardThrustScale * magnetism * CAMERA_LAG_SECONDS)
 }

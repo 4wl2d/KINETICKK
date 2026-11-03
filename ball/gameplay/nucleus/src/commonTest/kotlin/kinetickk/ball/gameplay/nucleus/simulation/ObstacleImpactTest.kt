@@ -27,11 +27,6 @@ import kotlin.test.assertTrue
  * responds like a swept hit, and a third contact in one step ends its motion.
  */
 class ObstacleImpactTest {
-    private fun MutableGameState.bandSpeed(fraction: Float): Float {
-        val start = obstacleDamageStartSpeed()
-        return start + (obstacleLethalSpeed() - start) * fraction
-    }
-
     /** Flies the Core along +x into a rock centred at ([rockX], [rockY]) so it meets the surface [degrees] off the normal. */
     private fun MutableGameState.hit(speed: Float, degrees: Float = 0f, rockX: Float = ROCK_X, rockY: Float = 0f) {
         val combined = ROCK_RADIUS + coreRadius

@@ -55,11 +55,6 @@ class ObstacleSystemTest {
         flyIntoObstaclesForTesting(contactX + speed / 240f, 0f, speed, 0f)
     }
 
-    private fun MutableGameState.bandSpeed(fraction: Float): Float {
-        val start = obstacleDamageStartSpeed()
-        return start + (obstacleLethalSpeed() - start) * fraction
-    }
-
     // -----------------------------------------------------------------------------------------
     // Generation.
 

@@ -68,7 +68,7 @@ internal fun MutableGameState.takeDamage(
     ignoreReduction: Boolean = false,
     kind: IncomingDamage = IncomingDamage.HIT,
     obstacle: kinetickk.ball.content.api.ObstacleKind? = null,
-    lethalReason: String = "CORE FRACTURED",
+    lethalReason: String = CORE_FRACTURED_REASON,
 ) {
     if (kind == IncomingDamage.OBSTACLE) {
         takeObstacleDamage(rawAmount, obstacle)
@@ -140,6 +140,9 @@ internal fun MutableGameState.takeDamage(
     if (incoming) fireClauses(EffectTrigger.HURT, null, rawAmount)
     if (hp <= 0f) resolveLethal(lethalReason)
 }
+
+/** Run end message of an integrity death with no more specific cause. */
+internal const val CORE_FRACTURED_REASON: String = "CORE FRACTURED"
 
 /** Run end message of a collision that leaves the Core at zero integrity. */
 internal const val OBSTACLE_COLLISION_REASON: String = "OBSTACLE COLLISION"

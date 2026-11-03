@@ -44,11 +44,6 @@ class StructureCollisionTest {
     private fun quiet(content: GameplayContentSnapshot = structuresDisabledContent, shape: CoreShape = CoreShape.ORB, weapon: WeaponId = WeaponId.FLUX_WAKE) =
         buildTestState(content = content, shape = shape, weapon = weapon).apply { clearObstaclesForTesting() }
 
-    private fun MutableGameState.bandSpeed(fraction: Float): Float {
-        val start = obstacleDamageStartSpeed()
-        return start + (obstacleLethalSpeed() - start) * fraction
-    }
-
     /** Places the wall at x = 300 and flies the Core into it at [speed], half a step before the contact. */
     private fun MutableGameState.ramWall(speed: Float, kind: WallKind = WallKind.SOLID) {
         placeWallsForTesting(listOf(testWall(wallX, -200f, wallX, 200f, kind = kind)))

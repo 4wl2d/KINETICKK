@@ -39,9 +39,9 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /*
- * Obstacle kinds. The content owns each kind's properties; every obstacle query here and in ObstacleSystem reads them
- * instead of naming kinds. Generation rolls the newer kinds on asteroid candidates from a stream of their own, so the
- * layout (positions, ids, candidate radii, gaps) never moves. After the Core's collisions a per-step pass measures
+ * Obstacle kinds. The content owns each kind's properties; the solidity, shot-stopping, grazing, echo and field queries
+ * here and in ObstacleSystem read them instead of naming kinds. Generation rolls the newer kinds on asteroid candidates
+ * from a stream of their own, so the layout (positions, ids, candidate radii, gaps) never moves. After the Core's collisions a per-step pass measures
  * the Core's proximity to solid obstacles (NearObstacle, Matrix Near Miss, GRAZE), applies the field kinds to the Core
  * (gravity knots pull or push it, and leaving a knot after a hard turn slings it on; crossing an accelerator gate
  * boosts it; riding an erupting thermal vent heats and lifts it; coming near a derelict mine arms it), then to nearby
@@ -379,7 +379,7 @@ private fun wellPullAt(
 private fun MutableGameState.updateSling(heldBy: Long) {
     val previous = slingWellId
     if (previous == heldBy) return
-    if (previous != NO_OBSTACLE_ID && obstacleInWindow(previous)) {
+    if (previous != NO_OBSTACLE_ID && obstacleIndexOf(previous) >= 0) {
         val kinds = content.obstacles.kinds
         val current = speed
         if (current >= kinds.slingMinimumSpeed && angleBetween(coreHeading(), slingEntryHeading) >= kinds.slingTurnRadians) {
@@ -398,11 +398,11 @@ private const val SLING_RING_RADIUS: Float = 140f
 /** The Core's travel heading; 0 while it barely moves. */
 private fun MutableGameState.coreHeading(): Float = if (speed < 1f) 0f else atan2(velocityY, velocityX)
 
-/** True while an obstacle with [id] is in the current window. */
-private fun MutableGameState.obstacleInWindow(id: Long): Boolean {
+/** Index of the obstacle with [id] in the current window, or -1 when it is not there. */
+private fun MutableGameState.obstacleIndexOf(id: Long): Int {
     val obstacles = obstacleField.obstacles
-    for (index in obstacles.indices) if (obstacles[index].id == id) return true
-    return false
+    for (index in obstacles.indices) if (obstacles[index].id == id) return index
+    return -1
 }
 
 /**
@@ -504,7 +504,7 @@ private fun MutableGameState.scorchEnemiesInPlume(vent: Obstacle, kinds: Obstacl
 
 /** Thrown by an impact, or by the Dipole's polarity. */
 private fun MutableGameState.isThrownEnemy(enemy: Enemy): Boolean =
-    !(enemy.thrownUntil <= elapsed && !isThrownByPolarity(enemy))
+    enemy.thrownUntil > elapsed || isThrownByPolarity(enemy)
 
 private fun MutableGameState.anyLiveThrownEnemy(): Boolean {
     for (enemyIndex in enemies.indices) {
@@ -575,13 +575,8 @@ internal fun MutableGameState.shatterCrystal(index: Int, crystal: Obstacle, impa
  * their next contact). Nothing happens when it is no longer in the window.
  */
 internal fun MutableGameState.shatterCrystalStruckByEnemy(id: Long, slamSpeed: Float) {
-    val obstacles = obstacleField.obstacles
-    for (index in obstacles.indices) {
-        val obstacle = obstacles[index]
-        if (obstacle.id != id) continue
-        shatterCrystal(index, obstacle, slamSpeed, byCore = false)
-        return
-    }
+    val index = obstacleIndexOf(id)
+    if (index >= 0) shatterCrystal(index, obstacleField.obstacles[index], slamSpeed, byCore = false)
 }
 
 /** Salts of the Data a crystal drops: one direction per pickup from its shape seed. */

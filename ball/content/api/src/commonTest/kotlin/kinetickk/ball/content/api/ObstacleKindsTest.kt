@@ -15,16 +15,16 @@ import kotlin.test.assertTrue
 class ObstacleKindsTest {
     @Test
     fun everyKindCarriesItsPropertiesAndTheShippedKindsKeepTodaysBehaviour() {
-        // solid, phased, stopsShots, hurtsOnImpact, grazeable, echoes, breakable, field
+        // solid, phased, stopsShots, grazeable, echoes, field
         val expected = mapOf(
-            ObstacleKind.ASTEROID to "SsHGE",
+            ObstacleKind.ASTEROID to "SsGE",
             ObstacleKind.BUMPER to "SE",
-            ObstacleKind.UNSTABLE to "SsHGEB",
-            ObstacleKind.GRAVITY_WELL to "SsHGEF",
+            ObstacleKind.UNSTABLE to "SsGE",
+            ObstacleKind.GRAVITY_WELL to "SsGEF",
             ObstacleKind.ACCEL_GATE to "F",
-            ObstacleKind.CRYSTAL to "SsGEB",
-            ObstacleKind.DERELICT_MINE to "BF",
-            ObstacleKind.PHASE_SHARD to "SPsHG",
+            ObstacleKind.CRYSTAL to "SsGE",
+            ObstacleKind.DERELICT_MINE to "F",
+            ObstacleKind.PHASE_SHARD to "SPsG",
             ObstacleKind.THERMAL_VENT to "F",
         )
         assertEquals(ObstacleKind.entries.toSet(), expected.keys)
@@ -224,10 +224,8 @@ class ObstacleKindsTest {
         if (solid) append('S')
         if (phased) append('P')
         if (stopsShots) append('s')
-        if (hurtsOnImpact) append('H')
         if (grazeable) append('G')
         if (echoes) append('E')
-        if (breakable) append('B')
         if (field) append('F')
     }
 }

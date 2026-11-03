@@ -122,7 +122,7 @@ private fun MutableGameState.advanceDisc(disc: WeaponEntity, delta: Float) {
         } else {
             // A wall deflects like a rock, off the normal from its nearest point.
             val wall = structureField.walls[wallIndex]
-            val along = segmentParameter(disc.x, disc.y, wall.ax, wall.ay, wall.bx, wall.by)
+            val along = segmentNearest(disc.x, disc.y, wall.ax, wall.ay, wall.bx, wall.by)
             val nx = disc.x - (wall.ax + (wall.bx - wall.ax) * along)
             val ny = disc.y - (wall.ay + (wall.by - wall.ay) * along)
             val distance = max(1f, length(nx, ny))
@@ -267,7 +267,7 @@ private fun MutableGameState.advanceRift(rift: WeaponEntity, delta: Float) {
             if (!enemy.alive) continue
             val distanceSquared = pointToSegmentDistanceSquared(enemy.x, enemy.y, rift.x, rift.y, rift.endX, rift.endY)
             if (distanceSquared > square(HOLLOW_PULL_RADIUS) || distanceSquared < 1f) continue
-            val t = segmentParameter(enemy.x, enemy.y, rift.x, rift.y, rift.endX, rift.endY)
+            val t = segmentNearest(enemy.x, enemy.y, rift.x, rift.y, rift.endX, rift.endY)
             val dx = rift.x + (rift.endX - rift.x) * t - enemy.x
             val dy = rift.y + (rift.endY - rift.y) * t - enemy.y
             val distance = max(1f, length(dx, dy))
@@ -375,15 +375,6 @@ private fun MutableGameState.obstacleOnPath(x0: Float, y0: Float, x1: Float, y1:
         }
     }
     return null
-}
-
-/** Where along the segment from (ax, ay) to (bx, by) the point nearest (px, py) lies, in [0, 1]. */
-private fun segmentParameter(px: Float, py: Float, ax: Float, ay: Float, bx: Float, by: Float): Float {
-    val sx = bx - ax
-    val sy = by - ay
-    val lengthSquared = sx * sx + sy * sy
-    if (lengthSquared <= 0f) return 0f
-    return (((px - ax) * sx + (py - ay) * sy) / lengthSquared).coerceIn(0f, 1f)
 }
 
 // ---------------------------------------------------------------------------------------------

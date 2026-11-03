@@ -366,7 +366,7 @@ private fun MutableGameState.gyreRing(radius: Float, damage: Float) {
  * Ouroboros only answers integrity deaths; the singularity still ends the run directly. [reason] is the
  * run end message when nothing answers.
  */
-internal fun MutableGameState.resolveLethal(reason: String = "CORE FRACTURED") {
+internal fun MutableGameState.resolveLethal(reason: String = CORE_FRACTURED_REASON) {
     if (hp > 0f) return
     if (trySecondWind()) {
         reviveInvulnerableUntil = invulnerableUntil
