@@ -28,21 +28,22 @@ import kotlin.test.assertTrue
  *
  * The thresholds never move; the re-tune ladder of economy §2.1 (rampPlateau, topPlateau, the §1.5 Data levers, the
  * Rebirth Data requirement scale) is the only way to make an arm pass. FRESH alone is a population gate (0.5.0 active
- * items; policy.md, "Balance gate populations"), restated on the 0.6.0 base; the other arms pass their seeds with
- * probability 0.97 (DATA_MAX tier 0), 0.94 (DATA_MAX tiers 3 and 6), 0.98 (NO_DATA tiers 3 and 6) and 1.00 (NO_DATA
- * and NO_DATA_MAXED at tier 0) on the 0.6.0 tree, read from 300 population runs of each arm.
+ * items; policy.md, "Balance gate populations"), restated on the Elite-resonance base; the other arms pass their seeds
+ * with probability 0.98 (DATA_MAX tier 0), 0.99 and 0.95 (DATA_MAX tiers 3 and 6), 0.98 (NO_DATA tiers 3 and 6) and
+ * 1.00 (NO_DATA and NO_DATA_MAXED at tier 0) on that base, and with at least 0.93 (DATA_MAX tier 0) on the tree before
+ * it, read from 300 population runs of each arm.
  */
 class RunLevelCalibrationGateTest {
     /**
      * FRESH over the population: on the 05885fa9 tree the eleven fixed seeds (2026 and the probe i = 1..10) met both
-     * rules with probability 0.27. On the 0.6.0 base 213 of the 300 [PopulationSeeds] runs are alive at 720 s (0.710,
-     * SE 0.026) and 14 of those 213 stand outside level 22-30 (13 above, at 31 to 33, and one at 21: 0.066, SE 0.017).
-     * At least [FRESH_MIN_ALIVE_SHARE] of the population must be alive at 720 s: by the population threshold rule the
-     * lower of the seeded rule's 9 of 11 (0.82) and the base share minus two standard errors (0.658), rounded down. The
-     * 0.5.0 accepted fresh tier-0 survival of 0.73 is not a floor here: the 05885fa9 base itself read 0.713 on these
-     * seeds, so it recorded a point estimate of that base. At most [FRESH_MAX_OUTSIDE_SHARE] of the alive runs may
-     * stand outside level 22-30: the higher of the seeded rule's 0 and the base share plus two standard errors (0.0997),
-     * rounded up.
+     * rules with probability 0.27. On the Elite-resonance base 265 of the 300 [PopulationSeeds] runs are alive at 720 s
+     * (0.883, SE 0.019; 0.767 on the tree before it) and 7 of those 265 stand outside level 22-30 (six at 31 and one at
+     * 21: 0.026, SE 0.010). At least [FRESH_MIN_ALIVE_SHARE] of the population must be alive at 720 s: by the population
+     * threshold rule the lower of the seeded rule's 9 of 11 (0.818) and the base share minus two standard errors
+     * (0.846), rounded down. The 0.5.0 accepted fresh tier-0 survival of 0.73 is not a floor here: the 05885fa9 base
+     * itself read 0.713 on these seeds, so it recorded a point estimate of that base. At most [FRESH_MAX_OUTSIDE_SHARE]
+     * of the alive runs may stand outside level 22-30: the higher of the seeded rule's 0 and the base share plus two
+     * standard errors (0.046), rounded up.
      */
     @Test fun aFreshNoPoiBotIsAtLevelTwentyTwoToThirtyAfterTwelveActiveMinutes() {
         val runs = populationOf(PopulationSeeds) { seed ->
@@ -168,12 +169,15 @@ class RunLevelCalibrationGateTest {
 
     private companion object {
         /**
-         * FRESH: the least share of [PopulationSeeds] runs alive at 720 s (0.6.0 base 0.710, SE 0.026, n 300; the
-         * population threshold rule).
+         * FRESH: the least share of [PopulationSeeds] runs alive at 720 s (Elite-resonance base 0.883, SE 0.019, n 300;
+         * the population threshold rule).
          */
-        const val FRESH_MIN_ALIVE_SHARE = 0.65
+        const val FRESH_MIN_ALIVE_SHARE = 0.81
 
-        /** FRESH: the largest share of the alive runs outside level 22-30 at 720 s (0.6.0 base 0.066, SE 0.017, n 213). */
-        const val FRESH_MAX_OUTSIDE_SHARE = 0.10
+        /**
+         * FRESH: the largest share of the alive runs outside level 22-30 at 720 s (Elite-resonance base 0.026, SE 0.010,
+         * n 265).
+         */
+        const val FRESH_MAX_OUTSIDE_SHARE = 0.05
     }
 }
