@@ -48,6 +48,7 @@ Calibration windows (seeds `i × 7,919 + 13`):
 | 2,201..2,500 | sites (2,201..2,300), structures (2,301..2,400), dimensions (2,401..2,500) |
 | 2,501..2,800 | combined confirmation of the involuntary systems |
 | 2,801..3,400 | the base of the D and H floors, never tuned on |
+| 3,401..4,000 | Rebirth curves and permanent progression ([progression.md](progression.md)): the `balanceSweep` cells (3,401..3,500 by default) and campaigns |
 
 | Rule | Selection |
 |---|---|

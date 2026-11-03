@@ -294,6 +294,44 @@ runs every class that no gate shard lists. The lists live in build-logic's
 [Performance tools](../../tools/performance/README.md) cover benchmark comparisons.
 Agent instructions are in [AGENTS.md](../../AGENTS.md).
 
+### Balance sweep
+
+`balanceSweep` plays the reference bot (the input-only NoPoi bot of the gate
+harness) over many seeds and prints one row per Rebirth tier and profile: win
+share with its binomial standard error, median survival and Architect clear time,
+median run and weapon level, mean Legendaries, Epics and Relics, median banked
+Matter and the run ends by cause (`WIN`, `TIMEOUT` for a run alive at the
+harness's 900 s, or the end message). It is a tool, not a test: no `check`, shard
+or CI job runs it. The model it calibrates is in
+[progression.md](../balance/progression.md).
+
+```bash
+./gradlew -Pkinetickk.variant=release :ball:gameplay:nucleus:balanceSweep
+./gradlew -Pkinetickk.variant=release :ball:gameplay:nucleus:balanceSweep \
+  -Psweep.tiers=0,2,5,8,10 -Psweep.arms=fresh,half -Psweep.window=3401..3700
+./gradlew -Pkinetickk.variant=release :ball:gameplay:nucleus:balanceSweep \
+  "-Psweep.cells=fresh:2,half:5,full:10,strong:10" "-Psweep.knobs=damage=1.16;damage=1.18,honing=1.09"
+./gradlew -Pkinetickk.variant=release :ball:gameplay:nucleus:balanceSweep \
+  -Psweep.mode=campaign -Psweep.window=3401..4000 -Psweep.campaigns=16
+```
+
+| Property | Meaning | Default |
+|---|---|---|
+| `sweep.tiers` | tiers `first..last` or a list | `0..10` |
+| `sweep.arms` | `fresh`, `half`, `full`, `strong` (the design targets' profiles) | all |
+| `sweep.cells` | explicit `arm:tier` pairs instead of tiers × arms | — |
+| `sweep.window` | probe indices; seeds are `i × 7,919 + 13`, never the gate population | `3401..3500` |
+| `sweep.threads` | worker threads | every core |
+| `sweep.knobs` | content overrides `name=value,…`; `;` separates sets, each printed as its own table: `health`, `damage`, `matter` (per-tier bases), `honing`, `refit`, `refitIntegrity`, `weaponCap`, `costScale`, `bossCapShrink` | none |
+| `sweep.out` | file for one tab-separated line per run | none |
+| `sweep.mode` | `cells`, or `campaign`: whole profiles from a fresh start that bank Matter, buy the cheapest upgrade they can afford and push their Rebirth rank; prints the runs to a full Matrix with one maxed character and weapon | `cells` |
+| `sweep.campaigns` | campaigns in campaign mode | `12` |
+
+Tune only on the calibration windows of the [balance policy](../balance/policy.md)
+(3,401..4,000 is the progression window); 100 runs per cell resolve a win share
+to about ±0.05. A full table (11 tiers × 4 profiles × 100 runs) takes about
+five to ten minutes on 16 threads.
+
 ### Startup resources
 
 Before opening the menu, the shared app loads every bundled font and resolves its
