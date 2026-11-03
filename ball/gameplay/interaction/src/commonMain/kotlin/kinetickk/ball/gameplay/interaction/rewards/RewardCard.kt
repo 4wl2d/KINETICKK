@@ -16,6 +16,7 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,6 +33,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.NonRestartableComposable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -40,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -57,7 +60,11 @@ import androidx.compose.ui.text.font.FontWeight
 import kinetickk.ball.content.api.RuleLineKind
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
+import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
+import kinetickk.foundation.design.CanvasTextMeasurer
+import kinetickk.foundation.design.InterfaceTypography
+import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.DiscoveryBadge
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkPathCache
@@ -197,20 +204,8 @@ internal fun RewardCard(
         // the default and no further, so the two labels never collide or get cut.
         val bandMeasurer = rememberKkCanvasMeasurer(min(textScale, 1f))
         val facePaths = remember { KkPathCache(4) }
-        Canvas(Modifier.fillMaxSize().onPlaced { plates?.card = it }) {
-            // The face and its plates use the current selection together.
-            val face = if (selection > 0.5f) Kk.Ink3 else Kk.Ink2
-            // The plates are measured first: the art lays itself out in the room the text leaves.
-            plates?.prepare(this, face, scrollState.value.toFloat())
-            val dealt = burst()
-            drawRewardCardFace(bandMeasurer, presentation, accent, clock.value, selection, dealt, facePaths, phoneDeal, look, artCache,
-                plates?.textBottom ?: Float.NaN, plates?.footerTop ?: Float.NaN, frame = false)
-            if (plates != null) {
-                drawRewardFacePlates(plates, paths.slab(0, RewardFaceSpecs.bounds(size.width, size.height), RewardCardCutDp.dp.toPx(), KkSlabKind.SLAB))
-            }
-            // The rarity frame last, over the plates, so it stays whole round the card.
-            drawKkCardFrame(RewardFaceSpecs.bounds(size.width, size.height), clock.value, look.style, dealt)
-        }
+        RewardCardFace(plates, selection, scrollState, burst, bandMeasurer, presentation, accent, clock, facePaths, phoneDeal, look,
+            artCache, paths)
         // A decline card's plate and text start clear of its slanted dashed outline (a tall phone card's slant reaches them).
         val declineShift = if (presentation.decline) rewardDeclineShiftDp(spec, maxHeight.value).dp else 0.dp
         val plateSize = spec.dp(spec.plateSize)
@@ -219,25 +214,7 @@ internal fun RewardCard(
                 .testTag("kinetickk.gameplay.choice.${index + 1}.${if (spec.compact) "compact" else "expanded"}")
                 .drawBehind { drawRewardIcon(presentation, accent, iconColor, look.secondHue, look.plateTint, spec.compact, clock.value) },
         )
-        // Identity beside the icon: a relic's keys, then an active's slot and lane, Risk, Reborn, Heirloom and tag chips.
-        val chipsLeft = spec.dp(spec.plateX + spec.plateSize + spec.chipsGap) + declineShift
-        val chipsWidth = (maxWidth - chipsLeft - spec.dp(spec.end)).coerceAtLeast(0.dp)
-        val keys = presentation.keys
-        // Phone relic cards keep the keys and the Heirloom mark; the attuned tags read on the board (and in the Codex).
-        val headerChips = if (spec.compact) presentation.chips.filter { it.kind != RewardChipKind.ATTUNED } else presentation.chips
-        if (headerChips.isNotEmpty() || keys.isNotEmpty()) {
-            Column(
-                Modifier.offset(chipsLeft, spec.dp(spec.plateY)).width(chipsWidth).height(plateSize + spec.dp(6f))
-                    .facePlate(plates, "chips").testTag("kinetickk.gameplay.choice.${index + 1}.chips"),
-                // Centered against the icon plate, so a card with few chips leaves no empty column under them.
-                verticalArrangement = Arrangement.spacedBy(spec.dp(if (spec.compact) 4f else 6f), Alignment.CenterVertically),
-            ) {
-                if (keys.isNotEmpty()) RewardKeyWords(keys, typography, spec.sp(if (spec.compact) 9f else 10.5f), roles)
-                val rows = if (keys.isEmpty()) (if (spec.compact) 2 else 3) else (if (spec.compact) 1 else 2)
-                RewardChipFlow(headerChips, spec.chips, textScale, Modifier.fillMaxWidth(), maxRows = rows,
-                    gapDp = if (spec.compact) 4f else 5f)
-            }
-        }
+        RewardCardHeaderChips(presentation, spec, maxWidth, declineShift, plateSize, plates, index, typography, roles, textScale)
         val forecast = presentation.forecast.take(rewardForecastLimit(spec.compact))
         val footerTags = if (presentation.item == null && presentation.chips.isEmpty() && !spec.compact) presentation.tags else emptyList()
         val hasFooter = footerTags.isNotEmpty() || presentation.action != null || forecast.isNotEmpty()
@@ -259,71 +236,12 @@ internal fun RewardCard(
         val mechanics = presentation.rules.any { it.kind != RuleLineKind.COST } || presentation.relic != null
         val changes = if (spec.compact && mechanics) emptyList() else presentation.changes
         val descriptions = if (spec.compact && changes.isNotEmpty()) emptyList() else presentation.descriptions
-        val body: @Composable (Float, Modifier, RewardFacePlates?, Dp) -> Unit = { fit, bodyModifier, rowPlates, lowest ->
-            val font = spec.font * fit
-            Column(bodyModifier.padding(start = start, end = end), verticalArrangement = Arrangement.spacedBy(gap * fit)) {
-                RewardCardName(presentation.title, presentation.rank, typography, (if (spec.compact) 26f else 38f) * font, clock,
-                    color = if (presentation.heirloom) roles.gold.base else Kk.Bone)
-                if (narrow) presentation.bandEnd?.let { bandEnd ->
-                    OverlayText(bandEnd, typography.monoStyle(10f * font, color = Kk.Mute), uppercase = true)
-                }
-                if (!spec.compact) presentation.family?.let { family ->
-                    OverlayFitText(family, typography.monoStyle(11f * font, color = Kk.Mute), uppercase = true, maxLines = 2)
-                }
-                Spacer(Modifier.height(spec.dp(if (spec.compact) 2f else 8f) * fit))
-                if (changes.isNotEmpty() || presentation.rules.isNotEmpty() || descriptions.isNotEmpty()) Column(
-                    Modifier.padding(end = rowsEnd(lowest) - end), verticalArrangement = Arrangement.spacedBy(gap * fit),
-                ) {
-                    // An item's values take its element hue (the preset's volt for Kinetic): rarity is the card's material, not a value color.
-                    val valueColor = rewardTextTone(if (presentation.item != null) iconColor else accent)
-                    changes.forEachIndexed { line, change ->
-                        RewardStatLine(change, line == 0, valueColor, spec.compact, font, typography, roles, Modifier.facePlate(rowPlates, "stat$line"))
-                    }
-                    val bodySize = (if (spec.compact) 13f else 14.5f) * font
-                    if (presentation.rules.isNotEmpty()) {
-                        // Trigger bars and numbers take the line's element, else the card's own type hue.
-                        RewardRuleRows(presentation.rules, iconColor, bodySize, (if (spec.compact) 9f else 10.5f) * font, spec.lineHeight, typography,
-                            roles, rowPlates, gap * fit * 0.4f,
-                            costLabel = if (spec.compact) null else language.text(OverlayRedesignText.Cost),
-                            costLabelStyle = typography.monoStyle((if (spec.compact) 8.5f else 9.5f) * font, weight = FontWeight.Bold, color = roles.threat))
-                    } else {
-                        descriptions.forEachIndexed { line, description ->
-                            val color = if (presentation.decline) Kk.Mute else Kk.Bone2
-                            val number = if (presentation.relic != null) Kk.Bone else color
-                            OverlayRichText(
-                                rewardRichText(description, number, if (line == 0) presentation.values else emptyList(), rewardTextTone(accent)),
-                                typography.bodyStyle(bodySize, lineHeightEm = spec.lineHeight, color = color),
-                                Modifier.fillMaxWidth().facePlate(rowPlates, "description$line"),
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        val body = rewardCardBody(presentation, spec, start, end, gap, narrow, changes, descriptions, rowsEnd, iconColor, accent, typography,
+            roles, clock, language)
         // Costs are never hidden: a relic's liability in a threat-striped block, laid out under the body
         // as its tail. It fits with the body; when the body still overflows at its smallest size, the
         // cost keeps its whole height at the bottom and only the text above it scrolls.
-        val costs: (@Composable (Float, Dp) -> Unit)? = if (presentation.rules.isEmpty() && presentation.liabilities.isNotEmpty()) {
-            { fit, lowest ->
-                val font = spec.font * fit
-                Column(Modifier.fillMaxWidth().padding(start = start, end = rowsEnd(lowest))
-                    .testTag("kinetickk.gameplay.choice.${index + 1}.cost"),
-                    verticalArrangement = Arrangement.spacedBy(gap * fit)) {
-                    presentation.liabilities.forEachIndexed { line, liability ->
-                        RewardCostBlock(
-                            liability,
-                            if (spec.compact) null else language.text(OverlayRedesignText.Cost),
-                            typography.bodyStyle((if (spec.compact) 12.5f else 13.5f) * font, lineHeightEm = spec.lineHeight, color = roles.threat),
-                            typography.monoStyle((if (spec.compact) 8.5f else 9.5f) * font, weight = FontWeight.Bold, color = roles.threat),
-                            roles.threat,
-                            Modifier.fillMaxWidth().facePlate(plates, "liability$line"),
-                        )
-                    }
-                }
-            }
-        } else {
-            null
-        }
+        val costs = rewardCardCosts(presentation, spec, start, gap, rowsEnd, plates, index, typography, roles, language)
         val fitState = remember(presentation, maxWidth, maxHeight, textScale, phoneDeal, typography, LocalDensity.current) {
             RewardCardFitState()
         }
@@ -348,69 +266,262 @@ internal fun RewardCard(
                 .padding(end = spec.dp(if (spec.compact) 14f else 18f)).fillMaxHeight().width(3.dp)
                 .testTag("kinetickk.gameplay.choice.${index + 1}.scroll"))
         }
-        if (hasFooter) {
-            // The outcome tag and the forecast stay pinned at the bottom of the card, outside the scrolling body.
-            Row(
-                Modifier.align(Alignment.BottomStart)
-                    .padding(start = start - spec.dp(4f), end = end - spec.dp(6f), bottom = bodyBottom)
-                    .height(footerHeight)
-                    .facePlate(plates, "footer")
-                    .testTag("kinetickk.gameplay.choice.${index + 1}.footer"),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                presentation.action?.let { action ->
-                    OverlayTag(
-                        action.label,
-                        variant = when (action.tone) {
-                            RewardTone.THREAT -> KkTagVariant.THREAT
-                            RewardTone.YOU -> KkTagVariant.YOU
-                            else -> KkTagVariant.LINE
-                        },
-                        heightDp = spec.chips.heightDp,
-                        fontSize = if (spec.compact) 11.5f else 13f,
-                        textScale = textScale,
+        if (hasFooter) RewardCardFooter(presentation, spec, start, end, bodyBottom, footerHeight, plates, index, footerTags, forecast, textScale)
+        if (presentation.isNewDiscovery) RewardCardNewStamp(presentation, spec, language, textScale, index)
+    }
+}
+
+/** The card's body: the name, a narrow card's band value and the family, then the stat lines, rules or descriptions. */
+@Composable
+private fun rewardCardBody(
+    presentation: RewardCardPresentation,
+    spec: RewardCardSpec,
+    start: Dp,
+    end: Dp,
+    gap: Dp,
+    narrow: Boolean,
+    changes: List<RewardStatPresentation>,
+    descriptions: List<String>,
+    rowsEnd: (Dp) -> Dp,
+    iconColor: Color,
+    accent: Color,
+    typography: InterfaceTypography,
+    roles: KkRolePalette,
+    clock: State<Float>,
+    language: AppLanguage,
+): @Composable (Float, Modifier, RewardFacePlates?, Dp) -> Unit = { fit, bodyModifier, rowPlates, lowest ->
+    val font = spec.font * fit
+    Column(bodyModifier.padding(start = start, end = end), verticalArrangement = Arrangement.spacedBy(gap * fit)) {
+        RewardCardName(presentation.title, presentation.rank, typography, (if (spec.compact) 26f else 38f) * font, clock,
+            color = if (presentation.heirloom) roles.gold.base else Kk.Bone)
+        if (narrow) presentation.bandEnd?.let { bandEnd ->
+            OverlayText(bandEnd, typography.monoStyle(10f * font, color = Kk.Mute), uppercase = true)
+        }
+        if (!spec.compact) presentation.family?.let { family ->
+            OverlayFitText(family, typography.monoStyle(11f * font, color = Kk.Mute), uppercase = true, maxLines = 2)
+        }
+        Spacer(Modifier.height(spec.dp(if (spec.compact) 2f else 8f) * fit))
+        if (changes.isNotEmpty() || presentation.rules.isNotEmpty() || descriptions.isNotEmpty()) Column(
+            Modifier.padding(end = rowsEnd(lowest) - end), verticalArrangement = Arrangement.spacedBy(gap * fit),
+        ) {
+            // An item's values take its element hue (the preset's volt for Kinetic): rarity is the card's material, not a value color.
+            val valueColor = rewardTextTone(if (presentation.item != null) iconColor else accent)
+            changes.forEachIndexed { line, change ->
+                RewardStatLine(change, line == 0, valueColor, spec.compact, font, typography, roles, Modifier.facePlate(rowPlates, "stat$line"))
+            }
+            val bodySize = (if (spec.compact) 13f else 14.5f) * font
+            if (presentation.rules.isNotEmpty()) {
+                // Trigger bars and numbers take the line's element, else the card's own type hue.
+                RewardRuleRows(presentation.rules, iconColor, bodySize, (if (spec.compact) 9f else 10.5f) * font, spec.lineHeight, typography,
+                    roles, rowPlates, gap * fit * 0.4f,
+                    costLabel = if (spec.compact) null else language.text(OverlayRedesignText.Cost),
+                    costLabelStyle = typography.monoStyle((if (spec.compact) 8.5f else 9.5f) * font, weight = FontWeight.Bold, color = roles.threat))
+            } else {
+                descriptions.forEachIndexed { line, description ->
+                    val color = if (presentation.decline) Kk.Mute else Kk.Bone2
+                    val number = if (presentation.relic != null) Kk.Bone else color
+                    OverlayRichText(
+                        rewardRichText(description, number, if (line == 0) presentation.values else emptyList(), rewardTextTone(accent)),
+                        typography.bodyStyle(bodySize, lineHeightEm = spec.lineHeight, color = color),
+                        Modifier.fillMaxWidth().facePlate(rowPlates, "description$line"),
                     )
-                }
-                footerTags.forEach { tag -> OverlayTag(tag, variant = KkTagVariant.LINE, textScale = textScale) }
-                if (forecast.isNotEmpty()) {
-                    RewardChipFlow(forecast, spec.chips, textScale,
-                        Modifier.weight(1f).testTag("kinetickk.gameplay.choice.${index + 1}.forecast"), gapDp = if (spec.compact) 4f else 5f)
                 }
             }
         }
-        if (presentation.isNewDiscovery) {
-            // On the board the stamp sits on the icon plate's lower corner, clear of the chips and the
-            // name at any text size (its bottom edge is fixed; a larger stamp grows up over the icon).
-            // An active item's plate keeps its lower band for the rank pips: there the stamp sits on the
-            // plate's upper corner, below the band, and a larger stamp grows down over the glyph.
-            // Phone cards have no room beside their small icon: the stamp rides on the top edge, its
-            // bottom fixed just inside the frame and above the band's labels and pips, so a larger
-            // stamp grows up and away from the card.
-            if (spec.compact) {
-                val overlap = spec.dp(RewardNewStampOverlapDp)
-                Box(
-                    Modifier.align(Alignment.TopEnd).padding(end = spec.dp(14f)).layout { measurable, constraints ->
-                        val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
-                        layout(placeable.width, 0) { placeable.place(0, overlap.roundToPx() - placeable.height) }
-                    },
-                ) {
-                    DiscoveryBadge(
-                        language.text(GameplayText.NewDiscovery), min(textScale * 0.7f, RewardNewStampMaxScale),
-                        Modifier.testTag("kinetickk.gameplay.choice.${index + 1}.new"),
-                    )
-                }
-            } else {
-                Box(
-                    Modifier.offset(spec.dp(spec.plateX - 8f), spec.dp(spec.plateY)).height(spec.dp(spec.plateSize + 6f)),
-                    contentAlignment = if (presentation.item?.active != null) Alignment.TopStart else Alignment.BottomStart,
-                ) {
-                    DiscoveryBadge(
-                        language.text(GameplayText.NewDiscovery), textScale * 0.9f,
-                        Modifier.testTag("kinetickk.gameplay.choice.${index + 1}.new"),
-                    )
-                }
+    }
+}
+
+/** A relic's liabilities as threat-striped blocks under the body (none when the card has rules or no costs). */
+@Composable
+private fun rewardCardCosts(
+    presentation: RewardCardPresentation,
+    spec: RewardCardSpec,
+    start: Dp,
+    gap: Dp,
+    rowsEnd: (Dp) -> Dp,
+    plates: RewardFacePlates?,
+    index: Int,
+    typography: InterfaceTypography,
+    roles: KkRolePalette,
+    language: AppLanguage,
+): (@Composable (Float, Dp) -> Unit)? = if (presentation.rules.isEmpty() && presentation.liabilities.isNotEmpty()) {
+    { fit, lowest ->
+        val font = spec.font * fit
+        Column(Modifier.fillMaxWidth().padding(start = start, end = rowsEnd(lowest))
+            .testTag("kinetickk.gameplay.choice.${index + 1}.cost"),
+            verticalArrangement = Arrangement.spacedBy(gap * fit)) {
+            presentation.liabilities.forEachIndexed { line, liability ->
+                RewardCostBlock(
+                    liability,
+                    if (spec.compact) null else language.text(OverlayRedesignText.Cost),
+                    typography.bodyStyle((if (spec.compact) 12.5f else 13.5f) * font, lineHeightEm = spec.lineHeight, color = roles.threat),
+                    typography.monoStyle((if (spec.compact) 8.5f else 9.5f) * font, weight = FontWeight.Bold, color = roles.threat),
+                    roles.threat,
+                    Modifier.fillMaxWidth().facePlate(plates, "liability$line"),
+                )
             }
+        }
+    }
+} else {
+    null
+}
+
+/** The card face, its text plates and the rarity frame, drawn behind the card's text. */
+@Composable
+@NonRestartableComposable
+private fun RewardCardFace(
+    plates: RewardFacePlates?,
+    selection: Float,
+    scrollState: ScrollState,
+    burst: () -> Float,
+    bandMeasurer: CanvasTextMeasurer,
+    presentation: RewardCardPresentation,
+    accent: Color,
+    clock: State<Float>,
+    facePaths: KkPathCache,
+    phoneDeal: Boolean,
+    look: RewardCardLook,
+    artCache: RewardArtCache,
+    paths: KkPathCache,
+) {
+    Canvas(Modifier.fillMaxSize().onPlaced { plates?.card = it }) {
+        // The face and its plates use the current selection together.
+        val face = if (selection > 0.5f) Kk.Ink3 else Kk.Ink2
+        // The plates are measured first: the art lays itself out in the room the text leaves.
+        plates?.prepare(this, face, scrollState.value.toFloat())
+        val dealt = burst()
+        drawRewardCardFace(bandMeasurer, presentation, accent, clock.value, selection, dealt, facePaths, phoneDeal, look, artCache,
+            plates?.textBottom ?: Float.NaN, plates?.footerTop ?: Float.NaN, frame = false)
+        if (plates != null) {
+            drawRewardFacePlates(plates, paths.slab(0, RewardFaceSpecs.bounds(size.width, size.height), RewardCardCutDp.dp.toPx(), KkSlabKind.SLAB))
+        }
+        // The rarity frame last, over the plates, so it stays whole round the card.
+        drawKkCardFrame(RewardFaceSpecs.bounds(size.width, size.height), clock.value, look.style, dealt)
+    }
+}
+
+/** Identity beside the icon plate: a relic's keys, then the header chips. */
+@Composable
+@NonRestartableComposable
+private fun RewardCardHeaderChips(
+    presentation: RewardCardPresentation,
+    spec: RewardCardSpec,
+    maxWidth: Dp,
+    declineShift: Dp,
+    plateSize: Dp,
+    plates: RewardFacePlates?,
+    index: Int,
+    typography: InterfaceTypography,
+    roles: KkRolePalette,
+    textScale: Float,
+) {
+    // Identity beside the icon: a relic's keys, then an active's slot and lane, Risk, Reborn, Heirloom and tag chips.
+    val chipsLeft = spec.dp(spec.plateX + spec.plateSize + spec.chipsGap) + declineShift
+    val chipsWidth = (maxWidth - chipsLeft - spec.dp(spec.end)).coerceAtLeast(0.dp)
+    val keys = presentation.keys
+    // Phone relic cards keep the keys and the Heirloom mark; the attuned tags read on the board (and in the Codex).
+    val headerChips = if (spec.compact) presentation.chips.filter { it.kind != RewardChipKind.ATTUNED } else presentation.chips
+    if (headerChips.isNotEmpty() || keys.isNotEmpty()) {
+        Column(
+            Modifier.offset(chipsLeft, spec.dp(spec.plateY)).width(chipsWidth).height(plateSize + spec.dp(6f))
+                .facePlate(plates, "chips").testTag("kinetickk.gameplay.choice.${index + 1}.chips"),
+            // Centered against the icon plate, so a card with few chips leaves no empty column under them.
+            verticalArrangement = Arrangement.spacedBy(spec.dp(if (spec.compact) 4f else 6f), Alignment.CenterVertically),
+        ) {
+            if (keys.isNotEmpty()) RewardKeyWords(keys, typography, spec.sp(if (spec.compact) 9f else 10.5f), roles)
+            val rows = if (keys.isEmpty()) (if (spec.compact) 2 else 3) else (if (spec.compact) 1 else 2)
+            RewardChipFlow(headerChips, spec.chips, textScale, Modifier.fillMaxWidth(), maxRows = rows,
+                gapDp = if (spec.compact) 4f else 5f)
+        }
+    }
+}
+
+/** The outcome tag, footer tags and forecast, pinned at the bottom of the card outside the scrolling body. */
+@Composable
+@NonRestartableComposable
+private fun BoxScope.RewardCardFooter(
+    presentation: RewardCardPresentation,
+    spec: RewardCardSpec,
+    start: Dp,
+    end: Dp,
+    bodyBottom: Dp,
+    footerHeight: Dp,
+    plates: RewardFacePlates?,
+    index: Int,
+    footerTags: List<String>,
+    forecast: List<RewardChip>,
+    textScale: Float,
+) {
+    // The outcome tag and the forecast stay pinned at the bottom of the card, outside the scrolling body.
+    Row(
+        Modifier.align(Alignment.BottomStart)
+            .padding(start = start - spec.dp(4f), end = end - spec.dp(6f), bottom = bodyBottom)
+            .height(footerHeight)
+            .facePlate(plates, "footer")
+            .testTag("kinetickk.gameplay.choice.${index + 1}.footer"),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        presentation.action?.let { action ->
+            OverlayTag(
+                action.label,
+                variant = when (action.tone) {
+                    RewardTone.THREAT -> KkTagVariant.THREAT
+                    RewardTone.YOU -> KkTagVariant.YOU
+                    else -> KkTagVariant.LINE
+                },
+                heightDp = spec.chips.heightDp,
+                fontSize = if (spec.compact) 11.5f else 13f,
+                textScale = textScale,
+            )
+        }
+        footerTags.forEach { tag -> OverlayTag(tag, variant = KkTagVariant.LINE, textScale = textScale) }
+        if (forecast.isNotEmpty()) {
+            RewardChipFlow(forecast, spec.chips, textScale,
+                Modifier.weight(1f).testTag("kinetickk.gameplay.choice.${index + 1}.forecast"), gapDp = if (spec.compact) 4f else 5f)
+        }
+    }
+}
+
+/** The New stamp of a first discovery: on the icon plate's corner on the board, on the top edge of a phone card. */
+@Composable
+@NonRestartableComposable
+private fun BoxScope.RewardCardNewStamp(
+    presentation: RewardCardPresentation,
+    spec: RewardCardSpec,
+    language: AppLanguage,
+    textScale: Float,
+    index: Int,
+) {
+    // On the board the stamp sits on the icon plate's lower corner, clear of the chips and the
+    // name at any text size (its bottom edge is fixed; a larger stamp grows up over the icon).
+    // An active item's plate keeps its lower band for the rank pips: there the stamp sits on the
+    // plate's upper corner, below the band, and a larger stamp grows down over the glyph.
+    // Phone cards have no room beside their small icon: the stamp rides on the top edge, its
+    // bottom fixed just inside the frame and above the band's labels and pips, so a larger
+    // stamp grows up and away from the card.
+    if (spec.compact) {
+        val overlap = spec.dp(RewardNewStampOverlapDp)
+        Box(
+            Modifier.align(Alignment.TopEnd).padding(end = spec.dp(14f)).layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+                layout(placeable.width, 0) { placeable.place(0, overlap.roundToPx() - placeable.height) }
+            },
+        ) {
+            DiscoveryBadge(
+                language.text(GameplayText.NewDiscovery), min(textScale * 0.7f, RewardNewStampMaxScale),
+                Modifier.testTag("kinetickk.gameplay.choice.${index + 1}.new"),
+            )
+        }
+    } else {
+        Box(
+            Modifier.offset(spec.dp(spec.plateX - 8f), spec.dp(spec.plateY)).height(spec.dp(spec.plateSize + 6f)),
+            contentAlignment = if (presentation.item?.active != null) Alignment.TopStart else Alignment.BottomStart,
+        ) {
+            DiscoveryBadge(
+                language.text(GameplayText.NewDiscovery), textScale * 0.9f,
+                Modifier.testTag("kinetickk.gameplay.choice.${index + 1}.new"),
+            )
         }
     }
 }
