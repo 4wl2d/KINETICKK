@@ -29,15 +29,15 @@ import kotlin.math.sin
 
 /*
  * A dungeon's floor beyond its plate: the template's floor (deck plates, ice lattice, resonance rings, roots, grates,
- * sanctum tiles) in neutral lines with its accent inlay, the dark band where floor meets wall, a light pool per room
- * tinted by the room's mood (the element's hue while dormant, threat while sealed, warm bone once cleared) and the
+ * sanctum tiles) in neutral lines with its accent inlay, the dark band where floor meets wall, a light pool in every
+ * room that is not dormant, tinted by its mood (threat while sealed, warm bone once cleared) and the
  * runes along the walls in three groups that pulse out of step, lit for good once their room is cleared. Shapes come
  * from the content template, cached per template, rotation and kind in DungeonFloorPaths; nothing allocates per frame
  * once they are built.
  */
 
 /** Ambient occlusion where floor meets wall: an ink stroke on the room outlines (half under the slabs). */
-private const val OCCLUSION = 110f
+private const val OCCLUSION = 84f
 
 /** The room light pool spans this share of the room's shorter side. */
 private const val ROOM_POOL_SHARE = 0.62f
@@ -79,11 +79,12 @@ internal fun DrawScope.drawDungeonFloor(
         val mood = roomMood(structure, dungeon, room)
         val light = roomLight(mood, accent, roles)
         val breath = lightBreath(style, mood, time, room * 0.37f)
+        // A dormant room is lit by its sconces alone; its own pool would only add fill under them.
+        if (mood == RoomMood.DORMANT) continue
         val peak = when (mood) {
-            RoomMood.DORMANT -> 0.035f + 0.015f * breath
             RoomMood.SEALED -> 0.07f + 0.06f * breath
             RoomMood.GUARDIAN -> 0.12f + 0.08f * breath
-            RoomMood.CLEARED -> 0.09f
+            else -> 0.09f
         }
         val shorter = min(spec.maxX - spec.minX, spec.maxY - spec.minY)
         // Light stays inside its room: the walls hold it.
