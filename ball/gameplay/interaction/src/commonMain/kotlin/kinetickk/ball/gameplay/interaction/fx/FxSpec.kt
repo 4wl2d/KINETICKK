@@ -11,7 +11,7 @@ import kinetickk.ball.content.api.StatusElement
  * The procedural pieces every reaction, skill and Apex look is built from. One painter draws each
  * from (centre, reach, layer progress, seed, direction, weight, colours); none stores particles.
  */
-enum class FxPrimitive {
+internal enum class FxPrimitive {
     /** A filled circle growing from r0 to r1. */
     DISC,
 
@@ -83,13 +83,13 @@ enum class FxPrimitive {
 }
 
 /** Which colour a layer takes: the first or second element, bone, ink, the two alternating, the player's or the gold. */
-enum class FxColor { A, B, BONE, INK, AB, YOU, GOLD, GOLD_LIGHT }
+internal enum class FxColor { A, B, BONE, INK, AB, YOU, GOLD, GOLD_LIGHT }
 
 /** Layer easing: linear, Out, In, Snap and Pull (`KkEase`). */
-enum class FxEase { L, O, I, S, P }
+internal enum class FxEase { L, O, I, S, P }
 
 /** How a burst's reach follows its cue. */
-enum class FxReach {
+internal enum class FxReach {
     /** The cue's radius within 36..240. */
     AREA,
 
@@ -104,7 +104,7 @@ enum class FxReach {
 }
 
 /** Bits of [FxLayer.flags]. */
-object FxFlag {
+internal object FxFlag {
     /** A signature layer: always drawn, whatever the budget, crowd or setting. */
     const val SIG: Int = 1
 
@@ -167,14 +167,14 @@ object FxFlag {
 }
 
 /** The four stroke widths world FX use (world units); a dotted ring uses the dotted stroke (1.6). */
-val FxStrokeWidths: FloatArray = floatArrayOf(1.5f, 2f, 3f, 4.5f)
+internal val FxStrokeWidths: FloatArray = floatArrayOf(1.5f, 2f, 3f, 4.5f)
 
 /**
  * One animated piece of a look: [primitive] over the burst progress [t0]..[t1] eased by [ease], in
  * [color], [count] elements, radius fraction [r0]→[r1] of the reach, stroke [width], [spin] degrees
  * over the layer, primitive parameters [param]/[param2], peak [alpha] and [FxFlag] bits.
  */
-class FxLayer(
+internal class FxLayer(
     val primitive: FxPrimitive,
     val t0: Float,
     val t1: Float,
@@ -219,7 +219,7 @@ class FxLayer(
 }
 
 /** A transient look: its [life] in seconds, how its reach follows the cue and its [layers] in draw order. */
-class ReactionFxSpec(
+internal class ReactionFxSpec(
     val life: Float,
     val reach: FxReach,
     val fixedReach: Float,
@@ -266,7 +266,7 @@ private const val DIR = FxFlag.DIR
  * The 21 reaction looks (hud-fx §4.3 with the keystone deltas of §4.4), indexed by reaction ordinal.
  * The exhaustive `when` makes a new reaction fail to compile until it has a look.
  */
-object ReactionFxSpecs {
+internal object ReactionFxSpecs {
     private val specs: Array<ReactionFxSpec> = Array(ReactionId.entries.size) { build(ReactionId.entries[it]) }
 
     operator fun get(reaction: Int): ReactionFxSpec = specs[reaction.coerceIn(0, specs.lastIndex)]
@@ -469,7 +469,7 @@ object ReactionFxSpecs {
  * Skill cast and delayed-impact looks (hud-fx §4.7), by skill and phase. Reach is the cue's radius
  * (the effect's own radius), or [ReactionFxSpec.fixedReach] where the look has a fixed one.
  */
-object SkillFxSpecs {
+internal object SkillFxSpecs {
     const val PHASES: Int = 2
     private val specs: Array<ReactionFxSpec?> = Array(SkillId.entries.size * PHASES) { index ->
         build(SkillId.entries[index / PHASES], index % PHASES)
@@ -600,7 +600,7 @@ object SkillFxSpecs {
  * Core's position; the character's silhouette outline growing to three Core radii is drawn by the
  * renderer over the first half.
  */
-object ApexFxSpec {
+internal object ApexFxSpec {
     const val REACH: Float = 280f
     const val SILHOUETTE_END: Float = 0.5f
 
@@ -613,7 +613,7 @@ object ApexFxSpec {
 }
 
 /** How a styled link is drawn (hud-fx §4.5). */
-enum class LinkKind {
+internal enum class LinkKind {
     /** The weapon's Arc Coil zigzag. */
     WEAPON,
 
@@ -637,13 +637,13 @@ enum class LinkKind {
 }
 
 /** Which colours a link look takes: the style's element pair, its skill, element or the gold. */
-enum class LinkTone { REACTION, SKILL, ELEMENT, GOLD, BONE }
+internal enum class LinkTone { REACTION, SKILL, ELEMENT, GOLD, BONE }
 
 /**
  * One link look: [kind], its presentation [life] (a styled link lives at least this long),
  * [segments] and [jitter] for lightning, and the end and middle marks it carries.
  */
-class LinkLook(
+internal class LinkLook(
     val kind: LinkKind,
     val tone: LinkTone,
     val life: Float,
@@ -668,7 +668,7 @@ class LinkLook(
 )
 
 /** Link looks by `LinkStyleCode` (0 weapon, 1 + reaction, 32 + skill, 64 + element Break, 96 + character Apex). */
-object LinkLooks {
+internal object LinkLooks {
     const val REACTION_BASE: Int = 1
     const val SKILL_BASE: Int = 32
     const val BREAK_BASE: Int = 64
