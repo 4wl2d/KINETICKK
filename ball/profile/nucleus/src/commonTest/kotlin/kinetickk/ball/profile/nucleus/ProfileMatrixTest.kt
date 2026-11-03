@@ -94,7 +94,7 @@ class ProfileMatrixTest {
             MatrixNodeId.CRITICAL_LATTICE to 1,
             MatrixNodeId.SALVAGE_PROTOCOL to 2,
         )
-        val spent = 150L + 400L + 900L + 600L + 150L + 400L
+        val spent = 400L + 1_500L + 6_000L + 2_400L + 400L + 1_000L
         val state = state(matter = 7L, lifetime = 7L, ranks = owned)
 
         val frame = ProfileNucleus.decide(state, ProfileNucleusPulse.Intent(ProfilePulse.ResetMatrix)).acceptedFrame()
@@ -141,9 +141,9 @@ class ProfileMatrixTest {
 
         assertEquals(1, loaded.profile.matrix.rank(MatrixNodeId.IMPACT_DRIVER))
         assertEquals(2, loaded.profile.matrix.rank(MatrixNodeId.DATA_ARCHIVE))
-        // Two excess ranks at the one remaining price of 150.
-        assertEquals(100L + 2L * 150L, loaded.profile.economy.matter)
-        assertEquals(400L, loaded.profile.economy.lifetimeMatter)
+        // Two excess ranks at the one remaining price of 400.
+        assertEquals(100L + 2L * 400L, loaded.profile.economy.matter)
+        assertEquals(900L, loaded.profile.economy.lifetimeMatter)
     }
 
     @Test
