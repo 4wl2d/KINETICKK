@@ -121,7 +121,8 @@ class DimensionPilotGateTest {
      * paceCeiling, scorch, rings, embers, emberLife, emberRadius, haloRadius, turnMin, turnMax, spacingMin, spacingMax,
      * splitFactor, throwMin, throwMax,
      * zenithBossShare, nadirBossShare, zenithBossDamage, nadirBossDamage, and the Nadir's nadirSpawn, nadirCap and
-     * nadirVisit seconds). The outcome arms
+     * nadirVisit seconds). `KK_DIMENSION_OBJECTIVE=HARVEST` (any objective) forces it on every window seed of the arms that
+     * play it, in place of the two halves. The outcome arms
      * OC (no rift), OZ and ON (a Zenith or Nadir visit at 165 s with its rolled objective) play whole runs and print the
      * win shares the outcome gate compares.
      */
@@ -131,10 +132,12 @@ class DimensionPilotGateTest {
         val seeds = windowSeeds(indices)
         val content = probedContent(System.getenv("KK_DIMENSION_KNOBS").orEmpty())
         val wanted = System.getenv("KK_DIMENSION_ARMS")?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }
-        println("DIMENSION PROBE window $indices knobs ${knobs(content)}")
+        val forced = System.getenv("KK_DIMENSION_OBJECTIVE")?.takeIf { it.isNotBlank() }?.let { DimensionObjective.valueOf(it.trim()) }
+        println("DIMENSION PROBE window $indices knobs ${knobs(content)}${forced?.let { " objective $it" }.orEmpty()}")
         for (arm in DimensionArm.entries) {
             if (wanted != null && arm.label !in wanted) continue
-            val runs = flyArm(arm, seeds, content)
+            if (forced != null && forced !in arm.objectives) continue
+            val runs = flyArm(arm, seeds, content, objectives = forced?.let { listOf(it) } ?: arm.objectives)
             runs.forEach { println("DIMENSION PROBE ${arm.label} $it") }
             println("DIMENSION PROBE SUMMARY ${arm.label} ${summary(runs)}")
         }
@@ -196,18 +199,19 @@ class DimensionPilotGateTest {
         }
 
         /**
-         * [arm] on [seeds]: the first half forced to the arm's first objective, the rest to its last. Probes pass an
-         * [observer] per seed that sees the state after every input frame.
+         * [arm] on [seeds]: the first half forced to the first of [objectives] (the arm's own), the rest to its last.
+         * Probes pass an [observer] per seed that sees the state after every input frame.
          */
         fun flyArm(
             arm: DimensionArm,
             seeds: List<Int>,
             content: GameplayContentSnapshot,
+            objectives: List<DimensionObjective> = arm.objectives,
             observer: (Int) -> (MutableGameState) -> Unit = { {} },
         ): List<DimensionVisitRun> {
             val half = (seeds.size + 1) / 2
             return populationOf(seeds.withIndex().toList()) { (index, seed) ->
-                val objective = if (index < half) arm.objectives.first() else arm.objectives.last()
+                val objective = if (index < half) objectives.first() else objectives.last()
                 flyDimensionRun(seed, arm.profile, arm.target, arm.riftAt, objective, arm.takeRefuse, content = content, observer = observer(seed))
             }
         }
