@@ -42,6 +42,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.flight.CoreStasisState
 import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 import kinetickk.ball.gameplay.nucleus.simulation.sites.SiteRunState
 import kinetickk.ball.gameplay.nucleus.simulation.variety.VarietyRunState
+import kinetickk.ball.gameplay.nucleus.simulation.elements.ElementRunState
 
 /**
  * Reducer-owned simulation state. Each field declares its initial value and its copy from [copySource] together,
@@ -169,6 +170,9 @@ internal class MutableGameState(
     /** Owned items, clause timers and counters, buffs. */
     internal val buildRun: BuildRunState = BuildRunState(content, copySource?.buildRun)
 
+    /** Combat fields and the reaction and break budgets. */
+    internal val elementRun: ElementRunState = ElementRunState(copySource?.elementRun)
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -192,18 +196,10 @@ internal class MutableGameState(
     internal val easyMode: Boolean = copySource?.easyMode ?: (runMode == RunMode.EASY)
     /** Immutable compiled build shared by reduction siblings; replaced by [recompileBuild]. */
     internal var build: CompiledBuild = copySource?.build ?: CompiledBuild.empty(content)
-    /** Lingering fields; a deep copy forks the table. */
-    internal val combatFieldTable: CombatFieldTable = copySource?.combatFieldTable?.fork() ?: CombatFieldTable()
-    /** Field kinds the Core stood in at the last field pass, one bit per [CombatFieldKind] ordinal. */
-    internal var coreFieldMask: Int = copySource?.coreFieldMask ?: 0
-    /** When entering a field may next count as a field entry. */
-    internal var fieldEnterReadyAt: Float = copySource?.fieldEnterReadyAt ?: 0f
     /** What the skill slots hold: the owned active items' effects; immutable, replaced when an active item binds, ranks or is replaced. */
     internal var skillLoadout: SkillLoadout = copySource?.skillLoadout ?: SkillLoadout.EMPTY
     /** Skill and Apex timing; a deep copy forks it. */
     internal var skillRuntime: SkillRuntime = copySource?.skillRuntime?.fork() ?: SkillRuntime()
-    internal var reactionTokens: Float = copySource?.reactionTokens ?: REACTION_BURST
-    internal var breakTokens: Float = copySource?.breakTokens ?: BREAK_BURST
     internal var invulnerableUntil: Float = copySource?.invulnerableUntil ?: 0f
     internal var overdriveBurnoutUntil: Float = copySource?.overdriveBurnoutUntil ?: 0f
     internal var overheatArmed: Boolean = copySource?.overheatArmed ?: true

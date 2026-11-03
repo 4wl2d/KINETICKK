@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.gameplay.nucleus.model.ActiveBuff
+import kinetickk.ball.gameplay.nucleus.model.CombatFieldTable
 import kinetickk.ball.gameplay.nucleus.model.RunFloatArray
 import kinetickk.ball.gameplay.nucleus.model.RunIntArray
 
@@ -55,3 +56,24 @@ internal var MutableGameState.comboKillCounter: Int
 internal var MutableGameState.arsenalCounter: Int
     get() = buildRun.arsenalCounter
     set(value) { buildRun.arsenalCounter = value }
+
+// ElementRunState
+
+internal val MutableGameState.combatFieldTable: CombatFieldTable
+    get() = elementRun.combatFieldTable
+
+internal var MutableGameState.coreFieldMask: Int
+    get() = elementRun.coreFieldMask
+    set(value) { elementRun.coreFieldMask = value }
+
+internal var MutableGameState.fieldEnterReadyAt: Float
+    get() = elementRun.fieldEnterReadyAt
+    set(value) { elementRun.fieldEnterReadyAt = value }
+
+internal var MutableGameState.reactionTokens: Float
+    get() = elementRun.reactionTokens
+    set(value) { elementRun.reactionTokens = value }
+
+internal var MutableGameState.breakTokens: Float
+    get() = elementRun.breakTokens
+    set(value) { elementRun.breakTokens = value }
