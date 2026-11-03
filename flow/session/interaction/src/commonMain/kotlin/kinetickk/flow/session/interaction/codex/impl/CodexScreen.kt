@@ -163,7 +163,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
         codexItemLabelNeed(measurer, language, labelDensity, ui, CODEX_ROW_NAME_FLOOR_FONT)
     }
     var gridFocusedValue by remember { mutableStateOf(false) }
-    val keys = entries.map { it.key }.toSet()
+    val keys = remember(entries) { entries.map { it.key }.toSet() }
     LaunchedEffect(keys) {
         val retained = selectionValue.retain(keys)
         if (selectionValue.sheetOpen && !retained.sheetOpen) {
@@ -390,7 +390,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                         scrollHolder.SaveableStateProvider(if (tab == CodexTab.CATALOG) "${tab.ordinal}/$category" else "${tab.ordinal}") {
                             val grid = rememberLazyGridState()
                             var priorKeysValue by rememberSaveable { mutableStateOf<String?>(null) }
-                            val resultKey = entries.joinToString("|") { it.key }
+                            val resultKey = remember(entries) { entries.joinToString("|") { it.key } }
                             LaunchedEffect(resultKey) {
                                 if (priorKeysValue != null && priorKeysValue != resultKey) grid.scrollToItem(0)
                                 priorKeysValue = resultKey
