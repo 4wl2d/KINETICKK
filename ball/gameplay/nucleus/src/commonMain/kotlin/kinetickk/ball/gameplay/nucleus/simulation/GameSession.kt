@@ -348,8 +348,8 @@ internal fun MutableGameState.requestDash() {
 
 /**
  * Buffers a cast of skill [slot] for [MutableGameState.SKILL_INPUT_BUFFER_SECONDS]; the next fixed steps cast it
- * once it can. Scalars only (a scalar-input reduction shares the skill runtime). An empty slot or a run that is
- * not RUNNING buffers nothing.
+ * once it can. It writes only the two buffer fields; the skill runtime changes when a step casts. An empty slot or a
+ * run that is not RUNNING buffers nothing.
  */
 internal fun MutableGameState.requestSkill(slot: Int) {
     if (phase != GamePhase.RUNNING || slot !in 0 until SkillRuntime.SLOTS || skillLoadout.isEmpty(slot)) return
