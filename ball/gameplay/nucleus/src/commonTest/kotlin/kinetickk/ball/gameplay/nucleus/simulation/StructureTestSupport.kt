@@ -8,6 +8,9 @@ import kinetickk.ball.content.api.StructurePolicy
 import kinetickk.ball.content.api.StructureTemplate
 import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WorldLayer
+import kinetickk.ball.content.api.roomAt
+import kinetickk.ball.content.api.rotateQuarterX
+import kinetickk.ball.content.api.rotateQuarterY
 import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
 import kinetickk.ball.gameplay.nucleus.model.StructureField
@@ -168,5 +171,73 @@ internal fun MutableGameState.killGarrisonForTesting() {
     enemies.filter { it.ownerTag == tag && it.alive }.forEach { enemy ->
         onEnemyKilled(enemy)
         enemies.remove(enemy)
+    }
+}
+
+/** A run with every far cell holding [template]; the Core rests at the centre of the one in cell (12, −9). */
+internal class DungeonFixture(
+    template: StructureTemplateId,
+    seed: Int = 44,
+    rebirth: Int = 0,
+    configure: (StructurePolicy) -> StructurePolicy = { it },
+) {
+    val content = forcedStructureContent(template).let { it.copy(structures = configure(it.structures)) }
+    val run = buildTestState(content = content, seed = seed, rebirth = rebirth)
+    val placement = run.structureAtForTesting(12, -9)
+    val template: StructureTemplate = run.content.structures.template(template)
+
+    init {
+        run.teleportCoreForTesting(placement.absoluteX, placement.absoluteY)
+        run.enemies.clear()
+        run.pickups.clear()
+    }
+
+    val structure: PlacedStructure get() = run.structureField.structures[run.structureField.indexOf(placement.id)]
+
+    /** Run-local point of the template-space point. */
+    fun world(localX: Float, localY: Float): Pair<Float, Float> {
+        val s = structure
+        return s.x + rotateQuarterX(localX, localY, s.rotation) to s.y + rotateQuarterY(localX, localY, s.rotation)
+    }
+
+    fun roomCentre(room: Int): Pair<Float, Float> {
+        val spec = template.rooms[room]
+        return world((spec.minX + spec.maxX) / 2f, (spec.minY + spec.maxY) / 2f)
+    }
+
+    fun moveCore(point: Pair<Float, Float>) {
+        run.coreX = point.first
+        run.coreY = point.second
+        run.previousCoreX = point.first
+        run.previousCoreY = point.second
+    }
+
+    /** Puts the Core in [room] and runs the dungeon step until it holds the structure and acted on the room. */
+    fun enterRoom(room: Int) {
+        moveCore(roomCentre(room))
+        run.updateStructures(MutableGameState.FIXED_STEP)
+        run.updateStructures(MutableGameState.FIXED_STEP)
+    }
+
+    fun doors(): List<WallKind> {
+        val s = structure
+        return run.structureField.walls.subList(s.wallStart, s.wallEnd).filter { it.door >= 0 }.sortedBy { it.door }.map { it.kind }
+    }
+
+    fun tag(room: Int): Long = roomEncounterTag(placement.id, room)
+
+    fun garrison(room: Int) = run.enemies.filter { it.ownerTag == tag(room) && it.alive }
+
+    /** The room holding the run-local point, or −1. */
+    fun roomOf(x: Float, y: Float): Int {
+        val s = structure
+        return template.roomAt(x - s.x, y - s.y, s.rotation)
+    }
+
+    fun clear(room: Int) {
+        enterRoom(room)
+        check(run.dungeon?.engagedRoom == room) { "room $room did not seal" }
+        run.killGarrisonForTesting()
+        run.updateStructures(MutableGameState.FIXED_STEP)
     }
 }

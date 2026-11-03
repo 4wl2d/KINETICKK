@@ -109,8 +109,8 @@ data class StructureDoor(
 data class StructureCapsule(val ax: Float, val ay: Float, val bx: Float, val by: Float, val halfThickness: Float) {
     init {
         require(ax.isFinite() && ay.isFinite() && bx.isFinite() && by.isFinite()) { "Capsule ends must be finite" }
-        require(halfThickness in MIN_CAPSULE_HALF_THICKNESS..MAX_CAPSULE_HALF_THICKNESS) {
-            "Capsule half thickness must be in 12..80"
+        require(halfThickness in MIN_CAPSULE_HALF_THICKNESS..ContentBounds.MAX_STRUCTURE_WALL_HALF_THICKNESS) {
+            "Capsule half thickness must be in 12..${ContentBounds.MAX_STRUCTURE_WALL_HALF_THICKNESS.toInt()}"
         }
     }
 }
@@ -435,6 +435,24 @@ fun rotateQuarterY(x: Float, y: Float, quarter: Int): Float = when (quarter and 
 }
 
 /**
+ * Index of the room holding the offset ([dx], [dy]) from the centre of this template turned by [rotation], at least
+ * [inset] inside its bounds, or [STRUCTURE_OUTSIDE]. The offset is turned back into template space, where rooms are
+ * axis-aligned. Shared by Nucleus (which room seals) and Interaction (what the scrim and door hints show).
+ */
+fun StructureTemplate.roomAt(dx: Float, dy: Float, rotation: Int, inset: Float = 0f): Int {
+    val inverse = (4 - rotation) and 3
+    val localX = rotateQuarterX(dx, dy, inverse)
+    val localY = rotateQuarterY(dx, dy, inverse)
+    for (index in rooms.indices) {
+        val room = rooms[index]
+        if (localX >= room.minX + inset && localX <= room.maxX - inset && localY >= room.minY + inset && localY <= room.maxY - inset) {
+            return index
+        }
+    }
+    return STRUCTURE_OUTSIDE
+}
+
+/**
  * Bootstrap cross-check against the roster and the obstacle window: every fixed garrison kind is an ordinary kind or
  * a mini-boss other than the Herald, a room garrisons at most one mini-boss (its garrison is one encounter, which
  * holds at most one boss), an ordinary STRUCTURE kind opens at tier 0 from the first second, the obstacle window spans
@@ -572,7 +590,6 @@ private const val MIN_JAMB: Float = 40f
 private const val MIN_WALL_HALF_THICKNESS: Float = 12f
 private const val MAX_WALL_HALF_THICKNESS: Float = 60f
 private const val MIN_CAPSULE_HALF_THICKNESS: Float = 12f
-private const val MAX_CAPSULE_HALF_THICKNESS: Float = 80f
 private const val MAX_TEMPLATE_NAME_LENGTH: Int = 32
 private const val FOOTPRINT_CENTRE_TOLERANCE: Float = 1f
 private const val MAX_OBSTACLE_CLEARANCE: Float = 600f

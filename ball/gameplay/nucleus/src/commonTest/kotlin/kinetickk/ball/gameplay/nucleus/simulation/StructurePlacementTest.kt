@@ -11,6 +11,7 @@ import kinetickk.ball.content.api.StructureTemplate
 import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WallAxis
 import kinetickk.ball.content.api.WorldLayer
+import kinetickk.ball.content.api.roomAt
 import kinetickk.ball.content.api.rotateQuarterX
 import kinetickk.ball.content.api.rotateQuarterY
 import kinetickk.ball.gameplay.nucleus.model.DungeonState
@@ -244,7 +245,7 @@ class StructurePlacementTest {
         val field = run.structureField
         assertTrue(field.structures.isNotEmpty() && field.signals.isNotEmpty())
         val structure = field.structures[0]
-        run.dungeon = DungeonState(structure.id, structure.template, structure.rotation, structure.x, structure.y, engagedRoom = 0, enteredAt = 1f)
+        run.dungeon = DungeonState(structure.id, structure.template, structure.rotation, structure.x, structure.y, engagedRoom = 0)
         run.applyStructureDoors(structure.id)
         val before = run.structureField
         val wallsBefore = before.walls.map { it.absolute(run) }
@@ -295,7 +296,7 @@ class StructurePlacementTest {
 
         // A spent structure stops signalling and the next nearest takes its place.
         val nearest = run.structureField.signals[0].id
-        run.markSpent(nearest, SPENT_FLAG)
+        run.markSpent(nearest)
         run.teleportCoreForTesting(spot.first, spot.second)
         assertEquals(
             expected.filter { it.first != nearest }.take(ContentBounds.MAX_STRUCTURE_SIGNALS).map { it.first },
@@ -341,7 +342,7 @@ class StructurePlacementTest {
 
         val untouched = run.structureField
         val others = untouched.structures.filter { it.id != id }.flatMap { s -> untouched.walls.subList(s.wallStart, s.wallEnd) }
-        run.dungeon = DungeonState(id, placement.template, placement.rotation, 0f, 0f, engagedRoom = 0, enteredAt = 0f)
+        run.dungeon = DungeonState(id, placement.template, placement.rotation, 0f, 0f, engagedRoom = 0)
         run.applyStructureDoors(id)
         assertEquals(listOf(sealed, sealed, sealed, sealed, sealed), doors(), "the engaged antechamber seals every door it touches")
         assertEquals(listOf(open, open, open, sealed, sealed), untouched.walls.filter { it.id and 0xFFL.inv() == id && it.door >= 0 }.sortedBy { it.door }.map { it.kind }, "the published window never changes")
@@ -364,7 +365,7 @@ class StructurePlacementTest {
         run.teleportCoreForTesting(placement.absoluteX, placement.absoluteY)
         assertEquals(replaced, run.structureField.walls.toList())
         run.dungeon = null
-        run.markSpent(id, SPENT_FLAG)
+        run.markSpent(id)
         run.applyStructureDoors(id)
         assertEquals(List(5) { open }, doors())
         assertTrue(run.structureField.structures[run.structureField.indexOf(id)].spent)
@@ -376,39 +377,25 @@ class StructurePlacementTest {
         val run = state(canonicalGameplayContent)
         val bound = ContentBounds.MAX_SPENT_STRUCTURES
         val ids = List(bound + 1) { structureId(WorldLayer.BASE, 100 + it, -it) }
-        ids.take(bound).forEach { run.markSpent(it, SPENT_FLAG) }
+        ids.take(bound).forEach { run.markSpent(it) }
         assertEquals(bound, run.spentStructureIds.size)
-        assertTrue(ids.take(bound).all { run.isSpent(it) && !run.isCollapsed(it) })
+        assertTrue(ids.take(bound).all { run.isSpent(it) })
 
         val full = run.spentStructureIds
-        run.markSpent(ids[bound], SPENT_FLAG)
+        run.markSpent(ids[bound])
         assertEquals(bound, run.spentStructureIds.size)
         assertFalse(run.isSpent(ids[0]), "the oldest is forgotten")
         assertTrue(run.isSpent(ids[1]) && run.isSpent(ids[bound]))
         assertEquals(bound, full.size, "the published list is never mutated")
         assertEquals(ids[0] or SPENT_FLAG, full[0])
 
-        run.markSpent(ids[1], COLLAPSED_FLAG)
+        run.markSpent(ids[1])
         assertEquals(bound, run.spentStructureIds.size, "one entry per structure")
-        assertTrue(run.isCollapsed(ids[1]) && !run.isSpent(ids[1]))
-        assertEquals(ids[1] or COLLAPSED_FLAG, run.spentStructureIds.last())
-        run.markSpent(ids[2] or SPENT_FLAG, SPENT_FLAG)
+        assertTrue(run.isSpent(ids[1]))
+        assertEquals(ids[1] or SPENT_FLAG, run.spentStructureIds.last())
+        run.markSpent(ids[2] or SPENT_FLAG)
         assertEquals(ids[2] or SPENT_FLAG, run.spentStructureIds.last(), "a flagged id names the same structure")
         assertEquals(bound, run.spentStructureIds.size)
-    }
-
-    @Test
-    fun collapsedStructuresLeaveTheWindowButKeepTheirClearing() {
-        val run = state(forcedStructureContent(StructureTemplateId.SPIRE), seed = 55)
-        val placement = run.structureAtForTesting(-10, 14)
-        run.teleportCoreForTesting(placement.absoluteX, placement.absoluteY)
-        assertTrue(run.structureField.indexOf(placement.id) >= 0)
-        run.markSpent(placement.id, COLLAPSED_FLAG)
-        run.teleportCoreForTesting(placement.absoluteX, placement.absoluteY)
-        assertEquals(-1, run.structureField.indexOf(placement.id))
-        assertTrue(run.structureField.signals.none { it.id == placement.id })
-        assertTrue(run.structureFootprintContains(placement.absoluteX, placement.absoluteY, 0f))
-        run.obstacleField.obstacles.forEach { assertFalse(run.meetsAFootprint(it), "the clearing stays: $it") }
     }
 
     @Test
@@ -472,6 +459,7 @@ class StructurePlacementTest {
         run.teleportCoreForTesting(placement.absoluteX + 7_000.0, placement.absoluteY)
         assertTrue(run.structureField.bossCollapsed && run.structureField.structures.isEmpty(), "every later window stays empty")
         assertTrue(run.structureFootprintContains(placement.absoluteX, placement.absoluteY, 0f), "footprints remain clearings")
+        run.obstacleField.obstacles.forEach { assertFalse(run.meetsAFootprint(it), "the clearing stays: $it") }
     }
 
     @Test
@@ -488,7 +476,7 @@ class StructurePlacementTest {
         // Past the cell margin the query looks into the neighbouring cell.
         assertTrue(run.structureFootprintContains(east + 1_999.0, y, 2_000f))
 
-        run.markSpent(placement.id, SPENT_FLAG)
+        run.markSpent(placement.id)
         assertTrue(run.structureFootprintContains(placement.absoluteX, y, 0f), "spent footprints still count")
         run.worldLayer = WorldLayer.ZENITH
         assertFalse(run.structureFootprintContains(placement.absoluteX, y, 0f), "no structures in the other layers")
@@ -558,6 +546,12 @@ class StructurePlacementTest {
         val run = state(forcedStructureContent(StructureTemplateId.DERELICT_STATION), seed = 99)
         val template = run.content.structures.template(StructureTemplateId.DERELICT_STATION)
         val rotations = HashSet<Int>()
+        // nearestWall as (gap, nx, ny), or a gap of +∞ when no wall is within reach.
+        fun nearest(x: Float, y: Float, reach: Float): Triple<Float, Float, Float> {
+            var result = Triple(Float.POSITIVE_INFINITY, 0f, 0f)
+            run.nearestWall(x, y, reach) { normalX, normalY, gap -> result = Triple(gap, normalX, normalY) }
+            return result
+        }
         var cell = 20
         while (rotations.size < 4) {
             val placement = run.structureAtForTesting(cell, -cell)
@@ -570,11 +564,11 @@ class StructurePlacementTest {
                 val cy = (room.minY + room.maxY) / 2f
                 val x = structure.x + rotateQuarterX(cx, cy, structure.rotation)
                 val y = structure.y + rotateQuarterY(cx, cy, structure.rotation)
-                assertEquals(index, roomAt(template, structure.rotation, structure.x, structure.y, x, y, 80f))
+                assertEquals(index, template.roomAt(x - structure.x, y - structure.y, structure.rotation, 80f))
                 val inset = minOf(room.maxX - room.minX, room.maxY - room.minY) / 2f + 1f
-                assertEquals(-1, roomAt(template, structure.rotation, structure.x, structure.y, x, y, inset))
+                assertEquals(-1, template.roomAt(x - structure.x, y - structure.y, structure.rotation, inset))
             }
-            assertEquals(-1, roomAt(template, structure.rotation, structure.x, structure.y, structure.x + 3_000f, structure.y, 0f))
+            assertEquals(-1, template.roomAt(3_000f, 0f, structure.rotation))
 
             // Beside the middle of the longest solid wall.
             val walls = run.wallsOf(structure)
@@ -584,23 +578,21 @@ class StructurePlacementTest {
             val ny = (wall.bx - wall.ax) / length
             val mx = (wall.ax + wall.bx) / 2f
             val my = (wall.ay + wall.by) / 2f
-            val out = FloatArray(4)
-            assertEquals(30f, run.nearestWallSurface(mx + nx * (wall.halfThickness + 30f), my + ny * (wall.halfThickness + 30f), 60f, out), 0.01f)
-            assertEquals(nx, out[2], 1e-4f)
-            assertEquals(ny, out[3], 1e-4f)
-            assertEquals(mx + nx * wall.halfThickness, out[0], 0.01f)
-            assertEquals(my + ny * wall.halfThickness, out[1], 0.01f)
-            assertEquals(Float.POSITIVE_INFINITY, run.nearestWallSurface(mx + nx * (wall.halfThickness + 30f), my + ny * (wall.halfThickness + 30f), 20f, out))
+            val (gap, normalX, normalY) = nearest(mx + nx * (wall.halfThickness + 30f), my + ny * (wall.halfThickness + 30f), 60f)
+            assertEquals(30f, gap, 0.01f)
+            assertEquals(nx, normalX, 1e-4f)
+            assertEquals(ny, normalY, 1e-4f)
+            assertEquals(Float.POSITIVE_INFINITY, nearest(mx + nx * (wall.halfThickness + 30f), my + ny * (wall.halfThickness + 30f), 20f).first)
 
             // An open doorway is clear space; once sealed its centre lies inside the door.
             val door = walls.first { it.door == 0 }
             assertEquals(WallKind.DOOR_OPEN, door.kind)
             val doorX = (door.ax + door.bx) / 2f
             val doorY = (door.ay + door.by) / 2f
-            assertTrue(run.nearestWallSurface(doorX, doorY, 200f, out) > 0f)
-            run.dungeon = DungeonState(structure.id, structure.template, structure.rotation, structure.x, structure.y, engagedRoom = 0, enteredAt = 0f)
+            assertTrue(nearest(doorX, doorY, 200f).first > 0f)
+            run.dungeon = DungeonState(structure.id, structure.template, structure.rotation, structure.x, structure.y, engagedRoom = 0)
             run.applyStructureDoors(structure.id)
-            assertEquals(-door.halfThickness, run.nearestWallSurface(doorX, doorY, 200f, out), 0.01f)
+            assertEquals(-door.halfThickness, nearest(doorX, doorY, 200f).first, 0.01f)
             run.dungeon = null
 
             // The broad phase never misses a wall within reach.
@@ -615,7 +607,7 @@ class StructurePlacementTest {
                     val gap = hypot(px - (near.ax + (near.bx - near.ax) * along), py - (near.ay + (near.by - near.ay) * along)) - near.halfThickness
                     if (gap <= 120f) assertTrue(index in visited, "wall $index at $gap u from $px, $py")
                 }
-                run.forEachSolidWallNear(px, py, 120f, includeOpen = false) { _, visitedWall -> assertNotEquals(WallKind.DOOR_OPEN, visitedWall.kind) }
+                run.forEachSolidWallNear(px, py, 120f) { _, visitedWall -> assertNotEquals(WallKind.DOOR_OPEN, visitedWall.kind) }
             }
         }
     }

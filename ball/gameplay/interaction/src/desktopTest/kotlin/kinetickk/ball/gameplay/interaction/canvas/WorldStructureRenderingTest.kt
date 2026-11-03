@@ -206,7 +206,7 @@ class WorldStructureRenderingTest {
     /** The lower hall sealed around the Core (the base cleared): threat doors and brackets, the scrim at full depth. */
     private fun sealedScene(): GameplayRenderModel {
         val spire = spire(clearedRooms = 0b0001, engagedRoom = 1)
-        return base.with("structures" to structureProjection(spire, dungeon = spire, garrisonAlive = 5, garrisonTotal = 5))
+        return base.with("structures" to structureProjection(spire, dungeon = spire))
     }
 
     /** The base and the lower hall cleared, the Core still in the hall: its upper door is the next way. */

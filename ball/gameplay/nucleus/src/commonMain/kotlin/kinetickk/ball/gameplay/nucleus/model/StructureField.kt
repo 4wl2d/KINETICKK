@@ -6,8 +6,6 @@ package kinetickk.ball.gameplay.nucleus.model
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.gameplay.nucleus.render.WallKind
-import kinetickk.foundation.collections.ImmutableList
-import kinetickk.foundation.collections.immutableListOf
 
 /** One capsule wall: the segment ([ax], [ay]) → ([bx], [by]) inflated by [halfThickness]; [door] is its door index or −1. */
 internal data class Wall(
@@ -144,12 +142,8 @@ internal data class DungeonState(
     val clearedRooms: Int = 0,
     /** −1: no sealed room. */
     val engagedRoom: Int = -1,
-    /** At most [ContentBounds.MAX_STRUCTURE_GARRISON]. */
-    val garrisonIds: ImmutableList<Int> = immutableListOf(),
-    val garrisonTotal: Int = 0,
     /** A garrison fight ever started (leaving marks it spent). */
     val engaged: Boolean = false,
-    val enteredAt: Float,
 ) {
     fun shifted(shiftX: Float, shiftY: Float): DungeonState = copy(x = x - shiftX, y = y - shiftY)
 }

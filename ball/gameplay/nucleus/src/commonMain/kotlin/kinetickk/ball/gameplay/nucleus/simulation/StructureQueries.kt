@@ -3,9 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.StructureTemplate
-import kinetickk.ball.content.api.rotateQuarterX
-import kinetickk.ball.content.api.rotateQuarterY
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.gameplay.nucleus.model.Wall
 import kinetickk.ball.gameplay.nucleus.render.WallKind
 import kotlin.math.abs
@@ -16,16 +14,16 @@ import kotlin.math.sqrt
 
 /*
  * Capsule geometry and the wall queries of the structure window. A wall is the segment A–B inflated by its half
- * thickness (a zero-length segment is a pillar). Sealed doors block like solid walls; open doors only when a query
- * asks for them. Every query walks the at most nine windowed structures by their footprint first, then the walls of
- * the overlapped ones by their own bounds, allocation-free.
+ * thickness (a zero-length segment is a pillar). Sealed doors block like solid walls; open doors never block. Every
+ * query walks the at most nine windowed structures by their footprint first, then the walls of the overlapped ones by
+ * their own bounds, allocation-free. Which room holds a point is the content's StructureTemplate.roomAt.
  */
 
 /**
  * How far a wall reaches past its structure's footprint: the footprint bounds wall centre lines, and no wall or
- * free-standing capsule is thicker than the content's 80 u half thickness.
+ * free-standing capsule is thicker than the content's bound.
  */
-internal const val STRUCTURE_WALL_OVERHANG: Float = 80f
+internal const val STRUCTURE_WALL_OVERHANG: Float = ContentBounds.MAX_STRUCTURE_WALL_HALF_THICKNESS
 
 /**
  * Fraction t ∈ [0, 1] of P0 → P1 at which a point first comes within [radius] of the segment A–B; 0 when it starts
@@ -115,14 +113,13 @@ internal fun segmentNearest(px: Float, py: Float, ax: Float, ay: Float, bx: Floa
 
 /**
  * Visits the walls of the window whose bounds inflated by their half thickness and [reach] contain ([x], [y]): solid
- * walls and sealed doors, plus open doors when [includeOpen]. At most nine footprint tests, then at most 48 wall
- * bound tests per overlapped structure; allocation-free.
+ * walls and sealed doors, never open doors. At most nine footprint tests, then at most 48 wall bound tests per
+ * overlapped structure; allocation-free.
  */
 internal inline fun MutableGameState.forEachSolidWallNear(
     x: Float,
     y: Float,
     reach: Float,
-    includeOpen: Boolean = false,
     action: (index: Int, wall: Wall) -> Unit,
 ) {
     val field = structureField
@@ -135,7 +132,7 @@ internal inline fun MutableGameState.forEachSolidWallNear(
         if (abs(x - structure.x) > structure.halfWidth + margin || abs(y - structure.y) > structure.halfHeight + margin) continue
         for (index in structure.wallStart until structure.wallEnd) {
             val wall = walls[index]
-            if (!includeOpen && wall.kind == WallKind.DOOR_OPEN) continue
+            if (wall.kind == WallKind.DOOR_OPEN) continue
             val inflate = wall.halfThickness + reach
             if (x < min(wall.ax, wall.bx) - inflate || x > max(wall.ax, wall.bx) + inflate) continue
             if (y < min(wall.ay, wall.by) - inflate || y > max(wall.ay, wall.by) + inflate) continue
@@ -146,18 +143,16 @@ internal inline fun MutableGameState.forEachSolidWallNear(
 
 /**
  * The nearest solid wall surface (sealed doors included) within [reach] of ([x], [y]): calls [found] once with the
- * surface point, the outward normal and the gap to it (negative inside a wall), or never when no wall is that close.
- * A point on a wall's centre line takes the segment's left normal; on a pillar's centre, +x. Allocation-free.
+ * outward normal and the gap to it (negative inside a wall), or never when no wall is that close. A point on a wall's
+ * centre line takes the segment's left normal; on a pillar's centre, +x. Allocation-free.
  */
 internal inline fun MutableGameState.nearestWall(
     x: Float,
     y: Float,
     reach: Float,
-    found: (surfaceX: Float, surfaceY: Float, nx: Float, ny: Float, gap: Float) -> Unit,
+    found: (nx: Float, ny: Float, gap: Float) -> Unit,
 ) {
     var best = Float.POSITIVE_INFINITY
-    var bestX = 0f
-    var bestY = 0f
     var bestNx = 1f
     var bestNy = 0f
     forEachSolidWallNear(x, y, reach) { _, wall ->
@@ -180,50 +175,11 @@ internal inline fun MutableGameState.nearestWall(
             bestNy = if (length > 0f) segmentX / length else 0f
         }
         best = gap
-        bestX = nearestX + bestNx * wall.halfThickness
-        bestY = nearestY + bestNy * wall.halfThickness
     }
-    if (best <= reach) found(bestX, bestY, bestNx, bestNy, best)
-}
-
-/**
- * [nearestWall] into [out] as (surface x, surface y, nx, ny) (four slots): returns the gap (negative inside a wall)
- * or +∞ when no wall is within [reach].
- */
-internal fun MutableGameState.nearestWallSurface(x: Float, y: Float, reach: Float, out: FloatArray): Float {
-    var result = Float.POSITIVE_INFINITY
-    nearestWall(x, y, reach) { surfaceX, surfaceY, nx, ny, gap ->
-        out[0] = surfaceX
-        out[1] = surfaceY
-        out[2] = nx
-        out[3] = ny
-        result = gap
-    }
-    return result
-}
-
-/**
- * Index of the room of [template] (placed at ([centerX], [centerY]) with quarter [rotation]) holding ([x], [y]) at
- * least [inset] inside its bounds, or −1. The point is turned back into template space, where rooms are
- * axis-aligned.
- */
-internal fun roomAt(template: StructureTemplate, rotation: Int, centerX: Float, centerY: Float, x: Float, y: Float, inset: Float): Int {
-    val inverse = (4 - rotation) and 3
-    val dx = x - centerX
-    val dy = y - centerY
-    val localX = rotateQuarterX(dx, dy, inverse)
-    val localY = rotateQuarterY(dx, dy, inverse)
-    val rooms = template.rooms
-    for (index in rooms.indices) {
-        val room = rooms[index]
-        if (localX >= room.minX + inset && localX <= room.maxX - inset && localY >= room.minY + inset && localY <= room.maxY - inset) {
-            return index
-        }
-    }
-    return -1
+    if (best <= reach) found(bestNx, bestNy, best)
 }
 
 private const val MIN_SEGMENT_LENGTH: Double = 1e-6
 
-/** Below this distance from a wall's centre line the contact normal falls back to the segment's own normal. */
+/** Below this distance from a wall's centre line a contact normal falls back to the segment's normal or the motion. */
 internal const val WALL_NORMAL_MIN_LENGTH: Float = 0.001f

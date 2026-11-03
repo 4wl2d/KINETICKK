@@ -12,14 +12,12 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.StructureRewardKind
 import kinetickk.ball.content.api.StructureNotice
-import kinetickk.ball.content.api.StructurePolicy
-import kinetickk.ball.content.api.StructureTemplate
 import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.content.api.WorldLayer
+import kinetickk.ball.content.api.roomAt
 import kinetickk.ball.content.api.rotateQuarterX
 import kinetickk.ball.content.api.rotateQuarterY
-import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
 import kinetickk.ball.gameplay.nucleus.model.RunSecretFlag
 import kinetickk.ball.gameplay.nucleus.model.TAU
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
@@ -48,84 +46,16 @@ import kotlin.test.assertTrue
 class DungeonSystemTest {
     private val step = MutableGameState.FIXED_STEP
 
-    /** A run with every far cell holding [template]; the Core rests at the centre of the one in cell (12, −9). */
-    private class Dungeon(
-        template: StructureTemplateId,
-        seed: Int = 44,
-        rebirth: Int = 0,
-        configure: (StructurePolicy) -> StructurePolicy = { it },
-    ) {
-        val content = forcedStructureContent(template).let { it.copy(structures = configure(it.structures)) }
-        val run = buildTestState(content = content, seed = seed, rebirth = rebirth)
-        val placement = run.structureAtForTesting(12, -9)
-        val template: StructureTemplate = run.content.structures.template(template)
-
-        init {
-            run.teleportCoreForTesting(placement.absoluteX, placement.absoluteY)
-            run.enemies.clear()
-            run.pickups.clear()
-        }
-
-        val structure: PlacedStructure get() = run.structureField.structures[run.structureField.indexOf(placement.id)]
-
-        /** Run-local point of the template-space point. */
-        fun world(localX: Float, localY: Float): Pair<Float, Float> {
-            val s = structure
-            return s.x + rotateQuarterX(localX, localY, s.rotation) to s.y + rotateQuarterY(localX, localY, s.rotation)
-        }
-
-        fun roomCentre(room: Int): Pair<Float, Float> {
-            val spec = template.rooms[room]
-            return world((spec.minX + spec.maxX) / 2f, (spec.minY + spec.maxY) / 2f)
-        }
-
-        fun moveCore(point: Pair<Float, Float>) {
-            run.coreX = point.first
-            run.coreY = point.second
-            run.previousCoreX = point.first
-            run.previousCoreY = point.second
-        }
-
-        /** Puts the Core in [room] and runs the dungeon step until it holds the structure and acted on the room. */
-        fun enterRoom(room: Int) {
-            moveCore(roomCentre(room))
-            run.updateStructures(MutableGameState.FIXED_STEP)
-            run.updateStructures(MutableGameState.FIXED_STEP)
-        }
-
-        fun doors(): List<WallKind> {
-            val s = structure
-            return run.structureField.walls.subList(s.wallStart, s.wallEnd).filter { it.door >= 0 }.sortedBy { it.door }.map { it.kind }
-        }
-
-        fun tag(room: Int): Long = roomEncounterTag(placement.id, room)
-
-        fun garrison(room: Int) = run.enemies.filter { it.ownerTag == tag(room) && it.alive }
-
-        /** The room holding the run-local point, or −1. */
-        fun roomOf(x: Float, y: Float): Int {
-            val s = structure
-            return roomAt(template, s.rotation, s.x, s.y, x, y, 0f)
-        }
-
-        fun clear(room: Int) {
-            enterRoom(room)
-            check(run.dungeon?.engagedRoom == room) { "room $room did not seal" }
-            run.killGarrisonForTesting()
-            run.updateStructures(MutableGameState.FIXED_STEP)
-        }
-    }
-
     // -----------------------------------------------------------------------------------------
     // Entry, sealing and the cap.
 
     @Test
     fun enteringAStructureAnnouncesItOnceAndRecordsItsDiscovery() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         // Above the airlock: inside the footprint, in no room.
         dungeon.moveCore(dungeon.world(-900f, -600f))
-        assertEquals(-1, roomAt(dungeon.template, dungeon.structure.rotation, dungeon.structure.x, dungeon.structure.y, run.coreX, run.coreY, 0f))
+        assertEquals(-1, dungeon.template.roomAt(run.coreX - dungeon.structure.x, run.coreY - dungeon.structure.y, dungeon.structure.rotation))
         run.updateStructures(step)
         val held = assertNotNull(run.dungeon)
         assertEquals(dungeon.placement.id, held.structureId)
@@ -149,7 +79,7 @@ class DungeonSystemTest {
 
     @Test
     fun enteringARoomSealsItsDoorsAndSpawnsItsGarrisonInsideTheCap() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         val open = WallKind.DOOR_OPEN
         val sealed = WallKind.DOOR_SEALED
@@ -164,13 +94,11 @@ class DungeonSystemTest {
         assertEquals(listOf(open, sealed, sealed, open), dungeon.doors())
         val garrison = dungeon.garrison(1)
         assertEquals(5, garrison.size)
-        assertEquals(garrison.map { it.id }, held.garrisonIds.toList())
-        assertEquals(5, held.garrisonTotal)
         assertEquals(2, garrison.count { it.type == EnemyType.SENTRY })
         assertNotNull(run.encounter(dungeon.tag(1)))
         val s = dungeon.structure
         garrison.forEach { enemy ->
-            assertEquals(1, roomAt(dungeon.template, s.rotation, s.x, s.y, enemy.x, enemy.y, 0f), "${enemy.type} spawns in the hall")
+            assertEquals(1, dungeon.template.roomAt(enemy.x - s.x, enemy.y - s.y, s.rotation), "${enemy.type} spawns in the hall")
             assertTrue(run.wallsClearOf(enemy.x, enemy.y, enemy.radius), "${enemy.type} spawns clear of the walls")
             assertTrue(run.isPlaceBound(enemy))
             assertTrue(run.content.enemy(enemy.type).livesIn(EnemyHabitat.STRUCTURE) || enemy.type == EnemyType.SENTRY)
@@ -186,7 +114,7 @@ class DungeonSystemTest {
 
     @Test
     fun aRoomRefusesToEngageWhenTheGarrisonWouldPassTheHardCap() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         val cap = run.content.rebirth.maxActiveEnemies
         // The hall garrisons five: with cap − 4 enemies alive it does not fit.
@@ -213,7 +141,7 @@ class DungeonSystemTest {
 
     @Test
     fun passagesClearOnEntryWithoutSealing() {
-        val dungeon = Dungeon(StructureTemplateId.LABYRINTH)
+        val dungeon = DungeonFixture(StructureTemplateId.LABYRINTH)
         val run = dungeon.run
         val before = dungeon.doors()
         dungeon.enterRoom(7)
@@ -234,7 +162,7 @@ class DungeonSystemTest {
 
     @Test
     fun clearingOpensTheDoorsAndLocksOpenWhenAllTheirRoomsAreCleared() {
-        val dungeon = Dungeon(StructureTemplateId.VAULT)
+        val dungeon = DungeonFixture(StructureTemplateId.VAULT)
         val run = dungeon.run
         val open = WallKind.DOOR_OPEN
         val sealed = WallKind.DOOR_SEALED
@@ -261,7 +189,7 @@ class DungeonSystemTest {
 
     @Test
     fun aRoomClearsOnlyOnceEveryEnemyItsEncounterOwnsIsGone() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         dungeon.enterRoom(1)
         val garrison = dungeon.garrison(1)
@@ -271,7 +199,7 @@ class DungeonSystemTest {
         garrison.forEach { run.onEnemyKilled(it); run.enemies.remove(it) }
         run.updateStructures(step)
         assertEquals(1, run.dungeon!!.engagedRoom)
-        assertTrue(run.dungeon!!.garrisonIds.isEmpty(), "the panel counts the members still alive")
+        assertEquals(listOf(straggler), dungeon.garrison(1), "only the tagged straggler holds the room")
         run.onEnemyKilled(straggler)
         run.enemies.remove(straggler)
         run.updateStructures(step)
@@ -281,7 +209,7 @@ class DungeonSystemTest {
 
     @Test
     fun garrisonsAreLeashExemptNeverEvictedAndClampedToTheirRoom() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         dungeon.enterRoom(1)
         val garrison = dungeon.garrison(1)
@@ -299,7 +227,7 @@ class DungeonSystemTest {
         member.y = outsideY
         run.resolveEnemyObstacles()
         val s = dungeon.structure
-        assertEquals(1, roomAt(dungeon.template, s.rotation, s.x, s.y, member.x, member.y, 0f))
+        assertEquals(1, dungeon.template.roomAt(member.x - s.x, member.y - s.y, s.rotation))
     }
 
     @Test
@@ -307,7 +235,7 @@ class DungeonSystemTest {
         // The Brood Queen keeps her distance from a Core at the vault's centre, so she ends against a wall and hatches
         // broods aimed through it. Every enemy the vault's encounter owns stays in the vault, and the kills clear it.
         for (seed in 44..47) {
-            val vault = Dungeon(StructureTemplateId.VAULT, seed)
+            val vault = DungeonFixture(StructureTemplateId.VAULT, seed)
             val run = vault.run
             vault.clear(1)
             vault.clear(2)
@@ -334,7 +262,7 @@ class DungeonSystemTest {
 
         // Warden Prime's final-phase guards spawn beside her as she holds off near the sanctum walls.
         for (seed in 44..45) {
-            val reliquary = Dungeon(StructureTemplateId.RELIQUARY, seed)
+            val reliquary = DungeonFixture(StructureTemplateId.RELIQUARY, seed)
             val run = reliquary.run
             for (chapel in listOf(0, 2, 6, 8)) reliquary.clear(chapel)
             reliquary.enterRoom(4)
@@ -364,7 +292,7 @@ class DungeonSystemTest {
         // The Brood Queen held against each vault wall, a sealed door and a corner hatches broods aimed every way. Each
         // Swarmling lands in the vault clear of the walls as it spawns, before a wall pass could pull it back, and none
         // is dropped.
-        val vault = Dungeon(StructureTemplateId.VAULT)
+        val vault = DungeonFixture(StructureTemplateId.VAULT)
         val run = vault.run
         vault.clear(1)
         vault.clear(2)
@@ -394,7 +322,7 @@ class DungeonSystemTest {
                     val s = vault.structure
                     assertEquals(
                         3,
-                        roomAt(vault.template, s.rotation, s.x, s.y, add.x, add.y, add.radius + wall - 0.5f),
+                        vault.template.roomAt(add.x - s.x, add.y - s.y, s.rotation, add.radius + wall - 0.5f),
                         "Queen at ($localX, $localY), turn $turn: a Swarmling hatched behind a wall",
                     )
                 }
@@ -408,7 +336,7 @@ class DungeonSystemTest {
 
     @Test
     fun theFinalRoomPaysItsRewardsOnceThroughExistingChannels() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         dungeon.enterRoom(2)
         assertEquals(2, run.dungeon!!.engagedRoom)
@@ -447,7 +375,7 @@ class DungeonSystemTest {
 
     @Test
     fun aVaultPaysItsCryoAspectAndAFlooredItemOffer() {
-        val dungeon = Dungeon(StructureTemplateId.VAULT)
+        val dungeon = DungeonFixture(StructureTemplateId.VAULT)
         val run = dungeon.run
         dungeon.clear(1)
         dungeon.clear(2)
@@ -468,7 +396,7 @@ class DungeonSystemTest {
     @Test
     fun clearingEachTrialChangesItsOwnElementalBuildMechanics() {
         for (templateId in StructureTemplateId.entries.filter { it != StructureTemplateId.ARCHITECTS_DOODLE }) {
-            val dungeon = Dungeon(templateId)
+            val dungeon = DungeonFixture(templateId)
             val run = dungeon.run
             val rewardId = requireNotNull(dungeon.template.rewards.single { it.kind == StructureRewardKind.ASPECT }.boonId)
             val entropyThreshold = run.breakThreshold(StatusElement.ENTROPY)
@@ -505,7 +433,7 @@ class DungeonSystemTest {
             Triple(StructureTemplateId.FOUNDRY, StatusElement.THERMAL, 1),
         )
         for ((templateId, element, spread) in cases) {
-            val dungeon = Dungeon(templateId)
+            val dungeon = DungeonFixture(templateId)
             val run = dungeon.run
             dungeon.clear(dungeon.template.finalRoom)
             run.enemies.clear()
@@ -522,7 +450,7 @@ class DungeonSystemTest {
 
     @Test
     fun theFoundryRewardMakesADistantWildfireFeedTheCore() {
-        val dungeon = Dungeon(StructureTemplateId.FOUNDRY)
+        val dungeon = DungeonFixture(StructureTemplateId.FOUNDRY)
         val run = dungeon.run
         val before = run.dummy(x = run.coreX + 1_000f, y = run.coreY)
         run.setOff(ReactionId.WILDFIRE, before)
@@ -538,7 +466,7 @@ class DungeonSystemTest {
     @Test
     fun themedGarrisonChoicesBelongToTheirTrialAndKeepFixedGuards() {
         for (id in StructureTemplateId.entries.filter { it != StructureTemplateId.ARCHITECTS_DOODLE }) {
-            val dungeon = Dungeon(id)
+            val dungeon = DungeonFixture(id)
             dungeon.run.elapsed = 500f // Every themed kind's ordinary time gate is open.
             val template = dungeon.template
             val room = template.rooms.indexOfFirst { it.garrison.any { entry -> entry.type == null } }
@@ -554,8 +482,8 @@ class DungeonSystemTest {
 
     @Test
     fun roomIntegrityTuningPreservesTheWholeGarrisonIncludingItsGuardian() {
-        val reference = Dungeon(StructureTemplateId.VAULT) { it.copy(garrisonHealthMultiplier = 1f) }
-        val tuned = Dungeon(StructureTemplateId.VAULT) { it.copy(garrisonHealthMultiplier = 0.75f) }
+        val reference = DungeonFixture(StructureTemplateId.VAULT) { it.copy(garrisonHealthMultiplier = 1f) }
+        val tuned = DungeonFixture(StructureTemplateId.VAULT) { it.copy(garrisonHealthMultiplier = 0.75f) }
         reference.enterRoom(3)
         tuned.enterRoom(3)
         val original = reference.garrison(3)
@@ -575,11 +503,11 @@ class DungeonSystemTest {
 
     @Test
     fun aThemedGarrisonWaitsForItsOrdinaryTimeGate() {
-        val early = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val early = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         early.enterRoom(0)
         assertTrue(early.garrison(0).any { it.type == EnemyType.SHOOTER })
         assertTrue(early.garrison(0).none { it.type == EnemyType.LANCER }, "Lancers wait for their time gate")
-        val late = Dungeon(StructureTemplateId.DERELICT_STATION) { policy ->
+        val late = DungeonFixture(StructureTemplateId.DERELICT_STATION) { policy ->
             policy.copy(templates = policy.templates.map { template ->
                 if (template.id == StructureTemplateId.DERELICT_STATION) template.copy(garrisonTypes = immutableListOf(EnemyType.LANCER))
                 else template
@@ -592,7 +520,7 @@ class DungeonSystemTest {
 
     @Test
     fun anotherTrialOfAnOwnedAspectSalvagesMatterWithoutStackingItsRules() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         run.applyRunBoon(64)
         val attack = run.attackSpeed
@@ -608,7 +536,7 @@ class DungeonSystemTest {
 
     @Test
     fun aFullBoonInventorySalvagesTheAspectWithoutExceedingItsCap() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         repeat(ContentBounds.MAX_RUN_BOONS) { run.applyRunBoon(32 + it) }
         val owned = run.runBoons
@@ -624,7 +552,7 @@ class DungeonSystemTest {
 
     @Test
     fun anAspectClearChangesOnlyItsReductionCandidateAndANewRunDropsTheRules() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val source = dungeon.run
         dungeon.enterRoom(dungeon.template.finalRoom)
         val originalBuild = source.build
@@ -644,7 +572,7 @@ class DungeonSystemTest {
 
     @Test
     fun leavingAfterAFightAbandonsWithoutRewardAndNeverRearms() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         dungeon.enterRoom(1)
         val kills = run.kills
@@ -668,7 +596,7 @@ class DungeonSystemTest {
 
     @Test
     fun leavingBeforeAnyFightLeavesTheStructureArmed() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         dungeon.moveCore(dungeon.world(-900f, -600f))
         run.updateStructures(step)
@@ -721,7 +649,7 @@ class DungeonSystemTest {
 
     @Test
     fun theArchitectCollapsesWallsAndRemovesTheGarrisonWithoutReward() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         dungeon.enterRoom(1)
         val hall = dungeon.roomCentre(1)
@@ -753,7 +681,7 @@ class DungeonSystemTest {
 
     @Test
     fun theArchitectCollapsesTheDungeonWhenTheWindowMovesInTheStepAfterItArrives() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         run.quietArenaForTesting()
         dungeon.enterRoom(1)
@@ -782,7 +710,7 @@ class DungeonSystemTest {
         if (acrossX) run.setVelocityForTesting(240f, 0f) else run.setVelocityForTesting(0f, 240f)
         run.simulateStep(step)
         assertTrue(window != run.obstacleField.centerChunkX to run.obstacleField.centerChunkY, "the window moved")
-        assertEquals(1, roomAt(dungeon.template, placed.rotation, placed.x, placed.y, run.coreX, run.coreY, 0f), "the Core is still in the hall")
+        assertEquals(1, dungeon.template.roomAt(run.coreX - placed.x, run.coreY - placed.y, placed.rotation), "the Core is still in the hall")
 
         assertNull(run.dungeon, "the dungeon collapses")
         assertTrue(run.isSpent(dungeon.placement.id), "the fought structure is spent")
@@ -797,7 +725,7 @@ class DungeonSystemTest {
 
     @Test
     fun noRoomEngagesInTheLastFortyFiveSecondsBeforeTheArchitect() {
-        val cutoff = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val cutoff = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val bossAt = cutoff.run.content.tempo.bossAtSeconds
         val lead = cutoff.run.content.structures.engageCutoffSeconds
         assertEquals(45f, lead)
@@ -806,7 +734,7 @@ class DungeonSystemTest {
         assertEquals(-1, cutoff.run.dungeon!!.engagedRoom)
         assertTrue(cutoff.run.enemies.isEmpty())
 
-        val before = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val before = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         // The float just below the cutoff (stepped through its bits; positive, so one bit down is the next float down).
         before.run.elapsed = Float.fromBits((bossAt - lead).toRawBits() - 1)
         before.enterRoom(1)
@@ -815,7 +743,7 @@ class DungeonSystemTest {
 
     @Test
     fun anotherEngagementKeepsTheRoomDormant() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         // A window site's trial runs elsewhere: one engagement at a time.
         run.sites = listOf(SiteState(0L, SiteKind.entries.first(), run.coreX + 5_000f, run.coreY, Float.POSITIVE_INFINITY, active = true))
@@ -830,7 +758,7 @@ class DungeonSystemTest {
 
     @Test
     fun aLayerChangeCollapsesTheDungeonAndStructuresAtTheArrival() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         dungeon.enterRoom(1)
         val kills = run.kills
@@ -843,7 +771,7 @@ class DungeonSystemTest {
         assertTrue(run.isSpent(dungeon.placement.id))
 
         // A dungeon held without a fight leaves no mark.
-        val calm = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val calm = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         calm.moveCore(calm.world(-900f, -600f))
         calm.run.updateStructures(step)
         calm.run.onWorldLayerChanged(WorldLayer.BASE, WorldLayer.NADIR)
@@ -853,7 +781,7 @@ class DungeonSystemTest {
 
     @Test
     fun anEncounterEndedElsewhereAbandonsTheDungeon() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         dungeon.enterRoom(1)
         run.endAllEncounters(despawn = true)
@@ -869,17 +797,17 @@ class DungeonSystemTest {
 
     @Test
     fun spentStructuresAreRememberedInABoundedFifo() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         dungeon.clear(2)
         assertTrue(run.isSpent(dungeon.placement.id))
         val bound = ContentBounds.MAX_SPENT_STRUCTURES
         // Thirty-one later structures keep it spent; the thirty-second evicts it and it arms again.
-        repeat(bound - 1) { run.markSpent(structureId(WorldLayer.BASE, 200 + it, 200), SPENT_FLAG) }
+        repeat(bound - 1) { run.markSpent(structureId(WorldLayer.BASE, 200 + it, 200)) }
         assertEquals(bound, run.spentStructureIds.size)
         dungeon.enterRoom(1)
         assertNull(run.dungeon)
-        run.markSpent(structureId(WorldLayer.BASE, 300, 300), SPENT_FLAG)
+        run.markSpent(structureId(WorldLayer.BASE, 300, 300))
         assertEquals(bound, run.spentStructureIds.size)
         assertFalse(run.isSpent(dungeon.placement.id))
         dungeon.enterRoom(1)
@@ -890,8 +818,8 @@ class DungeonSystemTest {
 
     @Test
     fun garrisonCompositionDrawsNothingFromTheRunStreams() {
-        fun sealed(seed: Int): Pair<Dungeon, List<EnemyType>> {
-            val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION, seed = seed)
+        fun sealed(seed: Int): Pair<DungeonFixture, List<EnemyType>> {
+            val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION, seed = seed)
             val run = dungeon.run
             val streams = listOf(run.gameplayRandom.snapshot(), run.rewardRandom.snapshot(), run.spawnRandom.snapshot(), run.siteRandom.snapshot())
             dungeon.enterRoom(1)
@@ -905,7 +833,7 @@ class DungeonSystemTest {
         assertEquals(first.garrison(1).map { it.x to it.y }, again.garrison(1).map { it.x to it.y })
 
         // The garrison follows the hash of the run seed and the room, not the run's history.
-        val drawn = Dungeon(StructureTemplateId.DERELICT_STATION, seed = 44)
+        val drawn = DungeonFixture(StructureTemplateId.DERELICT_STATION, seed = 44)
         repeat(50) { drawn.run.gameplayRandom.nextInt(); drawn.run.spawnRandom.nextInt(); drawn.run.rewardRandom.nextInt() }
         drawn.enterRoom(1)
         assertEquals(kinds, drawn.garrison(1).map { it.type })
@@ -913,9 +841,9 @@ class DungeonSystemTest {
 
     @Test
     fun rebirthTiersAddMembersToTheFirstHabitatEntry() {
-        val fresh = Dungeon(StructureTemplateId.DERELICT_STATION, rebirth = 0)
+        val fresh = DungeonFixture(StructureTemplateId.DERELICT_STATION, rebirth = 0)
         fresh.enterRoom(1)
-        val veteran = Dungeon(StructureTemplateId.DERELICT_STATION, rebirth = 8)
+        val veteran = DungeonFixture(StructureTemplateId.DERELICT_STATION, rebirth = 8)
         veteran.enterRoom(1)
         // One extra per four tiers on the hall's habitat entry (three at the garrison scale 0.8); the Sentries stay two.
         assertEquals(5, fresh.garrison(1).size)
@@ -930,14 +858,14 @@ class DungeonSystemTest {
         val rooms = listOf(StructureTemplateId.DERELICT_STATION to listOf(0, 1, 2, 3), StructureTemplateId.VAULT to listOf(0, 1, 2))
         for ((template, indices) in rooms) for (room in indices) {
             val clearance = if (template == StructureTemplateId.DERELICT_STATION && room == 0) 200f else 260f
-            val dungeon = Dungeon(template)
+            val dungeon = DungeonFixture(template)
             val run = dungeon.run
             dungeon.enterRoom(room)
             val garrison = dungeon.garrison(room)
             assertTrue(garrison.isNotEmpty(), "$template room $room")
             val s = dungeon.structure
             garrison.forEach { enemy ->
-                assertEquals(room, roomAt(dungeon.template, s.rotation, s.x, s.y, enemy.x, enemy.y, 0f), "$template room $room ${enemy.type}")
+                assertEquals(room, dungeon.template.roomAt(enemy.x - s.x, enemy.y - s.y, s.rotation), "$template room $room ${enemy.type}")
                 val apart = kotlin.math.hypot(enemy.x - run.coreX, enemy.y - run.coreY)
                 assertTrue(apart >= clearance - 0.01f, "$template room $room ${enemy.type} spawned $apart from the Core")
             }
@@ -947,7 +875,7 @@ class DungeonSystemTest {
     @Test
     fun garrisonScaleScalesOrdinaryEntriesButNeverAMiniBossAndStopsAtTwelve() {
         // The vault: one Brood Queen and three Crawlers; at scale 2 the Crawlers double and the Queen stays one.
-        val doubled = Dungeon(StructureTemplateId.VAULT) { it.copy(garrisonScale = 2f) }
+        val doubled = DungeonFixture(StructureTemplateId.VAULT) { it.copy(garrisonScale = 2f) }
         doubled.clear(1)
         doubled.clear(2)
         doubled.enterRoom(3)
@@ -956,15 +884,14 @@ class DungeonSystemTest {
         assertEquals(6, vault.count { it.type == EnemyType.CRAWLER })
 
         // The west gallery at scale 3: twelve habitat picks and six Sentries stop at twelve.
-        val tripled = Dungeon(StructureTemplateId.VAULT) { it.copy(garrisonScale = 3f) }
+        val tripled = DungeonFixture(StructureTemplateId.VAULT) { it.copy(garrisonScale = 3f) }
         tripled.enterRoom(1)
         assertEquals(ContentBounds.MAX_STRUCTURE_GARRISON, tripled.garrison(1).size)
-        assertEquals(ContentBounds.MAX_STRUCTURE_GARRISON, tripled.run.dungeon!!.garrisonTotal)
     }
 
     @Test
     fun theArchitectsDoodleRecordsItsSecretWithoutAGarrison() {
-        val dungeon = Dungeon(StructureTemplateId.ARCHITECTS_DOODLE)
+        val dungeon = DungeonFixture(StructureTemplateId.ARCHITECTS_DOODLE)
         val run = dungeon.run
         run.message = ""
         dungeon.moveCore(dungeon.roomCentre(0))
@@ -998,13 +925,13 @@ class DungeonSystemTest {
 
     @Test
     fun theDirectorSlowsWhileARoomIsSealed() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         dungeon.moveCore(dungeon.world(-900f, -600f))
         run.updateStructures(step)
         assertEquals(1f, run.structureDirectorScale())
         assertEquals(WorldLayer.BASE.habitat, run.ambientHabitat())
-        assertFalse(run.structureInteriorActive())
+        assertFalse(run.structureEngagementActive())
         dungeon.enterRoom(1)
         assertEquals(run.content.structures.directorRateWhileSealed, run.structureDirectorScale())
         assertEquals(0.35f, run.structureDirectorScale())
@@ -1017,7 +944,7 @@ class DungeonSystemTest {
 
     @Test
     fun whileARoomIsSealedTheDirectorSpawnsOnlyStructureKinds() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         run.elapsed = 150f
         run.invulnerableUntil = Float.MAX_VALUE
@@ -1029,7 +956,7 @@ class DungeonSystemTest {
         val kinds = mutableSetOf<EnemyType>()
         repeat((40f / step).toInt()) {
             run.simulateStep(step)
-            assertTrue(run.structureInteriorActive(), "the room stays sealed")
+            assertTrue(run.structureEngagementActive(), "the room stays sealed")
             run.enemies.filter { it.ownerTag == 0L }.forEach { enemy ->
                 if (run.content.enemy(enemy.type).rank == EnemyRank.ORDINARY) kinds += enemy.type
             }
@@ -1044,7 +971,7 @@ class DungeonSystemTest {
 
     @Test
     fun anEventPlannedBeforeASealOrItsClearFiresKindsOfTheHabitatItFiresIn() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         run.elapsed = 150f
         fun livesIn(type: EnemyType, habitat: EnemyHabitat) = run.content.enemy(type).weightIn(habitat) > 0f
@@ -1076,7 +1003,7 @@ class DungeonSystemTest {
         // Planned in open space with a kind that lives only there, fired once the room has sealed.
         planOutside(EnemyHabitat.STRUCTURE)
         dungeon.enterRoom(1)
-        assertTrue(run.structureInteriorActive())
+        assertTrue(run.structureEngagementActive())
         val sealed = fire()
         assertTrue(sealed.isNotEmpty() && sealed.all { livesIn(it, EnemyHabitat.STRUCTURE) }, "only STRUCTURE kinds while sealed: $sealed")
 
@@ -1084,14 +1011,14 @@ class DungeonSystemTest {
         planOutside(EnemyHabitat.SPACE)
         run.killGarrisonForTesting()
         run.updateStructures(step)
-        assertFalse(run.structureInteriorActive(), "the room cleared")
+        assertFalse(run.structureEngagementActive(), "the room cleared")
         val cleared = fire()
         assertTrue(cleared.isNotEmpty() && cleared.all { livesIn(it, EnemyHabitat.SPACE) }, "only SPACE kinds after the clear: $cleared")
     }
 
     @Test
     fun pilotsSeeEveryStructureOfTheWindowAsOneCircle() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         val structures = run.structureField.structures
         assertTrue(structures.isNotEmpty())
@@ -1113,7 +1040,7 @@ class DungeonSystemTest {
 
     @Test
     fun dungeonAndStructureFieldAreIsolatedBetweenReductionSiblings() {
-        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val dungeon = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val source = dungeon.run
         dungeon.moveCore(dungeon.roomCentre(1))
         source.updateStructures(step)

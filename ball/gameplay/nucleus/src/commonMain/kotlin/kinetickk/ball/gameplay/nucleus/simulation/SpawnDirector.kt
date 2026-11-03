@@ -556,7 +556,7 @@ internal fun MutableGameState.viewportEdgeDistance(angle: Float): Float {
 
 /** The habitat ambient picks use: a structure interior, else the world layer's own. */
 internal fun MutableGameState.ambientHabitat(): EnemyHabitat =
-    if (structureInteriorActive()) EnemyHabitat.STRUCTURE else worldLayer.habitat
+    if (structureEngagementActive()) EnemyHabitat.STRUCTURE else worldLayer.habitat
 
 /**
  * Ordinary spawn weight of [definition] in [habitat] at [threatSeconds]: zero before its time or Rebirth gate, ramping

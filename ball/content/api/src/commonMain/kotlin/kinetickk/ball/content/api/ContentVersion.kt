@@ -87,6 +87,8 @@ object ContentBounds {
     const val MAX_STRUCTURE_GARRISON: Int = 12
     /** Largest side of a structure footprint. */
     const val MAX_STRUCTURE_FOOTPRINT: Float = 2_400f
+    /** Thickest wall or free-standing capsule half thickness: how far a wall reaches past its footprint. */
+    const val MAX_STRUCTURE_WALL_HALF_THICKNESS: Float = 80f
     /** Rewards of one structure's final room. */
     const val MAX_STRUCTURE_REWARDS: Int = 6
     /** Structures placed in the generated window around the Core. */

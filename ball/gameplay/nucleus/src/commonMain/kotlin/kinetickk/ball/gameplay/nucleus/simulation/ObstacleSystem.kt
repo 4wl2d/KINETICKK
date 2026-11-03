@@ -480,7 +480,7 @@ private fun MutableGameState.resolveCoreObstacleCollisions(): Boolean {
             // The wall response leaves the Core at its rest point off the wall; the sweep goes on from there.
             coreX = contactX
             coreY = contactY
-            respondToWall(wallIndex, structureField.walls[wallIndex], contactX, contactY)
+            respondToWall(structureField.walls[wallIndex], contactX, contactY)
             startX = coreX
             startY = coreY
         } else {

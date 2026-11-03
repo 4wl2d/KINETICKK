@@ -49,27 +49,17 @@ internal fun MutableGameState.structureRenderProjection(
 }
 
 /**
- * The dungeon's panel facts: rooms that count (garrisoned rooms and the final room) and how many of them are clear,
- * the sealed room, the garrison members still alive out of those spawned, and whether a panel shows (not for secret
- * templates). An equal projection keeps [previous].
+ * The dungeon's structure, its sealed room and whether a panel shows (not for secret templates); the panel's room
+ * counts come from the trial projection. Equal facts keep [previous].
  */
 private fun MutableGameState.dungeonProjection(current: DungeonState, previous: DungeonProjection?): DungeonProjection {
-    val template = content.structures.template(current.template)
-    val counted = template.roomsToClearMask
-    val ids = current.garrisonIds
-    var alive = 0
-    for (index in ids.indices) if (enemyById(ids[index])?.alive == true) alive++
-    val projection = DungeonProjection(
-        structureId = current.structureId,
-        template = current.template,
-        roomsToClear = counted.countOneBits(),
-        roomsCleared = (current.clearedRooms and counted).countOneBits(),
-        engagedRoom = current.engagedRoom,
-        garrisonAlive = alive,
-        garrisonTotal = current.garrisonTotal,
-        panel = !template.secret,
-    )
-    return if (projection == previous) previous else projection
+    val panel = !content.structures.template(current.template).secret
+    if (previous != null && previous.structureId == current.structureId && previous.engagedRoom == current.engagedRoom &&
+        previous.panel == panel
+    ) {
+        return previous
+    }
+    return DungeonProjection(structureId = current.structureId, engagedRoom = current.engagedRoom, panel = panel)
 }
 
 private fun MutableGameState.structureProjections(

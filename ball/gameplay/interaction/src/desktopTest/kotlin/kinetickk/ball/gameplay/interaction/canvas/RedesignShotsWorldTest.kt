@@ -598,7 +598,7 @@ class RedesignShotsWorldTest {
         dungeon: StructureFixture? = null,
         signals: List<StructureFixture> = emptyList(),
     ): GameplayRenderModel =
-        base.with("structures" to structureProjection(*structures, signals = signals, dungeon = dungeon, garrisonAlive = 4, garrisonTotal = 6))
+        base.with("structures" to structureProjection(*structures, signals = signals, dungeon = dungeon))
 
     /** A Vault, a Spire and a Labyrinth off screen: the two nearest entrances get their markers. */
     private fun structureSignals(w: Float, h: Float): GameplayRenderModel {

@@ -78,6 +78,6 @@ internal fun MutableGameState.inBaseLayer(): Boolean = worldLayer == WorldLayer.
 @Suppress("UNUSED_PARAMETER")
 internal fun MutableGameState.onWorldLayerChanged(from: WorldLayer, to: WorldLayer) {
     clearSitesForLayerChange()
-    onStructureLayerChanged()
+    collapseDungeonForLayerChange()
     endWorldEventForLayerChange()
 }

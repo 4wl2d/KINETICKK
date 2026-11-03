@@ -16,14 +16,11 @@ import kotlin.math.hypot
  * dungeon itself runs in DungeonSystem.kt.
  */
 
-/** True while a dungeon room is sealed. */
+/** True while a dungeon room is sealed: the Core is shut in it (ambient picks then use the STRUCTURE habitat). */
 internal fun MutableGameState.structureEngagementActive(): Boolean = (dungeon?.engagedRoom ?: -1) >= 0
 
 /** True once the run entered or spent a structure. */
 internal fun MutableGameState.structureTouched(): Boolean = dungeon != null || spentStructureIds.isNotEmpty()
-
-/** True while the Core is shut in a sealed room (ambient picks then use the STRUCTURE habitat). */
-internal fun MutableGameState.structureInteriorActive(): Boolean = structureEngagementActive()
 
 /**
  * Appends one optional-site mark per structure of the window, spent ones included (their walls still hurt): its
@@ -75,9 +72,6 @@ internal fun MutableGameState.structureTrialProjection(): TrialProjection? {
         structure = held.template,
     )
 }
-
-/** A world layer switch collapses the dungeon silently. */
-internal fun MutableGameState.onStructureLayerChanged() = collapseDungeonForLayerChange()
 
 /** The director's spawn-rate scale: slower while a room is sealed (outside spawns would only pile against its walls). */
 internal fun MutableGameState.structureDirectorScale(): Float =

@@ -25,15 +25,12 @@ import kotlin.math.hypot
  * window moves to another chunk, the world layer changes or the Architect collapses the structures; a door change
  * replaces one structure's wall slice. Disabled content keeps the empty window a run starts with.
  *
- * Skipped placements: collapsed ones (spent list) and, after a layer switch, those whose footprint inflated by the
- * obstacle clearance meets the arrival keep-out of the same layer (stateless, so no arrival bookkeeping exists).
+ * Skipped placements: after a layer switch, those whose footprint inflated by the obstacle clearance meets the arrival
+ * keep-out of the same layer (stateless, so no arrival bookkeeping exists).
  */
 
 /** Spent-list flag of a cleared or abandoned structure. */
 internal const val SPENT_FLAG: Long = 1L
-
-/** Spent-list flag of a structure taken out of the window for good. */
-internal const val COLLAPSED_FLAG: Long = 2L
 
 /** A structure id without its spent-list flag bits (structure ids keep their low byte clear). */
 private const val STRUCTURE_ID_MASK: Long = -0x100L
@@ -50,7 +47,7 @@ internal fun MutableGameState.refreshStructureField(chunkX: Int, chunkY: Int) {
  * The structure window centred on the absolute chunk: the placements of the at most 3 × 3 cells the obstacle window
  * covers whose footprint meets it (row-major), their walls with door kinds, and the signals. Empty once [collapsed].
  */
-internal fun MutableGameState.buildStructureField(chunkX: Int, chunkY: Int, collapsed: Boolean): StructureField {
+private fun MutableGameState.buildStructureField(chunkX: Int, chunkY: Int, collapsed: Boolean): StructureField {
     val layer = worldLayer.ordinal
     if (collapsed) return StructureField.of(chunkX, chunkY, layer, true, emptyList(), emptyList(), emptyList())
     val policy = content.structures
@@ -102,10 +99,9 @@ internal fun MutableGameState.buildStructureField(chunkX: Int, chunkY: Int, coll
     return StructureField.of(chunkX, chunkY, layer, false, structures, walls, structureSignals())
 }
 
-/** The placement in the cell unless it collapsed or the arrival keep-out of the current layer covers it. */
+/** The placement in the cell unless the arrival keep-out of the current layer covers it. */
 private fun MutableGameState.availableStructure(cellX: Int, cellY: Int): StructurePlacement? {
     val placement = structurePlacement(cellX, cellY) ?: return null
-    if (isCollapsed(placement.id)) return null
     val keepOut = worldKeepOut
     if (keepOut != null) {
         val nearestX = keepOut.x.coerceIn(placement.absoluteX - placement.halfWidth, placement.absoluteX + placement.halfWidth)
@@ -240,13 +236,13 @@ private const val MAX_WINDOW_CELLS: Int = 3
 private const val SIGNAL_CELL_REACH: Int = 2
 
 // ---------------------------------------------------------------------------------------------
-// Spent list: cleared, abandoned or collapsed structures, oldest first, value-only.
+// Spent list: cleared or abandoned structures, oldest first, value-only.
 
 /**
- * Records [structureId] with [flag] at the end of the spent list, replacing an earlier entry of the same structure;
- * past [ContentBounds.MAX_SPENT_STRUCTURES] entries the oldest is forgotten (that structure can arm again).
+ * Records [structureId] with [SPENT_FLAG] at the end of the spent list, replacing an earlier entry of the same
+ * structure; past [ContentBounds.MAX_SPENT_STRUCTURES] entries the oldest is forgotten (that structure can arm again).
  */
-internal fun MutableGameState.markSpent(structureId: Long, flag: Long) {
+internal fun MutableGameState.markSpent(structureId: Long) {
     val id = structureId and STRUCTURE_ID_MASK
     val current = spentStructureIds
     val next = ArrayList<Long>(current.size + 1)
@@ -254,19 +250,14 @@ internal fun MutableGameState.markSpent(structureId: Long, flag: Long) {
         val entry = current[index]
         if (entry and STRUCTURE_ID_MASK != id) next += entry
     }
-    next += id or flag
+    next += id or SPENT_FLAG
     val excess = next.size - ContentBounds.MAX_SPENT_STRUCTURES
     spentStructureIds = if (excess > 0) next.subList(excess, next.size).toList() else next
 }
 
 /** True when the spent list holds [structureId] as cleared or abandoned. */
-internal fun MutableGameState.isSpent(structureId: Long): Boolean = spentEntryIs(structureId, SPENT_FLAG)
-
-/** True when the spent list holds [structureId] as collapsed. */
-internal fun MutableGameState.isCollapsed(structureId: Long): Boolean = spentEntryIs(structureId, COLLAPSED_FLAG)
-
-private fun MutableGameState.spentEntryIs(structureId: Long, flag: Long): Boolean {
-    val entry = (structureId and STRUCTURE_ID_MASK) or flag
+internal fun MutableGameState.isSpent(structureId: Long): Boolean {
+    val entry = (structureId and STRUCTURE_ID_MASK) or SPENT_FLAG
     val spent = spentStructureIds
     for (index in spent.indices) if (spent[index] == entry) return true
     return false

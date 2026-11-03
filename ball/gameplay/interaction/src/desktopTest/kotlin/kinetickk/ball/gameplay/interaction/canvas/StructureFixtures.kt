@@ -64,14 +64,12 @@ internal class StructureFixture(
 
 /**
  * The render fact of [structures] as the mapper publishes it: their walls in order, a signal at the entrance of each of
- * [signals], and the dungeon of [dungeon] (one of [structures]) with its panel facts.
+ * [signals], and the dungeon of [dungeon] (one of [structures]).
  */
 internal fun structureProjection(
     vararg structures: StructureFixture,
     signals: List<StructureFixture> = emptyList(),
     dungeon: StructureFixture? = null,
-    garrisonAlive: Int = 0,
-    garrisonTotal: Int = 0,
 ): StructureRenderProjection {
     val walls = ArrayList<WallProjection>()
     val placed = structures.map { fixture ->
@@ -99,17 +97,7 @@ internal fun structureProjection(
         )
     }
     val held = dungeon?.let { fixture ->
-        val counted = fixture.template.roomsToClearMask
-        DungeonProjection(
-            structureId = fixture.id,
-            template = fixture.template.id,
-            roomsToClear = counted.countOneBits(),
-            roomsCleared = (fixture.clearedRooms and counted).countOneBits(),
-            engagedRoom = fixture.engagedRoom,
-            garrisonAlive = garrisonAlive,
-            garrisonTotal = garrisonTotal,
-            panel = !fixture.template.secret,
-        )
+        DungeonProjection(structureId = fixture.id, engagedRoom = fixture.engagedRoom, panel = !fixture.template.secret)
     }
     return StructureRenderProjection(
         structures = placed.toImmutableList(),
@@ -149,9 +137,9 @@ internal fun structureTrial(fixture: StructureFixture): TrialProjection? {
     )
 }
 
-/** This model with the Core holding [fixture]'s dungeon: the structure in the window with its panel facts, and its trial. */
-internal fun GameplayRenderModel.withDungeon(fixture: StructureFixture, garrisonAlive: Int = 4, garrisonTotal: Int = 6): GameplayRenderModel =
+/** This model with the Core holding [fixture]'s dungeon: the structure in the window as the dungeon, and its trial. */
+internal fun GameplayRenderModel.withDungeon(fixture: StructureFixture): GameplayRenderModel =
     with(
-        "structures" to structureProjection(fixture, dungeon = fixture, garrisonAlive = garrisonAlive, garrisonTotal = garrisonTotal),
+        "structures" to structureProjection(fixture, dungeon = fixture),
         "trial" to structureTrial(fixture),
     )

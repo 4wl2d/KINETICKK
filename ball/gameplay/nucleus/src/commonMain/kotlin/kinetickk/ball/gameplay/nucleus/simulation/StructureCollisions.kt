@@ -52,8 +52,7 @@ internal fun MutableGameState.earliestWallEntry(x0: Float, y0: Float, x1: Float,
  * point just off the wall along the contact normal and meets the solid-impact response of the wall's structure, band
  * damage scaled by the policy's wall damage scale.
  */
-@Suppress("UNUSED_PARAMETER")
-internal fun MutableGameState.respondToWall(index: Int, wall: Wall, contactX: Float, contactY: Float) {
+internal fun MutableGameState.respondToWall(wall: Wall, contactX: Float, contactY: Float) {
     val along = segmentNearest(contactX, contactY, wall.ax, wall.ay, wall.bx, wall.by)
     val nearestX = wall.ax + (wall.bx - wall.ax) * along
     val nearestY = wall.ay + (wall.by - wall.ay) * along
@@ -191,18 +190,12 @@ private fun MutableGameState.clampGarrisonToRoom() {
 }
 
 /** [value] held inside [low]..[high]; the middle when the span is empty. */
-private fun clampIntoSpan(value: Float, low: Float, high: Float): Float =
+internal fun clampIntoSpan(value: Float, low: Float, high: Float): Float =
     if (low > high) (low + high) * 0.5f else value.coerceIn(low, high)
 
 /** True when a circle of [radius] at ([x], [y]) would come within the spawn clearance of a solid or sealed wall. */
-internal fun MutableGameState.wallBlocksPoint(x: Float, y: Float, radius: Float): Boolean {
-    if (structureField.structures.isEmpty()) return false
-    val reach = radius + SPAWN_OBSTACLE_CLEARANCE
-    forEachSolidWallNear(x, y, reach) { _, wall ->
-        if (wallDistanceSquared(x, y, wall) < square(wall.halfThickness + reach)) return true
-    }
-    return false
-}
+internal fun MutableGameState.wallBlocksPoint(x: Float, y: Float, radius: Float): Boolean =
+    !wallsClearOf(x, y, radius + SPAWN_OBSTACLE_CLEARANCE)
 
 /** True when a circle of [radius] swept from ([x0], [y0]) to ([x1], [y1]) would touch a solid or sealed wall. */
 internal fun MutableGameState.wallBlocksSegment(x0: Float, y0: Float, x1: Float, y1: Float, radius: Float): Boolean {
@@ -392,7 +385,7 @@ private fun wallDistanceSquared(x: Float, y: Float, wall: Wall): Float {
  */
 private fun wallNormal(wall: Wall, offsetX: Float, offsetY: Float, backX: Float, backY: Float): SteeringVector {
     val distance = length(offsetX, offsetY)
-    if (distance >= MIN_CONTACT_NORMAL) return steeringVector(offsetX / distance, offsetY / distance)
+    if (distance >= WALL_NORMAL_MIN_LENGTH) return steeringVector(offsetX / distance, offsetY / distance)
     val segmentX = wall.bx - wall.ax
     val segmentY = wall.by - wall.ay
     val segment = length(segmentX, segmentY)
@@ -402,16 +395,13 @@ private fun wallNormal(wall: Wall, offsetX: Float, offsetY: Float, backX: Float,
         return if (nx * backX + ny * backY < 0f) steeringVector(-nx, -ny) else steeringVector(nx, ny)
     }
     val back = length(backX, backY)
-    return if (back >= MIN_CONTACT_NORMAL) steeringVector(backX / back, backY / back) else steeringVector(1f, 0f)
+    return if (back >= WALL_NORMAL_MIN_LENGTH) steeringVector(backX / back, backY / back) else steeringVector(1f, 0f)
 }
 
 private fun square(value: Float): Float = value * value
 
 /** The Core rests this far off a wall surface, like off a rock. */
 private const val WALL_CONTACT_SEPARATION: Float = 0.05f
-
-/** Below this distance from a wall's centre line the contact normal falls back to the motion. */
-private const val MIN_CONTACT_NORMAL: Float = 0.001f
 
 /** Room a placement keeps from a structure footprint beyond its own radius. */
 private const val STRUCTURE_EJECT_MARGIN: Float = 64f

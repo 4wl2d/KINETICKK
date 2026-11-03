@@ -415,8 +415,7 @@ class HudHotPathAllocationTest {
             val vault = StructureFixture(templates.template(StructureTemplateId.VAULT), base.coreX + 1_800f, base.coreY - 600f, id = 9L shl 8)
             val far = StructureFixture(templates.template(StructureTemplateId.LABYRINTH), base.coreX + 9_000f, base.coreY + 4_000f,
                 id = 10L shl 8)
-            val structures = structureProjection(foundry, vault, signals = listOf(vault, far), dungeon = foundry, garrisonAlive = 4,
-                garrisonTotal = 6)
+            val structures = structureProjection(foundry, vault, signals = listOf(vault, far), dungeon = foundry)
             val frames = List(FRAMES) { frame ->
                 base.with("structures" to structures, "elapsed" to frame * GameplayRenderModel.FIXED_STEP,
                     "coreX" to base.coreX + frame * 0.37f, "coreY" to base.coreY - frame * 0.21f)

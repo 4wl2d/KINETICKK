@@ -533,7 +533,7 @@ internal class MutableGameState(
     internal var structureField: StructureField = reductionSource?.structureField ?: StructureField.EMPTY
     /** The structure the Core is inside (or was, within the leave radius), or null. Value-only. */
     internal var dungeon: DungeonState? = reductionSource?.dungeon
-    /** Spent or collapsed structures, oldest first, at most [ContentBounds.MAX_SPENT_STRUCTURES]; id or flag. */
+    /** Cleared or abandoned structures, oldest first, at most [ContentBounds.MAX_SPENT_STRUCTURES]; id or flag. */
     internal var spentStructureIds: List<Long> = reductionSource?.spentStructureIds ?: emptyList()
     /** Last structure whose entry banner was shown (re-entering does not repeat it). */
     internal var lastAnnouncedStructureId: Long = reductionSource?.lastAnnouncedStructureId ?: 0L

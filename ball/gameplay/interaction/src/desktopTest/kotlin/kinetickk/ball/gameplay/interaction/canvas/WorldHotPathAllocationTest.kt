@@ -933,8 +933,7 @@ class WorldHotPathAllocationTest {
         val spire = StructureFixture(templates.template(StructureTemplateId.SPIRE), CORE + 860f, CORE, id = 9L shl 8)
         val vault = StructureFixture(templates.template(StructureTemplateId.VAULT), CORE - 1_200f, CORE - 3_400f, id = 10L shl 8)
         check(structureInteriorAmount(model.with("structures" to structureProjection(foundry, dungeon = foundry))) == 1f)
-        return model.with("structures" to structureProjection(foundry, spire, signals = listOf(foundry, spire, vault), dungeon = foundry,
-            garrisonAlive = 4, garrisonTotal = 6))
+        return model.with("structures" to structureProjection(foundry, spire, signals = listOf(foundry, spire, vault), dungeon = foundry))
     }
 
     private companion object {

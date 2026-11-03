@@ -67,7 +67,7 @@ class StructureFieldTest {
         // A world without structures, so the hand-placed window is the only one and a new run leaves it empty.
         val state = MutableGameState(structuresDisabledContent).apply { startRun() }
         state.structureField = StructureField.of(0, 0, 0, false, listOf(structure(1, 0, 1)), listOf(wall(0)), emptyList())
-        state.dungeon = DungeonState(1L shl 8, StructureTemplateId.VAULT, 0, 300_000f, 0f, enteredAt = 1f)
+        state.dungeon = DungeonState(1L shl 8, StructureTemplateId.VAULT, 0, 300_000f, 0f)
         state.spentStructureIds = listOf(5L)
         state.lastAnnouncedStructureId = 5L
         state.coreX = 300_000f

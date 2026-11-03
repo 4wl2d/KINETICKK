@@ -9,6 +9,7 @@ import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WorldLayer
+import kinetickk.ball.content.api.roomAt
 import kinetickk.ball.content.api.rotateQuarterX
 import kinetickk.ball.content.api.rotateQuarterY
 import kinetickk.ball.gameplay.nucleus.model.DungeonState
@@ -25,7 +26,6 @@ import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
 import kinetickk.ball.gameplay.nucleus.render.WallKind
 import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
-import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -252,13 +252,13 @@ class StructureCollisionTest {
 
         // The engaged hall seals both its doors: nothing gets out of it.
         val hall = 1
-        run.dungeon = DungeonState(placement.id, placement.template, placement.rotation, structure().x, structure().y, engagedRoom = hall, enteredAt = 0f)
+        run.dungeon = DungeonState(placement.id, placement.template, placement.rotation, structure().x, structure().y, engagedRoom = hall)
         run.applyStructureDoors(placement.id)
         // A door's capsule overlaps its jamb's cap, leaving a shallow notch where the Core rests 38.2 u off the line.
         val inset = 24f + run.coreRadius - 3f
         flights(roomCentre(hall), "sealed hall") {
             val s = structure()
-            assertEquals(hall, roomAt(template, s.rotation, s.x, s.y, run.coreX, run.coreY, inset), "the Core left the sealed hall")
+            assertEquals(hall, template.roomAt(run.coreX - s.x, run.coreY - s.y, s.rotation, inset), "the Core left the sealed hall")
         }
 
         // A door sealing over the Core's centre line pushes it out of the door at once, back the way it came.
@@ -450,7 +450,7 @@ class StructureCollisionTest {
             structure.x + rotateQuarterX(localX, localY, structure.rotation) to structure.y + rotateQuarterY(localX, localY, structure.rotation)
         val hall = template.rooms[1]
         // A member pushed past the hall's east wall into the bay, and one inside its room; an add the hall's encounter
-        // owns outside the garrison list (spawned beside a mini-boss) in the bay; a stranger in the bay.
+        // owns (spawned beside a mini-boss) in the bay; a stranger in the bay.
         val tag = roomEncounterTag(placement.id, 1)
         val (memberX, memberY) = world(hall.maxX + 200f, 300f)
         val member = run.dummy(x = memberX, y = memberY).apply { ownerTag = tag }
@@ -459,15 +459,14 @@ class StructureCollisionTest {
         val add = run.dummy(x = memberX, y = memberY).apply { ownerTag = tag }
         val stranger = run.dummy(x = memberX, y = memberY)
         run.dungeon = DungeonState(
-            placement.id, placement.template, placement.rotation, structure.x, structure.y, engagedRoom = 1,
-            garrisonIds = immutableListOf(member.id, settled.id), garrisonTotal = 2, engaged = true, enteredAt = 0f,
+            placement.id, placement.template, placement.rotation, structure.x, structure.y, engagedRoom = 1, engaged = true,
         )
         run.resolveEnemyObstacles()
         val inset = member.radius + template.wallHalfThickness + 4f
-        assertEquals(1, roomAt(template, structure.rotation, structure.x, structure.y, member.x, member.y, inset - 0.01f), "clamped into the hall")
+        assertEquals(1, template.roomAt(member.x - structure.x, member.y - structure.y, structure.rotation, inset - 0.01f), "clamped into the hall")
         assertEquals(member.x, member.previousX, "the clamp is a teleport")
         assertEquals(member.y, member.previousY)
-        assertEquals(1, roomAt(template, structure.rotation, structure.x, structure.y, add.x, add.y, inset - 0.01f), "the add is held too")
+        assertEquals(1, template.roomAt(add.x - structure.x, add.y - structure.y, structure.rotation, inset - 0.01f), "the add is held too")
         assertEquals(insideX, settled.x, "a member inside its room stays put")
         assertEquals(insideY, settled.y)
         assertEquals(memberX, stranger.x, "only enemies the encounter owns are held")
@@ -614,32 +613,29 @@ class StructureCollisionTest {
         run.teleportCoreForTesting(placement.absoluteX, placement.absoluteY)
         run.enemies.clear()
         val structure = run.structureField.structures[run.structureField.indexOf(placement.id)]
-        fun outside(x: Float, y: Float, inflate: Float): Boolean = run.structureField.structures.all { s ->
-            abs(x - s.x) >= s.halfWidth + inflate || abs(y - s.y) >= s.halfHeight + inflate
-        }
 
         // Ejection moves a point to the nearest side of the footprint inflated by its radius and a margin.
         val ejected = run.structureEjected(structure.x + structure.halfWidth - 30f, structure.y + 10f, 20f)
         assertEquals(structure.y + 10f, ejected.y, "only across the nearest side")
         assertTrue(ejected.x >= structure.x + structure.halfWidth + 20f + 64f)
-        assertTrue(outside(ejected.x, ejected.y, 20f + 64f))
+        assertTrue(run.outsideFootprintsForTesting(ejected.x, ejected.y, 20f + 64f))
         val far = run.structureEjected(structure.x + 5_000f, structure.y, 20f)
         assertEquals(structure.x + 5_000f, far.x, "a point away from every footprint stays")
 
         val (totemX, totemY) = run.nudgedClearOfObstacles(structure.x, structure.y, 70f)
-        assertTrue(outside(totemX, totemY, 70f), "the Totem left the footprint")
+        assertTrue(run.outsideFootprintsForTesting(totemX, totemY, 70f), "the Totem left the footprint")
         assertFalse(run.isSpawnPointBlocked(totemX, totemY, 70f))
         val (pointX, pointY) = run.clearPointOfInterestSite(structure.x, structure.y)
-        assertTrue(outside(pointX, pointY, 320f), "the anomaly, its ring and its beacons left the footprint")
+        assertTrue(run.outsideFootprintsForTesting(pointX, pointY, 320f), "the anomaly, its ring and its beacons left the footprint")
 
         // The director's spawns and leashed relocations around a Core standing in the structure.
         repeat(40) { run.spawnScheduled(EnemyType.DRIFTER) }
         assertTrue(run.enemies.isNotEmpty())
-        run.enemies.forEach { enemy -> assertTrue(outside(enemy.x, enemy.y, enemy.radius), "spawned inside a footprint at ${enemy.x}, ${enemy.y}") }
+        run.enemies.forEach { enemy -> assertTrue(run.outsideFootprintsForTesting(enemy.x, enemy.y, enemy.radius), "spawned inside a footprint at ${enemy.x}, ${enemy.y}") }
         val leashed = run.enemies.first()
         repeat(20) {
             run.relocateLeashedEnemy(leashed)
-            assertTrue(outside(leashed.x, leashed.y, leashed.radius), "relocated inside a footprint")
+            assertTrue(run.outsideFootprintsForTesting(leashed.x, leashed.y, leashed.radius), "relocated inside a footprint")
         }
 
         // A sealed room is closed: a point inside the engaged room leaves the footprint like any other room's point.
@@ -650,13 +646,13 @@ class StructureCollisionTest {
             val cy = (spec.minY + spec.maxY) / 2f
             return structure.x + rotateQuarterX(cx, cy, structure.rotation) to structure.y + rotateQuarterY(cx, cy, structure.rotation)
         }
-        run.dungeon = DungeonState(placement.id, placement.template, placement.rotation, structure.x, structure.y, engagedRoom = 1, enteredAt = 0f)
+        run.dungeon = DungeonState(placement.id, placement.template, placement.rotation, structure.x, structure.y, engagedRoom = 1)
         val (hallX, hallY) = roomCentre(1)
         val sealed = run.structureEjected(hallX, hallY, 17f)
-        assertTrue(outside(sealed.x, sealed.y, 17f + 64f), "the engaged room's point leaves the footprint")
+        assertTrue(run.outsideFootprintsForTesting(sealed.x, sealed.y, 17f + 64f), "the engaged room's point leaves the footprint")
         val (bayX, bayY) = roomCentre(3)
         val moved = run.structureEjected(bayX, bayY, 17f)
-        assertTrue(outside(moved.x, moved.y, 17f + 64f), "another room's point leaves the footprint")
+        assertTrue(run.outsideFootprintsForTesting(moved.x, moved.y, 17f + 64f), "another room's point leaves the footprint")
     }
 
     @Test
@@ -727,9 +723,6 @@ class StructureCollisionTest {
                 val placement = run.structurePlacement(12, -9) ?: continue
                 run.teleportCoreForTesting(placement.absoluteX, placement.absoluteY)
                 val structure = run.structureField.structures[run.structureField.indexOf(placement.id)]
-                fun outside(x: Float, y: Float, inflate: Float): Boolean = run.structureField.structures.all { s ->
-                    abs(x - s.x) >= s.halfWidth + inflate || abs(y - s.y) >= s.halfHeight + inflate
-                }
                 val random = kotlin.random.Random(seed * 31 + template.ordinal)
                 repeat(60) {
                     val gap = 380f + random.nextFloat() * 240f
@@ -751,9 +744,9 @@ class StructureCollisionTest {
                         if (abs(offerX - structure.x) >= structure.halfWidth || abs(offerY - structure.y) >= structure.halfHeight) continue
                         overStructure++
                         val (siteX, siteY) = run.clearPointOfInterestSite(offerX, offerY)
-                        assertTrue(outside(siteX, siteY, 320f), "$template seed $seed: the site rests in the structure at ($siteX, $siteY)")
+                        assertTrue(run.outsideFootprintsForTesting(siteX, siteY, 320f), "$template seed $seed: the site rests in the structure at ($siteX, $siteY)")
                         val (totemX, totemY) = run.nudgedClearOfObstacles(offerX, offerY, 70f)
-                        assertTrue(outside(totemX, totemY, 70f), "$template seed $seed: the Totem rests in the structure at ($totemX, $totemY)")
+                        assertTrue(run.outsideFootprintsForTesting(totemX, totemY, 70f), "$template seed $seed: the Totem rests in the structure at ($totemX, $totemY)")
                     }
                 }
             }

@@ -19,6 +19,7 @@ import kinetickk.ball.content.api.StructureRoom
 import kinetickk.ball.content.api.StructureTemplate
 import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.localizedContent
+import kinetickk.ball.content.api.roomAt
 import kinetickk.ball.content.api.rotateQuarterX
 import kinetickk.ball.content.api.rotateQuarterY
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
@@ -159,7 +160,7 @@ internal fun DrawScope.drawStructureWalls(engine: GameplayRenderModel, shakeX: F
         }
         val current = dungeon != null && dungeon.structureId == structure.id
         val coreRoom = if (current) {
-            roomAt(template, rotation, engine.renderCoreX - structure.x, engine.renderCoreY - structure.y)
+            template.roomAt(engine.renderCoreX - structure.x, engine.renderCoreY - structure.y, rotation)
         } else {
             NO_ROOM
         }
@@ -216,7 +217,7 @@ internal fun structureInteriorAmount(engine: GameplayRenderModel): Float {
     val depth = min(structure.halfWidth - abs(dx), structure.halfHeight - abs(dy))
     if (depth <= 0f) return 0f
     val template = engine.content.structures.template(structure.template)
-    if (roomAt(template, structure.rotation, dx, dy) == STRUCTURE_OUTSIDE) return 0f
+    if (template.roomAt(dx, dy, structure.rotation) == STRUCTURE_OUTSIDE) return 0f
     return (depth / INTERIOR_FADE).coerceIn(0f, 1f)
 }
 
@@ -500,19 +501,6 @@ private fun reached(room: Int, cleared: Int, coreRoom: Int): Boolean =
 
 private fun pending(room: Int, cleared: Int, counted: Int): Boolean =
     room != STRUCTURE_OUTSIDE && counted and (1 shl room) != 0 && cleared and (1 shl room) == 0
-
-/** The room of [template] turned by [rotation] that holds the offset ([dx], [dy]) from its centre, or [STRUCTURE_OUTSIDE]. */
-private fun roomAt(template: StructureTemplate, rotation: Int, dx: Float, dy: Float): Int {
-    val inverse = (4 - rotation) and 3
-    val x = rotateQuarterX(dx, dy, inverse)
-    val y = rotateQuarterY(dx, dy, inverse)
-    val rooms = template.rooms
-    for (index in rooms.indices) {
-        val room = rooms[index]
-        if (x >= room.minX && x <= room.maxX && y >= room.minY && y <= room.maxY) return index
-    }
-    return STRUCTURE_OUTSIDE
-}
 
 /** The centre of [room] turned by [rotation], as a point from the structure centre [center]. */
 private fun roomCenter(center: Offset, room: StructureRoom, rotation: Int): Offset {

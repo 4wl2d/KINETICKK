@@ -8,6 +8,7 @@ import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.STRUCTURE_OUTSIDE
 import kinetickk.ball.content.api.WallAxis
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.roomAt
 import kinetickk.ball.content.api.rotateQuarterX
 import kinetickk.ball.content.api.rotateQuarterY
 import kinetickk.ball.gameplay.nucleus.model.DungeonState
@@ -68,7 +69,7 @@ internal data class DungeonAttempt(
  *   are avoided as the bot avoids them. The Architect's Doodle is a secret, not a dungeon: it is never the target.
  * - Inside a sealed room: the nearest garrison member is the target, at most 800 u/s. The bot's hunting law decides
  *   how: its orbiting weapons (Arc Coil, Ion Swarm, Prism Relay) circle the target at 220 u, every other weapon rams
- *   it. Walls within 140 u of the predicted Core push it off (gain 6, [nearestWallSurface]); a Dash only dodges a shot
+ *   it. Walls within 140 u of the predicted Core push it off (gain 6, [nearestWall]); a Dash only dodges a shot
  *   when its line is clear of walls and solid rocks, and never while the previous Dash phase runs.
  * - Inside with no sealed room: a breadth-first route over open doors to the nearest room still to clear (an
  *   uncleared room with a garrison, or the final room once its locks are open), through door waypoints 160 u on each
@@ -104,7 +105,6 @@ internal class DungeonPilot(
     private var stageDoor = -1
     private var doorStage = 0
     private var braking = false
-    private val wall = FloatArray(4)
     private val corner = FloatArray(2)
     private val siteMarks = FloatArray(MAX_OPTIONAL_SITE_MARKS * 3)
     private val queue = IntArray(ROUTE_NODES)
@@ -326,7 +326,7 @@ internal class DungeonPilot(
 
     private fun dungeonControl(s: MutableGameState, held: DungeonState) {
         val template = s.content.structures.template(held.template)
-        val room = roomAt(template, held.rotation, held.x, held.y, s.coreX, s.coreY, 0f)
+        val room = template.roomAt(s.coreX - held.x, s.coreY - held.y, held.rotation)
         if (room >= 0) lastRoom = room
         val (desiredX, desiredY) = if (held.engagedRoom >= 0) fightVelocity(s, held, template) else routeVelocity(s, held, template)
         val walled = repelWalls(s, desiredX, desiredY)
@@ -539,9 +539,16 @@ internal class DungeonPilot(
     private fun repelWalls(s: MutableGameState, x: Float, y: Float): Pair<Float, Float> {
         val px = s.coreX + s.velocityX * 0.3f
         val py = s.coreY + s.velocityY * 0.3f
-        val gap = s.nearestWallSurface(px, py, WALL_REACH, wall)
+        var gap = Float.POSITIVE_INFINITY
+        var nx = 0f
+        var ny = 0f
+        s.nearestWall(px, py, WALL_REACH) { wallNx, wallNy, wallGap ->
+            nx = wallNx
+            ny = wallNy
+            gap = wallGap
+        }
         if (gap >= WALL_REACH) return x to y
-        return x + wall[2] * (WALL_REACH - gap) * WALL_GAIN to y + wall[3] * (WALL_REACH - gap) * WALL_GAIN
+        return x + nx * (WALL_REACH - gap) * WALL_GAIN to y + ny * (WALL_REACH - gap) * WALL_GAIN
     }
 
     /** The bot's side-step from hostile shots closing within 0.45 s. */

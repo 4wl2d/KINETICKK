@@ -8,6 +8,7 @@ import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WorldLayer
+import kinetickk.ball.content.api.roomAt
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayExitProgressResult
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
@@ -952,7 +953,6 @@ private class FuzzSession(private val plan: FuzzPlan, private val options: FuzzO
         bound("structure walls", m.structureField.walls.size, ContentBounds.MAX_STRUCTURE_WALLS)
         bound("structure signals", m.structureField.signals.size, ContentBounds.MAX_STRUCTURE_SIGNALS)
         bound("spent structures", m.spentStructureIds.size, ContentBounds.MAX_SPENT_STRUCTURES)
-        m.dungeon?.let { bound("garrison ids", it.garrisonIds.size, ContentBounds.MAX_STRUCTURE_GARRISON) }
         bound("combat fields", m.combatFieldTable.count, ContentBounds.MAX_COMBAT_FIELDS)
         bound("pending acquired item ids", m.pendingAcquiredItemIds.size, MAX_RECENT_ITEM_IDS)
         bound("pending sound cues", m.soundCues.size, MutableGameState.MAX_GAMEPLAY_SOUND_CUES)
@@ -1043,7 +1043,7 @@ private class FuzzSession(private val plan: FuzzPlan, private val options: FuzzO
             }
             return
         }
-        val coreRoom = roomAt(content.structures.template(dungeon.template), dungeon.rotation, dungeon.x, dungeon.y, m.coreX, m.coreY, 0f)
+        val coreRoom = content.structures.template(dungeon.template).roomAt(m.coreX - dungeon.x, m.coreY - dungeon.y, dungeon.rotation)
         if (coreRoom != dungeon.engagedRoom) {
             if (coreOutsideSince.isNaN()) coreOutsideSince = m.elapsed
             if (m.elapsed - coreOutsideSince > 5f) {
@@ -1060,8 +1060,8 @@ private class FuzzSession(private val plan: FuzzPlan, private val options: FuzzO
         for (enemy in m.enemies) {
             if (!enemy.alive || enemy.ownerTag != tag) continue
             live++
-            if (outside == null && roomAt(template, dungeon.rotation, dungeon.x, dungeon.y, enemy.x, enemy.y, 0f) != dungeon.engagedRoom) {
-                outside = "${enemy.type} ${enemy.id} at ${enemy.x.toInt()},${enemy.y.toInt()} (room ${roomAt(template, dungeon.rotation, dungeon.x, dungeon.y, enemy.x, enemy.y, 0f)})"
+            if (outside == null && template.roomAt(enemy.x - dungeon.x, enemy.y - dungeon.y, dungeon.rotation) != dungeon.engagedRoom) {
+                outside = "${enemy.type} ${enemy.id} at ${enemy.x.toInt()},${enemy.y.toInt()} (room ${template.roomAt(enemy.x - dungeon.x, enemy.y - dungeon.y, dungeon.rotation)})"
             }
         }
         if (outside != null) {

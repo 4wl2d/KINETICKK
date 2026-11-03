@@ -1148,8 +1148,7 @@ class GameplayReductionIsolationTest {
         )
         dungeon = DungeonState(
             structureId = (1L shl 63) or (5L shl 34) or (6L shl 8), template = StructureTemplateId.VAULT, rotation = 1,
-            x = 2_000f, y = 1_500f, clearedRooms = 0b1, engagedRoom = 2, garrisonIds = immutableListOf(21, 22),
-            garrisonTotal = 4, engaged = true, enteredAt = 0.5f,
+            x = 2_000f, y = 1_500f, clearedRooms = 0b1, engagedRoom = 2, engaged = true,
         )
         spentStructureIds = listOf(11L, 12L)
         lastAnnouncedStructureId = 13L

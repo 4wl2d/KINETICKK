@@ -6,8 +6,6 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WallAxis
-import kinetickk.ball.content.api.rotateQuarterX
-import kinetickk.ball.content.api.rotateQuarterY
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.render.StructureRenderProjection
 import kinetickk.ball.gameplay.nucleus.render.TrialClock
@@ -32,51 +30,9 @@ import kotlin.test.assertTrue
 class StructureRenderMapperTest {
     private val step = MutableGameState.FIXED_STEP
 
-    /** A run whose far cells all hold [template]; the Core rests at the centre of the one in cell (12, −9). */
-    private class Site(template: StructureTemplateId) {
-        val run = buildTestState(content = forcedStructureContent(template), seed = 44)
-        val placement = run.structureAtForTesting(12, -9)
-        val template = run.content.structures.template(template)
-
-        init {
-            run.teleportCoreForTesting(placement.absoluteX, placement.absoluteY)
-            run.enemies.clear()
-            run.pickups.clear()
-        }
-
-        val index: Int get() = run.structureField.indexOf(placement.id)
-
-        fun local(localX: Float, localY: Float): Pair<Float, Float> {
-            val structure = run.structureField.structures[index]
-            return structure.x + rotateQuarterX(localX, localY, structure.rotation) to
-                structure.y + rotateQuarterY(localX, localY, structure.rotation)
-        }
-
-        fun moveCore(point: Pair<Float, Float>) {
-            run.coreX = point.first
-            run.coreY = point.second
-            run.previousCoreX = point.first
-            run.previousCoreY = point.second
-        }
-
-        fun enterRoom(room: Int) {
-            val spec = template.rooms[room]
-            moveCore(local((spec.minX + spec.maxX) / 2f, (spec.minY + spec.maxY) / 2f))
-            run.updateStructures(MutableGameState.FIXED_STEP)
-            run.updateStructures(MutableGameState.FIXED_STEP)
-        }
-
-        fun clear(room: Int) {
-            enterRoom(room)
-            check(run.dungeon?.engagedRoom == room) { "room $room did not seal" }
-            run.killGarrisonForTesting()
-            run.updateStructures(MutableGameState.FIXED_STEP)
-        }
-    }
-
     @Test
     fun aSealedRoomProjectsItsStructureWallsSignalsAndPanelFacts() {
-        val site = Site(StructureTemplateId.DERELICT_STATION)
+        val site = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = site.run
         site.enterRoom(1)
         val dungeon = assertNotNull(run.dungeon)
@@ -106,7 +62,7 @@ class StructureRenderMapperTest {
             assertEquals(listOf(wall.ax, wall.ay, wall.bx, wall.by, wall.halfThickness), listOf(drawn.ax, drawn.ay, drawn.bx, drawn.by, drawn.halfThickness))
             assertEquals(wall.door, drawn.door)
         }
-        val structure = projected.structures[site.index]
+        val structure = projected.structures[run.structureField.indexOf(site.placement.id)]
         val doors = projected.walls.subList(structure.wallStart, structure.wallEnd).filter { it.door >= 0 }.sortedBy { it.door }
         assertEquals(listOf(WallKind.DOOR_OPEN, WallKind.DOOR_SEALED, WallKind.DOOR_SEALED, WallKind.DOOR_OPEN), doors.map { it.kind })
         // Signals carry the entrance (the outer door's centre), nearest first, for unspent structures.
@@ -117,39 +73,32 @@ class StructureRenderMapperTest {
         val own = projected.signals.single { it.id == site.placement.id }
         val entrance = site.template.doors[site.template.entranceDoor]
         assertEquals(WallAxis.VERTICAL, entrance.axis)
-        val expected = site.local(entrance.line, entrance.center)
+        val expected = site.world(entrance.line, entrance.center)
         assertEquals(expected.first, own.x, 0.01f)
         assertEquals(expected.second, own.y, 0.01f)
 
-        // The panel: four rooms count (each has a garrison), none clear, the garrison alive out of those spawned.
+        // The dungeon: its structure, the sealed room and a panel (the trial projection carries the room counts).
         val panel = assertNotNull(projected.dungeon)
         assertEquals(site.placement.id, panel.structureId)
-        assertEquals(StructureTemplateId.DERELICT_STATION, panel.template)
-        assertEquals(4, panel.roomsToClear)
-        assertEquals(0, panel.roomsCleared)
         assertEquals(1, panel.engagedRoom)
-        assertTrue(dungeon.garrisonTotal > 0)
-        assertEquals(dungeon.garrisonTotal, panel.garrisonTotal)
-        assertEquals(dungeon.garrisonTotal, panel.garrisonAlive)
         assertTrue(panel.panel)
 
-        // A member falling counts at once, before the dungeon step forgets it; the run is only read.
-        val fallen = run.enemies.first { it.id in dungeon.garrisonIds }
+        // A member falling changes nothing the projection shows; the run is only read.
+        val fallen = run.enemies.first { it.ownerTag == roomEncounterTag(site.placement.id, 1) }
         fallen.hp = 0f
         val after = run.toRenderModel().structures
-        assertEquals(dungeon.garrisonTotal - 1, after.dungeon?.garrisonAlive)
+        assertEquals(panel, after.dungeon)
         assertSame(dungeon, run.dungeon)
     }
 
     @Test
     fun clearedRoomsCountAndASpentStructureShowsEveryRoomWithoutItsSignal() {
-        val site = Site(StructureTemplateId.DERELICT_STATION)
+        val site = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = site.run
         site.clear(0)
         site.clear(1)
         var projected = run.toRenderModel().structures
-        assertEquals(0b011, projected.structures[site.index].clearedRooms)
-        assertEquals(2, projected.dungeon?.roomsCleared)
+        assertEquals(0b011, projected.structures[run.structureField.indexOf(site.placement.id)].clearedRooms)
         assertEquals(-1, projected.dungeon?.engagedRoom)
         assertTrue(projected.signals.any { it.id == site.placement.id })
 
@@ -159,7 +108,7 @@ class StructureRenderMapperTest {
         assertTrue(run.isSpent(site.placement.id))
         projected = run.toRenderModel().structures
         // Spent: every room bit, no dungeon, and its entrance no longer signals although the window still lists it.
-        val structure = projected.structures[site.index]
+        val structure = projected.structures[run.structureField.indexOf(site.placement.id)]
         assertTrue(structure.spent)
         assertEquals(0b1111, structure.clearedRooms)
         assertNull(projected.dungeon)
@@ -171,23 +120,23 @@ class StructureRenderMapperTest {
 
     @Test
     fun aSecretTemplateHoldsNoPanelAndCountsOnlyItsFinalRoom() {
-        val site = Site(StructureTemplateId.ARCHITECTS_DOODLE)
+        val site = DungeonFixture(StructureTemplateId.ARCHITECTS_DOODLE)
         val run = site.run
         // Inside the planet's ring, outside its one room: the structure is held, nothing is cleared yet.
-        site.moveCore(site.local(0f, 560f))
+        site.moveCore(site.world(0f, 560f))
         run.updateStructures(step)
         assertNotNull(run.dungeon)
         val panel = assertNotNull(run.toRenderModel().structures.dungeon)
         assertFalse(panel.panel)
-        assertEquals(1, panel.roomsToClear)
-        assertEquals(0, panel.garrisonTotal)
+        assertEquals(1 shl site.template.finalRoom, site.template.roomsToClearMask)
+        assertNull(run.structureTrialProjection())
     }
 
     @Test
     fun theSameWindowAndDungeonKeepThePreviousProjectionAndEachChangeReprojectsOnlyItself() {
-        val site = Site(StructureTemplateId.DERELICT_STATION)
+        val site = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val source = site.run
-        site.moveCore(site.local(-900f, -600f))
+        site.moveCore(site.world(-900f, -600f))
         source.updateStructures(step)
         assertNotNull(source.dungeon)
         val retained = source.toRenderModel()
@@ -209,21 +158,17 @@ class StructureRenderMapperTest {
         assertSame(first.signals, sealed.signals)
         assertEquals(1, sealed.dungeon?.engagedRoom)
 
-        // A garrison member falling changes only the panel facts.
+        // A garrison member falling changes nothing the projection shows: the whole projection is kept.
         val identity = source.copyForReduction()
-        source.enemies.first { it.id in source.dungeon!!.garrisonIds }.hp = 0f
+        source.enemies.first { it.ownerTag == roomEncounterTag(site.placement.id, 1) }.hp = 0f
         val fallen = source.toRenderModel(retainedSealed, identity).structures
-        assertNotSame(sealed, fallen)
-        assertSame(sealed.walls, fallen.walls)
-        assertSame(sealed.structures, fallen.structures)
-        assertSame(sealed.signals, fallen.signals)
-        assertEquals(sealed.dungeon!!.garrisonAlive - 1, fallen.dungeon?.garrisonAlive)
+        assertSame(sealed, fallen)
 
         // Another structure spent while the window and the dungeon stay the same: its entrance stops signalling.
         val other = assertNotNull(source.structureField.signals.firstOrNull { it.id != site.placement.id }).id
         val unchanged = source.copyForReduction()
         val retainedFallen = source.toRenderModel(retainedSealed, identity)
-        source.markSpent(other, SPENT_FLAG)
+        source.markSpent(other)
         val dropped = source.toRenderModel(retainedFallen, unchanged).structures
         assertFalse(dropped.signals.any { it.id == other })
         assertSame(retainedFallen.structures.walls, dropped.walls)
@@ -236,7 +181,7 @@ class StructureRenderMapperTest {
      */
     @Test
     fun aHeldDungeonPublishesItsTrialPanelUntilASiteRunsOrTheTemplateIsSecret() {
-        val site = Site(StructureTemplateId.DERELICT_STATION)
+        val site = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = site.run
         assertNull(run.toRenderModel().trial, "no structure entered yet")
 

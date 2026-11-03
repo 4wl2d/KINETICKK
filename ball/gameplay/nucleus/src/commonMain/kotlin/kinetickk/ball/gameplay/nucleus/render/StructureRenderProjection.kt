@@ -39,15 +39,10 @@ data class StructureProjection(
 /** A structure's entrance, shown as an edge marker and on the minimap within reach. */
 data class StructureSignalProjection(val id: Long, val template: StructureTemplateId, val x: Float, val y: Float)
 
-/** The dungeon in progress; [panel] is false for secret templates (no trial panel). */
+/** The dungeon in progress: its structure, the sealed room or -1, and [panel], false for secret templates (no trial panel). */
 data class DungeonProjection(
     val structureId: Long,
-    val template: StructureTemplateId,
-    val roomsToClear: Int,
-    val roomsCleared: Int,
     val engagedRoom: Int,
-    val garrisonAlive: Int,
-    val garrisonTotal: Int,
     val panel: Boolean,
 )
 

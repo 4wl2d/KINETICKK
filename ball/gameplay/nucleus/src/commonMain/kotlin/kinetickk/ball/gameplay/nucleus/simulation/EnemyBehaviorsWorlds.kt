@@ -285,7 +285,7 @@ internal inline fun MutableGameState.nearestSurface(
             }
         }
     }
-    nearestWall(x, y, reach) { _, _, nx, ny, gap -> if (gap < bestGap) { bestGap = gap; bestNx = nx; bestNy = ny } }
+    nearestWall(x, y, reach) { nx, ny, gap -> if (gap < bestGap) { bestGap = gap; bestNx = nx; bestNy = ny } }
     if (bestGap <= reach) found(bestNx, bestNy, bestGap)
 }
 

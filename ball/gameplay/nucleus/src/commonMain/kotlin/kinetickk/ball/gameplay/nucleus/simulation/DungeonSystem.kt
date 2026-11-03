@@ -18,6 +18,7 @@ import kinetickk.ball.content.api.StructureTemplate
 import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WallAxis
 import kinetickk.ball.content.api.WorldDiscovery
+import kinetickk.ball.content.api.roomAt
 import kinetickk.ball.content.api.rotateQuarterX
 import kinetickk.ball.content.api.rotateQuarterY
 import kinetickk.ball.gameplay.nucleus.model.DungeonState
@@ -26,8 +27,6 @@ import kinetickk.ball.gameplay.nucleus.model.profile
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.PickupType
-import kinetickk.foundation.collections.immutableListOf
-import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.hypot
@@ -61,9 +60,9 @@ internal fun roomEncounterTag(structureId: Long, room: Int): Long = encounterTag
  */
 @Suppress("UNUSED_PARAMETER")
 internal fun MutableGameState.updateStructures(delta: Float) {
-    val interior = structureInteriorActive()
+    val interior = structureEngagementActive()
     stepDungeon()
-    if (structureInteriorActive() != interior) keepPendingEventInHabitat()
+    if (structureEngagementActive() != interior) keepPendingEventInHabitat()
 }
 
 private fun MutableGameState.stepDungeon() {
@@ -92,7 +91,7 @@ private fun MutableGameState.stepDungeon() {
         return
     }
     val template = policy.template(current.template)
-    val room = roomAt(template, current.rotation, current.x, current.y, coreX, coreY, policy.entryInset)
+    val room = template.roomAt(coreX - current.x, coreY - current.y, current.rotation, policy.entryInset)
     if (room < 0 || current.clearedRooms and (1 shl room) != 0) return
     if (template.rooms[room].garrison.isEmpty()) {
         clearRoom(current, room)
@@ -131,7 +130,7 @@ private fun MutableGameState.enterStructure() {
         val structure = structures[index]
         if (abs(coreX - structure.x) > structure.halfWidth || abs(coreY - structure.y) > structure.halfHeight) continue
         if (isSpent(structure.id)) continue
-        dungeon = DungeonState(structure.id, structure.template, structure.rotation, structure.x, structure.y, enteredAt = elapsed)
+        dungeon = DungeonState(structure.id, structure.template, structure.rotation, structure.x, structure.y)
         applyStructureDoors(structure.id)
         val template = content.structures.template(structure.template)
         if (template.secret) return
@@ -163,7 +162,7 @@ private fun MutableGameState.coreInsideAnotherStructure(structureId: Long): Bool
 private fun MutableGameState.dropDungeon(current: DungeonState, announce: Boolean) {
     if (current.engagedRoom >= 0) endEncounter(roomEncounterTag(current.structureId, current.engagedRoom), despawn = true)
     if (current.engaged) {
-        markSpent(current.structureId, SPENT_FLAG)
+        markSpent(current.structureId)
         if (announce) {
             message = StructureNotice.STRUCTURE_ABANDONED.key
             messageTime = 1.8f
@@ -174,24 +173,14 @@ private fun MutableGameState.dropDungeon(current: DungeonState, announce: Boolea
 }
 
 /**
- * The sealed room's garrison: members still alive are kept for the panel; the room clears once no enemy its encounter
- * owns is alive (adds and fragments included, all held in the room by the wall pass). An encounter ended by anyone
- * else (it was abandoned) abandons the dungeon.
+ * The sealed room's garrison: the room clears once no enemy its encounter owns is alive (adds and fragments included,
+ * all held in the room by the wall pass). An encounter ended by anyone else (it was abandoned) abandons the dungeon.
  */
 private fun MutableGameState.upkeepGarrison(current: DungeonState) {
     val tag = roomEncounterTag(current.structureId, current.engagedRoom)
     if (encounter(tag) == null) {
         dropDungeon(current, announce = true)
         return
-    }
-    val ids = current.garrisonIds
-    var live = 0
-    for (index in enemies.indices) {
-        val enemy = enemies[index]
-        if (enemy.alive && enemy.id in ids) live++
-    }
-    if (live != ids.size) {
-        dungeon = current.copy(garrisonIds = ids.filter { id -> enemies.any { it.id == id && it.alive } }.toImmutableList())
     }
     if (liveEncounterMembers(tag) > 0) return
     endEncounter(tag, despawn = false)
@@ -230,9 +219,7 @@ private fun MutableGameState.engageRoom(current: DungeonState, room: Int) {
         positions = plan.positions,
     )
     if (!spawnEncounter(request)) return
-    val ids = ArrayList<Int>(members.size)
-    for (index in enemies.indices) if (enemies[index].ownerTag == tag) ids += enemies[index].id
-    dungeon = current.copy(engagedRoom = room, engaged = true, garrisonIds = ids.toImmutableList(), garrisonTotal = ids.size)
+    dungeon = current.copy(engagedRoom = room, engaged = true)
     applyStructureDoors(current.structureId)
     val guardian = members.any { it.profile.rank == EnemyRank.MINI_BOSS }
     message = (if (guardian) StructureNotice.GUARDIAN_AWAKENS else StructureNotice.DOORS_SEALED).key
@@ -264,7 +251,7 @@ private fun MutableGameState.clearRoom(current: DungeonState, room: Int) {
         val lock = doors[index].lockRooms
         if (lock != 0 && current.clearedRooms and lock != lock && cleared and lock == lock) locksOpened = true
     }
-    val next = current.copy(clearedRooms = cleared, engagedRoom = -1, garrisonIds = immutableListOf())
+    val next = current.copy(clearedRooms = cleared, engagedRoom = -1)
     dungeon = next
     if (room == template.finalRoom) {
         finishStructure(next, template)
@@ -293,7 +280,7 @@ private fun MutableGameState.finishStructure(current: DungeonState, template: St
         message = StructureNotice.STRUCTURE_CLEARED.key
     }
     messageTime = 2.5f
-    markSpent(current.structureId, SPENT_FLAG)
+    markSpent(current.structureId)
     dungeon = null
     applyStructureDoors(current.structureId)
 }
@@ -483,8 +470,8 @@ private fun centerPoint(room: StructureRoom, wallHalfThickness: Float, radius: F
     val uy = if (distance > 0.001f) dy / distance else 0f
     val inset = radius + wallHalfThickness + WALL_POINT_GAP
     return steeringVector(
-        spanClamp(coreX + ux * CENTER_CORE_DISTANCE, room.minX + inset, room.maxX - inset),
-        spanClamp(coreY + uy * CENTER_CORE_DISTANCE, room.minY + inset, room.maxY - inset),
+        clampIntoSpan(coreX + ux * CENTER_CORE_DISTANCE, room.minX + inset, room.maxX - inset),
+        clampIntoSpan(coreY + uy * CENTER_CORE_DISTANCE, room.minY + inset, room.maxY - inset),
     )
 }
 
@@ -533,9 +520,6 @@ private fun latticeCoordinate(low: Float, high: Float, index: Int): Float {
         else -> high
     }
 }
-
-private fun spanClamp(value: Float, low: Float, high: Float): Float =
-    if (low > high) (low + high) * 0.5f else value.coerceIn(low, high)
 
 /**
  * The template-space [point] placed in the world, nudged by [step] along ±y then ±x (template space) to the first

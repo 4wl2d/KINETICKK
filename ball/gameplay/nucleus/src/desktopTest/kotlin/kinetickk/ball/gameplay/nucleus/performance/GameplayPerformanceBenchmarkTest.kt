@@ -324,7 +324,7 @@ class GameplayPerformanceBenchmarkTest {
                 listOf(Wall(1L shl 63, WallKind.SOLID, 600f, -200f, 1_200f, -200f, 24f)),
                 emptyList(),
             ) },
-            { dungeon = DungeonState(1L shl 63, StructureTemplateId.VAULT, 0, 900f, 0f, enteredAt = 1f) },
+            { dungeon = DungeonState(1L shl 63, StructureTemplateId.VAULT, 0, 900f, 0f) },
             { spentStructureIds = listOf(1L) },
             { lastAnnouncedStructureId = 1L },
             { worldLayer = WorldLayer.ZENITH },
