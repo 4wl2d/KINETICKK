@@ -97,8 +97,12 @@ object ContentBounds {
     const val MAX_STRUCTURE_WALLS: Int = MAX_STRUCTURES_IN_WINDOW * MAX_STRUCTURE_TEMPLATE_WALLS
     /** Structure signals shown as edge markers at once. */
     const val MAX_STRUCTURE_SIGNALS: Int = 4
-    /** Spent structure ids a run remembers. */
-    const val MAX_SPENT_STRUCTURES: Int = 32
+    /** Spent structure ids a run remembers for the whole run; a full set counts every structure as spent. */
+    const val MAX_SPENT_STRUCTURES: Int = 128
+    /** Totem chests waiting at once; a further chest is salvaged. */
+    const val MAX_TOTEM_CHESTS: Int = 4
+    /** Charges of one Totem chest (and the size of `TotemChestPolicy.chargeWeights`). */
+    const val MAX_TOTEM_CHEST_CHARGES: Int = 3
 
     /** Halo rings of one Zenith course. */
     const val MAX_HALO_RINGS: Int = 12

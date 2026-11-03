@@ -232,8 +232,10 @@ object EnemyNotices {
     const val SECRET_BOSS_DEFEATED: String = "SECRET BOSS DEFEATED"
     const val CARTOGRAPHER_ENRAGES: String = "THE CARTOGRAPHER ENRAGES"
     const val ANTECEDENT_ENRAGES: String = "THE ANTECEDENT ENRAGES"
+    /** Title of the weapon amplification every Elite-class kill grants (`ELITE RESONANCE // LEVEL n`). */
+    const val ELITE_RESONANCE: String = "ELITE RESONANCE"
     val all: ImmutableList<String> = listOf(
-        SECRET_SIGNAL, SECRET_SIGNAL_LOST, SECRET_BOSS_DEFEATED, CARTOGRAPHER_ENRAGES, ANTECEDENT_ENRAGES,
+        SECRET_SIGNAL, SECRET_SIGNAL_LOST, SECRET_BOSS_DEFEATED, CARTOGRAPHER_ENRAGES, ANTECEDENT_ENRAGES, ELITE_RESONANCE,
     ).toImmutableList()
 }
 
@@ -282,7 +284,7 @@ fun defaultEnemyDefinitions(): ImmutableList<EnemyDefinition> = listOf(
         habitatWeights = HabitatWeights(structure = 5f, nadir = 3f),
     ),
     EnemyDefinition(
-        EnemyType.ELITE, "Elite", "Carries an elemental aspect, fires radial volleys and drops a Key and a Relic.",
+        EnemyType.ELITE, "Elite", "Carries an elemental aspect, fires radial volleys and drops a Key and a Relic; its fall amplifies your weapon.",
         threat = 4, timeGateSeconds = 38f, minimumRebirth = 0, weight = 0f, rank = EnemyRank.ELITE,
         habitats = EnemyHabitat.ALL,
     ),

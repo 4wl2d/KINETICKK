@@ -48,8 +48,8 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Keeps its range, pulls the Core into its well and fires radial bursts." to
         "Держит дистанцию, затягивает ядро в свой колодец и стреляет кольцевыми залпами.",
     "Sways forward and breaks into two fragments when destroyed." to "Раскачиваясь, идёт вперёд и при уничтожении распадается на два осколка.",
-    "Carries an elemental aspect, fires radial volleys and drops a Key and a Relic." to
-        "Несёт стихийный аспект, стреляет кольцевыми залпами и оставляет ключ и реликвию.",
+    "Carries an elemental aspect, fires radial volleys and drops a Key and a Relic; its fall amplifies your weapon." to
+        "Несёт стихийный аспект, стреляет кольцевыми залпами и оставляет ключ и реликвию; его гибель усиливает ваше оружие.",
     "The final boss. It shifts between phases and hardens against your build." to
         "Финальный босс. Переходит между фазами и закаляется против вашей сборки.",
     "Arrives in packs of six to ten and flocks around the Core." to "Прилетает стаями от шести до десяти и кружит вокруг ядра.",
@@ -352,6 +352,7 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "CORE FRACTURED" to "ЯДРО РАЗРУШЕНО",
     "OBSTACLE COLLISION" to "СТОЛКНОВЕНИЕ С ПРЕПЯТСТВИЕМ",
     "ELITE KEY ACQUIRED" to "ПОЛУЧЕН ЭЛИТНЫЙ КЛЮЧ",
+    "ELITE RESONANCE" to "РЕЗОНАНС ЭЛИТЫ",
     "RELIC RESONANCE" to "РЕЗОНАНС РЕЛИКВИИ",
     "TOTEM DETECTED" to "ОБНАРУЖЕН ТОТЕМ",
     "ELITE SIGNAL" to "ЭЛИТНЫЙ СИГНАЛ",
