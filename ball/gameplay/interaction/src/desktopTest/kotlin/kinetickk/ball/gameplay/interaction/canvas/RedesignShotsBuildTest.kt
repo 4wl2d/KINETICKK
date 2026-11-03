@@ -169,7 +169,7 @@ class RedesignShotsBuildTest {
     }
 
     /** Enemies around the Core showing every status mark, and the build that set their thresholds. */
-    private fun statusWorld(width: Int, height: Int): GameplayRenderModel {
+    internal fun statusWorld(width: Int, height: Int): GameplayRenderModel {
         val base = hudTestModel(width.toFloat(), height.toFloat())
         val statuses = listOf(
             EnemyType.DRIFTER to (3 shl 0),
@@ -198,7 +198,7 @@ class RedesignShotsBuildTest {
         )
     }
 
-    private fun statusFx(width: Int, height: Int): VisualFxProjection {
+    internal fun statusFx(width: Int, height: Int): VisualFxProjection {
         val s = minOf(width, height) / 810f
         return VisualFxProjection.EMPTY.copy(
             elementBursts = ((0 until 5).map { element ->
@@ -216,7 +216,7 @@ class RedesignShotsBuildTest {
     }
 
     /** Ninety enemies on screen: ordinary ones drop their patterns for a flat tint. */
-    private fun crowdWorld(width: Int, height: Int): GameplayRenderModel {
+    internal fun crowdWorld(width: Int, height: Int): GameplayRenderModel {
         val base = hudTestModel(width.toFloat(), height.toFloat())
         val enemies = (0 until 90).map { index ->
             val x = ((index % 15) - 7f) * width / 16f
@@ -230,7 +230,7 @@ class RedesignShotsBuildTest {
     }
 
     /** The HUD with four gauge relics, a lingering replaced relic, an elite carrying statuses and Burnout. */
-    private fun hudBuild(width: Int, height: Int): GameplayRenderModel {
+    internal fun hudBuild(width: Int, height: Int): GameplayRenderModel {
         val base = hudTestModel(width.toFloat(), height.toFloat())
         val sx = width / 1440f
         val sy = height / 810f
@@ -250,7 +250,7 @@ class RedesignShotsBuildTest {
     }
 
     // The reducer's rank order, lowest first: an acquisition, the first Breaks, a discovery.
-    private fun hudFx(): VisualFxProjection = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(
+    internal fun hudFx(): VisualFxProjection = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(
         BuildNotificationProjection("Cinder Ram", immutableListOf("Impact damage +0.05", "+ Ram II", "+ Thermal I"), 5.2f),
         BuildNotificationProjection("BREAK", immutableListOf("+ Ignite", "+ Freeze"), 3f, BuildNoticeKind.BREAK),
         BuildNotificationProjection("REACTION DISCOVERED", immutableListOf("+ Thermal Shock"), 5.8f, BuildNoticeKind.DISCOVERY),
@@ -260,7 +260,7 @@ class RedesignShotsBuildTest {
      * A paused run with a full build: brackets, tags, elements, reactions (one met), items and costs, and two active items
      * (Frost Line III in Z, Solar Flare I in X) leading the item grid with their keys.
      */
-    private fun pauseBuild(width: Int, height: Int, language: AppLanguage, textScale: Float): GameplayRenderModel =
+    internal fun pauseBuild(width: Int, height: Int, language: AppLanguage, textScale: Float): GameplayRenderModel =
         rewardFixtureModel(
             phase = GamePhase.PAUSED, language = language, width = width.toFloat(), height = height.toFloat(), textScale = textScale,
             content = rewardActiveFixtureContent,

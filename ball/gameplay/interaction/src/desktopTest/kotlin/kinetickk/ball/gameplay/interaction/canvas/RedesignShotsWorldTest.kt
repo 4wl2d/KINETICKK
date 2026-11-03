@@ -343,7 +343,7 @@ class RedesignShotsWorldTest {
         ImageIO.write(image, "png", file)
     }
 
-    private class Scene(
+    internal class Scene(
         val name: String,
         val roles: KkRolePalette = KkRolePalette.Default,
         val time: Float = 3f,
@@ -353,7 +353,7 @@ class RedesignShotsWorldTest {
         val textScale: Float = 1.25f,
     )
 
-    private fun scenes(): List<Scene> = buildList {
+    internal fun scenes(): List<Scene> = buildList {
         add(Scene("cruise", model = { w, h -> cruise(w, h) }, fx = ::cruiseFx))
         add(Scene("mono", roles = KkRolePalette.Mono, model = { w, h -> cruise(w, h) }, fx = ::cruiseFx))
         add(Scene("protan", roles = KkRolePalette.Protan, model = { w, h -> cruise(w, h) }, fx = ::cruiseFx))
@@ -1172,7 +1172,7 @@ class RedesignShotsWorldTest {
         )
     }
 
-    private object Fonts {
+    internal object Fonts {
         private val directory: File by lazy {
             generateSequence(File("").absoluteFile) { it.parentFile }
                 .map { File(it, "foundation/design/src/commonMain/composeResources/font") }

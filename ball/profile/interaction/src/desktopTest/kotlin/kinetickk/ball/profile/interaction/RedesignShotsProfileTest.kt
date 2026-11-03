@@ -115,7 +115,7 @@ class RedesignShotsProfileTest {
 
     private val roster = setOf(CoreShape.ORB, CoreShape.PRISM, CoreShape.STAR)
 
-    private fun characters(matter: Long = 1_284L, upgrades: PermanentUpgrades = characterLevels(prism = 3, star = 10)) =
+    internal fun characters(matter: Long = 1_284L, upgrades: PermanentUpgrades = characterLevels(prism = 3, star = 10)) =
         with(HangarShotAccess) { hangarProjection(unlocked = roster).model(matter, upgrades) }
 
     /**
@@ -262,7 +262,7 @@ class RedesignShotsProfileTest {
         }
     }
 
-    private fun rebirth(target: Int, canAdvance: Boolean = true) = RebirthRenderModel(
+    internal fun rebirth(target: Int, canAdvance: Boolean = true) = RebirthRenderModel(
         current = rebirthProfile((target - 1).coerceAtLeast(0)),
         focus = rebirthProfile(target.coerceAtMost(10)),
         highestCleared = target - 1,

@@ -131,7 +131,7 @@ class RedesignShotsHudTest {
         }
     }
 
-    private class Scene(
+    internal class Scene(
         val model: GameplayRenderModel,
         val fx: VisualFxProjection,
         val memory: HudPresentationMemory,
@@ -140,7 +140,7 @@ class RedesignShotsHudTest {
         val controls: kinetickk.ball.gameplay.interaction.input.RunningControlPressLog? = null,
     )
 
-    private enum class Shot {
+    internal enum class Shot {
         CRUISE, DASH, OVERHEAT, POLARITY, OVERDRIVE, CRITICAL, ELITE, ARCHITECT, TRIAL, TRIAL_INFO, FEED, FEED_ANOMALY,
         // Review states: interleaved synergies, off-screen markers with a boss alive, an orbit trial near the boss row.
         SYNERGY, ELITE_MARKERS, ARCHITECT_TRIAL,
@@ -208,7 +208,7 @@ class RedesignShotsHudTest {
         else -> Values(640f to 470f, 905f to 300f, 412f, 28f, 0.86f, 58f, 142f, 40f, 12, 0.62f, 462f, 1, 14)
     }
 
-    private fun scene(shot: Shot, base: GameplayRenderModel, width: Int, height: Int): Scene {
+    internal fun scene(shot: Shot, base: GameplayRenderModel, width: Int, height: Int): Scene {
         val v = values(shot)
         val sx = width / 1440f
         val sy = height / 810f
@@ -430,7 +430,7 @@ class RedesignShotsHudTest {
         return constructor.newInstance(*args) as GameplayRenderModel
     }
 
-    private fun baseModel(width: Int, height: Int): GameplayRenderModel {
+    internal fun baseModel(width: Int, height: Int): GameplayRenderModel {
         val content = shotContent()
         val profile = PlayerProfile(preferences = PlayerPreferences(language = AppLanguage.English))
         val initial = GameplayState.initial(RunId(1), content)
@@ -450,7 +450,7 @@ class RedesignShotsHudTest {
         return requireNotNull(GameplayNucleus.renderSnapshot(resized).renderModel)
     }
 
-    private val typography: InterfaceTypography by lazy {
+    internal val typography: InterfaceTypography by lazy {
         val directory = File(root, "foundation/design/src/commonMain/composeResources/font")
         fun font(name: String, weight: FontWeight, style: FontStyle = FontStyle.Normal) = Font(File(directory, "$name.ttf"), weight, style)
         val cond = FontFamily(

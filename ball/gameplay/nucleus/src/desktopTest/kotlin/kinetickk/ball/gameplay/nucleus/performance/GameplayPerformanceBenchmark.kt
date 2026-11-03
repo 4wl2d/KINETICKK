@@ -708,7 +708,7 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
     }
 }
 
-private fun newRunningState(seed: Int, content: GameplayContentSnapshot = canonicalGameplayContent): MutableGameState =
+internal fun newRunningState(seed: Int, content: GameplayContentSnapshot = canonicalGameplayContent): MutableGameState =
     MutableGameState(content = content, seed = seed).apply {
         resize(1_280f, 720f, 1f)
         startRun()
