@@ -87,7 +87,8 @@ internal data class DungeonAttempt(
  *   side of every door centre. Held from outside the walls (a notch of the footprint), it first leaves the footprint
  *   and rounds it to the entrance.
  * - After the outcome the bot flies as before (footprint avoidance on), opening a waiting Totem chest while it holds
- *   a Key.
+ *   a Key. Its cursor picks up where the pilot left the singularity; a stale cursor had swung across the Core's path
+ *   and ended runs on singularity contact moments after their clear.
  * - Unstick ([PilotStallBreaker]), in every phase, after 3 s of crawling (its 1 s speed average below 150 u/s): when a
  *   wall of at most [ROUND_WALL_LENGTH] (a pillar, the Foundry's conveyor fin) stands between the Core and what it
  *   chases (its target, its waypoint, or the nearest enemy while the bot steers), it flies round that wall's box by
@@ -130,7 +131,8 @@ internal class DungeonPilot(
     private val stall = PilotStallBreaker()
     private var chaseX = 0f
     private var chaseY = 0f
-    private var escaped = false
+    /** True after a frame the pilot steered itself (seek, dungeon, a way out): the bot's cursor resyncs on handover. */
+    private var pilotSteered = false
     private var rounding = false
     private val wallBox = FloatArray(4)
 
@@ -140,14 +142,16 @@ internal class DungeonPilot(
         if (unstick(s)) return
         when {
             attempt != null -> botControl(s)
-            holding && held != null && held.structureId == heldId -> dungeonControl(s, held)
-            s.elapsed >= seekFrom && s.elapsed < s.content.tempo.bossAtSeconds - SEEK_LEAD -> seekControl(s)
+            holding && held != null && held.structureId == heldId -> dungeonControl(s, held).also { pilotSteered = true }
+            s.elapsed >= seekFrom && s.elapsed < s.content.tempo.bossAtSeconds - SEEK_LEAD -> seekControl(s).also { pilotSteered = true }
             else -> botControl(s)
         }
-        escaped = false
     }
 
-    /** The bot's steering, chasing what it chases (the nearest enemy); its cursor resumes from where a way out left it. */
+    /**
+     * The bot's steering, chasing what it chases (the nearest enemy). Its cursor resumes from where the pilot's own
+     * steering left the singularity, so the handover after the attempt never swings a stale cursor across the Core's path.
+     */
     private fun botControl(s: MutableGameState) {
         var best = Float.POSITIVE_INFINITY
         for (enemy in s.enemies) {
@@ -159,8 +163,9 @@ internal class DungeonPilot(
                 chaseY = enemy.y
             }
         }
-        if (escaped) bot.syncCursor(s)
+        if (pilotSteered) bot.syncCursor(s)
         bot.control(s)
+        pilotSteered = false
     }
 
     /**
@@ -246,7 +251,7 @@ internal class DungeonPilot(
         steer(s, dodged.first, dodged.second, brakeAbove = INSIDE_BRAKE_ON, releaseBelow = INSIDE_BRAKE_OFF)
         dashOnThreat(s)
         bot.castSkills(s)
-        escaped = true
+        pilotSteered = true
     }
 
     /** The bot's choices: it opts into nothing a choice offers and builds as the bot does. */
