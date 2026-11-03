@@ -7,6 +7,7 @@ import kinetickk.ball.content.api.StructureTemplate
 import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WallAxis
 import kinetickk.ball.content.api.WorldDiscovery
+import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.content.api.rotateQuarterX
 import kinetickk.ball.content.api.rotateQuarterY
 import kinetickk.ball.gameplay.nucleus.model.Pickup
@@ -84,11 +85,15 @@ class DungeonTemplateTourTest {
     }
 
     private fun tourEveryRotation(id: StructureTemplateId) {
+        // Placement is pure: the policy and the seed alone say what each cell holds, so only a tour builds a run.
+        val policy = forcedStructureContent(id).structures
         val seen = BooleanArray(4)
         var cellX = FIRST_CELL_X
         while (!seen.all { it }) {
             check(cellX < FIRST_CELL_X + MAX_CELL_SCAN) { "no cell of $id found for every rotation" }
-            val placement = tourState(id).structureAtForTesting(cellX, TOUR_CELL_Y)
+            val placement = requireNotNull(placeStructure(policy, TOUR_SEED, WorldLayer.BASE, cellX, TOUR_CELL_Y)) {
+                "No structure in cell $cellX, $TOUR_CELL_Y"
+            }
             if (!seen[placement.rotation]) {
                 seen[placement.rotation] = true
                 tour(id, cellX)
