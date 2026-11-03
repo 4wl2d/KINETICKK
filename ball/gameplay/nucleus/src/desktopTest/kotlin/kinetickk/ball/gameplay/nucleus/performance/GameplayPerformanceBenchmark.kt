@@ -91,6 +91,9 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kinetickk.ball.gameplay.nucleus.simulation.pendingActiveItemId
 import kinetickk.ball.gameplay.nucleus.simulation.pendingActiveReborn
+import kinetickk.ball.gameplay.nucleus.simulation.skillBufferTime
+import kinetickk.ball.gameplay.nucleus.simulation.apexBufferTime
+import kinetickk.ball.gameplay.nucleus.simulation.skillBufferMask
 
 internal const val GAMEPLAY_BENCHMARK_SUITE_VERSION = "gameplay-core-v6"
 private const val DEFAULT_SEED = 731_991

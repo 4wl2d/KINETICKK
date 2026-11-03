@@ -75,6 +75,9 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kinetickk.ball.gameplay.nucleus.simulation.pendingActiveItemId
 import kinetickk.ball.gameplay.nucleus.simulation.pendingActiveReborn
+import kinetickk.ball.gameplay.nucleus.simulation.skillBufferTime
+import kinetickk.ball.gameplay.nucleus.simulation.apexBufferTime
+import kinetickk.ball.gameplay.nucleus.simulation.skillBufferMask
 
 class GameplayPerformanceBenchmarkTest {
     @Test

@@ -1361,8 +1361,8 @@ private class SeekFuzzPilot(private val bot: NoPoiBot) : FuzzPilot {
  * `holder.field`): never read across steps or casts, so never copied.
  */
 internal val FuzzScratchFields: Set<String> = setOf(
-    "skillScratch", "castSlot", "castHits", "castAttunedStacks", "castPrimaryId", "castBossHitFirst", "castBossHitSecond",
-    "scratch.chainScratch", "scratch.chainDepth", "scratch.shatteringEnemyId",
+    "skillCast.skillScratch", "skillCast.castSlot", "skillCast.castHits", "skillCast.castAttunedStacks",
+    "skillCast.castPrimaryId", "skillCast.castBossHitFirst", "skillCast.castBossHitSecond", "scratch.chainScratch", "scratch.chainDepth", "scratch.shatteringEnemyId",
 )
 
 private fun isGameClass(type: Class<*>): Boolean = type.name.startsWith("kinetickk.")

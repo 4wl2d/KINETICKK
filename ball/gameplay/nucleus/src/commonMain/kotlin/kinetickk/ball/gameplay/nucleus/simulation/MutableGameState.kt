@@ -45,6 +45,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.structures.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
+import kinetickk.ball.gameplay.nucleus.simulation.skills.SkillCastState
 
 
 /**
@@ -103,6 +104,8 @@ internal class MutableGameState(
     internal val scratch: StepScratch = StepScratch(copySource?.scratch)
     /** Choices waiting to open. */
     internal val pendingChoice: PendingChoiceState = PendingChoiceState(copySource?.pendingChoice)
+    /** Skill and Apex input buffers and the running cast's scratch. */
+    internal val skillCast: SkillCastState = SkillCastState(copySource?.skillCast)
 
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
@@ -247,24 +250,10 @@ internal class MutableGameState(
     internal var markDispatches: Int = copySource?.markDispatches ?: 0
     /** Hostile bolts erased this run (a run statistic). */
     internal var shotsErased: Long = copySource?.shotsErased ?: 0L
-    // Skill and Apex input: buffered slot requests and their age, the buffered Apex request.
-    internal var skillBufferMask: Int = copySource?.skillBufferMask ?: 0
-    internal var skillBufferTime: Float = copySource?.skillBufferTime ?: 0f
-    internal var apexBufferTime: Float = copySource?.apexBufferTime ?: 0f
     /** What the skill slots hold: the owned active items' effects; immutable, replaced when an active item binds, ranks or is replaced. */
     internal var skillLoadout: SkillLoadout = copySource?.skillLoadout ?: SkillLoadout.EMPTY
     /** Skill and Apex timing; a deep copy forks it. */
     internal var skillRuntime: SkillRuntime = copySource?.skillRuntime?.fork() ?: SkillRuntime()
-    /** Candidate-private scratch of one skill cast (picked targets); never read across casts. */
-    internal val skillScratch: IntArray = IntArray(MAX_SKILL_SCRATCH)
-    /** The slot casting right now, -1 between casts; the cast's damaged-enemy count and the bosses it struck. */
-    internal var castSlot: Int = -1
-    internal var castHits: Int = 0
-    /** Enemies the running element-less cast attuned (SkillAttunement). */
-    internal var castAttunedStacks: Int = 0
-    internal var castPrimaryId: Int = -1
-    internal var castBossHitFirst: Int = -1
-    internal var castBossHitSecond: Int = -1
     internal var reactionTokens: Float = copySource?.reactionTokens ?: REACTION_BURST
     internal var breakTokens: Float = copySource?.breakTokens ?: BREAK_BURST
     internal var discoveredReactionMask: Int = copySource?.discoveredReactionMask

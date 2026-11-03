@@ -48,3 +48,44 @@ internal var MutableGameState.pendingActiveItemId: Int?
 internal var MutableGameState.pendingActiveReborn: Boolean
     get() = pendingChoice.pendingActiveReborn
     set(value) { pendingChoice.pendingActiveReborn = value }
+
+// SkillCastState
+
+internal var MutableGameState.skillBufferMask: Int
+    get() = skillCast.skillBufferMask
+    set(value) { skillCast.skillBufferMask = value }
+
+internal var MutableGameState.skillBufferTime: Float
+    get() = skillCast.skillBufferTime
+    set(value) { skillCast.skillBufferTime = value }
+
+internal var MutableGameState.apexBufferTime: Float
+    get() = skillCast.apexBufferTime
+    set(value) { skillCast.apexBufferTime = value }
+
+internal val MutableGameState.skillScratch: IntArray
+    get() = skillCast.skillScratch
+
+internal var MutableGameState.castSlot: Int
+    get() = skillCast.castSlot
+    set(value) { skillCast.castSlot = value }
+
+internal var MutableGameState.castHits: Int
+    get() = skillCast.castHits
+    set(value) { skillCast.castHits = value }
+
+internal var MutableGameState.castAttunedStacks: Int
+    get() = skillCast.castAttunedStacks
+    set(value) { skillCast.castAttunedStacks = value }
+
+internal var MutableGameState.castPrimaryId: Int
+    get() = skillCast.castPrimaryId
+    set(value) { skillCast.castPrimaryId = value }
+
+internal var MutableGameState.castBossHitFirst: Int
+    get() = skillCast.castBossHitFirst
+    set(value) { skillCast.castBossHitFirst = value }
+
+internal var MutableGameState.castBossHitSecond: Int
+    get() = skillCast.castBossHitSecond
+    set(value) { skillCast.castBossHitSecond = value }
