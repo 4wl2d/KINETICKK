@@ -3,16 +3,12 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.DirectorPersonalityId
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.GameplayContentSnapshot
-import kinetickk.ball.content.api.OmenId
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicId
-import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
@@ -45,6 +41,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.director.SpawnDirectorState
 import kinetickk.ball.gameplay.nucleus.simulation.flight.CoreStasisState
 import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 import kinetickk.ball.gameplay.nucleus.simulation.sites.SiteRunState
+import kinetickk.ball.gameplay.nucleus.simulation.variety.VarietyRunState
 
 /**
  * Reducer-owned simulation state. Each field declares its initial value and its copy from [copySource] together,
@@ -160,6 +157,9 @@ internal class MutableGameState(
     /** Sites, directed rewards and run secrets. */
     internal val siteRun: SiteRunState = SiteRunState(copySource?.siteRun)
 
+    /** Omen, mutators, personality, world events and signals. */
+    internal val varietyRun: VarietyRunState = VarietyRunState(copySource?.varietyRun)
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -243,29 +243,6 @@ internal class MutableGameState(
     /** Window kinds draw from their own stream, so sites never shift offers, spawns or crits. */
     internal var siteRandom: CloneableXorWowRandom = copySource?.siteRandom?.copy()
         ?: CloneableXorWowRandom(seed xor SITE_SEED_SALT)
-    internal var omenPending: Boolean = copySource?.omenPending ?: false
-    internal var runOmen: OmenId? = copySource?.runOmen
-    /** Rebirth mutators a run modifier added (bit per ordinal), on top of the tier's own. */
-    internal var runMutatorMask: Int = copySource?.runMutatorMask ?: 0
-    internal var directorPersonality: DirectorPersonalityId? = copySource?.directorPersonality
-    internal var featuredAspect: Int = copySource?.featuredAspect ?: -1
-    internal var surgeIndex: Int = copySource?.surgeIndex ?: 0
-    internal var surgeThemeType: Int = copySource?.surgeThemeType ?: -1
-    internal var varietyAnnouncement: Int = copySource?.varietyAnnouncement ?: 0
-    internal var keynoteTag: BuildTag? = copySource?.keynoteTag
-    internal var keynoteElement: StatusElement? = copySource?.keynoteElement
-    /** At most [ContentBounds.MAX_WORLD_EVENTS_PER_RUN] plans. */
-    internal var worldEventPlans: ImmutableList<WorldEventPlan> = copySource?.worldEventPlans ?: immutableListOf()
-    internal var nextWorldEvent: Int = copySource?.nextWorldEvent ?: 0
-    internal var worldEvent: WorldEventProjection? = copySource?.worldEvent
-    internal var worldEventPulse: Int = copySource?.worldEventPulse ?: 0
-    internal var worldEventNextPulseAt: Float = copySource?.worldEventNextPulseAt ?: 0f
-    internal var eventSignals: ImmutableList<EventSignalProjection> = copySource?.eventSignals ?: immutableListOf()
-    internal var nextSignalSlot: Int = copySource?.nextSignalSlot ?: 0
-    internal var signalsSpawned: Int = copySource?.signalsSpawned ?: 0
-    internal var signalsEngaged: Int = copySource?.signalsEngaged ?: 0
-    /** At most [ContentBounds.MAX_PENDING_SIGNAL_PROMPTS] prompts. */
-    internal var pendingSignalPrompts: ImmutableList<SignalPrompt> = copySource?.pendingSignalPrompts ?: immutableListOf()
 
     internal var nextEntityId: Int = copySource?.nextEntityId ?: 1
     /** Seed of this run; obstacle chunks hash it with their absolute chunk. */
@@ -377,8 +354,6 @@ internal class MutableGameState(
     var rebirthRank: Int = copySource?.rebirthRank
         ?: max(activeRebirthProfile.tier, bootstrapProgress?.rebirthProgress?.rank ?: activeRebirthProfile.tier)
         internal set
-    /** Volatile Remains bursts waiting to detonate (Rebirth R4), at most [MAX_VOLATILE_BURSTS]. */
-    internal var volatileBursts: ImmutableList<VolatileBurstProjection> = copySource?.volatileBursts ?: immutableListOf()
     var screenWidth: Float = copySource?.screenWidth ?: 1280f
         internal set
     var screenHeight: Float = copySource?.screenHeight ?: 720f
