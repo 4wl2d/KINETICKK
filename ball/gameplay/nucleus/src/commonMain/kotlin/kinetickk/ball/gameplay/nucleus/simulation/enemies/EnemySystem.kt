@@ -81,115 +81,13 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
             EnemyType.PYRE_HERALD -> updatePyreHerald(enemy, dx, dy, distance, cadence, delta)
             EnemyType.CARTOGRAPHER -> updateCartographer(enemy, dx, dy, distance, cadence, delta)
             EnemyType.ANTECEDENT -> updateAntecedent(enemy, dx, dy, distance, cadence, delta)
-            EnemyType.SHOOTER -> {
-                val desired = if (distance > 340f) 78f else if (distance < 250f) -72f else 0f
-                val tangent = if (enemy.id % 2 == 0) 1f else -1f
-                steerEnemy(
-                    enemy,
-                    dx / distance * desired - dy / distance * 62f * tangent,
-                    dy / distance * desired + dx / distance * 62f * tangent,
-                    2.4f,
-                    delta,
-                )
-                enemy.actionTimer -= cadence
-                if (enemy.actionTimer <= 0f && distance < 760f) {
-                    enemy.actionTimer = 1.7f
-                    if (canAttack(enemy)) {
-                        fireSpread(
-                            enemy.x, enemy.y, atan2(dy, dx),
-                            if (content.tempo.denseAttacks(threatElapsed)) 3 else 1, 0.14f, 220f, shotDamage(enemy),
-                        )
-                    }
-                }
-            }
+            EnemyType.SHOOTER -> updateShooter(enemy, dx, dy, distance, cadence, delta)
             EnemyType.CHARGER -> updateCharger(enemy, dx, dy, distance, cadence, delta)
-            EnemyType.INTERCEPTOR -> {
-                val leadTime = clamp(distance / 650f, 0.28f, 0.85f)
-                val leadX = coreX + velocityX * leadTime - enemy.x
-                val leadY = coreY + velocityY * leadTime - enemy.y
-                val leadDistance = max(1f, length(leadX, leadY))
-                val interceptSpeed = min(360f, 145f + speed * 0.13f)
-                steerEnemy(
-                    enemy,
-                    leadX / leadDistance * interceptSpeed,
-                    leadY / leadDistance * interceptSpeed,
-                    4.2f,
-                    delta,
-                )
-                enemy.actionTimer -= cadence
-                if (enemy.actionTimer <= 0f && distance < 720f) {
-                    enemy.actionTimer = 2.4f
-                    if (canAttack(enemy)) {
-                        val interceptBoost = 175f * rebirthProfile.enemySpeedMultiplier
-                        enemy.vx += leadX / leadDistance * interceptBoost
-                        enemy.vy += leadY / leadDistance * interceptBoost
-                    }
-                }
-            }
-            EnemyType.WEAVER -> {
-                val weave = sin(elapsed * 2.7f + enemy.id * 0.91f)
-                val tangentX = -dy / distance
-                val tangentY = dx / distance
-                steerEnemy(
-                    enemy,
-                    dx / distance * 92f + tangentX * weave * 175f,
-                    dy / distance * 92f + tangentY * weave * 175f,
-                    2.8f,
-                    delta,
-                )
-                enemy.actionTimer -= cadence
-                if (enemy.actionTimer <= 0f && distance < 700f) {
-                    enemy.actionTimer = 1.85f
-                    if (canAttack(enemy)) {
-                        fireProjectileWall(
-                            enemy.x,
-                            enemy.y,
-                            atan2(dy, dx),
-                            if (content.tempo.denseAttacks(threatElapsed)) 5 else 3,
-                            34f,
-                            245f,
-                            shotDamage(enemy),
-                        )
-                    }
-                }
-            }
-            EnemyType.WARDEN -> {
-                val desired = if (distance > 330f) 64f else if (distance < 250f) -58f else 0f
-                val tangent = if (enemy.id % 2 == 0) 1f else -1f
-                steerEnemy(
-                    enemy,
-                    dx / distance * desired - dy / distance * 28f * tangent,
-                    dy / distance * desired + dx / distance * 28f * tangent,
-                    1.55f,
-                    delta,
-                )
-                applyGravityWell(enemy, dx, dy, distance, delta, strength = 1f)
-                enemy.actionTimer -= cadence
-                if (enemy.actionTimer <= 0f && distance < 780f) {
-                    enemy.actionTimer = 2.65f
-                    if (canAttack(enemy)) fireRadial(enemy.x, enemy.y, 8, 132f, elapsed * 0.35f, shotDamage(enemy))
-                }
-            }
-            EnemyType.SPLITTER -> {
-                val sway = sin(elapsed * 1.6f + enemy.id) * 44f
-                steerEnemy(
-                    enemy,
-                    dx / distance * 58f - dy / distance * sway,
-                    dy / distance * 58f + dx / distance * sway,
-                    1.35f,
-                    delta,
-                )
-            }
-            EnemyType.ELITE -> {
-                updateEliteAffix(enemy, dx, dy, distance, delta)
-                val tangent = if (enemy.id % 2 == 0) 1f else -1f
-                steerEnemy(enemy, dx / distance * 52f - dy / distance * 45f * tangent, dy / distance * 52f + dx / distance * 45f * tangent, 1.3f, delta)
-                enemy.actionTimer -= cadence
-                if (enemy.actionTimer <= 0f) {
-                    enemy.actionTimer = 1.18f
-                    if (canAttack(enemy)) fireRadial(enemy.x, enemy.y, 10, 165f, elapsed * 0.2f, shotDamage(enemy))
-                }
-            }
+            EnemyType.INTERCEPTOR -> updateInterceptor(enemy, distance, cadence, delta)
+            EnemyType.WEAVER -> updateWeaver(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.WARDEN -> updateWarden(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.SPLITTER -> updateSplitter(enemy, dx, dy, distance, delta)
+            EnemyType.ELITE -> updateElite(enemy, dx, dy, distance, cadence, delta)
             EnemyType.ARCHITECT -> updateArchitect(enemy, dx, dy, distance, delta * motion)
             EnemyType.SWARMLING -> updateSwarmling(enemy, dx, dy, distance, delta)
             EnemyType.BOMBER -> updateBomber(enemy, dx, dy, distance, delta)
@@ -208,6 +106,129 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
     resolveEnemyObstacles()
     // Detonated Bombers leave without a kill.
     enemies.removeMatchingStable { enemy -> enemy.dead }
+    leashFarEnemies()
+    updateEncounters()
+}
+
+private fun MutableGameState.updateShooter(enemy: Enemy, dx: Float, dy: Float, distance: Float, cadence: Float, delta: Float) {
+    val desired = if (distance > 340f) 78f else if (distance < 250f) -72f else 0f
+    val tangent = if (enemy.id % 2 == 0) 1f else -1f
+    steerEnemy(
+        enemy,
+        dx / distance * desired - dy / distance * 62f * tangent,
+        dy / distance * desired + dx / distance * 62f * tangent,
+        2.4f,
+        delta,
+    )
+    enemy.actionTimer -= cadence
+    if (enemy.actionTimer <= 0f && distance < 760f) {
+        enemy.actionTimer = 1.7f
+        if (canAttack(enemy)) {
+            fireSpread(
+                enemy.x, enemy.y, atan2(dy, dx),
+                if (content.tempo.denseAttacks(threatElapsed)) 3 else 1, 0.14f, 220f, shotDamage(enemy),
+            )
+        }
+    }
+}
+
+private fun MutableGameState.updateInterceptor(enemy: Enemy, distance: Float, cadence: Float, delta: Float) {
+    val leadTime = clamp(distance / 650f, 0.28f, 0.85f)
+    val leadX = coreX + velocityX * leadTime - enemy.x
+    val leadY = coreY + velocityY * leadTime - enemy.y
+    val leadDistance = max(1f, length(leadX, leadY))
+    val interceptSpeed = min(360f, 145f + speed * 0.13f)
+    steerEnemy(
+        enemy,
+        leadX / leadDistance * interceptSpeed,
+        leadY / leadDistance * interceptSpeed,
+        4.2f,
+        delta,
+    )
+    enemy.actionTimer -= cadence
+    if (enemy.actionTimer <= 0f && distance < 720f) {
+        enemy.actionTimer = 2.4f
+        if (canAttack(enemy)) {
+            val interceptBoost = 175f * rebirthProfile.enemySpeedMultiplier
+            enemy.vx += leadX / leadDistance * interceptBoost
+            enemy.vy += leadY / leadDistance * interceptBoost
+        }
+    }
+}
+
+private fun MutableGameState.updateWeaver(enemy: Enemy, dx: Float, dy: Float, distance: Float, cadence: Float, delta: Float) {
+    val weave = sin(elapsed * 2.7f + enemy.id * 0.91f)
+    val tangentX = -dy / distance
+    val tangentY = dx / distance
+    steerEnemy(
+        enemy,
+        dx / distance * 92f + tangentX * weave * 175f,
+        dy / distance * 92f + tangentY * weave * 175f,
+        2.8f,
+        delta,
+    )
+    enemy.actionTimer -= cadence
+    if (enemy.actionTimer <= 0f && distance < 700f) {
+        enemy.actionTimer = 1.85f
+        if (canAttack(enemy)) {
+            fireProjectileWall(
+                enemy.x,
+                enemy.y,
+                atan2(dy, dx),
+                if (content.tempo.denseAttacks(threatElapsed)) 5 else 3,
+                34f,
+                245f,
+                shotDamage(enemy),
+            )
+        }
+    }
+}
+
+private fun MutableGameState.updateWarden(enemy: Enemy, dx: Float, dy: Float, distance: Float, cadence: Float, delta: Float) {
+    val desired = if (distance > 330f) 64f else if (distance < 250f) -58f else 0f
+    val tangent = if (enemy.id % 2 == 0) 1f else -1f
+    steerEnemy(
+        enemy,
+        dx / distance * desired - dy / distance * 28f * tangent,
+        dy / distance * desired + dx / distance * 28f * tangent,
+        1.55f,
+        delta,
+    )
+    applyGravityWell(enemy, dx, dy, distance, delta, strength = 1f)
+    enemy.actionTimer -= cadence
+    if (enemy.actionTimer <= 0f && distance < 780f) {
+        enemy.actionTimer = 2.65f
+        if (canAttack(enemy)) fireRadial(enemy.x, enemy.y, 8, 132f, elapsed * 0.35f, shotDamage(enemy))
+    }
+}
+
+private fun MutableGameState.updateSplitter(enemy: Enemy, dx: Float, dy: Float, distance: Float, delta: Float) {
+    val sway = sin(elapsed * 1.6f + enemy.id) * 44f
+    steerEnemy(
+        enemy,
+        dx / distance * 58f - dy / distance * sway,
+        dy / distance * 58f + dx / distance * sway,
+        1.35f,
+        delta,
+    )
+}
+
+private fun MutableGameState.updateElite(enemy: Enemy, dx: Float, dy: Float, distance: Float, cadence: Float, delta: Float) {
+    updateEliteAffix(enemy, dx, dy, distance, delta)
+    val tangent = if (enemy.id % 2 == 0) 1f else -1f
+    steerEnemy(enemy, dx / distance * 52f - dy / distance * 45f * tangent, dy / distance * 52f + dx / distance * 45f * tangent, 1.3f, delta)
+    enemy.actionTimer -= cadence
+    if (enemy.actionTimer <= 0f) {
+        enemy.actionTimer = 1.18f
+        if (canAttack(enemy)) fireRadial(enemy.x, enemy.y, 10, 165f, elapsed * 0.2f, shotDamage(enemy))
+    }
+}
+
+/**
+ * Relocates every enemy that is not leash-exempt and has strayed beyond its leash from the Core; Elites and Heralds
+ * keep the longer leader leash.
+ */
+private fun MutableGameState.leashFarEnemies() {
     val leashDistance = max(screenWidth, screenHeight) * 1.15f + 360f
     val leashSquared = leashDistance * leashDistance
     val leaderLeashDistance = max(FAR_LEADER_LEASH_DISTANCE, leashDistance)
@@ -218,7 +239,6 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
         val limit = if (enemy.type == EnemyType.ELITE || enemy.type == EnemyType.HERALD) leaderLeashSquared else leashSquared
         if (distanceSquared(enemy.x, enemy.y, coreX, coreY) > limit) relocateLeashedEnemy(enemy)
     }
-    updateEncounters()
 }
 
 /**
