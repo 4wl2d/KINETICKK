@@ -13,6 +13,7 @@ internal enum class HudRedesignText(
     LevelLabel("Lvl", "Ур."),
     WeaponLevel("Lvl {0}", "Ур. {0}"),
     Overheat("Overheat", "Перегрев"),
+    CoreStasisWarning("Core freezing — move", "Ядро замерзает — двигайся"),
     ArchitectTitle("The Architect", "Архитектор"),
     AnomalyTrial("Anomaly trial", "Испытание аномалии"),
     TrialSeconds("{0} / {1} s", "{0} / {1} с"),
