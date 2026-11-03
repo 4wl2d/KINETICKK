@@ -57,7 +57,7 @@ fun SourceStructureTask.useRepositorySources() {
     baselineFile.set(repositoryRoot.file("build-logic/source-structure-baseline.tsv"))
 }
 
-tasks.register<VerifySourceStructureTask>("verifySourceStructure") {
+val verifySourceStructure = tasks.register<VerifySourceStructureTask>("verifySourceStructure") {
     group = "verification"
     description = "Verifies file, function and package size ratchets, import boundaries and package cycles."
     useRepositorySources()
@@ -93,6 +93,6 @@ val verifyModuleGraph = tasks.register<VerifyArchitectureTask>("verifyModuleGrap
 
 tasks.register("verifyArchitecture") {
     group = "verification"
-    description = "Verifies module boundaries and forbidden nucleus and API imports."
-    dependsOn(verifyModuleGraph)
+    description = "Verifies module boundaries, forbidden imports and the source structure ratchets."
+    dependsOn(verifyModuleGraph, verifySourceStructure)
 }
