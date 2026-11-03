@@ -1166,13 +1166,16 @@ Re-pinned goldens (old -> new): items `0..172` with every item effect
 `68d4572118b9586d` -> `25c0be545c5a2647` (the GRIP and SLING effects); items
 `173..268` `6ae3869a3317ee94` -> `17777e466f80fc29` (six items back over the
 5 % floor under the flight law) -> `bfc80fdf55b64617` (Empty Chamber 20 ->
-25 %) -> `ef1306c885aae256` (Loader Sigil 0.5 -> 0.6 s); build tuning
-`90af4a2ca532d113` -> `c5ea14c28212923a` (Orbit, Supernova, Repel and
-Attractor retuned to the flight law); weapon and Matrix economy
+25 %) -> `ef1306c885aae256` (Loader Sigil 0.5 -> 0.6 s) -> `d9c6c8717293226d`
+(Field Marshal forces three reactions); build tuning `90af4a2ca532d113` ->
+`c5ea14c28212923a` (Orbit, Supernova, Repel and Attractor retuned to the
+flight law) -> `7ddff247e2f622d1` (Rocket Clap never launches against the
+Core's travel); weapon and Matrix economy
 `6e61ebea0bcb73f7` -> `120fe0d55a06ce89` (Impact Dampers and Gravity Surfer
 capped); active effects, Apex, upgrades and tempo `443334dcc0d91f0d` ->
 `3301c1592ee84a8c` (four skills retuned to the flight speeds) ->
-`e73bd70a41ae42f0` (Mirror Stance's single parry). New slices: the terrain
+`e73bd70a41ae42f0` (Mirror Stance's single parry) -> `6f57bbc082aececf`
+(Mass Driver and Sonic Boom at forward thrust 0.36). New slices: the terrain
 items `287..301` `ebcd1818d76810e4` -> `7199c257d9d5f681` (Glass Harvest at
 Reborn 1); run variety `0ee882129c87121f` -> `24a8c347d62bc2dd` (Keynote
 element share) -> `bb958301a03293ab` (four omens become trades) ->
@@ -1318,7 +1321,7 @@ centre (designed as half speed in 1.84 s instead of 0.69 s); `scrapeShare` 0.3; 
 Golden Drifter's gold glint, an easter-egg exception to gold meaning Rebirth;
 the Baby mode look; the dimension themes; the Core ribbon; the Dipole's
 unlock pace at 40 ricochets now that every ricochet hurts; Mirror Stance's
-single parry; the 1.25 s ember life of the Harvest; the 60 s Nadir visit.
+single parry; the 1.1 s ember life of the Harvest (1.25 s before the pace recalibration); the 60 s Nadir visit.
 
 ## 2026-10-29 movement and exploration adjustment
 
@@ -1464,9 +1467,11 @@ contacts are geometric (18.6k, 51.3k, 48.9k, 10.0k and 6.4k u), while the
 threshold scales with cruise (54.3k u at 0.36, 50.7k u at 0.32, where only
 seed 23 cleared it by 1.3%). The clause that one of five rays must fly long
 rested on that single ray. The test now requires a hazard on every seed, as it
-did before 0.6.0, and the room for long straight travel stays with
-`ObstacleNavigationTest` (at least 75% of 1,200 u paths clear across 12 seeds
-and every heading).
+did before 0.6.0, and states the long flight as the distance the clause was
+written for: half of the 60 s obstacle-free flight under forward thrust 0.32,
+50,698 u, which seed 23 flies at 0.36 (51,344 u). `ObstacleNavigationTest`
+separately holds the geometry (at least 75% of 1,200 u paths clear across 12
+seeds and every heading).
 
 ### Combat content under forward thrust 0.36
 
@@ -1630,8 +1635,10 @@ leaving the arena.
 | Veteran clear | 0.855 (213/249) | 0.984 (245/249) | 0.747 (189/253) |
 | Fresh / veteran median fight, s | 52.53 / 48.83 | 52.11 / 50.27 | 44.77 / 43.13 |
 
-The bands [0.40, 0.85] and [0.40, 0.90] were met only through the dropped
-kills; with kills credited, an arm fails only by dying. On the SITES window,
+The bands [0.40, 0.85] and [0.40, 0.90] were met on the 0.6.0 verification
+(0.837 and 0.829) only through the dropped kills; at forward thrust 0.36 the
+fresh arm already read 0.866, and with kills credited an arm fails only by
+dying. On the SITES window,
 `bossIntegrityShare` 0.55 to 1.0 gives fresh 0.909 to 0.833 (median fight
 48.7 to 72.5 s) and veteran 0.974 to 0.987 at every share, so no share meets
 the veteran band. The bands stay, since a bounty is meant to carry risk, and
