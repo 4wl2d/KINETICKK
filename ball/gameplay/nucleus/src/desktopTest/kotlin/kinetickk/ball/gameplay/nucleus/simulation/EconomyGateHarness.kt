@@ -44,12 +44,14 @@ internal val PopulationIndices: IntRange = 1_001..1_300
  * disagreed, as for the Apex Prism, both pooled decided), since a change to the reward stream re-rolled them; each
  * states its rule over these 300 runs. They are disjoint from every fixed gate seed set (i ≤ 205, and 2026), from the
  * calibration windows (i ≤ 900 and 1,301..2,800) and from the window of the D and H floors (2,801..3,400). The
- * thresholds follow the population threshold rule on the 0.6.0 base (tree 15b23096): a floor is the lower of the
- * gate's design or seeded threshold on the same statement (k of n read as k / n, a median or ratio bound as is) and the
- * base value on these seeds minus two standard errors; a ceiling is the higher of that threshold and the base plus two
- * standard errors; both rounded outward to 0.01, and a design target never weakens. A 0.5.0 accepted trade-off bounds
- * a gate more strictly only where the base itself meets it (ItemVariety V2's 0.81 does). Each test's KDoc records its
- * base value, SE and threshold.
+ * thresholds follow the population threshold rule on the Elite-resonance base (policy.md: the tree where Elite-class
+ * kills amplify the weapon in place of the open-world Totem, dungeons hold Totem chests and collapse, and a still Core
+ * freezes; the 0.6.0 tree 15b23096 was the base before it): a floor is the lower of the gate's design or seeded
+ * threshold on the same statement (k of n read as k / n, a median or ratio bound as is) and the base value on these
+ * seeds minus two standard errors; a ceiling is the higher of that threshold and the base plus two standard errors;
+ * both rounded outward to 0.01, and a design target never weakens. A 0.5.0 accepted trade-off bounds a gate more
+ * strictly only where the base itself meets it (ItemVariety V2's 0.81 does). Each test's KDoc records its base value,
+ * SE and threshold.
  */
 internal val PopulationSeeds: List<Int> = windowSeeds(PopulationIndices)
 
