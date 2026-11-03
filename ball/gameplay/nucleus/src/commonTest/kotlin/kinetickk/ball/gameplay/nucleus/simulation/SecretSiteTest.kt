@@ -805,6 +805,20 @@ class SecretSiteTest {
     }
 
     @Test
+    fun aGoldenDrifterAtZeroIntegrityWhenTheArchitectIsDueIsCaughtNotReleased() {
+        // The site cutoff runs in the step the Architect is due, before that step's kill sweep.
+        val game = released()
+        val drifter = game.goldenDrifter()!!
+        drifter.hp = 0f
+        game.elapsed = game.content.tempo.bossAtSeconds
+        game.standAt(game.coreX, game.coreY)
+        assertEquals(drifter.id, game.goldenDrifterId, "the cutoff leaves it to the kill sweep")
+        game.sweepKills()
+        assertTrue(game.hasSecret(RunSecretFlag.GOLDEN_DRIFTER_CAUGHT))
+        assertEquals(-1, game.goldenDrifterId)
+    }
+
+    @Test
     fun leavingTheDuelPastItsLeashRemovesTheCartographerForTheRunAndGrantsNothing() {
         val game = summoned()
         val sigil = game.secretSigil!!

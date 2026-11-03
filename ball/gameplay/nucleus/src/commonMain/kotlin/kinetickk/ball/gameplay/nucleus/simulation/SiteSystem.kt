@@ -67,10 +67,10 @@ internal fun MutableGameState.updateSites(delta: Float) {
     if (bossSpawned || elapsed >= content.tempo.bossAtSeconds) {
         for (index in sites.indices) releaseSiteFoes(sites[index])
         sites = emptyList()
-        // Nothing opens once the Architect arrives, so nothing ambient stays in view, and a Golden Drifter leaves, as
-        // does the sigil with a summoned boss.
+        // Nothing opens once the Architect arrives, so nothing ambient stays in view, and a Golden Drifter leaves (one at
+        // zero integrity waits for the step's kill sweep to catch it), as does the sigil with a summoned boss.
         ambientSites = AmbientSiteWindow.EMPTY
-        releaseGoldenDrifterWithoutKill()
+        if (goldenDrifter()?.let { it.hp <= 0f } != true) releaseGoldenDrifterWithoutKill()
         releaseSecretSigil()
         return
     }
