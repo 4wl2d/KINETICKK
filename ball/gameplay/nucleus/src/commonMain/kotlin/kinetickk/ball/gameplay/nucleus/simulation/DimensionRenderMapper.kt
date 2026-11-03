@@ -125,42 +125,18 @@ private fun MutableGameState.portalProjection(
     return if (projection == previous) previous else projection
 }
 
-private fun haloProjections(halos: ImmutableList<HaloRing>, reusable: ImmutableList<HaloProjection>?): ImmutableList<HaloProjection> {
-    if (reusable != null && reusable.size == halos.size) {
-        var same = true
-        for (index in halos.indices) {
-            val ring = halos[index]
-            val projected = reusable[index]
-            if (projected.id != ring.id || !projected.x.sameBitsAs(ring.x) || !projected.y.sameBitsAs(ring.y) ||
-                projected.courseIndex != ring.courseIndex
-            ) {
-                same = false
-                break
-            }
-        }
-        if (same) return reusable
-    }
-    return halos.mapToImmutableList { HaloProjection(it.id, it.x, it.y, it.courseIndex) }
-}
+private fun haloProjections(halos: ImmutableList<HaloRing>, reusable: ImmutableList<HaloProjection>?): ImmutableList<HaloProjection> =
+    halos.reuseProjectionIfContentEqual(reusable) { ring, projected ->
+        projected.id == ring.id && projected.x.sameBitsAs(ring.x) && projected.y.sameBitsAs(ring.y) &&
+            projected.courseIndex == ring.courseIndex
+    } ?: halos.mapToImmutableList { HaloProjection(it.id, it.x, it.y, it.courseIndex) }
 
-private fun MutableGameState.emberProjections(embers: ImmutableList<Ember>, reusable: ImmutableList<EmberProjection>?): ImmutableList<EmberProjection> {
-    if (reusable != null && reusable.size == embers.size) {
-        var same = true
-        for (index in embers.indices) {
-            val ember = embers[index]
-            val projected = reusable[index]
-            if (!projected.x.sameBitsAs(ember.x) || !projected.y.sameBitsAs(ember.y) ||
-                !projected.remaining.sameBitsAs(emberRemaining(ember)) || !projected.fromX.sameBitsAs(ember.fromX) ||
-                !projected.fromY.sameBitsAs(ember.fromY) || !projected.age.sameBitsAs(emberAge(ember))
-            ) {
-                same = false
-                break
-            }
-        }
-        if (same) return reusable
-    }
-    return embers.mapToImmutableList { EmberProjection(it.x, it.y, emberRemaining(it), it.fromX, it.fromY, emberAge(it)) }
-}
+private fun MutableGameState.emberProjections(embers: ImmutableList<Ember>, reusable: ImmutableList<EmberProjection>?): ImmutableList<EmberProjection> =
+    embers.reuseProjectionIfContentEqual(reusable) { ember, projected ->
+        projected.x.sameBitsAs(ember.x) && projected.y.sameBitsAs(ember.y) &&
+            projected.remaining.sameBitsAs(emberRemaining(ember)) && projected.fromX.sameBitsAs(ember.fromX) &&
+            projected.fromY.sameBitsAs(ember.fromY) && projected.age.sameBitsAs(emberAge(ember))
+    } ?: embers.mapToImmutableList { EmberProjection(it.x, it.y, emberRemaining(it), it.fromX, it.fromY, emberAge(it)) }
 
 private fun MutableGameState.emberRemaining(ember: Ember): Float = max(0f, ember.expiresAt - elapsed)
 

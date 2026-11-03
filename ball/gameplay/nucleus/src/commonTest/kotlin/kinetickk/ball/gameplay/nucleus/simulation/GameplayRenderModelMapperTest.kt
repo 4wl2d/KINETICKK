@@ -514,7 +514,6 @@ class GameplayRenderModelMapperTest {
         assertTrue(quiet.ambientSites.isEmpty())
         assertFalse(quiet.easyMode)
         assertEquals(-1, quiet.goldenDrifterId)
-        assertEquals(-1, quiet.featuredAspect)
         assertNull(quiet.runOmen)
 
         val signals = immutableListOf(EventSignalProjection(id = 3, kind = SignalKind.SHRINE, x = 40f, y = -60f, expiresAt = 90f))
@@ -526,9 +525,7 @@ class GameplayRenderModelMapperTest {
             goldenDrifterId = 17
             runBoons = boons
             runOmen = OmenId.RICH_VEINS
-            runMutatorMask = 0b1000
             directorPersonality = DirectorPersonalityId.SIEGE
-            featuredAspect = StatusElement.SONIC.ordinal
             keynoteTag = BuildTag.entries.last()
             keynoteElement = StatusElement.VOID
             worldEvent = event
@@ -542,18 +539,11 @@ class GameplayRenderModelMapperTest {
         assertEquals(17, projected.goldenDrifterId)
         assertSame(boons, projected.runBoons)
         assertEquals(OmenId.RICH_VEINS, projected.runOmen)
-        assertEquals(0b1000, projected.runMutatorMask)
         assertEquals(DirectorPersonalityId.SIEGE, projected.directorPersonality)
-        assertEquals(StatusElement.SONIC.ordinal, projected.featuredAspect)
         assertEquals(BuildTag.entries.last(), projected.keynoteTag)
         assertEquals(StatusElement.VOID, projected.keynoteElement)
         assertSame(event, projected.worldEvent)
         assertSame(signals, projected.eventSignals)
-        // The values are immutable state, so a later change in the run never reaches the published projection.
-        source.eventSignals = immutableListOf()
-        source.runBoons = immutableListOf()
-        assertEquals(signals.toList(), projected.eventSignals.toList())
-        assertEquals(listOf(33, 48), projected.runBoons.toList())
     }
 
     @Test
@@ -737,9 +727,7 @@ class GameplayRenderModelMapperTest {
         "dimension" to dimension,
         "runBoons" to runBoons.toList(),
         "runOmen" to runOmen,
-        "runMutatorMask" to runMutatorMask,
         "directorPersonality" to directorPersonality,
-        "featuredAspect" to featuredAspect,
         "keynoteTag" to keynoteTag,
         "keynoteElement" to keynoteElement,
         "worldEvent" to worldEvent,

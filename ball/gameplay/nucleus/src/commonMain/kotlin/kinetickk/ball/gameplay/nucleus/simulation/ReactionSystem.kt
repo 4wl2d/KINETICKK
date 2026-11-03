@@ -425,7 +425,7 @@ internal fun MutableGameState.resolveReaction(
                 val target = enemies[index]
                 if (!target.alive || isShifting(target) || distanceSquared(x, y, target.x, target.y) > square(radius + target.radius)) continue
                 dealStatusDamage(target, magnitude, StatusElement.CRYO, ignoresAffinity = true)
-                if (target.alive && isOrdinary(target)) {
+                if (target.alive && target.isOrdinary) {
                     target.disabledUntil = max(target.disabledUntil, elapsed + STASIS_STOP_SECONDS)
                     target.vx = 0f
                     target.vy = 0f
@@ -567,7 +567,7 @@ private fun MutableGameState.quake(x: Float, y: Float, radius: Float, damage: Fl
         val target = enemies[index]
         if (!target.alive || isShifting(target) || distanceSquared(x, y, target.x, target.y) > square(radius + target.radius)) continue
         dealStatusDamage(target, damage, StatusElement.GRAVITIC, ignoresAffinity = true)
-        if (target.alive && isOrdinary(target)) target.disabledUntil = max(target.disabledUntil, elapsed + SEISMIC_STUN_SECONDS)
+        if (target.alive && target.isOrdinary) target.disabledUntil = max(target.disabledUntil, elapsed + SEISMIC_STUN_SECONDS)
     }
 }
 
@@ -1034,9 +1034,6 @@ internal fun MutableGameState.knockbackAsDamage(target: Enemy, knockback: Float,
 internal const val IMMOVABLE_KNOCKBACK: Float = 0.35f
 internal const val KNOCKBACK_DAMAGE_SCALE: Float = 0.15f
 internal const val KNOCKBACK_DAMAGE_GATE_SECONDS: Float = 0.5f
-
-/** Ordinary enemies take stuns and stops; Elites and bosses shrug them off. */
-private fun isOrdinary(enemy: Enemy): Boolean = !enemy.isEliteClass
 
 /** Pushes [target] away from ([x], [y]) at [speed], scaled by the knockback it takes. */
 internal fun MutableGameState.hurl(x: Float, y: Float, target: Enemy, speed: Float) {

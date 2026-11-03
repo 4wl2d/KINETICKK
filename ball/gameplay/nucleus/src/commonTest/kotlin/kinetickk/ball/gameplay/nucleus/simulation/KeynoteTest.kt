@@ -175,13 +175,13 @@ class KeynoteTest {
             val model = state.toRenderModel()
             assertEquals(state.keynoteTag, model.keynoteTag)
             assertEquals(element, model.keynoteElement)
-            assertEquals(state.featuredAspect, model.featuredAspect)
         }
         for (content in listOf(withoutKeynote, canonicalGameplayContent.withoutRunVariety())) {
-            val model = buildTestState(seed = 4, content = content).toRenderModel()
+            val state = buildTestState(seed = 4, content = content)
+            val model = state.toRenderModel()
             assertNull(model.keynoteTag)
             assertNull(model.keynoteElement)
-            assertEquals(-1, model.featuredAspect)
+            assertEquals(-1, state.featuredAspect)
         }
     }
 

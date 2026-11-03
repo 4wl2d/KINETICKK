@@ -44,7 +44,7 @@ internal const val BLACKOUT_DATA_LIFE_SECONDS: Float = 10f
 internal const val ARCHITECT_ENRAGE_ATTACK_RATE: Float = 1.45f
 
 /** Ordinary enemies are neither Elites nor boss class (the Architect, mini-bosses such as the Herald, secret bosses). */
-internal val Enemy.isOrdinary: Boolean get() = !type.profile.eliteClass
+internal val Enemy.isOrdinary: Boolean get() = !isEliteClass
 
 /** True while an Armored Vanguard plate still guards [this] against weapons. */
 internal val Enemy.armorIntact: Boolean get() = armored && !armorCracked
@@ -111,8 +111,7 @@ internal fun MutableGameState.entropyTideShieldRegen(): Float =
  */
 internal fun MutableGameState.rollVanguardArmor(enemy: Enemy) {
     if (!runMutatorActive(RebirthMutator.ARMORED_VANGUARD) || !enemy.isOrdinary) return
-    val hash = splitMix64(splitMix64(runSeed.toLong() xor ARMOR_SEED_SALT) xor enemy.id.toLong())
-    enemy.armored = (hash ushr 40).toFloat() / (1 shl 24) < ARMORED_VANGUARD_CHANCE
+    enemy.armored = hashUnit(runHash(runSeed, ARMOR_SEED_SALT, enemy.id.toLong())) < ARMORED_VANGUARD_CHANCE
 }
 
 /** Salt of the Armored Vanguard hash, distinct from the obstacle field's. */

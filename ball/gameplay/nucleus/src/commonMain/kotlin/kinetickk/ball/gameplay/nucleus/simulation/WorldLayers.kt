@@ -70,9 +70,8 @@ internal fun MutableGameState.switchWorldWindow() {
 
 internal fun MutableGameState.inBaseLayer(): Boolean = worldLayer == WorldLayer.BASE
 
-/** Called by a layer switch after the layer field changed; one line per lane. */
-@Suppress("UNUSED_PARAMETER")
-internal fun MutableGameState.onWorldLayerChanged(from: WorldLayer, to: WorldLayer) {
+/** Clears layer-bound sites, structures and world events after a layer switch. */
+internal fun MutableGameState.onWorldLayerChanged() {
     clearSitesForLayerChange()
     collapseDungeonForLayerChange()
     endWorldEventForLayerChange()

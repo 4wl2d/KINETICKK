@@ -517,12 +517,8 @@ class GameplayRenderModel(
     val runBoons: ImmutableList<Int> = immutableListOf(),
     /** The omen chosen at the run start, or null. */
     val runOmen: OmenId? = null,
-    /** Rebirth mutators a run modifier added on top of the tier's own (bit per mutator ordinal). */
-    val runMutatorMask: Int = 0,
     /** The director personality rolled for this run, or null. */
     val directorPersonality: DirectorPersonalityId? = null,
-    /** The SURGE theme's featured aspect (StatusElement ordinal), or -1. */
-    val featuredAspect: Int = -1,
     /** The run's featured build tag and element (run resonance), or null. */
     val keynoteTag: BuildTag? = null,
     val keynoteElement: StatusElement? = null,

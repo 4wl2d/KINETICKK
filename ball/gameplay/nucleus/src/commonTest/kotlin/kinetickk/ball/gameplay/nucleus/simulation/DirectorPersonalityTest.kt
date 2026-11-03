@@ -80,7 +80,6 @@ class DirectorPersonalityTest {
             assertEquals(off.directorPhaseUntil * calm, varied.directorPhaseUntil, 1e-4f, "Seed $seed opening calm")
             val model = varied.toRenderModel()
             assertEquals(id, model.directorPersonality)
-            assertEquals(varied.featuredAspect, model.featuredAspect)
         }
     }
 

@@ -89,9 +89,8 @@ internal fun MutableGameState.enterDimension(target: WorldLayer): Boolean {
     val serial = dimensionRun.visitedMask.countOneBits()
     val objective = rollObjective(definition, serial)
     val endsAt = min(elapsed + definition.visitSeconds, content.tempo.bossAtSeconds - policy.exitMarginSeconds)
-    val from = worldLayer
     switchLayer(target)
-    onWorldLayerChanged(from, target)
+    onWorldLayerChanged()
     // A displaced Elite is due at once: the layer holds it back, and the return reschedules it.
     clearHostilesForLayerChange(eliteRescheduleAt = elapsed)
     drawPickupsIn()
@@ -127,7 +126,7 @@ internal fun MutableGameState.exitDimension(reason: DimensionExit) {
     val from = worldLayer
     val policy = content.dimensions
     switchLayer(WorldLayer.BASE)
-    onWorldLayerChanged(from, WorldLayer.BASE)
+    onWorldLayerChanged()
     clearHostilesForLayerChange(eliteRescheduleAt = Float.POSITIVE_INFINITY)
     drawPickupsIn()
     resetDirectorForLayer(entering = false)

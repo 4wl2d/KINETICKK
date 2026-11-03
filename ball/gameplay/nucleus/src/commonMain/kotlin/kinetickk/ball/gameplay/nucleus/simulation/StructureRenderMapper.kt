@@ -66,19 +66,10 @@ private fun MutableGameState.structureProjections(
     placed: List<PlacedStructure>,
     current: DungeonState?,
     reusable: ImmutableList<StructureProjection>?,
-): ImmutableList<StructureProjection> {
-    if (reusable != null && reusable.size == placed.size) {
-        var same = true
-        for (index in placed.indices) {
-            val structure = placed[index]
-            if (!reusable[index].matches(structure, clearedRooms(structure, current), engagedRoom(structure, current))) {
-                same = false
-                break
-            }
-        }
-        if (same) return reusable
-    }
-    return placed.mapToImmutableList { structure ->
+): ImmutableList<StructureProjection> =
+    placed.reuseProjectionIfContentEqual(reusable) { structure, projected ->
+        projected.matches(structure, clearedRooms(structure, current), engagedRoom(structure, current))
+    } ?: placed.mapToImmutableList { structure ->
         StructureProjection(
             id = structure.id,
             template = structure.template,
@@ -94,7 +85,6 @@ private fun MutableGameState.structureProjections(
             engagedRoom = engagedRoom(structure, current),
         )
     }
-}
 
 /** Every room bit of a spent structure, the dungeon's cleared rooms for its own structure, none otherwise. */
 private fun MutableGameState.clearedRooms(structure: PlacedStructure, current: DungeonState?): Int = when {
@@ -120,21 +110,11 @@ private fun StructureProjection.matches(structure: PlacedStructure, clearedRooms
         this.clearedRooms == clearedRooms &&
         this.engagedRoom == engagedRoom
 
-private fun wallProjections(walls: List<Wall>, reusable: ImmutableList<WallProjection>?): ImmutableList<WallProjection> {
-    if (reusable != null && reusable.size == walls.size) {
-        var same = true
-        for (index in walls.indices) {
-            if (!reusable[index].matches(walls[index])) {
-                same = false
-                break
-            }
+private fun wallProjections(walls: List<Wall>, reusable: ImmutableList<WallProjection>?): ImmutableList<WallProjection> =
+    walls.reuseProjectionIfContentEqual(reusable) { wall, projected -> projected.matches(wall) }
+        ?: walls.mapToImmutableList { wall ->
+            WallProjection(wall.id, wall.kind, wall.ax, wall.ay, wall.bx, wall.by, wall.halfThickness, wall.door)
         }
-        if (same) return reusable
-    }
-    return walls.mapToImmutableList { wall ->
-        WallProjection(wall.id, wall.kind, wall.ax, wall.ay, wall.bx, wall.by, wall.halfThickness, wall.door)
-    }
-}
 
 private fun WallProjection.matches(wall: Wall): Boolean =
     id == wall.id &&

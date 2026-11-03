@@ -763,7 +763,7 @@ class DungeonSystemTest {
         dungeon.enterRoom(1)
         val kills = run.kills
         run.message = ""
-        run.onWorldLayerChanged(WorldLayer.BASE, WorldLayer.ZENITH)
+        run.onWorldLayerChanged()
         assertNull(run.dungeon)
         assertTrue(run.enemies.none { it.ownerTag != 0L })
         assertEquals(kills, run.kills)
@@ -774,7 +774,7 @@ class DungeonSystemTest {
         val calm = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         calm.moveCore(calm.world(-900f, -600f))
         calm.run.updateStructures(step)
-        calm.run.onWorldLayerChanged(WorldLayer.BASE, WorldLayer.NADIR)
+        calm.run.onWorldLayerChanged()
         assertNull(calm.run.dungeon)
         assertFalse(calm.run.isSpent(calm.placement.id))
     }

@@ -81,11 +81,11 @@ internal fun MutableGameState.toRenderModel(
         effectiveWeaponPower = effectiveWeaponPower(),
         rewardPreviews = if (phase == GamePhase.CHOICE && identitySource?.phase == GamePhase.CHOICE &&
             choices === identitySource.choices && reusableCollections != null &&
-            buildStats() == identitySource.buildStats() &&
             equippedRelics === identitySource.equippedRelics && weapon == identitySource.weapon && elapsed == identitySource.elapsed &&
             itemStacks.sharesStorageWith(identitySource.itemStacks) && build === identitySource.build &&
             discoveredPairingMask == identitySource.discoveredPairingMask &&
-            discoveredReactionMask == identitySource.discoveredReactionMask
+            discoveredReactionMask == identitySource.discoveredReactionMask &&
+            buildStats(withContributions = false) == identitySource.buildStats(withContributions = false)
         ) reusableCollections.rewardPreviews else rewardPreviews(),
         coolingRate = coolingRate,
         magnetStrength = magnetStrength,
@@ -370,9 +370,7 @@ internal fun MutableGameState.toRenderModel(
         dimension = dimensionProjection(reusableCollections?.dimension, identitySource),
         runBoons = runBoons,
         runOmen = runOmen,
-        runMutatorMask = runMutatorMask,
         directorPersonality = directorPersonality,
-        featuredAspect = featuredAspect,
         keynoteTag = keynoteTag,
         keynoteElement = keynoteElement,
         worldEvent = worldEvent,
@@ -570,8 +568,7 @@ private fun MutableGameState.skillBarProjection(previous: SkillBarProjection?): 
 }
 
 private fun MutableGameState.skillSlotProjection(slot: Int, previous: SkillSlotProjection?): SkillSlotProjection {
-    val id = skillLoadout.skill(slot)
-        ?: return previous?.takeIf { it == SkillSlotProjection.EMPTY } ?: SkillSlotProjection.EMPTY
+    val id = skillLoadout.skill(slot) ?: return SkillSlotProjection.EMPTY
     val runtime = skillRuntime
     val rank = skillLoadout.rank(slot)
     val values = content.skill(id).rank(rank).values
@@ -954,7 +951,7 @@ private fun <Source, Projection> List<Source>.reuseEmptyProjection(
 ): ImmutableList<Projection>? =
     previous?.takeIf { isEmpty() && it.isEmpty() }
 
-private inline fun <Source, Projection> List<Source>.reuseProjectionIfContentEqual(
+internal inline fun <Source, Projection> List<Source>.reuseProjectionIfContentEqual(
     previous: ImmutableList<Projection>?,
     sameProjection: (Source, Projection) -> Boolean,
 ): ImmutableList<Projection>? {

@@ -50,16 +50,10 @@ internal fun splitMix64(value: Long): Long {
 
 /** Candidate-private SplitMix64 stream seeded by a hash (obstacle chunks, variant rolls, placements). */
 internal class HashRandom(private var state: Long) {
-    private fun next(): Long {
-        state += -0x61c8864680b583ebL
-        var z = state
-        z = (z xor (z ushr 30)) * -0x40a7b892e31b1a47L
-        z = (z xor (z ushr 27)) * -0x6b2fb644ecceee15L
-        return z xor (z ushr 31)
-    }
+    private fun next(): Long = splitMix64(state).also { state += -0x61c8864680b583ebL }
 
     /** Uniform in [0, 1) with 24 exact bits, identical on every platform. */
-    fun nextFloat(): Float = (next() ushr 40).toInt() / 16_777_216f
+    fun nextFloat(): Float = hashUnit(next())
 
     fun nextInt(): Int = (next() ushr 32).toInt()
 

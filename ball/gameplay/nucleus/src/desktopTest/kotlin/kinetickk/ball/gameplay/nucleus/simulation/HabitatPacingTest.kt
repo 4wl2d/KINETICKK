@@ -55,7 +55,7 @@ class HabitatPacingTest {
             state.enemies.clear()
             state.projectiles.removeAll { it.hostile }
             state.worldLayer = layer
-            state.onWorldLayerChanged(WorldLayer.BASE, layer)
+            state.onWorldLayerChanged()
             state.pendingEventKind = -1
             state.pendingEventSize = 0
             state.pendingEventType = -1

@@ -1450,9 +1450,7 @@ private fun canonicalRenderFingerprint(state: MutableGameState): Long {
     signature = mix(signature, render.dimension.toString().hashCode())
     render.runBoons.forEach { boon -> signature = mix(signature, boon) }
     signature = mix(signature, render.runOmen?.ordinal ?: -1)
-    signature = mix(signature, render.runMutatorMask)
     signature = mix(signature, render.directorPersonality?.ordinal ?: -1)
-    signature = mix(signature, render.featuredAspect)
     signature = mix(signature, render.keynoteTag?.ordinal ?: -1)
     signature = mix(signature, render.keynoteElement?.ordinal ?: -1)
     signature = mix(signature, render.worldEvent.toString().hashCode())

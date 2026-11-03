@@ -161,16 +161,12 @@ internal class GameComponent private constructor(
                 "Gameplay local revision capacity exhausted before Intent construction"
             }
             val before = committedState
-            val simulationStartedAt = if (DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true) {
-                TimeSource.Monotonic.markNow()
-            } else null
-            val decision = GameplayNucleus.decide(
-                before,
-                GameplayNucleusPulse.Intent(pulse),
-                GameplayContext.Empty,
-            )
-            if (DIAGNOSTICS_ENABLED && simulationStartedAt != null) {
-                performanceDiagnostics?.phase(DiagnosticPhase.Simulation, simulationStartedAt.elapsedNow().inWholeNanoseconds)
+            val decision = timed(DiagnosticPhase.Simulation) {
+                GameplayNucleus.decide(
+                    before,
+                    GameplayNucleusPulse.Intent(pulse),
+                    GameplayContext.Empty,
+                )
             }
             when (decision) {
                 is GameplayDecision.Rejected -> GameplayAcceptance.Rejected(
@@ -192,6 +188,18 @@ internal class GameComponent private constructor(
             }
         }
 
+    /** Runs [block] and, while performance capture is on, records its duration as [phase]. */
+    private inline fun <T> timed(phase: DiagnosticPhase, block: () -> T): T {
+        val sink = if (DIAGNOSTICS_ENABLED) performanceDiagnostics?.takeIf { it.capturesPerformance } else null
+        if (sink == null) return block()
+        val startedAt = TimeSource.Monotonic.markNow()
+        try {
+            return block()
+        } finally {
+            sink.phase(phase, startedAt.elapsedNow().inWholeNanoseconds)
+        }
+    }
+
     /** Shared source, expanded at ingress to keep the input path free of extra call boundaries. */
     @Suppress("NOTHING_TO_INLINE")
     private inline fun acceptFrame(
@@ -200,17 +208,13 @@ internal class GameComponent private constructor(
         frame: GameplayAcceptedFrame,
         renderModelNeutralTransition: Boolean = false,
     ) {
-        val projectionStartedAt = if (DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true) {
-            TimeSource.Monotonic.markNow()
-        } else null
-        val renderSnapshot = preflight(
-            before = before,
-            renderModelNeutralTransition = renderModelNeutralTransition,
-            item = item,
-            frame = frame,
-        )
-        if (DIAGNOSTICS_ENABLED && projectionStartedAt != null) {
-            performanceDiagnostics?.phase(DiagnosticPhase.Projection, projectionStartedAt.elapsedNow().inWholeNanoseconds)
+        val renderSnapshot = timed(DiagnosticPhase.Projection) {
+            preflight(
+                before = before,
+                renderModelNeutralTransition = renderModelNeutralTransition,
+                item = item,
+                frame = frame,
+            )
         }
         publish(frame.nextState, renderSnapshot)
         initializeInteractionFxIfStarted(before, item)
@@ -413,18 +417,8 @@ internal class GameComponent private constructor(
             is GameplayOutput.EmitVisualFx ->
                 checkNotNull(interactionFxReducer).apply(output.cues)
             is GameplayOutput.SendProfileCommand -> executeProfileCommand(output, item)
-            is GameplayOutput.AdvanceAudio -> {
-                val audioStartedAt = if (DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true) {
-                    TimeSource.Monotonic.markNow()
-                } else null
-                try {
-                    audioExecutor.advance(output.realDeltaSeconds, output.cues)
-                } finally {
-                    if (DIAGNOSTICS_ENABLED && audioStartedAt != null) {
-                        performanceDiagnostics?.phase(DiagnosticPhase.Audio, audioStartedAt.elapsedNow().inWholeNanoseconds)
-                    }
-                }
-            }
+            is GameplayOutput.AdvanceAudio ->
+                timed(DiagnosticPhase.Audio) { audioExecutor.advance(output.realDeltaSeconds, output.cues) }
             GameplayOutput.EnsureAudioUnlocked ->
                 audioExecutor.ensureUnlocked()
             is GameplayOutput.RunExited -> checkNotNull(item.exitReplyOrNull()).accepted(output.result)
