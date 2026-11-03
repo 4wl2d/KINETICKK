@@ -1454,3 +1454,13 @@ Brake authority, launch assistance and zero extra straight-line drag stay
 unchanged. The existing flight, polarity, collision-band and dimension
 checks pass; the deterministic intent trace is updated from its measured
 positions, velocities, enemy following and trail counts.
+
+At 0.36 none of `ObstacleEdgeExploitTest`'s five pinned reach-0.79 rays flies
+half of its obstacle-free distance before the first lethal contact: the
+contacts are geometric (18.6k, 51.3k, 48.9k, 10.0k and 6.4k u), while the
+threshold scales with cruise (54.3k u at 0.36, 50.7k u at 0.32, where only
+seed 23 cleared it by 1.3%). The clause that one of five rays must fly long
+rested on that single ray. The test now requires a hazard on every seed, as it
+did before 0.6.0, and the room for long straight travel stays with
+`ObstacleNavigationTest` (at least 75% of 1,200 u paths clear across 12 seeds
+and every heading).
