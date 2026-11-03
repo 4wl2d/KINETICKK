@@ -68,18 +68,6 @@ class ChallengeSiteTest {
         updateSites(delta)
     }
 
-    /** One step that sweeps the Core from ([fromX], [fromY]) to ([toX], [toY]). */
-    private fun MutableGameState.flyStep(fromX: Float, fromY: Float, toX: Float, toY: Float, delta: Float = 0.01f) {
-        previousCoreX = fromX
-        previousCoreY = fromY
-        coreX = toX
-        coreY = toY
-        updateSites(delta)
-    }
-
-    private fun MutableGameState.hasDiscoveredTrials(): Boolean =
-        worldDiscoveryMask and WorldDiscovery.TRIALS.bit != 0 && pendingWorldDiscoveryMask and WorldDiscovery.TRIALS.bit != 0
-
     private fun MutableGameState.assertGrantedNothing() {
         assertTrue(sites.isEmpty())
         assertEquals(SiteNotice.CHALLENGE_FAILED.english, message)
@@ -91,7 +79,7 @@ class ChallengeSiteTest {
         assertTrue(sites.isEmpty())
         assertEquals(SiteNotice.CHALLENGE_COMPLETE.english, message)
         assertEquals(listOf(reward), pendingDirectedRewards)
-        assertTrue(hasDiscoveredTrials())
+        assertTrue(discovered(WorldDiscovery.TRIALS))
     }
 
     @Test
@@ -122,9 +110,9 @@ class ChallengeSiteTest {
         for (kind in listOf(SiteKind.BRAKELESS_TRIAL, SiteKind.UNTOUCHED_TRIAL, SiteKind.VELOCITY_TRIAL, SiteKind.RAM_TRIAL)) {
             val game = game()
             game.startChallenge(kind, x = 100f, y = -50f)
-            game.hold(100f, -50f + CHALLENGE_LEASH)
+            game.hold(100f, -50f + WINDOW_SITE_LEASH)
             assertEquals(1, game.sites.size, "$kind: exactly the leash keeps the trial")
-            game.hold(100f, -50f + CHALLENGE_LEASH + 1f)
+            game.hold(100f, -50f + WINDOW_SITE_LEASH + 1f)
             game.assertGrantedNothing()
         }
     }
@@ -296,7 +284,7 @@ class ChallengeSiteTest {
     fun leavingTheRamRiteTurnsItsFoesIntoOrdinaryEnemies() {
         val game = game()
         val rite = game.startChallenge(SiteKind.RAM_TRIAL)
-        game.hold(0f, CHALLENGE_LEASH + 1f)
+        game.hold(0f, WINDOW_SITE_LEASH + 1f)
         game.assertGrantedNothing()
         // The encounter would have despawned them at its own abandon distance; the site released them first.
         game.updateEnemies(0.01f)
@@ -510,10 +498,10 @@ class ChallengeSiteTest {
         val slalom = game.startChallenge(SiteKind.SLALOM_TRIAL)
         game.sites = listOf(slalom.copy(step = 4))
         val pole = slalom.course[4]
-        game.hold(pole.dx, pole.dy + CHALLENGE_LEASH)
+        game.hold(pole.dx, pole.dy + WINDOW_SITE_LEASH)
         assertEquals(1, game.sites.size, "exactly the leash keeps the slalom")
-        assertTrue(length(pole.dx, pole.dy + CHALLENGE_LEASH) > CHALLENGE_LEASH, "farther than the leash from the centre")
-        game.hold(pole.dx, pole.dy + CHALLENGE_LEASH + 1f)
+        assertTrue(length(pole.dx, pole.dy + WINDOW_SITE_LEASH) > WINDOW_SITE_LEASH, "farther than the leash from the centre")
+        game.hold(pole.dx, pole.dy + WINDOW_SITE_LEASH + 1f)
         game.assertGrantedNothing()
     }
 

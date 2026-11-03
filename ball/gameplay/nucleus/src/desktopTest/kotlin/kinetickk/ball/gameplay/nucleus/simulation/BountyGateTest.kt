@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.SiteKind
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
@@ -59,10 +60,7 @@ class BountyGateTest {
         println(
             "SIGIL ARM runs=${sigil.size} duels=${duels.size} " + bootstrapLine("summoned", sigil) { it.shareOf { run -> run.engagements.isNotEmpty() } } +
                 " " + bootstrapLine("broken", sigil) { it.judged(SiteArm.SIGIL.kinds).shareWhere { e -> e.outcome.success } } +
-                " " + bootstrapLine("medianFight", sigil) { runs ->
-                    runs.judged(SiteArm.SIGIL.kinds).filter { it.outcome.success }.map { it.seconds }.sorted()
-                        .let { if (it.isEmpty()) 0.0 else it[it.size / 2].toDouble() }
-                } +
+                " " + bootstrapLine("medianFight", sigil) { medianFight(it, SiteArm.SIGIL.kinds) } +
                 " outcomes=" + duels.groupingBy { it.outcome }.eachCount().entries.sortedBy { it.key.ordinal }.joinToString(",") { "${it.key}:${it.value}" },
         )
         assertTrue(summoned >= MIN_SUMMONED, "the sigil arm summoned the Cartographer in only ${"%.3f".format(summoned)} of ${sigil.size} runs")
@@ -97,9 +95,9 @@ class BountyGateTest {
             populationOf(Seeds) { seed -> flySiteRun(seed, SiteArm.SIGIL, SiteRunSetup(stopAfterWindows = true)) }
         }
 
-        /** The median length of the claimed fights (simulated seconds; 0 without one). */
-        fun medianFight(runs: List<SiteRun>): Double =
-            runs.judged(SiteArm.BOUNTY.kinds).filter { it.outcome.success }.map { it.seconds }.sorted()
+        /** The median length of the claimed fights of [kinds] (simulated seconds; 0 without one). */
+        fun medianFight(runs: List<SiteRun>, kinds: Set<SiteKind> = SiteArm.BOUNTY.kinds): Double =
+            runs.judged(kinds).filter { it.outcome.success }.map { it.seconds }.sorted()
                 .let { if (it.isEmpty()) 0.0 else it[it.size / 2].toDouble() }
     }
 }

@@ -5,7 +5,6 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.WorldLayer
-import kinetickk.ball.gameplay.nucleus.model.SiteState
 
 /*
  * Rifts offered by POI windows. The sites lane draws a window's two kinds first, then asks here whether a rift claims
@@ -39,18 +38,6 @@ internal fun MutableGameState.claimPortalForWindow(offerId: Int, scheduledAt: Fl
     }
     dimensionRun = dimensionRun.copy(portalOffers = dimensionRun.portalOffers + 1)
     return PortalClaim(target, ((hash ushr 34) and 1L).toInt())
-}
-
-/** The Core flew through an offered rift: true when the visit started; a refused rift stays offered. */
-internal fun MutableGameState.activatePortalSite(site: SiteState): Boolean {
-    val target = site.kind.riftTarget() ?: return false
-    return enterDimension(target)
-}
-
-/** True while a rift kind may not be entered (its HATCH look); false for every other kind. */
-internal fun MutableGameState.portalLocked(kind: SiteKind): Boolean {
-    val target = kind.riftTarget() ?: return false
-    return !canEnterDimension(target)
 }
 
 /** The dimension a window rift kind leads into, or null for a kind that is no rift. */

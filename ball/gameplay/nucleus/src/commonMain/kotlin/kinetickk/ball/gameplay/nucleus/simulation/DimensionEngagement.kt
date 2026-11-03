@@ -35,12 +35,7 @@ internal fun MutableGameState.dimensionTouched(): Boolean = dimensionRun.visited
  */
 internal fun MutableGameState.appendDimensionMarks(out: FloatArray, count: Int): Int {
     val portal = dimensionRun.glitchPortal ?: return count
-    if (count >= MAX_OPTIONAL_SITE_MARKS) return count
-    val base = count * 3
-    out[base] = portal.x
-    out[base + 1] = portal.y
-    out[base + 2] = content.dimensions.portalRadius
-    return count + 1
+    return writeOptionalSiteMark(out, count, portal.x, portal.y, content.dimensions.portalRadius)
 }
 
 /** The trial panel's meter shows at most this many cells (the course and the Harvest stay well inside it). */

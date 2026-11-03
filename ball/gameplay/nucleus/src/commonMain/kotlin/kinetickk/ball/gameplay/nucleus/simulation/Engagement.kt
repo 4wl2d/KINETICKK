@@ -16,10 +16,9 @@ internal fun MutableGameState.activeWindowSite(): SiteState? {
     return null
 }
 
-/** Enemies an active site engagement owns: leash-exempt, never evicted. */
-internal fun MutableGameState.engagementFoeIds(): List<Int>? =
-    activeWindowSite()?.foeIds ?: secretSigil?.takeIf { it.active }?.foeIds
+/** The active site engagement, whose foes are leash-exempt and never evicted: a window trial or a sigil duel. */
+internal fun MutableGameState.engagementSite(): SiteState? = activeWindowSite() ?: secretSigil?.takeIf { it.active }
 
 /** True when [enemy] belongs to a place (an encounter or an active site) and stays there. */
 internal fun MutableGameState.isPlaceBound(enemy: Enemy): Boolean =
-    enemy.ownerTag != 0L || engagementFoeIds()?.contains(enemy.id) == true
+    enemy.ownerTag != 0L || engagementSite()?.isFoe(enemy.id) == true

@@ -217,7 +217,7 @@ private fun MutableGameState.touchAmbientSites() {
     for (index in sites.indices) {
         val site = sites[index]
         if (!site.settled || eggFound(site.kind)) continue
-        val trigger = ambientTriggerRadius(site.kind)
+        val trigger = ambientRule(site.kind)?.triggerRadius ?: 0f
         val touched = if (trigger > 0f) {
             distanceSquared(coreX, coreY, site.x, site.y) <= trigger * trigger
         } else {
@@ -293,30 +293,25 @@ internal fun MutableGameState.appendAmbientSiteMarks(out: FloatArray, count: Int
     var written = count
     val sites = ambientSites.sites
     for (index in sites.indices) {
-        if (written >= MAX_OPTIONAL_SITE_MARKS) break
         val site = sites[index]
         if (distanceSquared(coreX, coreY, site.x, site.y) > AMBIENT_MARK_REACH * AMBIENT_MARK_REACH) continue
-        val base = written * 3
-        out[base] = site.x
-        out[base + 1] = site.y
-        out[base + 2] = ambientMarkRadius(site.kind)
-        written++
+        written = writeOptionalSiteMark(out, written, site.x, site.y, ambientMarkRadius(site.kind))
     }
     return written
 }
 
 /** The circle a pilot must keep out of: a proximity trigger's radius, else the fly-through activation radius. */
 private fun MutableGameState.ambientMarkRadius(kind: SiteKind): Float {
-    val trigger = ambientTriggerRadius(kind)
+    val trigger = ambientRule(kind)?.triggerRadius ?: 0f
     return if (trigger > 0f) trigger else content.sites.definition(kind).activationRadius
 }
 
-/** The proximity trigger radius of [kind]'s rule, or 0 for a fly-through site. */
-private fun MutableGameState.ambientTriggerRadius(kind: SiteKind): Float {
+/**
+ * The ambient rule of [kind], or null for a kind no rule places: its trigger radius (0 for a fly-through site) and its
+ * off-screen reveal distance.
+ */
+internal fun MutableGameState.ambientRule(kind: SiteKind): AmbientSiteRule? {
     val rules = content.sites.ambient.rules
-    for (index in rules.indices) {
-        val rule = rules[index]
-        if (rule.kind == kind) return rule.triggerRadius
-    }
-    return 0f
+    for (index in rules.indices) if (rules[index].kind == kind) return rules[index]
+    return null
 }

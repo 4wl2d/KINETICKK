@@ -7,11 +7,22 @@ import kinetickk.ball.content.api.DimensionNotices
 import kinetickk.ball.content.api.SiteFamily
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.SiteNotice
+import kinetickk.ball.content.api.SiteReward
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.*
+
+/** A running window trial is lost once the Core is farther than this from its mark (a race: its next gate). */
+internal const val WINDOW_SITE_LEASH: Float = 2_400f
+
+/** Defenders a sealed anomaly's vault holds; the vault resolves at this count. */
+internal const val VAULT_DEFENDERS: Int = 3
+
+/** The orbit's and the untouched trial's volley lanes sit this far either side of the middle lane. */
+private const val VOLLEY_LANE_SPACING: Float = 60f
 
 /** A new run: no sites, no queued rewards, no secrets; the site stream and the discovery masks are kept. */
 internal fun MutableGameState.resetSites() {
@@ -91,24 +102,23 @@ private fun MutableGameState.advanceWindowSites(delta: Float) {
         SiteFamily.RACE -> advanceRaceSite(active, delta)
         SiteFamily.CHALLENGE -> advanceChallengeSite(active, delta)
         SiteFamily.BOUNTY -> advanceBountySite(active, delta)
-        // An accepted rift leaves the window sites to the dimension visit; the anomaly countdown is the step of
-        // everything else.
-        SiteFamily.ANOMALY, SiteFamily.PORTAL, SiteFamily.CACHE, SiteFamily.SECRET, SiteFamily.SIGNAL,
-        -> advanceAnomalySite(active, delta)
+        SiteFamily.ANOMALY -> advanceAnomalySite(active, delta)
+        // An accepted rift leaves the window sites to the dimension visit; caches, secrets and signals are never
+        // window sites.
+        SiteFamily.PORTAL, SiteFamily.CACHE, SiteFamily.SECRET, SiteFamily.SIGNAL,
+        -> error("${active.kind} never runs as a window trial")
     }
 }
 
 /**
- * One step of a running anomaly: lost on time out or 2,400 u from its centre; resolved by the circuit's three
- * beacons, the vault's three defenders or eight seconds in the orbit's ring.
+ * One step of a running anomaly: lost on time out or [WINDOW_SITE_LEASH] from its centre; resolved by the circuit's
+ * three beacons, the vault's [VAULT_DEFENDERS] defenders or eight seconds in the orbit's ring.
  */
 private fun MutableGameState.advanceAnomalySite(active: SiteState, delta: Float) {
     val policy = content.sites.windows
     var trial = active.copy(remaining = max(0f, active.remaining - delta))
-    if (trial.remaining <= 0f || distanceSquared(coreX, coreY, trial.x, trial.y) > square(2_400f)) {
-        sites = emptyList()
-        message = SiteNotice.ANOMALY_LOST.english
-        messageTime = 1.6f
+    if (trial.remaining <= 0f || distanceSquared(coreX, coreY, trial.x, trial.y) > square(WINDOW_SITE_LEASH)) {
+        loseWindowSite(SiteNotice.ANOMALY_LOST)
         return
     }
     var completed = false
@@ -121,9 +131,11 @@ private fun MutableGameState.advanceAnomalySite(active: SiteState, delta: Float)
             }
         }
         SiteKind.SEALED_ANOMALY -> {
-            completed = trial.count == 3
+            completed = trial.count == VAULT_DEFENDERS
             // Defenders remain around their vault, rather than following a fleeing player forever.
-            for (enemy in enemies) if (enemy.id in trial.foeIds && !enemy.dead) {
+            for (index in enemies.indices) {
+                val enemy = enemies[index]
+                if (!trial.isFoe(enemy.id) || enemy.dead) continue
                 val dx = enemy.x - trial.x
                 val dy = enemy.y - trial.y
                 val distance = length(dx, dy)
@@ -153,20 +165,39 @@ private fun MutableGameState.advanceAnomalySite(active: SiteState, delta: Float)
                 }
             }
         }
-        // Only the anomalies are offered until the site lane draws kinds by weight.
-        else -> Unit
+        else -> error("${trial.kind} is not an anomaly")
     }
     if (completed) {
         if (trial.kind == SiteKind.COLLAPSING_ORBIT) pendingCompletedOrbits++
-        sites = emptyList() // consume before any choice can open
-        message = SiteNotice.ANOMALY_RESOLVED.english
-        messageTime = 2f
-        // Granted after the notice, so a full directed queue's REWARD SALVAGED is the one shown.
-        grantSiteReward(
-            content.sites.definition(trial.kind).reward, trial.x, trial.y,
-            worldHash(runSeed, trial.offerId, trial.side, REWARD_SCATTER_SALT),
-        )
+        completeWindowSite(trial, SiteNotice.ANOMALY_RESOLVED, content.sites.definition(trial.kind).reward, trial.x, trial.y)
     } else sites = listOf(trial)
+}
+
+/** A running window trial was lost or failed: it leaves, nothing is granted and [notice] shows. */
+internal fun MutableGameState.loseWindowSite(notice: SiteNotice) {
+    sites = emptyList()
+    message = notice.english
+    messageTime = 1.6f
+}
+
+/**
+ * The running window trial [site] was completed: it leaves before any choice can open, [notice] shows, [discovery] is
+ * recorded and [reward] is granted at ([x], [y]), scattered by the window's hash.
+ */
+internal fun MutableGameState.completeWindowSite(
+    site: SiteState,
+    notice: SiteNotice,
+    reward: SiteReward,
+    x: Float,
+    y: Float,
+    discovery: WorldDiscovery? = null,
+) {
+    sites = emptyList() // consume before any choice can open
+    message = notice.english
+    messageTime = 2f
+    discovery?.let { discoverWorld(it) }
+    // Granted after the notice, so a full directed queue's REWARD SALVAGED is the one shown.
+    grantSiteReward(reward, x, y, worldHash(runSeed, site.offerId, site.side, REWARD_SCATTER_SALT))
 }
 
 /**
@@ -199,7 +230,7 @@ internal fun MutableGameState.offerWindowPair(
     val rift = claim?.let { riftKind(it.target) }
     val riftSide = claim?.side ?: -1
     check(claim == null || riftSide == 0 || riftSide == 1) { "A rift claims side 0 or 1 of a window" }
-    val heading = if (speed >= 80f) atan2(velocityY, velocityX) else atan2(lastAimDirectionY, lastAimDirectionX)
+    val heading = travelHeading()
     sites = List(2) { side ->
         val angle = heading + if (side == 0) -1.0f else 1.0f
         // Window sites move out from under obstacles, so their rings and beacons stay reachable.
@@ -285,7 +316,8 @@ internal fun MutableGameState.activateWindowSite(point: SiteState) {
         // A Ram rite without room for its foes, or a bounty whose boss finds no room, refuses to start and stays offered.
         SiteFamily.CHALLENGE -> startedChallenge(point)?.let { startWindowTrial(it) }
         SiteFamily.BOUNTY -> startedBounty(point)?.let { startWindowTrial(it) }
-        SiteFamily.PORTAL -> activatePortalSite(point)
+        // A refused rift stays offered.
+        SiteFamily.PORTAL -> point.kind.riftTarget()?.let { enterDimension(it) }
         // Caches and secrets are never window sites.
         SiteFamily.CACHE, SiteFamily.SECRET, SiteFamily.SIGNAL -> Unit
     }
@@ -299,9 +331,9 @@ private fun MutableGameState.startWindowTrial(started: SiteState) {
 }
 
 private fun MutableGameState.activateAnomalySite(point: SiteState) {
-    if (point.kind == SiteKind.SEALED_ANOMALY && enemies.size + 3 > content.rebirth.maxActiveEnemies) return
+    if (point.kind == SiteKind.SEALED_ANOMALY && enemies.size + VAULT_DEFENDERS > content.rebirth.maxActiveEnemies) return
     val ids = mutableListOf<Int>()
-    if (point.kind == SiteKind.SEALED_ANOMALY) repeat(3) { index ->
+    if (point.kind == SiteKind.SEALED_ANOMALY) repeat(VAULT_DEFENDERS) { index ->
         val angle = TAU * index / 3f
         val integrity = spawnIntegrity(EnemyType.WARDEN) * POINT_DEFENDER_HEALTH_SHARE
         val enemy = Enemy(
@@ -326,12 +358,12 @@ internal fun MutableGameState.recordSiteKill(enemy: Enemy) {
         return
     }
     if (recordSigilKill(enemy)) return
-    val trial = sites.singleOrNull()?.takeIf { it.active && enemy.id in it.foeIds } ?: return
+    val trial = sites.singleOrNull()?.takeIf { it.active && it.isFoe(enemy.id) } ?: return
     // Called once by onEnemyKilled, whose dead guard also protects this counter.
     val count = when (trial.kind) {
         SiteKind.RAM_TRIAL -> if (isDashKill(enemy)) trial.count + 1 else return
         SiteKind.BOUNTY_ARENA -> 1
-        else -> min(3, trial.count + 1)
+        else -> min(VAULT_DEFENDERS, trial.count + 1)
     }
     sites = listOf(trial.copy(count = count))
 }
@@ -340,11 +372,30 @@ private fun MutableGameState.fireOrbitVolley(point: SiteState) {
     val dx = cos(point.volleyAngle)
     val dy = sin(point.volleyAngle)
     val damage = hostileDamage(null, 12f)
+    fireThreeLaneVolley(point.x - dx * 320f, point.y - dy * 320f, dx, dy, 460f, 1.5f, damage)
+}
+
+/**
+ * Three hostile shots along the unit direction ([dx], [dy]) at [speed] for [life] seconds: one from ([originX],
+ * [originY]) and one [VOLLEY_LANE_SPACING] to either side of it.
+ */
+internal fun MutableGameState.fireThreeLaneVolley(
+    originX: Float,
+    originY: Float,
+    dx: Float,
+    dy: Float,
+    speed: Float,
+    life: Float,
+    damage: Float,
+) {
     repeat(3) { lane ->
-        val lateral = (lane - 1) * 60f
-        addProjectile(Projectile(point.x - dx * 320f - dy * lateral,
-            point.y - dy * 320f + dx * lateral, dx * 460f, dy * 460f,
-            radius = 7f, life = 1.5f, hostile = true, damage = damage))
+        val lateral = (lane - 1) * VOLLEY_LANE_SPACING
+        addProjectile(
+            Projectile(
+                originX - dy * lateral, originY + dx * lateral, dx * speed, dy * speed,
+                radius = 7f, life = life, hostile = true, damage = damage,
+            ),
+        )
     }
 }
 

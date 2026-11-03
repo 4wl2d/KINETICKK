@@ -4,15 +4,14 @@
 package kinetickk.ball.gameplay.nucleus.model
 
 import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 
-internal data class SitePoint(val dx: Float, val dy: Float)
-
 /** Circuit beacon offsets in visit order (step 0, 1, 2; the third beacon is the centre). */
-internal val CircuitBeacons: ImmutableList<SitePoint> =
-    immutableListOf(SitePoint(230f, 200f), SitePoint(-230f, 200f), SitePoint(0f, 0f))
+internal val CircuitBeacons: ImmutableList<SiteMarkProjection> =
+    immutableListOf(SiteMarkProjection(230f, 200f), SiteMarkProjection(-230f, 200f), SiteMarkProjection(0f, 0f))
 
 /** Value-only runtime of one site; reducers may safely retain prior snapshots. */
 internal data class SiteState(
@@ -42,15 +41,14 @@ internal data class SiteState(
     val aimY: Float = 0f,
     /** Enemies the site owns: vault defenders, marked Ram foes, the bounty or secret boss. */
     val foeIds: ImmutableList<Int> = immutableListOf(),
-    /** Course offsets from (x, y): circuit beacons, race gates or slalom poles, in order. */
-    val course: ImmutableList<SitePoint> = immutableListOf(),
+    /** Course offsets from (x, y): circuit beacons, race gates or slalom poles, in order (projected as they are). */
+    val course: ImmutableList<SiteMarkProjection> = immutableListOf(),
     /** Slalom: bit k set = pole k is passed on its left. */
     val sides: Int = 0,
-    /** Race: par seconds; slalom: course axis angle (radians). */
+    /** Race: par seconds. */
     val par: Float = 0f,
+    /** Slalom: course axis angle (radians). */
     val axis: Float = 0f,
-    /** Race: seconds allowed (medal limit). */
-    val limit: Float = 0f,
     /** Untouched: damage taken + absorbed when it started. */
     val hurtBaseline: Double = 0.0,
     /** Ambient: false until nudged clear of obstacles (settled once, inside the obstacle window). */
@@ -58,6 +56,12 @@ internal data class SiteState(
 ) {
     val offerId: Int get() = (id ushr 1).toInt()
     val side: Int get() = (id and 1L).toInt()
+
+    /** True when the site owns enemy [id] (an index scan, without boxing the id). */
+    fun isFoe(id: Int): Boolean {
+        for (index in foeIds.indices) if (foeIds[index] == id) return true
+        return false
+    }
 
     fun shifted(dx: Float, dy: Float): SiteState = copy(x = x - dx, y = y - dy, aimX = aimX - dx, aimY = aimY - dy)
 }

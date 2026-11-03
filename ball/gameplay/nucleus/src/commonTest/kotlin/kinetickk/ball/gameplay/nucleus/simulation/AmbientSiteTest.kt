@@ -19,7 +19,6 @@ import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
-import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.abs
 import kotlin.math.sqrt
 import kotlin.test.Test
@@ -67,31 +66,10 @@ class AmbientSiteTest {
         updateSites(0f)
     }
 
-    /** One site step that sweeps the Core from ([fromX], [fromY]) to ([toX], [toY]). */
-    private fun MutableGameState.flyStep(fromX: Float, fromY: Float, toX: Float, toY: Float) {
-        previousCoreX = fromX
-        previousCoreY = fromY
-        coreX = toX
-        coreY = toY
-        updateSites(0.01f)
-    }
-
-    /** The current window replaced by [sites] around the Core's chunk, so the next step keeps it. */
-    private fun MutableGameState.holdWindow(vararg sites: SiteState) {
-        ambientSites = AmbientSiteWindow(
-            absoluteChunk(worldOriginX + coreX), absoluteChunk(worldOriginY + coreY), sites.toList().toImmutableList(),
-        )
-    }
-
     private fun cache(cellX: Int, x: Float, y: Float, settled: Boolean = true) =
         SiteState(ambientSiteId(SiteKind.DRIFT_CACHE, cellX, 7), SiteKind.DRIFT_CACHE, x, y, Float.POSITIVE_INFINITY, settled = settled)
 
     private fun MutableGameState.absoluteDistance(site: SiteState): Double = sqrt(absoluteDistanceSquared(site.x, site.y))
-
-    private fun MutableGameState.matter(): Double = runMatter + matterFraction.toDouble()
-
-    private fun MutableGameState.streams(): List<Any> =
-        listOf(rewardRandom.snapshot(), spawnRandom.snapshot(), gameplayRandom.snapshot(), siteRandom.snapshot())
 
     @Test
     fun ambientSitesArePureFunctionsOfSeedAndCell() {

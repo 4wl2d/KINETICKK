@@ -52,7 +52,6 @@ import kinetickk.ball.gameplay.nucleus.model.Ember
 import kinetickk.ball.gameplay.nucleus.model.HaloRing
 import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
 import kinetickk.ball.gameplay.nucleus.model.SignalPrompt
-import kinetickk.ball.gameplay.nucleus.model.SitePoint
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.model.StructureField
 import kinetickk.ball.gameplay.nucleus.model.StructureSignal
@@ -71,6 +70,7 @@ import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
 import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.PickupType
+import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
 import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
@@ -1074,11 +1074,10 @@ class GameplayReductionIsolationTest {
                 aimX = 12f,
                 aimY = -14f,
                 foeIds = immutableListOf(11, 13),
-                course = immutableListOf(SitePoint(20f, 30f), SitePoint(-5f, 6f)),
+                course = immutableListOf(SiteMarkProjection(20f, 30f), SiteMarkProjection(-5f, 6f)),
                 sides = 0b10,
                 par = 7.5f,
                 axis = 0.6f,
-                limit = 9.5f,
                 hurtBaseline = 12.5,
                 settled = false,
             ),
@@ -2166,7 +2165,6 @@ class GameplayReductionIsolationTest {
                 value("$prefix.sides", site.sides)
                 float("$prefix.par", site.par)
                 float("$prefix.axis", site.axis)
-                float("$prefix.limit", site.limit)
                 value("$prefix.hurtBaseline", site.hurtBaseline.toRawBits())
                 value("$prefix.settled", site.settled)
             }

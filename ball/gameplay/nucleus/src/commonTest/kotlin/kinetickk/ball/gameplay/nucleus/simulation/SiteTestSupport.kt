@@ -6,6 +6,8 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.SiteFamily
 import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.WorldDiscovery
+import kinetickk.ball.gameplay.nucleus.model.AmbientSiteWindow
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.toImmutableList
@@ -46,6 +48,33 @@ internal val DesignWindowWeights: Map<SiteKind, Float> = SiteKind.entries.mapNot
         SiteFamily.CACHE, SiteFamily.SECRET, SiteFamily.PORTAL, SiteFamily.SIGNAL -> null
     }
 }.toMap()
+
+/** One site step that sweeps the Core from ([fromX], [fromY]) to ([toX], [toY]). */
+internal fun MutableGameState.flyStep(fromX: Float, fromY: Float, toX: Float, toY: Float, delta: Float = 0.01f) {
+    previousCoreX = fromX
+    previousCoreY = fromY
+    coreX = toX
+    coreY = toY
+    updateSites(delta)
+}
+
+/** The current ambient window replaced by [sites] around the Core's chunk, so the next step keeps it. */
+internal fun MutableGameState.holdWindow(vararg sites: SiteState) {
+    ambientSites = AmbientSiteWindow(
+        absoluteChunk(worldOriginX + coreX), absoluteChunk(worldOriginY + coreY), sites.toList().toImmutableList(),
+    )
+}
+
+/** The run's Matter, its fraction included. */
+internal fun MutableGameState.matter(): Double = runMatter + matterFraction.toDouble()
+
+/** The reward, spawn, gameplay and site streams' snapshots. */
+internal fun MutableGameState.streams(): List<Any> =
+    listOf(rewardRandom.snapshot(), spawnRandom.snapshot(), gameplayRandom.snapshot(), siteRandom.snapshot())
+
+/** True once [id] is discovered and waits in the pending mask for the next progress update. */
+internal fun MutableGameState.discovered(id: WorldDiscovery): Boolean =
+    worldDiscoveryMask and id.bit != 0 && pendingWorldDiscoveryMask and id.bit != 0
 
 /**
  * Offers window [index] at its scheduled second from the Core's current pose (nothing offered before, no swept

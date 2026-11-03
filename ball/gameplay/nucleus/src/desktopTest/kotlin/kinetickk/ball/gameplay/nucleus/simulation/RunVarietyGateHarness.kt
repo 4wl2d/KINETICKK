@@ -7,7 +7,6 @@ import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.OmenId
 import kinetickk.ball.content.api.SignalKind
 import kinetickk.ball.content.api.SignalOption
-import kinetickk.ball.gameplay.nucleus.model.EngagementSecretMask
 import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.model.segmentCircleIntersects
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
@@ -127,11 +126,6 @@ internal fun List<VarietyRun>.meanLevelAt600(): Double = sumOf { it.levelAt600.t
 /** Signals the runs touched over the signals they spawned (0 for none). */
 internal fun List<VarietyRun>.reachShare(): Double =
     sumOf { it.signalsSpawned }.let { spawned -> if (spawned == 0) 0.0 else sumOf { it.signalsEngaged }.toDouble() / spawned }
-
-/** [optionalSitesTouched] without the event-signal clause (a seeker engages signals by design). */
-private fun MutableGameState.optionalSitesTouchedOtherThanSignals(): Boolean =
-    activeWindowSite() != null || directedReward != null || pendingDirectedRewards.isNotEmpty() || openedSiteIds.isNotEmpty() ||
-        (runSecretFlags and EngagementSecretMask) != 0 || secretSigil?.active == true || structureTouched() || dimensionTouched()
 
 /**
  * The engaging pilot of the signal gate (spec §11.5): the NoPoi bot, which steers to each live event signal once no

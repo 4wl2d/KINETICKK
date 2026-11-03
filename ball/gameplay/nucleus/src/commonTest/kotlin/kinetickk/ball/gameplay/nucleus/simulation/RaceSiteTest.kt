@@ -14,12 +14,12 @@ import kinetickk.ball.content.api.RacePolicy
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.SiteNotice
 import kinetickk.ball.content.api.WorldDiscovery
-import kinetickk.ball.gameplay.nucleus.model.SitePoint
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.model.windowSiteId
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.render.PickupType
+import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.atan2
@@ -47,26 +47,12 @@ class RaceSiteTest {
         return sites.single()
     }
 
-    /** One step that sweeps the Core from ([fromX], [fromY]) to ([toX], [toY]). */
-    private fun MutableGameState.flyStep(fromX: Float, fromY: Float, toX: Float, toY: Float, delta: Float = 0.01f) {
-        previousCoreX = fromX
-        previousCoreY = fromY
-        coreX = toX
-        coreY = toY
-        updateSites(delta)
-    }
-
     /** One step straight through gate [index] of [race] (from 40 u before it to 40 u past it, along x). */
     private fun MutableGameState.passGate(race: SiteState, index: Int, delta: Float = 0.01f) {
         val gateX = race.x + race.course[index].dx
         val gateY = race.y + race.course[index].dy
         flyStep(gateX - 40f, gateY, gateX + 40f, gateY, delta)
     }
-
-    private fun MutableGameState.matter(): Double = runMatter + matterFraction.toDouble()
-
-    private fun MutableGameState.hasDiscovered(id: WorldDiscovery): Boolean =
-        worldDiscoveryMask and id.bit != 0 && pendingWorldDiscoveryMask and id.bit != 0
 
     @Test
     fun theCourseIsAHashOfTheRunSeedAndTheWindowSideAndDrawsFromNoStream() {
@@ -88,7 +74,7 @@ class RaceSiteTest {
         val same = again.startRace(offerId = 2, side = 1)
         assertEquals(race.course, same.course)
         assertEquals(race.par, same.par)
-        assertEquals(race.limit, same.limit)
+        assertEquals(race.remaining, same.remaining)
 
         // Another side, window or run seed lays another course.
         assertNotEquals(race.course, game().startRace(offerId = 2, side = 0).course)
@@ -125,9 +111,9 @@ class RaceSiteTest {
         assertEquals(setOf(5, 6, 7), sizes)
     }
 
-    private fun angleOf(point: SitePoint): Float = atan2(point.dy, point.dx)
+    private fun angleOf(point: SiteMarkProjection): Float = atan2(point.dy, point.dx)
 
-    private fun angleBetween(from: SitePoint, to: SitePoint): Float {
+    private fun angleBetween(from: SiteMarkProjection, to: SiteMarkProjection): Float {
         var turn = angleOf(to) - angleOf(from)
         while (turn > kotlin.math.PI) turn -= 2f * kotlin.math.PI.toFloat()
         while (turn < -kotlin.math.PI) turn += 2f * kotlin.math.PI.toFloat()
@@ -194,7 +180,6 @@ class RaceSiteTest {
             val par = path / game.steadyCursorSpeed(policy.parReach) + policy.turnAllowanceSeconds * (race.course.size - 1)
             assertEquals(par, race.par, "par on ${screen.first}x${screen.second}")
             val limit = min(max(par * policy.limitFactor, policy.minimumLimit), game.content.sites.windows.trialDuration)
-            assertEquals(limit, race.limit)
             assertEquals(limit, race.remaining)
             assertEquals(0, race.step)
             assertEquals(0f, race.clock)
@@ -205,11 +190,11 @@ class RaceSiteTest {
         // A short course is held to the minimum limit; a generous factor stops at the window's trial.
         val short = game(canonicalGameplayContent.withRace(RacePolicy(minRadius = 600f, maxRadius = 600f))).startRace()
         assertTrue(short.par * 2.4f < 12f)
-        assertEquals(12f, short.limit)
+        assertEquals(12f, short.remaining)
         val generous = game(
             canonicalGameplayContent.withRace(RacePolicy(limitFactor = 20f)),
         ).startRace()
-        assertEquals(canonicalGameplayContent.sites.windows.trialDuration, generous.limit)
+        assertEquals(canonicalGameplayContent.sites.windows.trialDuration, generous.remaining)
     }
 
     @Test
@@ -228,7 +213,7 @@ class RaceSiteTest {
         game.passGate(race, 1)
         assertEquals(2, game.sites.single().step)
         assertEquals(0.04f, game.sites.single().clock, 1e-6f)
-        assertEquals(race.limit - 0.04f, game.sites.single().remaining, 1e-5f)
+        assertEquals(race.remaining - 0.04f, game.sites.single().remaining, 1e-5f)
         // A swept pass grazing the gate's radius counts; one just outside it does not.
         val radius = game.content.sites.race.gateRadius
         val gateX = race.course[2].dx
@@ -323,7 +308,7 @@ class RaceSiteTest {
         assertEquals(race.y + last.dy, key.y)
         assertEquals(matter + 15.0 * game.matterGain, game.matter(), 1e-3)
         assertEquals(0, game.pendingLevelChoices)
-        assertTrue(game.hasDiscovered(WorldDiscovery.GATE_RACE))
+        assertTrue(game.discovered(WorldDiscovery.GATE_RACE))
     }
 
     @Test
@@ -334,7 +319,7 @@ class RaceSiteTest {
             val race = lastGateAt(game, clock = par * clockShare + extra)
             game.passGate(race, race.course.lastIndex)
             assertTrue(game.sites.isEmpty())
-            assertTrue(game.hasDiscovered(WorldDiscovery.GATE_RACE), "any finish discovers the race")
+            assertTrue(game.discovered(WorldDiscovery.GATE_RACE), "any finish discovers the race")
             return game
         }
         val silver = finish(1.3f, -0.02f)
@@ -356,7 +341,7 @@ class RaceSiteTest {
         assertTrue(plain.pendingDirectedRewards.isEmpty())
         assertEquals(0, plain.pendingLevelChoices)
         assertEquals(matter + 10.0 * plain.matterGain, plain.matter(), 1e-3)
-        assertTrue(plain.hasDiscovered(WorldDiscovery.GATE_RACE))
+        assertTrue(plain.discovered(WorldDiscovery.GATE_RACE))
     }
 
     @Test
@@ -393,7 +378,7 @@ class RaceSiteTest {
         val game = game()
         val race = game.startRace()
         val matter = game.matter()
-        game.flyStep(0f, 0f, 0f, 0f, delta = race.limit - 0.01f)
+        game.flyStep(0f, 0f, 0f, 0f, delta = race.remaining - 0.01f)
         assertEquals(1, game.sites.size, "still running just before the limit")
         game.flyStep(0f, 0f, 0f, 0f, delta = 0.02f)
         assertTrue(game.sites.isEmpty())
@@ -408,22 +393,24 @@ class RaceSiteTest {
     @Test
     fun strayingPastTheLeashFromTheNextGateLosesTheRace() {
         val game = game()
-        val course = immutableListOf(SitePoint(1_000f, 0f), SitePoint(1_500f, 900f), SitePoint(500f, 1_500f),
-            SitePoint(-500f, 1_400f), SitePoint(-1_100f, 600f))
+        val course = immutableListOf(
+            SiteMarkProjection(1_000f, 0f), SiteMarkProjection(1_500f, 900f), SiteMarkProjection(500f, 1_500f),
+            SiteMarkProjection(-500f, 1_400f), SiteMarkProjection(-1_100f, 600f),
+        )
         val race = SiteState(windowSiteId(0, 0), SiteKind.GATE_RACE, 0f, 0f, 85f, active = true, remaining = 20f,
-            course = course, par = 6f, limit = 20f)
+            course = course, par = 6f)
         game.sites = listOf(race)
-        game.flyStep(1_000f, RACE_LEASH, 1_000f, RACE_LEASH)
+        game.flyStep(1_000f, WINDOW_SITE_LEASH, 1_000f, WINDOW_SITE_LEASH)
         assertEquals(1, game.sites.size, "exactly the leash keeps the race")
-        game.flyStep(1_000f, RACE_LEASH + 1f, 1_000f, RACE_LEASH + 1f)
+        game.flyStep(1_000f, WINDOW_SITE_LEASH + 1f, 1_000f, WINDOW_SITE_LEASH + 1f)
         assertTrue(game.sites.isEmpty())
         assertEquals(SiteNotice.RACE_LOST.english, game.message)
 
         // The leash follows the next gate, not the start.
         game.sites = listOf(race.copy(step = 3))
-        game.flyStep(-500f, 1_400f + RACE_LEASH - 1f, -500f, 1_400f + RACE_LEASH - 1f)
+        game.flyStep(-500f, 1_400f + WINDOW_SITE_LEASH - 1f, -500f, 1_400f + WINDOW_SITE_LEASH - 1f)
         assertEquals(1, game.sites.size)
-        assertTrue(length(-500f, 1_400f + RACE_LEASH - 1f) > RACE_LEASH)
+        assertTrue(length(-500f, 1_400f + WINDOW_SITE_LEASH - 1f) > WINDOW_SITE_LEASH)
     }
 
     @Test

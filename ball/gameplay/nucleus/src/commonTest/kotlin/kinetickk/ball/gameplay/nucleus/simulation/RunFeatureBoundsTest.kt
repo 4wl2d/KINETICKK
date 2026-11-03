@@ -72,7 +72,7 @@ class RunFeatureBoundsTest {
         state.activateWindowSite(rite)
         assertEquals(rite.id, state.sites.single().id)
         assertTrue(state.sites.single().active)
-        assertEquals(state.enemies.map { it.id }, state.engagementFoeIds())
+        assertEquals<List<Int>?>(state.enemies.map { it.id }, state.engagementSite()?.foeIds)
 
         state.previousCoreX = other.x - 50f
         state.previousCoreY = other.y
@@ -98,7 +98,7 @@ class RunFeatureBoundsTest {
         state.activateWindowSite(bounty)
         assertEquals(bounty.id, state.sites.single().id)
         assertTrue(state.sites.single().active)
-        assertEquals(state.enemies.map { it.id }, state.engagementFoeIds())
+        assertEquals<List<Int>?>(state.enemies.map { it.id }, state.engagementSite()?.foeIds)
 
         state.previousCoreX = other.x - 50f
         state.previousCoreY = other.y

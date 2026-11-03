@@ -12,8 +12,6 @@ import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.RunSecretFlag
 import kinetickk.ball.gameplay.nucleus.model.TAU
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
-import kinetickk.ball.gameplay.nucleus.render.ChoiceType
-import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kotlin.math.cos
 import kotlin.math.sin
@@ -91,17 +89,9 @@ internal fun MutableGameState.setSecret(flag: RunSecretFlag) {
  */
 internal fun MutableGameState.openItemOfferWithFloor(floor: ItemRarity) {
     offerRarityFloor = floor
-    activeChoiceType = ChoiceType.ITEM
-    itemOffersOpened++
-    buildItemChoices()
+    openItemChoice()
     if (choices.isEmpty()) {
-        grantMatter(8f)
-        message = "CATALOG COMPLETE // MATTER SALVAGED"
-        messageTime = 1.5f
         offerRarityFloor = null
         finishChoice(GameplayAudioCue.UI_CLICK)
-        return
     }
-    clearInputBuffers()
-    phase = GamePhase.CHOICE
 }

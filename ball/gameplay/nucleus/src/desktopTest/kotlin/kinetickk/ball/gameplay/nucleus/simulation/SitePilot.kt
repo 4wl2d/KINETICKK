@@ -234,7 +234,7 @@ private fun MutableGameState.endedOutcome(before: FrameBefore): Pair<SiteOutcome
             val gate = trial.course[last]
             val passed = elapsed - before.at
             if (trial.step == last && trial.remaining - passed > 0f &&
-                length(coreX - trial.x - gate.dx, coreY - trial.y - gate.dy) < RACE_LEASH * 0.5f
+                length(coreX - trial.x - gate.dx, coreY - trial.y - gate.dy) < WINDOW_SITE_LEASH * 0.5f
             ) {
                 when (raceMedal(trial.copy(clock = trial.clock + passed))) {
                     3 -> SiteOutcome.GOLD

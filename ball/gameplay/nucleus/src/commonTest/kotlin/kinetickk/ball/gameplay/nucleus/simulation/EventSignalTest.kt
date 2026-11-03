@@ -89,9 +89,6 @@ class EventSignalTest {
     private fun MutableGameState.signalBuff(option: SignalOption): ActiveBuff? =
         buffs.singleOrNull { it.sourceKey == BuffSource.signal(option) }
 
-    private fun MutableGameState.streams(): List<Any> =
-        listOf(rewardRandom.snapshot(), spawnRandom.snapshot(), gameplayRandom.snapshot(), siteRandom.snapshot())
-
     @Test
     fun everyRunUsesOneOfThreeSlotsAndSignalKindsVaryAcrossRuns() {
         val slotRuns = IntArray(policy.slots)

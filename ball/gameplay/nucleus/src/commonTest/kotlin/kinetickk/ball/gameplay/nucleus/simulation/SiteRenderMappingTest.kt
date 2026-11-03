@@ -6,10 +6,10 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.SiteFamily
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.nucleus.model.AmbientSiteWindow
-import kinetickk.ball.gameplay.nucleus.model.SitePoint
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection
 import kinetickk.ball.gameplay.nucleus.render.TrialClock
 import kinetickk.ball.gameplay.nucleus.render.TrialProjection
 import kinetickk.ball.gameplay.nucleus.render.TrialReward
@@ -77,8 +77,8 @@ class SiteRenderMappingTest {
     fun aRaceCountsItsGatesAndNamesTheBestMedalItsClockStillAllows() {
         val game = game()
         val race = active(SiteKind.GATE_RACE, remaining = 9f).copy(
-            step = 2, par = 5f, limit = 12f,
-            course = List(6) { SitePoint(200f * it, -100f * it) }.toImmutableList(),
+            step = 2, par = 5f,
+            course = List(6) { SiteMarkProjection(200f * it, -100f * it) }.toImmutableList(),
         )
         // Par 5 s: gold to 5 s, silver to 6.5 s, bronze to 8.75 s (the shipped 1.0 / 1.3 / 1.75 factors).
         val medals = listOf(4f, 5f, 6.4f, 8.7f, 8.76f, 11f).map { clock -> game.running(race.copy(clock = clock)).medal }
@@ -190,7 +190,7 @@ class SiteRenderMappingTest {
     @Test
     fun theSigilFollowsTheWindowSitesAndAnUnmovedCourseKeepsItsList() {
         val game = game()
-        val course = List(7) { SitePoint(150f * it, 90f * it) }.toImmutableList()
+        val course = List(7) { SiteMarkProjection(150f * it, 90f * it) }.toImmutableList()
         game.sites = listOf(active(SiteKind.GATE_RACE).copy(par = 6f, course = course))
         game.secretSigil = SiteState(id = 9_000L, kind = SiteKind.FAR_SIGIL, x = -40f, y = 1_100f, expiresAt = 630f)
         val first = game.toRenderModel()
@@ -203,7 +203,8 @@ class SiteRenderMappingTest {
         assertSame(first.sites.first().course, next.sites.first().course)
         assertEquals(1.5f, next.sites.first().clock)
         // A course of other marks is projected anew.
-        game.sites = listOf(game.sites.single().copy(course = course.map { SitePoint(it.dx + 1f, it.dy) }.toImmutableList()))
+        val shifted = course.map { SiteMarkProjection(it.dx + 1f, it.dy) }.toImmutableList()
+        game.sites = listOf(game.sites.single().copy(course = shifted))
         assertNotSame(first.sites.first().course, game.toRenderModel(reusableCollections = next).sites.first().course)
     }
 

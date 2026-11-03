@@ -142,7 +142,7 @@ internal fun MutableGameState.updateSecretSigil() {
     }
     when {
         sigil.count >= 1 -> breakSigil(sigil)
-        distanceSquared(coreX, coreY, sigil.x, sigil.y) > policy.duelLeash * policy.duelLeash || !sigilBossAlive(sigil) ->
+        distanceSquared(coreX, coreY, sigil.x, sigil.y) > policy.duelLeash * policy.duelLeash || !siteBossAlive(sigil) ->
             fadeSigilDuel(sigil)
     }
 }
@@ -175,19 +175,9 @@ private fun MutableGameState.summonSigilBoss(sigil: SiteState) {
     setSecret(RunSecretFlag.CARTOGRAPHER_SUMMONED)
 }
 
-/** True while the duel's boss is alive. */
-private fun MutableGameState.sigilBossAlive(sigil: SiteState): Boolean {
-    val boss = sigil.foeIds.firstOrNull() ?: return false
-    for (index in enemies.indices) {
-        val enemy = enemies[index]
-        if (enemy.id == boss) return enemy.alive
-    }
-    return false
-}
-
 /** Kill hook ([recordSiteKill]): the duel's boss fell where it stood; the sigil breaks at its next step. */
 internal fun MutableGameState.recordSigilKill(enemy: Enemy): Boolean {
-    val sigil = secretSigil?.takeIf { it.active && enemy.id in it.foeIds } ?: return false
+    val sigil = secretSigil?.takeIf { it.active && it.isFoe(enemy.id) } ?: return false
     secretSigil = sigil.copy(count = 1, aimX = enemy.x, aimY = enemy.y)
     return true
 }
@@ -378,14 +368,7 @@ private fun MutableGameState.updateGoldenDrifter() {
 }
 
 /** The flying Golden Drifter, or null. */
-internal fun MutableGameState.goldenDrifter(): Enemy? {
-    if (goldenDrifterId < 0) return null
-    for (index in enemies.indices) {
-        val enemy = enemies[index]
-        if (enemy.id == goldenDrifterId && enemy.alive) return enemy
-    }
-    return null
-}
+internal fun MutableGameState.goldenDrifter(): Enemy? = enemyById(goldenDrifterId)?.takeIf { it.alive }
 
 /** Removes a flying Golden Drifter without a kill or reward (it got away, or the Architect arrived). */
 internal fun MutableGameState.releaseGoldenDrifterWithoutKill() {

@@ -8,8 +8,6 @@ import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.SiteNotice
 import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.gameplay.nucleus.model.Enemy
-import kinetickk.ball.gameplay.nucleus.model.Projectile
-import kinetickk.ball.gameplay.nucleus.model.SitePoint
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.model.TAU
@@ -17,6 +15,7 @@ import kinetickk.ball.gameplay.nucleus.model.distanceSquared
 import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.abs
@@ -29,17 +28,11 @@ import kotlin.math.sin
 /** Course seeds of slaloms: `worldHash(runSeed, offerId, side, SLALOM_COURSE_SALT)` (registered SITES salt). */
 internal const val SLALOM_COURSE_SALT: Long = 0x517E_C0A5_0000_0002L
 
-/** A running challenge is lost once the Core is farther than this from its centre (a slalom: from its next pole). */
-internal const val CHALLENGE_LEASH: Float = 2_400f
-
 /** Untouched volley shots fly at most this long. */
 private const val UNTOUCHED_SHOT_MAX_LIFE: Float = 2f
 
 /** Untouched volley shots fly this far past the aim point (within [UNTOUCHED_SHOT_MAX_LIFE]). */
 private const val UNTOUCHED_SHOT_OVERSHOOT: Float = 400f
-
-/** Untouched volley lanes sit this far either side of the middle lane. */
-private const val UNTOUCHED_LANE_SPACING: Float = 60f
 
 /** Fx colour of a passed pole's burst (bone). */
 private const val POLE_BURST_COLOR: Int = 1
@@ -85,7 +78,7 @@ private fun MutableGameState.spawnRamFoes(site: SiteState, policy: ChallengePoli
             placement = EncounterPlacement.RING,
             ringRadius = policy.ramRingRadius,
             integrityShare = policy.ramFoeHealthShare,
-            abandonDistance = CHALLENGE_LEASH,
+            abandonDistance = WINDOW_SITE_LEASH,
             evictOrdinary = false,
             announce = false,
         ),
@@ -109,7 +102,7 @@ internal fun siteEncounterTag(site: SiteState): Long = encounterTag(EncounterOwn
 private fun MutableGameState.laidSlalom(started: SiteState, policy: ChallengePolicy): SiteState {
     val random = HashRandom(worldHash(runSeed, started.offerId, started.side, SLALOM_COURSE_SALT))
     val firstSide = if (random.nextFloat() < 0.5f) 1f else -1f
-    val heading = if (speed >= 80f) atan2(velocityY, velocityX) else atan2(lastAimDirectionY, lastAimDirectionX)
+    val heading = travelHeading()
     var axis = heading
     var clear = false
     for (candidate in 0 until 3) {
@@ -130,7 +123,7 @@ private fun MutableGameState.laidSlalom(started: SiteState, policy: ChallengePol
     val unitX = cos(axis)
     val unitY = sin(axis)
     var sides = 0
-    val course = ArrayList<SitePoint>(policy.slalomPoles)
+    val course = ArrayList<SiteMarkProjection>(policy.slalomPoles)
     for (pole in 0 until policy.slalomPoles) {
         val side = slalomSide(firstSide, pole)
         if (side > 0f) sides = sides or (1 shl pole)
@@ -194,11 +187,11 @@ private fun slalomSide(firstSide: Float, pole: Int): Float = if (pole % 2 == 0) 
 /** Distance along the axis of slalom pole [pole]. */
 private fun slalomAlong(pole: Int, policy: ChallengePolicy): Float = policy.slalomFirstAlong + policy.slalomSpacing * pole
 
-private fun slalomPole(unitX: Float, unitY: Float, pole: Int, side: Float, policy: ChallengePolicy): SitePoint {
+private fun slalomPole(unitX: Float, unitY: Float, pole: Int, side: Float, policy: ChallengePolicy): SiteMarkProjection {
     val along = slalomAlong(pole, policy)
     val lateral = side * policy.slalomPoleOffset
     // The axis normal (−unitY, unitX) is the left of the course.
-    return SitePoint(unitX * along - unitY * lateral, unitY * along + unitX * lateral)
+    return SiteMarkProjection(unitX * along - unitY * lateral, unitY * along + unitX * lateral)
 }
 
 /** Radius of the brakeless ring [clock] seconds into the trial: it shrinks from its start to its end radius. */
@@ -209,10 +202,10 @@ internal fun ChallengePolicy.brakelessRing(clock: Float): Float =
 private enum class ChallengeOutcome { ONGOING, COMPLETED, FAILED }
 
 /**
- * One step of the running challenge [site]: lost on time out or once the Core strays [CHALLENGE_LEASH] from its centre
- * (a slalom: from its next pole); otherwise its kind's rule earns, counts or breaks. A completed challenge grants its
- * definition's reward and discovers the trials; a lost or failed one grants nothing. Either way the Ram rite's surviving
- * foes stay on as ordinary enemies.
+ * One step of the running challenge [site]: lost on time out or once the Core strays [WINDOW_SITE_LEASH] from its
+ * centre (a slalom: from its next pole); otherwise its kind's rule earns, counts or breaks. A completed challenge grants
+ * its definition's reward and discovers the trials; a lost or failed one grants nothing. Either way the Ram rite's
+ * surviving foes stay on as ordinary enemies.
  */
 internal fun MutableGameState.advanceChallengeSite(site: SiteState, delta: Float) {
     val trial = site.copy(clock = site.clock + delta, remaining = max(0f, site.remaining - delta))
@@ -283,7 +276,7 @@ private fun MutableGameState.challengeLeashBroken(trial: SiteState): Boolean {
         markX += trial.course[trial.step].dx
         markY += trial.course[trial.step].dy
     }
-    return distanceSquared(coreX, coreY, markX, markY) > square(CHALLENGE_LEASH)
+    return distanceSquared(coreX, coreY, markX, markY) > square(WINDOW_SITE_LEASH)
 }
 
 /** Marked foes of [trial] still alive. */
@@ -294,12 +287,6 @@ private fun MutableGameState.liveFoes(trial: SiteState): Int {
         if (enemy.alive && trial.isFoe(enemy.id)) live++
     }
     return live
-}
-
-/** Index scan without boxing the id. */
-private fun SiteState.isFoe(id: Int): Boolean {
-    for (index in foeIds.indices) if (foeIds[index] == id) return true
-    return false
 }
 
 /**
@@ -329,15 +316,7 @@ private fun MutableGameState.fireUntouchedVolley(trial: SiteState, policy: Chall
     val speed = policy.untouchedShotSpeed
     val life = min(UNTOUCHED_SHOT_MAX_LIFE, (length(trial.aimX - trial.x, trial.aimY - trial.y) + UNTOUCHED_SHOT_OVERSHOOT) / speed)
     val damage = hostileDamage(null, policy.untouchedShotDamage)
-    repeat(3) { lane ->
-        val lateral = (lane - 1) * UNTOUCHED_LANE_SPACING
-        addProjectile(
-            Projectile(
-                trial.x - dy * lateral, trial.y + dx * lateral, dx * speed, dy * speed,
-                radius = 7f, life = life, hostile = true, damage = damage,
-            ),
-        )
-    }
+    fireThreeLaneVolley(trial.x, trial.y, dx, dy, speed, life, damage)
 }
 
 /**
@@ -368,22 +347,14 @@ private fun MutableGameState.slalomCrossing(trial: SiteState, policy: ChallengeP
  */
 private fun MutableGameState.endChallenge(trial: SiteState, completed: Boolean) {
     if (trial.kind == SiteKind.RAM_TRIAL) endEncounter(siteEncounterTag(trial), despawn = false)
-    sites = emptyList() // consume before any choice can open
     if (!completed) {
-        message = SiteNotice.CHALLENGE_FAILED.english
-        messageTime = 1.6f
+        loseWindowSite(SiteNotice.CHALLENGE_FAILED)
         return
     }
-    message = SiteNotice.CHALLENGE_COMPLETE.english
-    messageTime = 2f
-    discoverWorld(WorldDiscovery.TRIALS)
     val lastMark = trial.course.lastOrNull()
-    // Granted after the notice, so a full directed queue's REWARD SALVAGED is the one shown.
-    grantSiteReward(
-        content.sites.definition(trial.kind).reward,
-        trial.x + (lastMark?.dx ?: 0f),
-        trial.y + (lastMark?.dy ?: 0f),
-        worldHash(runSeed, trial.offerId, trial.side, REWARD_SCATTER_SALT),
+    completeWindowSite(
+        trial, SiteNotice.CHALLENGE_COMPLETE, content.sites.definition(trial.kind).reward,
+        trial.x + (lastMark?.dx ?: 0f), trial.y + (lastMark?.dy ?: 0f), WorldDiscovery.TRIALS,
     )
 }
 

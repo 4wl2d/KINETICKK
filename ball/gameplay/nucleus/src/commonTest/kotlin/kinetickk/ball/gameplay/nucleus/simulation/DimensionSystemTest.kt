@@ -224,15 +224,15 @@ class DimensionSystemTest {
         val herald = game.addEnemyForTesting(900f, 0f, type = EnemyType.HERALD)
         val (x, y) = game.openPortalForTesting(WorldLayer.NADIR)
         val offered = game.sites
-        assertTrue(game.portalLocked(SiteKind.NADIR_RIFT))
+        assertFalse(game.canEnterDimension(WorldLayer.NADIR))
         game.flyThroughForTesting(x, y)
         game.updateSites(0.01f)
         assertEquals(WorldLayer.BASE, game.worldLayer)
         assertEquals(offered, game.sites, "a refused rift stays offered")
         assertTrue(herald in game.enemies)
         game.enemies.remove(herald)
-        assertFalse(game.portalLocked(SiteKind.NADIR_RIFT))
-        assertFalse(game.portalLocked(SiteKind.GATE_RACE), "only rifts lock")
+        assertTrue(game.canEnterDimension(WorldLayer.NADIR))
+        assertNull(SiteKind.GATE_RACE.riftTarget(), "only rifts lock")
 
         // At least the minimum visit must fit before the exit margin.
         val latestEntry = returnBy - policy.minimumVisitSeconds

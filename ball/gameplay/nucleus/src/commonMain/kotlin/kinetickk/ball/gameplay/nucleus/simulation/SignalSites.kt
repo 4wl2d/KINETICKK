@@ -13,13 +13,8 @@ internal fun MutableGameState.appendEventSignalMarks(out: FloatArray, count: Int
     var written = count
     val radius = content.variety.signals.touchRadius
     for (index in eventSignals.indices) {
-        if (written >= MAX_OPTIONAL_SITE_MARKS) return written
         val signal = eventSignals[index]
-        val base = written * 3
-        out[base] = signal.x
-        out[base + 1] = signal.y
-        out[base + 2] = radius
-        written++
+        written = writeOptionalSiteMark(out, written, signal.x, signal.y, radius)
     }
     return written
 }

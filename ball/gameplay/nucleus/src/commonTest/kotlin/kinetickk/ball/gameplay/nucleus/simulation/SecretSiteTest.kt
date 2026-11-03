@@ -27,7 +27,6 @@ import kinetickk.ball.gameplay.nucleus.render.LOST_CURSOR_FOUND_FLAG
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.lostCursorFollows
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
-import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.test.Test
@@ -62,32 +61,11 @@ class SecretSiteTest {
             sites = canonicalGameplayContent.sites.copy(secrets = configure(canonicalGameplayContent.sites.secrets)),
         )
 
-    /** The current window replaced by [sites] around the Core's chunk, so the next step keeps it. */
-    private fun MutableGameState.holdWindow(vararg sites: SiteState) {
-        ambientSites = AmbientSiteWindow(
-            absoluteChunk(worldOriginX + coreX), absoluteChunk(worldOriginY + coreY), sites.toList().toImmutableList(),
-        )
-    }
-
-    /** One site step that sweeps the Core from ([fromX], [fromY]) to ([toX], [toY]). */
-    private fun MutableGameState.flyStep(fromX: Float, fromY: Float, toX: Float, toY: Float) {
-        previousCoreX = fromX
-        previousCoreY = fromY
-        coreX = toX
-        coreY = toY
-        updateSites(0.01f)
-    }
-
     /** One site step with the Core resting at ([x], [y]). */
     private fun MutableGameState.standAt(x: Float, y: Float) = flyStep(x, y, x, y)
 
     private fun egg(kind: SiteKind, cellX: Int, x: Float, y: Float) =
         SiteState(ambientSiteId(kind, cellX, 3), kind, x, y, Float.POSITIVE_INFINITY, settled = true)
-
-    private fun MutableGameState.matter(): Double = runMatter + matterFraction.toDouble()
-
-    private fun MutableGameState.streams(): List<Any> =
-        listOf(rewardRandom.snapshot(), spawnRandom.snapshot(), gameplayRandom.snapshot(), siteRandom.snapshot())
 
     /** Rebuilds the window, then rests the Core at twelve far points in turn and returns every kind its windows held. */
     private fun MutableGameState.wander(): Set<SiteKind> {
@@ -99,9 +77,6 @@ class SecretSiteTest {
         }
         return seen
     }
-
-    private fun MutableGameState.found(discovery: WorldDiscovery): Boolean =
-        worldDiscoveryMask and discovery.bit != 0 && pendingWorldDiscoveryMask and discovery.bit != 0
 
     @Test
     fun theLostCursorIsFoundOncePerRunAndThenFollowsTheCore() {
@@ -119,7 +94,7 @@ class SecretSiteTest {
         game.flyStep(FAR_X + 100f, FAR_Y, FAR_X + 300f, FAR_Y)
 
         assertTrue(game.hasSecret(RunSecretFlag.LOST_CURSOR_FOUND))
-        assertTrue(game.found(WorldDiscovery.LOST_CURSOR))
+        assertTrue(game.discovered(WorldDiscovery.LOST_CURSOR))
         assertEquals(SiteNotice.LOST_CURSOR_FOUND.english, game.message)
         assertEquals(rerolls + 1, game.rerollsRemaining)
         assertEquals(matter + 15.0 * game.matterGain, game.matter(), 1e-3)
@@ -244,7 +219,7 @@ class SecretSiteTest {
         assertNull(game.encounter(GOLDEN_DRIFTER_TAG))
         assertEquals(SiteNotice.GOLDEN_ESCAPED.english, game.message)
         assertFalse(game.hasSecret(RunSecretFlag.GOLDEN_DRIFTER_CAUGHT))
-        assertFalse(game.found(WorldDiscovery.GOLDEN_DRIFTER))
+        assertFalse(game.discovered(WorldDiscovery.GOLDEN_DRIFTER))
     }
 
     @Test
@@ -257,7 +232,7 @@ class SecretSiteTest {
         assertEquals(40, game.pickups.count { it.type == PickupType.DATA })
         assertEquals(matter + 25.0 * game.matterGain, game.matter(), 1e-3)
         assertTrue(game.hasSecret(RunSecretFlag.GOLDEN_DRIFTER_CAUGHT))
-        assertTrue(game.found(WorldDiscovery.GOLDEN_DRIFTER))
+        assertTrue(game.discovered(WorldDiscovery.GOLDEN_DRIFTER))
         assertEquals(SiteNotice.GOLDEN_CAUGHT.english, game.message)
         assertEquals(-1, game.goldenDrifterId)
         assertEquals(streams, game.streams(), "the Data scatters from a hash")
@@ -299,7 +274,7 @@ class SecretSiteTest {
     fun spinCycleCountsTenTurnsAroundTheSingularityWithinItsWindow() {
         val game = spun(turns = 10.01f, seconds = 9.5f)
         assertTrue(game.hasSecret(RunSecretFlag.SPIN_CYCLE))
-        assertTrue(game.found(WorldDiscovery.SPIN_CYCLE))
+        assertTrue(game.discovered(WorldDiscovery.SPIN_CYCLE))
         assertEquals(SiteNotice.SPIN_CYCLE.english, game.message)
 
         assertFalse(spun(turns = 9.99f, seconds = 9.5f).hasSecret(RunSecretFlag.SPIN_CYCLE), "short of ten turns")
@@ -413,7 +388,7 @@ class SecretSiteTest {
         game.flyStep(FAR_X + 100f, FAR_Y, FAR_X + 300f, FAR_Y)
 
         assertTrue(game.hasSecret(RunSecretFlag.QUIET_SIGNAL_FOUND))
-        assertTrue(game.found(WorldDiscovery.QUIET_SIGNAL))
+        assertTrue(game.discovered(WorldDiscovery.QUIET_SIGNAL))
         assertEquals(SiteNotice.QUIET_SIGNAL.english, game.message, "the signal's words stay over the rift's notice")
         assertEquals(QUIET_NOTICE_SECONDS, game.messageTime)
         assertEquals(matter + 20.0 * game.matterGain, game.matter(), 1e-3)
@@ -433,7 +408,7 @@ class SecretSiteTest {
         late.elapsed = late.content.dimensions.latestGlitchRiftAt(late.content.tempo.bossAtSeconds) + 1f
         late.holdWindow(signal)
         late.flyStep(FAR_X + 100f, FAR_Y, FAR_X + 300f, FAR_Y)
-        assertTrue(late.found(WorldDiscovery.QUIET_SIGNAL))
+        assertTrue(late.discovered(WorldDiscovery.QUIET_SIGNAL))
         assertEquals(SiteNotice.QUIET_SIGNAL.english, late.message)
         assertNull(late.dimensionRun.glitchPortal)
     }
@@ -453,7 +428,7 @@ class SecretSiteTest {
         game.flyStep(FAR_X + 100f, FAR_Y, FAR_X + 300f, FAR_Y)
         assertTrue(game.engagementActive())
         assertFalse(game.hasSecret(RunSecretFlag.QUIET_SIGNAL_FOUND), "the signal is not heard during an engagement")
-        assertFalse(game.found(WorldDiscovery.QUIET_SIGNAL))
+        assertFalse(game.discovered(WorldDiscovery.QUIET_SIGNAL))
         assertNull(game.dimensionRun.glitchPortal)
         assertEquals(matter, game.matter(), 1e-3)
         assertEquals(listOf(signal.id), game.ambientSites.sites.map { it.id }, "the signal waits to be flown through again")
@@ -476,7 +451,7 @@ class SecretSiteTest {
         val matter = game.matter()
         game.discoverDoodle()
         assertTrue(game.hasSecret(RunSecretFlag.DOODLE_FOUND))
-        assertTrue(game.found(WorldDiscovery.ARCHITECTS_DOODLE))
+        assertTrue(game.discovered(WorldDiscovery.ARCHITECTS_DOODLE))
         assertEquals(SiteNotice.DOODLE.english, game.message)
         assertEquals(matter + 30.0 * game.matterGain, game.matter(), 1e-3)
         game.message = ""

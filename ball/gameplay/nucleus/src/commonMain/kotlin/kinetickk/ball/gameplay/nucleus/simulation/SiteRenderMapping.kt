@@ -8,9 +8,7 @@ import kinetickk.ball.content.api.SiteFamily
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.SiteReward
 import kinetickk.ball.gameplay.nucleus.model.CircuitBeacons
-import kinetickk.ball.gameplay.nucleus.model.SitePoint
 import kinetickk.ball.gameplay.nucleus.model.SiteState
-import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.TrialClock
 import kinetickk.ball.gameplay.nucleus.render.TrialProjection
@@ -19,13 +17,9 @@ import kinetickk.ball.gameplay.nucleus.render.TrialValue
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableListOfSize
-import kinetickk.foundation.collections.mapToImmutableList
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.ceil
 import kotlin.math.min
-
-/** Defenders a sealed anomaly's vault holds (SiteSystem completes it at this count). */
-private const val VAULT_DEFENDERS = 3
 
 /** The trial panel's meter has 1..24 cells. */
 private const val MAX_TRIAL_SEGMENTS = 24
@@ -34,9 +28,9 @@ private const val MAX_TRIAL_SEGMENTS = 24
 private const val DUEL_SEGMENTS = 3
 
 /**
- * The window sites, then the secret sigil if one lies in the world. Sites change a few times per second at most: the
- * same sites at the same time, or projections that already carry every derived value, keep the previous immutable
- * list; a course whose marks did not move keeps its previous list too.
+ * The window sites, then the secret sigil if one lies in the world. An offer's or a timed trial's remaining seconds
+ * change every step, so the list is rebuilt while a site is offered or running; the same sites at the same time, or
+ * projections that already carry every derived value, keep the previous immutable list, and a course is the site's own.
  */
 internal fun MutableGameState.siteProjections(
     reusable: ImmutableList<SiteProjection>?,
@@ -62,7 +56,7 @@ internal fun MutableGameState.siteProjections(
         }
     }
     return immutableListOfSize(count) { index ->
-        siteProjection(projectedSite(index), reusable?.getOrNull(index)?.course)
+        siteProjection(projectedSite(index))
     }
 }
 
@@ -114,7 +108,7 @@ private fun MutableGameState.ambientSiteProjection(site: SiteState): SiteProject
         warningRemaining = 0f,
         volleyAngle = 0f,
         activationRadius = definition.activationRadius,
-        reveal = ambientReveal(site.kind),
+        reveal = ambientRule(site.kind)?.revealDistance ?: 0f,
     )
 }
 
@@ -125,14 +119,7 @@ private fun MutableGameState.ambientProjectionMatches(projection: SiteProjection
         projection.x.sameBitsAs(site.x) &&
         projection.y.sameBitsAs(site.y) &&
         projection.activationRadius.sameBitsAs(definition.activationRadius) &&
-        projection.reveal.sameBitsAs(ambientReveal(site.kind))
-}
-
-/** An ambient kind's off-screen reveal distance from its rule (0, never shown off-screen, without one). */
-private fun MutableGameState.ambientReveal(kind: SiteKind): Float {
-    val rules = content.sites.ambient.rules
-    for (index in rules.indices) if (rules[index].kind == kind) return rules[index].revealDistance
-    return 0f
+        projection.reveal.sameBitsAs(ambientRule(site.kind)?.revealDistance ?: 0f)
 }
 
 /**
@@ -230,7 +217,7 @@ private fun trialReward(reward: SiteReward): TrialReward = when (reward.directed
 private fun MutableGameState.projectedSite(index: Int): SiteState =
     if (index < sites.size) sites[index] else checkNotNull(secretSigil)
 
-private fun MutableGameState.siteProjection(site: SiteState, previousCourse: ImmutableList<SiteMarkProjection>?): SiteProjection {
+private fun MutableGameState.siteProjection(site: SiteState): SiteProjection {
     val definition = content.sites.definition(site.kind)
     return SiteProjection(
         kind = site.kind,
@@ -244,7 +231,7 @@ private fun MutableGameState.siteProjection(site: SiteState, previousCourse: Imm
         foeIds = site.foeIds,
         warningRemaining = site.warningRemaining,
         volleyAngle = site.volleyAngle,
-        course = courseProjection(site.course, previousCourse),
+        course = site.course,
         radius = siteRadius(site),
         sides = site.sides,
         clock = site.clock,
@@ -255,37 +242,18 @@ private fun MutableGameState.siteProjection(site: SiteState, previousCourse: Imm
     )
 }
 
-private fun courseProjection(
-    course: ImmutableList<SitePoint>,
-    previous: ImmutableList<SiteMarkProjection>?,
-): ImmutableList<SiteMarkProjection> {
-    if (course.isEmpty()) return immutableListOf()
-    if (previous != null && courseMatches(previous, course)) return previous
-    return course.mapToImmutableList { mark -> SiteMarkProjection(mark.dx, mark.dy) }
-}
-
-private fun courseMatches(projection: ImmutableList<SiteMarkProjection>, course: ImmutableList<SitePoint>): Boolean {
-    if (projection.size != course.size) return false
-    for (index in course.indices) {
-        val mark = projection[index]
-        val point = course[index]
-        if (!mark.dx.sameBitsAs(point.dx) || !mark.dy.sameBitsAs(point.dy)) return false
-    }
-    return true
-}
-
 /** An offer counts down to its close; a timed trial its seconds left; an untimed duel shows none. */
 private fun MutableGameState.siteRemaining(site: SiteState): Float = when {
     !site.active -> (site.expiresAt - elapsed).coerceAtLeast(0f)
-    site.kind == SiteKind.GATE_RACE || content.sites.definition(site.kind).duration > 0f -> site.remaining
+    content.sites.definition(site.kind).duration > 0f -> site.remaining
     else -> 0f
 }
 
 private fun MutableGameState.siteProgress(site: SiteState): Float {
     val challenges = content.sites.challenges
     return when (site.kind) {
-        SiteKind.RESONANT_CIRCUIT -> site.step / 3f
-        SiteKind.SEALED_ANOMALY -> site.count / 3f
+        SiteKind.RESONANT_CIRCUIT -> site.step / CircuitBeacons.size.toFloat()
+        SiteKind.SEALED_ANOMALY -> site.count / VAULT_DEFENDERS.toFloat()
         SiteKind.COLLAPSING_ORBIT -> site.meter / content.sites.windows.orbitRequiredSeconds
         SiteKind.GATE_RACE -> share(site.step.toFloat(), site.course.size.toFloat())
         SiteKind.BRAKELESS_TRIAL -> share(site.meter, challenges.brakelessRequired)
@@ -306,13 +274,8 @@ private fun share(done: Float, required: Float): Float = if (required > 0f) min(
 /** Share of the duel foe's integrity already taken (1 once the kill hook counted it). */
 private fun MutableGameState.foeIntegrityLost(site: SiteState): Float {
     if (site.count >= 1) return 1f
-    val id = site.foeIds.firstOrNull() ?: return 0f
-    for (index in enemies.indices) {
-        val enemy = enemies[index]
-        if (enemy.id != id) continue
-        return if (enemy.maxHp > 0f) (1f - enemy.hp / enemy.maxHp).coerceIn(0f, 1f) else 0f
-    }
-    return 0f
+    val enemy = enemyById(site.foeIds.firstOrNull() ?: -1) ?: return 0f
+    return if (enemy.maxHp > 0f) (1f - enemy.hp / enemy.maxHp).coerceIn(0f, 1f) else 0f
 }
 
 /** True while an active duel's progress reads an enemy's integrity. */
@@ -361,7 +324,7 @@ private fun MutableGameState.siteProjectionMatches(projection: SiteProjection, s
         (projection.foeIds === site.foeIds || projection.foeIds == site.foeIds) &&
         projection.warningRemaining.sameBitsAs(site.warningRemaining) &&
         projection.volleyAngle.sameBitsAs(site.volleyAngle) &&
-        courseMatches(projection.course, site.course) &&
+        projection.course === site.course &&
         projection.radius.sameBitsAs(siteRadius(site)) &&
         projection.sides == site.sides &&
         projection.clock.sameBitsAs(site.clock) &&

@@ -30,13 +30,9 @@ internal fun MutableGameState.appendStructureMarks(out: FloatArray, count: Int):
     var written = count
     val structures = structureField.structures
     for (index in structures.indices) {
-        if (written >= MAX_OPTIONAL_SITE_MARKS) return written
         val structure = structures[index]
-        val base = written * 3
-        out[base] = structure.x
-        out[base + 1] = structure.y
-        out[base + 2] = hypot(structure.halfWidth, structure.halfHeight)
-        written++
+        val radius = hypot(structure.halfWidth, structure.halfHeight)
+        written = writeOptionalSiteMark(out, written, structure.x, structure.y, radius)
     }
     return written
 }

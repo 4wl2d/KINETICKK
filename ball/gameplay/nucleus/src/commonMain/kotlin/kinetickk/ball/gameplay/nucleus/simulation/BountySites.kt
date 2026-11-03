@@ -75,20 +75,14 @@ internal fun MutableGameState.advanceBountySite(site: SiteState, delta: Float) {
     val trial = site.copy(clock = site.clock + delta)
     when {
         trial.count >= 1 -> claimBounty(trial)
-        distanceSquared(coreX, coreY, trial.x, trial.y) > square(bountyExitRadius()) || !bossAlive(trial) -> abandonBounty(trial)
+        distanceSquared(coreX, coreY, trial.x, trial.y) > square(bountyExitRadius()) || !siteBossAlive(trial) -> abandonBounty(trial)
         else -> sites = listOf(trial)
     }
 }
 
-/** True while the bounty's boss is alive. */
-private fun MutableGameState.bossAlive(trial: SiteState): Boolean {
-    val boss = trial.foeIds.firstOrNull() ?: return false
-    for (index in enemies.indices) {
-        val enemy = enemies[index]
-        if (enemy.id == boss) return enemy.alive
-    }
-    return false
-}
+/** True while the boss of a bounty or a sigil duel (the site's first foe) is alive. */
+internal fun MutableGameState.siteBossAlive(site: SiteState): Boolean =
+    enemyById(site.foeIds.firstOrNull() ?: -1)?.alive == true
 
 /**
  * The boss fell: its own kill already paid its Key, Relic and Elite kill; the bounty adds its definition's reward and the
@@ -96,21 +90,14 @@ private fun MutableGameState.bossAlive(trial: SiteState): Boolean {
  */
 private fun MutableGameState.claimBounty(trial: SiteState) {
     endEncounter(siteEncounterTag(trial), despawn = false)
-    sites = emptyList() // consume before any choice can open
-    message = SiteNotice.BOUNTY_CLAIMED.english
-    messageTime = 2f
-    discoverWorld(WorldDiscovery.BOUNTY)
-    // Granted after the notice, so a salvaged reward's notice is the one shown.
-    grantSiteReward(
-        content.sites.definition(trial.kind).reward, trial.x, trial.y,
-        worldHash(runSeed, trial.offerId, trial.side, REWARD_SCATTER_SALT),
+    completeWindowSite(
+        trial, SiteNotice.BOUNTY_CLAIMED, content.sites.definition(trial.kind).reward, trial.x, trial.y,
+        WorldDiscovery.BOUNTY,
     )
 }
 
 /** The Core left: the boss and its guards leave without a kill, and nothing is granted. */
 private fun MutableGameState.abandonBounty(trial: SiteState) {
     endEncounter(siteEncounterTag(trial), despawn = true)
-    sites = emptyList()
-    message = SiteNotice.BOUNTY_ABANDONED.english
-    messageTime = 1.6f
+    loseWindowSite(SiteNotice.BOUNTY_ABANDONED)
 }

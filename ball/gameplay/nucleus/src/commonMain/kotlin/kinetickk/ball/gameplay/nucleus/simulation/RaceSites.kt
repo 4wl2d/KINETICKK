@@ -6,7 +6,6 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.ObstacleKind
 import kinetickk.ball.content.api.SiteNotice
 import kinetickk.ball.content.api.WorldDiscovery
-import kinetickk.ball.gameplay.nucleus.model.SitePoint
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.model.TAU
 import kinetickk.ball.gameplay.nucleus.model.distanceSquared
@@ -14,8 +13,8 @@ import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.model.segmentCircleIntersects
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection
 import kinetickk.foundation.collections.toImmutableList
-import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
@@ -23,9 +22,6 @@ import kotlin.math.sin
 
 /** Course seeds of gate races: `worldHash(runSeed, offerId, side, RACE_COURSE_SALT)` (registered SITES salt). */
 internal const val RACE_COURSE_SALT: Long = 0x517E_C0A5_0000_0001L
-
-/** A running race is lost once the Core is farther than this from its next gate. */
-internal const val RACE_LEASH: Float = 2_400f
 
 /** Fx colour of a passed gate's burst (bone). */
 private const val GATE_BURST_COLOR: Int = 1
@@ -42,10 +38,10 @@ internal fun MutableGameState.startedRace(site: SiteState): SiteState {
     val race = content.sites.race
     val random = HashRandom(worldHash(runSeed, site.offerId, site.side, RACE_COURSE_SALT))
     val gates = race.minGates + random.nextIndex(race.maxGates - race.minGates + 1)
-    val heading = if (speed >= 80f) atan2(velocityY, velocityX) else atan2(lastAimDirectionY, lastAimDirectionX)
+    val heading = travelHeading()
     val turn = if (random.nextFloat() < 0.5f) 1f else -1f
     val sweep = TAU * race.loopShare / gates
-    val course = ArrayList<SitePoint>(gates)
+    val course = ArrayList<SiteMarkProjection>(gates)
     var path = 0f
     var fromX = 0f
     var fromY = 0f
@@ -60,14 +56,14 @@ internal fun MutableGameState.startedRace(site: SiteState): SiteState {
         val dx = gate.x - site.x
         val dy = gate.y - site.y
         path += length(dx - fromX, dy - fromY)
-        course += SitePoint(dx, dy)
+        course += SiteMarkProjection(dx, dy)
         fromX = dx
         fromY = dy
     }
     val par = path / steadyCursorSpeed(race.parReach) + race.turnAllowanceSeconds * (gates - 1)
     val limit = min(max(par * race.limitFactor, race.minimumLimit), content.sites.windows.trialDuration)
     return site.copy(
-        active = true, remaining = limit, clock = 0f, step = 0, course = course.toImmutableList(), par = par, limit = limit,
+        active = true, remaining = limit, clock = 0f, step = 0, course = course.toImmutableList(), par = par,
     )
 }
 
@@ -140,10 +136,8 @@ internal fun MutableGameState.advanceRaceSite(site: SiteState, delta: Float) {
     val gate = trial.course[trial.step]
     val gateX = trial.x + gate.dx
     val gateY = trial.y + gate.dy
-    if (trial.remaining <= 0f || distanceSquared(coreX, coreY, gateX, gateY) > square(RACE_LEASH)) {
-        sites = emptyList()
-        message = SiteNotice.RACE_LOST.english
-        messageTime = 1.6f
+    if (trial.remaining <= 0f || distanceSquared(coreX, coreY, gateX, gateY) > square(WINDOW_SITE_LEASH)) {
+        loseWindowSite(SiteNotice.RACE_LOST)
         return
     }
     if (!segmentCircleIntersects(previousCoreX, previousCoreY, coreX, coreY, gateX, gateY, content.sites.race.gateRadius)) {
@@ -193,12 +187,7 @@ private fun MutableGameState.finishRace(race: SiteState, gateX: Float, gateY: Fl
         1 -> policy.bronze to SiteNotice.RACE_BRONZE
         else -> policy.finish to SiteNotice.RACE_FINISHED
     }
-    sites = emptyList() // consume before any choice can open
-    message = notice.english
-    messageTime = 2f
-    discoverWorld(WorldDiscovery.GATE_RACE)
-    // Granted after the notice, so a full directed queue's REWARD SALVAGED is the one shown.
-    grantSiteReward(reward, gateX, gateY, worldHash(runSeed, race.offerId, race.side, REWARD_SCATTER_SALT))
+    completeWindowSite(race, notice, reward, gateX, gateY, WorldDiscovery.GATE_RACE)
 }
 
 /**

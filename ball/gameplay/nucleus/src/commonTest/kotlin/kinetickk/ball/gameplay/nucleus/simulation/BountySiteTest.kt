@@ -71,8 +71,6 @@ class BountySiteTest {
 
     private fun MutableGameState.boss(): Enemy = enemies.single { it.id == sites.single().foeIds.single() }
 
-    private fun MutableGameState.matter(): Double = runMatter + matterFraction.toDouble()
-
     private fun MutableGameState.discoveredBounty(): Boolean = worldDiscoveryMask and WorldDiscovery.BOUNTY.bit != 0
 
     @Test
