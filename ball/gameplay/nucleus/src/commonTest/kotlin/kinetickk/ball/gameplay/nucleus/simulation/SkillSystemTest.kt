@@ -677,10 +677,9 @@ class SkillSystemTest {
         val committed = state.skillRuntime.toString()
         val loadout = state.skillLoadout
         val candidate = state.deepCopy()
-        assertTrue(candidate.skillRuntime.sharesStorageWith(state.skillRuntime), "a fork shares until it writes")
+        assertNotSame(state.skillRuntime, candidate.skillRuntime)
         candidate.elapsed = candidate.skillRuntime[slot, SkillCell.PENDING_AT]
         candidate.updateSkills(0f)
-        assertFalse(candidate.skillRuntime.sharesStorageWith(state.skillRuntime))
         assertEquals(committed, state.skillRuntime.toString(), "the committed runtime is untouched")
         assertSame(loadout, candidate.skillLoadout, "the immutable loadout is shared")
         candidate.startRun()

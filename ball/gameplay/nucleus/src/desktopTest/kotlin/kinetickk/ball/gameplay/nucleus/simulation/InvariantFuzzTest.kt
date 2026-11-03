@@ -70,7 +70,7 @@ class InvariantFuzzTest {
         state.coreObstacleGap = Float.POSITIVE_INFINITY
         assertNull(FuzzFiniteScan.first(state), "an infinite obstacle gap means no obstacle near")
         state.encounters = immutableListOf(EncounterState(encounterTag(EncounterOwner.SITE, 7L), Float.NaN, 0f, 300f, 2_400f, 1, 0, -1, 0f))
-        assertEquals("state.encounters[0].centerX = NaN", FuzzFiniteScan.first(state))
+        assertEquals("state.spawnDirector.encounters[0].centerX = NaN", FuzzFiniteScan.first(state))
         state.encounters = immutableListOf()
         state.enemies[0].vy = Float.NaN
         assertEquals("state.enemies[0].vy = NaN", FuzzFiniteScan.first(state))

@@ -175,9 +175,6 @@ class GameplayRenderModelMapperTest {
         assertSame(retained.coreState, projected.coreState)
         assertTrue(retained.combatFields.isNotEmpty())
         assertTrue(retained.enemies.single().controlBits != 0)
-        assertTrue(candidate.itemStacks.sharesStorageWith(source.itemStacks))
-        assertTrue(candidate.discoveredItemIds.sharesStorageWith(source.discoveredItemIds))
-        assertTrue(candidate.relicRanks.sharesStorageWith(source.relicRanks))
     }
 
     @Test

@@ -45,7 +45,9 @@ import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.structures.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
-
+import kinetickk.ball.gameplay.nucleus.simulation.skills.SkillCastState
+import kinetickk.ball.gameplay.nucleus.simulation.elements.CoreReactionState
+import kinetickk.ball.gameplay.nucleus.simulation.director.SpawnDirectorState
 
 /**
  * Reducer-owned simulation state. Each field declares its initial value and its copy from [copySource] together,
@@ -53,6 +55,10 @@ import kinetickk.ball.gameplay.nucleus.simulation.world.*
  *
  * The production tick mutates one instance in place. [deepCopy] isolates every mutable storage, random stream and
  * pending output buffer of its source; immutable values are shared.
+ *
+ * Cohesive groups with a single writing domain live in state holders, declared first so every later initializer sees
+ * them; each holder copies itself from its [copySource] counterpart. New fields go into a holder, read as
+ * `state.<holder>.<field>`; the forwarders in MutableGameStateForwarders.kt only keep older call sites unchanged.
  */
 internal class MutableGameState(
     internal val content: GameplayContentSnapshot,
@@ -99,6 +105,21 @@ internal class MutableGameState(
         const val MAX_SKILL_SCRATCH = 10
     }
 
+    /** Per-step combat and elements scratch. */
+    internal val scratch: StepScratch = StepScratch(copySource?.scratch)
+    /** Choices waiting to open. */
+    internal val pendingChoice: PendingChoiceState = PendingChoiceState(copySource?.pendingChoice)
+    /** Skill and Apex input buffers and the running cast's scratch. */
+    internal val skillCast: SkillCastState = SkillCastState(copySource?.skillCast)
+    /** Lingering reaction effects on the Core. */
+    internal val coreReactions: CoreReactionState = CoreReactionState(copySource?.coreReactions)
+    /** Retained relic mechanic timers, charges and counters. */
+    internal val relicMechanics: RelicMechanicState = RelicMechanicState(copySource?.relicMechanics)
+    /** Spawn pacing, director plan and live encounters. */
+    internal val spawnDirector: SpawnDirectorState = SpawnDirectorState(content, copySource?.spawnDirector)
+    /** Structure window, dungeon and spent structures. */
+    internal val structures: StructureRunState = StructureRunState(copySource?.structures)
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -114,30 +135,30 @@ internal class MutableGameState(
         ?: content.rebirth.profile(
             bootstrapProgress?.rebirthProgress?.level ?: initialRebirthLevel,
         )
-    internal val unlockedWeaponSet: CopyOnWriteMutableSet<WeaponId> = copySource?.unlockedWeaponSet?.fork()
-        ?: CopyOnWriteMutableSet(mutableSetOf<WeaponId>().apply {
+    internal val unlockedWeaponSet: RunMutableSet<WeaponId> = copySource?.unlockedWeaponSet?.copy()
+        ?: RunMutableSet(mutableSetOf<WeaponId>().apply {
             addAll(bootstrapProgress?.loadout?.unlockedWeapons.orEmpty())
             add(WeaponId.FLUX_WAKE)
         })
     internal var unlockedWeaponView: Set<WeaponId> = copySource?.unlockedWeaponView
         ?: unlockedWeaponSet.toSet()
     /** Owned Core Matrix ranks by content node index, captured from the profile at bootstrap. */
-    internal val matrixRanks: CopyOnWriteIntArray = copySource?.matrixRanks?.fork()
-        ?: CopyOnWriteIntArray(IntArray(content.matrixNodes.size) { index ->
+    internal val matrixRanks: RunIntArray = copySource?.matrixRanks?.copy()
+        ?: RunIntArray(IntArray(content.matrixNodes.size) { index ->
             val definition = content.matrixNodes[index]
             (bootstrapProgress?.matrix?.rank(definition.id) ?: 0).coerceIn(0, definition.maxRanks)
         })
     /** Folded Matrix effects of [matrixRanks]; immutable, refolded when a run starts. */
     internal var matrix: MatrixModifiers = copySource?.matrix ?: foldMatrix()
     /** Bought Refit levels by [CoreShape.ordinal], captured from the profile at bootstrap; a run never writes them. */
-    internal val characterUpgradeLevels: CopyOnWriteIntArray = copySource?.characterUpgradeLevels?.fork()
-        ?: CopyOnWriteIntArray(IntArray(CoreShape.entries.size) { index ->
+    internal val characterUpgradeLevels: RunIntArray = copySource?.characterUpgradeLevels?.copy()
+        ?: RunIntArray(IntArray(CoreShape.entries.size) { index ->
             (bootstrapProgress?.upgrades?.characterLevels?.getOrElse(index) { 0 } ?: 0)
                 .coerceIn(0, content.upgrades.maxLevel)
         })
     /** Bought Honing levels by [WeaponId.ordinal], captured from the profile at bootstrap; a run never writes them. */
-    internal val weaponUpgradeLevels: CopyOnWriteIntArray = copySource?.weaponUpgradeLevels?.fork()
-        ?: CopyOnWriteIntArray(IntArray(WeaponId.entries.size) { index ->
+    internal val weaponUpgradeLevels: RunIntArray = copySource?.weaponUpgradeLevels?.copy()
+        ?: RunIntArray(IntArray(WeaponId.entries.size) { index ->
             (bootstrapProgress?.upgrades?.weaponLevels?.getOrElse(index) { 0 } ?: 0)
                 .coerceIn(0, content.upgrades.maxLevel)
         })
@@ -145,8 +166,8 @@ internal class MutableGameState(
     internal var characterUpgradeLevel: Int = copySource?.characterUpgradeLevel ?: 0
     /** Refit's character-mechanic damage multiplier, fixed when a run starts. */
     internal var characterUpgradePower: Float = copySource?.characterUpgradePower ?: 1f
-    internal val discoveredItemIds: CopyOnWriteMutableSet<Int> = copySource?.discoveredItemIds?.fork()
-        ?: CopyOnWriteMutableSet(
+    internal val discoveredItemIds: RunMutableSet<Int> = copySource?.discoveredItemIds?.copy()
+        ?: RunMutableSet(
             bootstrapProgress?.collection?.discoveredItemIds
                 ?.filterTo(mutableSetOf()) { content.item(it) != null }
                 ?: mutableSetOf(),
@@ -154,14 +175,14 @@ internal class MutableGameState(
     internal var discoveredRelicMask: Long = copySource?.discoveredRelicMask
         ?: bootstrapProgress?.collection?.discoveredRelicIds?.fold(0L) { mask, id -> mask or (1L shl id.ordinal) } ?: 0L
     internal var pendingDiscoveredRelicMask: Long = copySource?.pendingDiscoveredRelicMask ?: 0L
-    internal var pendingDiscoveredItemIdStorage: CopyOnWriteMutableSet<Int>? =
-        copySource?.pendingDiscoveredItemIdStorage?.fork()
+    internal var pendingDiscoveredItemIdStorage: RunMutableSet<Int>? =
+        copySource?.pendingDiscoveredItemIdStorage?.copy()
     internal val pendingDiscoveredItemIds: PendingDiscoveredItemIdBuffer
         get() = PendingDiscoveredItemIdBuffer(this)
-    internal val itemStacks: CopyOnWriteIntArray = copySource?.itemStacks?.fork()
-        ?: CopyOnWriteIntArray(IntArray(content.items.size))
-    internal val rebornItems: CopyOnWriteIntArray = copySource?.rebornItems?.fork()
-        ?: CopyOnWriteIntArray(IntArray(content.items.size))
+    internal val itemStacks: RunIntArray = copySource?.itemStacks?.copy()
+        ?: RunIntArray(IntArray(content.items.size))
+    internal val rebornItems: RunIntArray = copySource?.rebornItems?.copy()
+        ?: RunIntArray(IntArray(content.items.size))
     /**
      * Build gains in order: item ids at first acquisition (a replaced active item's id leaves it) and relic binds or
      * rank-three upgrades as [relicGain] entries. Decides affinity ties. Immutable value, replaced on change.
@@ -187,16 +208,16 @@ internal class MutableGameState(
     )
     /** Immutable compiled build shared by reduction siblings; replaced by [recompileBuild]. */
     internal var build: CompiledBuild = copySource?.build ?: CompiledBuild.empty(content)
-    internal val clauseReadyAt: CopyOnWriteFloatArray = copySource?.clauseReadyAt?.fork()
-        ?: CopyOnWriteFloatArray(FloatArray(content.totalClauseCount))
-    internal val clauseCounters: CopyOnWriteIntArray = copySource?.clauseCounters?.fork()
-        ?: CopyOnWriteIntArray(IntArray(content.totalClauseCount))
+    internal val clauseReadyAt: RunFloatArray = copySource?.clauseReadyAt?.copy()
+        ?: RunFloatArray(FloatArray(content.totalClauseCount))
+    internal val clauseCounters: RunIntArray = copySource?.clauseCounters?.copy()
+        ?: RunIntArray(IntArray(content.totalClauseCount))
     /** Fractional status stacks per item, so stack magnitudes apply deterministically without RNG. */
-    internal val statusAccumulators: CopyOnWriteFloatArray = copySource?.statusAccumulators?.fork()
-        ?: CopyOnWriteFloatArray(FloatArray(content.items.size))
+    internal val statusAccumulators: RunFloatArray = copySource?.statusAccumulators?.copy()
+        ?: RunFloatArray(FloatArray(content.items.size))
     /** Earliest time each item may apply statuses again (per-item rate bound). */
-    internal val itemStatusReadyAt: CopyOnWriteFloatArray = copySource?.itemStatusReadyAt?.fork()
-        ?: CopyOnWriteFloatArray(FloatArray(content.items.size))
+    internal val itemStatusReadyAt: RunFloatArray = copySource?.itemStatusReadyAt?.copy()
+        ?: RunFloatArray(FloatArray(content.items.size))
     internal var buffs: List<ActiveBuff> = copySource?.buffs ?: emptyList()
     /** Lingering fields; a deep copy forks the table. */
     internal val combatFieldTable: CombatFieldTable = copySource?.combatFieldTable?.fork() ?: CombatFieldTable()
@@ -204,62 +225,10 @@ internal class MutableGameState(
     internal var coreFieldMask: Int = copySource?.coreFieldMask ?: 0
     /** When entering a field may next count as a field entry. */
     internal var fieldEnterReadyAt: Float = copySource?.fieldEnterReadyAt ?: 0f
-    // Core reaction state: lingering effects reactions leave on the Core (absolute run times).
-    internal var ablazeUntil: Float = copySource?.ablazeUntil ?: 0f
-    internal var frictionlessUntil: Float = copySource?.frictionlessUntil ?: 0f
-    internal var blastJumpUntil: Float = copySource?.blastJumpUntil ?: 0f
-    internal var weaveUntil: Float = copySource?.weaveUntil ?: 0f
-    internal var weaveDamage: Float = copySource?.weaveDamage ?: 0f
-    internal var weaveRange: Float = copySource?.weaveRange ?: 0f
-    /** Ice shards orbiting the Core (at most [MAX_GUARD_SHARDS]), until when and what each strikes for. */
-    internal var guardShards: Int = copySource?.guardShards ?: 0
-    internal var guardUntil: Float = copySource?.guardUntil ?: 0f
-    internal var guardDamage: Float = copySource?.guardDamage ?: 0f
-    /** The one Void Anchor (enemy id, -1 for none) and when it lapses. */
-    internal var voidAnchorId: Int = copySource?.voidAnchorId ?: -1
-    internal var voidAnchorUntil: Float = copySource?.voidAnchorUntil ?: 0f
-    internal var overcurrentReadyAt: Float = copySource?.overcurrentReadyAt ?: 0f
-    internal var flameRefundReadyAt: Float = copySource?.flameRefundReadyAt ?: 0f
-    /** The enemy whose execute is under way, so its Data latches to the Core; -1 between executes. */
-    internal var erasureLatchId: Int = copySource?.erasureLatchId ?: -1
-    /** When a reaction or item may next push the Core. */
-    internal var coreImpulseReadyAt: Float = copySource?.coreImpulseReadyAt ?: 0f
-    internal var primedDashUntil: Float = copySource?.primedDashUntil ?: 0f
-    /** Dash heat spent toward the next Dash-heat-to-skills refund (below its step of 10). */
-    internal var dashHeatBank: Float = copySource?.dashHeatBank ?: 0f
-    internal var phaseUntil: Float = copySource?.phaseUntil ?: 0f
-    /** Seismic's keystone keeps two pending aftershocks: when each strikes (negative when free), where and how hard. */
-    internal var aftershockAt0: Float = copySource?.aftershockAt0 ?: -1f
-    internal var aftershockX0: Float = copySource?.aftershockX0 ?: 0f
-    internal var aftershockY0: Float = copySource?.aftershockY0 ?: 0f
-    internal var aftershockDamage0: Float = copySource?.aftershockDamage0 ?: 0f
-    internal var aftershockAt1: Float = copySource?.aftershockAt1 ?: -1f
-    internal var aftershockX1: Float = copySource?.aftershockX1 ?: 0f
-    internal var aftershockY1: Float = copySource?.aftershockY1 ?: 0f
-    internal var aftershockDamage1: Float = copySource?.aftershockDamage1 ?: 0f
-    /** Erased bolts and cashed marks announced within the current fixed step; zero between steps. */
-    internal var shotErasedDispatches: Int = copySource?.shotErasedDispatches ?: 0
-    internal var markDispatches: Int = copySource?.markDispatches ?: 0
-    /** Hostile bolts erased this run (a run statistic). */
-    internal var shotsErased: Long = copySource?.shotsErased ?: 0L
-    // Skill and Apex input: buffered slot requests and their age, the buffered Apex request.
-    internal var skillBufferMask: Int = copySource?.skillBufferMask ?: 0
-    internal var skillBufferTime: Float = copySource?.skillBufferTime ?: 0f
-    internal var apexBufferTime: Float = copySource?.apexBufferTime ?: 0f
     /** What the skill slots hold: the owned active items' effects; immutable, replaced when an active item binds, ranks or is replaced. */
     internal var skillLoadout: SkillLoadout = copySource?.skillLoadout ?: SkillLoadout.EMPTY
     /** Skill and Apex timing; a deep copy forks it. */
     internal var skillRuntime: SkillRuntime = copySource?.skillRuntime?.fork() ?: SkillRuntime()
-    /** Candidate-private scratch of one skill cast (picked targets); never read across casts. */
-    internal val skillScratch: IntArray = IntArray(MAX_SKILL_SCRATCH)
-    /** The slot casting right now, -1 between casts; the cast's damaged-enemy count and the bosses it struck. */
-    internal var castSlot: Int = -1
-    internal var castHits: Int = 0
-    /** Enemies the running element-less cast attuned (SkillAttunement). */
-    internal var castAttunedStacks: Int = 0
-    internal var castPrimaryId: Int = -1
-    internal var castBossHitFirst: Int = -1
-    internal var castBossHitSecond: Int = -1
     internal var reactionTokens: Float = copySource?.reactionTokens ?: REACTION_BURST
     internal var breakTokens: Float = copySource?.breakTokens ?: BREAK_BURST
     internal var discoveredReactionMask: Int = copySource?.discoveredReactionMask
@@ -278,24 +247,7 @@ internal class MutableGameState(
     internal var ouroborosSpent: Boolean = copySource?.ouroborosSpent ?: false
     internal var ouroborosLockedUntil: Float = copySource?.ouroborosLockedUntil ?: 0f
     internal var invulnerableUntil: Float = copySource?.invulnerableUntil ?: 0f
-    internal var glassInvulnerabilityReadyAt: Float = copySource?.glassInvulnerabilityReadyAt ?: 0f
-    internal var bulwarkInvulnerabilityReadyAt: Float = copySource?.bulwarkInvulnerabilityReadyAt ?: 0f
-    internal var stormCharge: Float = copySource?.stormCharge ?: 0f
-    internal var stasisMeter: Float = copySource?.stasisMeter ?: STASIS_SECONDS
-    internal var stasisBank: Int = copySource?.stasisBank ?: 0
-    internal var stasisLockedUntil: Float = copySource?.stasisLockedUntil ?: 0f
-    internal var sinceTurn: Float = copySource?.sinceTurn ?: 0f
-    internal var gyreReadyAt: Float = copySource?.gyreReadyAt ?: 0f
-    /** Endless Gyre's delayed second ring: when it fires (negative when none is pending) and its damage. */
-    internal var gyreEchoAt: Float = copySource?.gyreEchoAt ?: -1f
-    internal var gyreEchoDamage: Float = copySource?.gyreEchoDamage ?: 0f
     internal var overdriveBurnoutUntil: Float = copySource?.overdriveBurnoutUntil ?: 0f
-    internal var overdriveExtension: Float = copySource?.overdriveExtension ?: 0f
-    internal var overdriveKills: Int = copySource?.overdriveKills ?: 0
-    internal var aegisAbsorbed: Float = copySource?.aegisAbsorbed ?: 0f
-    internal var aegisNovaReadyAt: Float = copySource?.aegisNovaReadyAt ?: 0f
-    internal var shieldBreakArmed: Boolean = copySource?.shieldBreakArmed ?: false
-    internal var shieldBreakReadyAt: Float = copySource?.shieldBreakReadyAt ?: 0f
     internal var overheatArmed: Boolean = copySource?.overheatArmed ?: true
     internal var wasBraking: Boolean = copySource?.wasBraking ?: false
     internal var brakeHoldTime: Float = copySource?.brakeHoldTime ?: 0f
@@ -304,28 +256,12 @@ internal class MutableGameState(
     internal var freeDashPrimed: Boolean = copySource?.freeDashPrimed ?: false
     internal var freeDashReadyAt: Float = copySource?.freeDashReadyAt ?: 0f
     internal var comboKillCounter: Int = copySource?.comboKillCounter ?: 0
-    internal var glassCharge: Float = copySource?.glassCharge ?: 0f
-    /** Maximum integrity Null Covenant's liability currently withholds (0 when none). */
-    internal var integrityLiabilityCut: Float = copySource?.integrityLiabilityCut ?: 0f
-    internal var cinderRecoilReadyAt: Float = copySource?.cinderRecoilReadyAt ?: 0f
     internal var offerPity: Int = copySource?.offerPity ?: 0
     /** Item offers opened this run; the Matrix widens every n-th one. */
     internal var itemOffersOpened: Int = copySource?.itemOffersOpened ?: 0
-    internal var secondWindSpent: Boolean = copySource?.secondWindSpent ?: false
-    /** When the next heat-free Matrix Dash is ready. */
-    internal var matrixFreeDashReadyAt: Float = copySource?.matrixFreeDashReadyAt ?: 0f
     internal var dashHitThisDash: Boolean = copySource?.dashHitThisDash ?: false
     internal var clauseDepth: Int = copySource?.clauseDepth ?: 0
     internal var arsenalCounter: Int = copySource?.arsenalCounter ?: 0
-    internal var necroticClock: Float = copySource?.necroticClock ?: 0f
-    /** Visual cue budget for statuses and reactions within the current fixed step. */
-    internal var statusCuesThisStep: Int = copySource?.statusCuesThisStep ?: 0
-    /** Candidate-private scratch for bounded chain targeting; never read across steps. */
-    internal val chainScratch: IntArray = IntArray(MAX_CHAIN_SCRATCH)
-    /** Nesting level of [chainScratch] use within the current step; zero between steps. */
-    internal var chainDepth: Int = 0
-    /** The enemy whose Freeze the current hit is shattering, so that hit's clauses still see it Frozen; -1 between hits. */
-    internal var shatteringEnemyId: Int = -1
     internal var soundCueStorage: MutableList<GameplayAudioCue>? =
         copySource?.soundCueStorage?.let { source -> ArrayList(source) }
     internal val soundCues: PendingSoundCueBuffer
@@ -336,7 +272,7 @@ internal class MutableGameState(
         get() = PendingVisualFxCueBuffer(this)
     internal var pendingBankedMatter: Long = copySource?.pendingBankedMatter ?: 0L
     internal var pendingClearedRebirthLevel: Int? = copySource?.pendingClearedRebirthLevel
-    /** Mutable character state; a deep copy forks it (scalars copied, buffers copy-on-write). */
+    /** Mutable character state; a deep copy forks it (scalars and buffers copied). */
     internal var characterRuntime: CharacterRuntime = copySource?.characterRuntime?.fork() ?: CharacterRuntime()
     /** Owned state of the equipped weapon (entities, proc gates, element cadences, scaling inputs); a deep copy forks it. */
     internal var weaponRuntime: WeaponRuntime = copySource?.weaponRuntime?.fork() ?: WeaponRuntime()
@@ -412,40 +348,6 @@ internal class MutableGameState(
     internal var offerRarityFloor: ItemRarity? = copySource?.offerRarityFloor
 
     internal var nextEntityId: Int = copySource?.nextEntityId ?: 1
-    internal var spawnClock: Float = copySource?.spawnClock ?: 0f
-    internal var nextEliteAt: Float = copySource?.nextEliteAt ?: content.tempo.firstEliteAtSeconds
-    /** Elites spawned this run. */
-    internal var elitesSpawned: Int = copySource?.elitesSpawned ?: 0
-    /** Heralds spawned this run; each scheduled Herald arrives once. */
-    internal var heraldsSpawned: Int = copySource?.heraldsSpawned ?: 0
-    /** Spawn director pacing phase ([SpawnDirectorPhase] ordinal) and the run time it ends. */
-    internal var directorPhase: Int = copySource?.directorPhase ?: 0
-    internal var directorPhaseUntil: Float = copySource?.directorPhaseUntil ?: 0f
-    /** Enemies' worth of spawn budget banked by the director; events spend it. */
-    internal var spawnBudget: Float = copySource?.spawnBudget ?: 0f
-    /** The planned next event ([SpawnEventKind] ordinal, or -1), its size and its single enemy type (-1 when mixed). */
-    internal var pendingEventKind: Int = copySource?.pendingEventKind ?: -1
-    internal var pendingEventSize: Int = copySource?.pendingEventSize ?: 0
-    internal var pendingEventType: Int = copySource?.pendingEventType ?: -1
-    /** Enemy types (bit per ordinal) used by the last and the previous event; they spawn at half weight. */
-    internal var recentEventTypes: Long = copySource?.recentEventTypes ?: 0L
-    internal var previousEventTypes: Long = copySource?.previousEventTypes ?: 0L
-    /** Secret boss kinds spawned this run (bit per EnemyType ordinal); each arrives at most once. */
-    internal var secretBossMask: Long = copySource?.secretBossMask ?: 0L
-    /** Live encounter groups, at most MAX_ACTIVE_ENCOUNTERS; value-only, replaced on change. */
-    internal var encounters: ImmutableList<EncounterState> = copySource?.encounters ?: immutableListOf()
-    internal var ambushReadyAt: Float = copySource?.ambushReadyAt ?: 0f
-    internal var encircleReadyAt: Float = copySource?.encircleReadyAt ?: 0f
-    internal var wallReadyAt: Float = copySource?.wallReadyAt ?: 0f
-    /** When an event may next exceed the ordinary cap by its own size. */
-    internal var capOverflowReadyAt: Float = copySource?.capOverflowReadyAt ?: 0f
-    /** Seconds the Core has kept ambush speed without a break. */
-    internal var ambushSpeedSeconds: Float = copySource?.ambushSpeedSeconds ?: 0f
-    /** Events fired this run and the kind, planned size and spawned count of the last one. */
-    internal var spawnEventCount: Int = copySource?.spawnEventCount ?: 0
-    internal var lastSpawnEventKind: Int = copySource?.lastSpawnEventKind ?: -1
-    internal var lastSpawnEventPlanned: Int = copySource?.lastSpawnEventPlanned ?: 0
-    internal var lastSpawnEventSpawned: Int = copySource?.lastSpawnEventSpawned ?: 0
     /** Seed of this run; obstacle chunks hash it with their absolute chunk. */
     internal val runSeed: Int = copySource?.runSeed ?: seed
     /** Content and seed are fixed for this state and all reduction siblings; rank the template pool only once. */
@@ -492,14 +394,6 @@ internal class MutableGameState(
      * collision honours; other invulnerability (Glass Comet, Bulwark) does not stop it.
      */
     internal var reviveInvulnerableUntil: Float = copySource?.reviveInvulnerableUntil ?: 0f
-    /** Structure walls, doors and signals of the window around the Core; an immutable value replaced on change. */
-    internal var structureField: StructureField = copySource?.structureField ?: StructureField.EMPTY
-    /** The structure the Core is inside (or was, within the leave radius), or null. Value-only. */
-    internal var dungeon: DungeonState? = copySource?.dungeon
-    /** Cleared or abandoned structures, oldest first, at most [ContentBounds.MAX_SPENT_STRUCTURES]; id or flag. */
-    internal var spentStructureIds: List<Long> = copySource?.spentStructureIds ?: emptyList()
-    /** Last structure whose entry banner was shown (re-entering does not repeat it). */
-    internal var lastAnnouncedStructureId: Long = copySource?.lastAnnouncedStructureId ?: 0L
     internal var dashBufferTime: Float = copySource?.dashBufferTime ?: 0f
     internal var bossSpawned: Boolean = copySource?.bossSpawned ?: false
     internal var keyboardBrakeActive: Boolean = copySource?.keyboardBrakeActive ?: false
@@ -531,29 +425,19 @@ internal class MutableGameState(
     internal var trailDistanceCarry: Float = copySource?.trailDistanceCarry ?: 0f
     internal var weaponClock: Float = copySource?.weaponClock ?: 0f
     internal var weaponSecondaryClock: Float = copySource?.weaponSecondaryClock ?: 0f
-    internal var pendingLevelChoices: Int = copySource?.pendingLevelChoices ?: 0
-    internal var pendingRelicChoices: Int = copySource?.pendingRelicChoices ?: 0
-    internal var pendingBindingRelic: RelicId? = copySource?.pendingBindingRelic
-    internal var pendingRelicBindAction: RelicChoiceAction? = copySource?.pendingRelicBindAction
-    /**
-     * The unowned active item taken while every slot held an active: it waits, with its Reborn roll, for the
-     * [ChoiceType.ACTIVE_SLOT] prompt to replace a slot or salvage it; null otherwise.
-     */
-    internal var pendingActiveItemId: Int? = copySource?.pendingActiveItemId
-    internal var pendingActiveReborn: Boolean = copySource?.pendingActiveReborn ?: false
-    internal val relicRanks: CopyOnWriteIntArray = copySource?.relicRanks?.fork()
-        ?: CopyOnWriteIntArray(IntArray(content.relics.size))
-    internal val relicCooldowns: CopyOnWriteFloatArray = copySource?.relicCooldowns?.fork()
-        ?: CopyOnWriteFloatArray(FloatArray(content.relics.size))
-    internal val relicCounters: CopyOnWriteIntArray = copySource?.relicCounters?.fork()
-        ?: CopyOnWriteIntArray(IntArray(content.relics.size))
+    internal val relicRanks: RunIntArray = copySource?.relicRanks?.copy()
+        ?: RunIntArray(IntArray(content.relics.size))
+    internal val relicCooldowns: RunFloatArray = copySource?.relicCooldowns?.copy()
+        ?: RunFloatArray(FloatArray(content.relics.size))
+    internal val relicCounters: RunIntArray = copySource?.relicCounters?.copy()
+        ?: RunIntArray(IntArray(content.relics.size))
     internal val echoHits: MutableList<EchoHit> = copySource?.echoHits
         ?.let { source ->
             source.mapTo(ArrayList(source.size), EchoHit::copy)
         }
         ?: mutableListOf()
-    internal val agonyMutationCounts: CopyOnWriteIntArray = copySource?.agonyMutationCounts?.fork()
-        ?: CopyOnWriteIntArray(IntArray(content.weapons.size))
+    internal val agonyMutationCounts: RunIntArray = copySource?.agonyMutationCounts?.copy()
+        ?: RunIntArray(IntArray(content.weapons.size))
     internal var dataFraction: Float = copySource?.dataFraction ?: 0f
     internal var matterFraction: Float = copySource?.matterFraction ?: 0f
     internal var shieldRechargeDelay: Float = copySource?.shieldRechargeDelay ?: 0f
@@ -885,8 +769,8 @@ internal fun MutableGameState.deepCopy(): MutableGameState =
 /**
  * Allocation-free owner view over discoveries awaiting publication.
  *
- * The actual COW set is absent for the overwhelmingly common empty state. A reduction fork only
- * creates its small COW facade when there is retained output to preserve.
+ * The actual set is absent for the overwhelmingly common empty state. A deep copy only copies it when
+ * there is retained output to preserve.
  */
 @JvmInline
 internal value class PendingDiscoveredItemIdBuffer(
@@ -904,7 +788,7 @@ internal value class PendingDiscoveredItemIdBuffer(
 
     fun add(itemId: Int): Boolean {
         owner.pendingDiscoveredItemIdStorage?.let { return it.add(itemId) }
-        owner.pendingDiscoveredItemIdStorage = CopyOnWriteMutableSet(mutableSetOf(itemId))
+        owner.pendingDiscoveredItemIdStorage = RunMutableSet(mutableSetOf(itemId))
         return true
     }
 
