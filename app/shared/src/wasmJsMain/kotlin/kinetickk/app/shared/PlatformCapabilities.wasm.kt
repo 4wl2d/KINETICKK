@@ -95,27 +95,28 @@ private const val WEB_STORAGE_FAILED_BEFORE_EXECUTION: String = "failed-before-e
 internal actual fun createPlatformTonePlaybackCapability(): TonePlaybackCapability =
     WebTonePlaybackCapability()
 
-/** Owns one AudioContext instance without publishing it through a JavaScript global cache. */
+/** Owns one AudioContext instance and its master bus without publishing them through a JavaScript global cache. */
 @OptIn(ExperimentalWasmJsInterop::class)
 private class WebTonePlaybackCapability : TonePlaybackCapability {
-    private var context: JsAny? = null
+    /** `{ context, master }`: the AudioContext and its unity-gain master bus, made with the first tone. */
+    private var audio: JsAny? = null
     private var closed = false
     private var gestureFeedbackPending = false
 
     override suspend fun prepare(requests: List<ToneRequest>) {
-        if (!closed) context = prepareWebAudio(context)
+        if (!closed) audio = prepareWebAudio(audio)
     }
 
     override fun unlock() {
         if (closed) return
-        context = unlockWebAudio(context)
+        audio = unlockWebAudio(audio)
         gestureFeedbackPending = true
     }
 
     override fun play(request: ToneRequest) {
         if (closed) return
-        context = playWebTone(
-            context,
+        audio = playWebTone(
+            audio,
             request.frequencyHz.toDouble(),
             request.durationSeconds.toDouble(),
             request.gain.toDouble(),
@@ -127,8 +128,8 @@ private class WebTonePlaybackCapability : TonePlaybackCapability {
 
     override fun close() {
         if (closed) return
-        closeWebAudio(context)
-        context = null
+        closeWebAudio(audio)
+        audio = null
         closed = true
     }
 }
@@ -138,7 +139,7 @@ private fun prepareWebAudio(current: JsAny?): JsAny? = js(
     """{
         const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
         try {
-            return current || (AudioContext ? new AudioContext() : null);
+            return current || (AudioContext ? { context: new AudioContext(), master: null } : null);
         } catch (failure) {
             // Audio is optional: a browser that refuses a context leaves the game silent.
             return null;
@@ -158,12 +159,13 @@ private fun unlockWebAudio(current: JsAny?): JsAny? = js(
     """{
         const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
         if (!AudioContext) return null;
-        const context = current || new AudioContext();
+        const audio = current || { context: new AudioContext(), master: null };
+        const context = audio.context;
         if (context.state === 'suspended') {
             const resume = context.resume();
             if (resume && typeof resume.catch === 'function') resume.catch(() => undefined);
         }
-        return context;
+        return audio;
     }""",
 )
 
@@ -179,22 +181,29 @@ private fun playWebTone(
     """{
         const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
         if (!AudioContext) return null;
-        const context = current || new AudioContext();
+        const audio = current || { context: new AudioContext(), master: null };
+        const context = audio.context;
         // resume() resolves asynchronously. The gesture's first cue can already be scheduled;
         // automatic frames before a gesture must not enqueue sounds into a suspended context.
-        if (context.state === 'suspended' && !allowSuspended) return context;
+        if (context.state === 'suspended' && !allowSuspended) return audio;
         const oscillator = context.createOscillator();
         const gain = context.createGain();
+        if (!audio.master) {
+            // One unity-gain bus per context: every tone reaches the destination through it.
+            audio.master = context.createGain();
+            audio.master.gain.value = 1;
+            audio.master.connect(context.destination);
+        }
         oscillator.type = wave;
         oscillator.frequency.setValueAtTime(frequency, context.currentTime);
         gain.gain.setValueAtTime(0.0001, context.currentTime);
         gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume), context.currentTime + 0.008);
         gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + duration);
         oscillator.connect(gain);
-        gain.connect(context.destination);
+        gain.connect(audio.master);
         oscillator.start();
         oscillator.stop(context.currentTime + duration + 0.015);
-        return context;
+        return audio;
     }""",
 )
 
@@ -202,7 +211,7 @@ private fun playWebTone(
 private fun closeWebAudio(current: JsAny?): Unit = js(
     """{
         if (current) {
-            const close = current.close();
+            const close = current.context.close();
             if (close && typeof close.catch === 'function') close.catch(() => undefined);
         }
     }""",
