@@ -19,8 +19,9 @@ internal fun MutableGameState.takeSoundCues(): ImmutableList<GameplayAudioCue> {
 
 internal fun MutableGameState.takeVisualFxCues(): ImmutableList<VisualFxCue> = visualFxCues.drain()
 
+/** A cue plays at most once per reduction: one already pending is not queued again. */
 internal fun MutableGameState.emitSound(cue: GameplayAudioCue) {
-    if (soundCues.size < MutableGameState.MAX_GAMEPLAY_SOUND_CUES) soundCues += cue
+    if (cue !in soundCues && soundCues.size < MutableGameState.MAX_GAMEPLAY_SOUND_CUES) soundCues += cue
 }
 
 internal fun MutableGameState.emitVisualFx(cue: VisualFxCue) {

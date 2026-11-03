@@ -999,6 +999,8 @@ internal value class PendingSoundCueBuffer(
 
     fun isNotEmpty(): Boolean = !owner.soundCueStorage.isNullOrEmpty()
 
+    operator fun contains(cue: GameplayAudioCue): Boolean = owner.soundCueStorage?.contains(cue) == true
+
     fun add(cue: GameplayAudioCue): Boolean {
         val retained = owner.soundCueStorage
         if (retained != null) return retained.add(cue)

@@ -187,7 +187,7 @@ class GameplayCollectionBoundsTest {
     }
 
     @Test
-    fun soundCuesAcceptThirtyTwoAndRejectThirtyThird() {
+    fun soundCuesHoldEachCueOnceWithinTheirBound() {
         val state = newState(seed = 901)
         repeat(MutableGameState.MAX_GAMEPLAY_SOUND_CUES) {
             state.emitSound(GameplayAudioCue.DASH)
@@ -196,8 +196,8 @@ class GameplayCollectionBoundsTest {
 
         val cues = state.takeSoundCues()
 
-        assertEquals(MutableGameState.MAX_GAMEPLAY_SOUND_CUES, cues.size)
-        assertTrue(cues.all { cue -> cue == GameplayAudioCue.DASH })
+        assertEquals(listOf(GameplayAudioCue.DASH, GameplayAudioCue.VICTORY), cues)
+        assertTrue(cues.size <= MutableGameState.MAX_GAMEPLAY_SOUND_CUES)
     }
 
     @Test

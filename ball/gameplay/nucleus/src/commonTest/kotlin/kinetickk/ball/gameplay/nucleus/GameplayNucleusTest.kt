@@ -449,21 +449,19 @@ class GameplayNucleusTest {
     }
 
     @Test
-    fun audioCueAccumulatorRetainsFirstThirtyTwoAndDropsThirtyThird() {
+    fun audioCueAccumulatorKeepsEachCueOnceInEmissionOrderAndDropsNone() {
         val state = MutableGameState(canonicalGameplayContent, seed = 1)
-        repeat(MutableGameState.MAX_GAMEPLAY_SOUND_CUES + 1) { index ->
-            state.emitSound(
-                if (index == MutableGameState.MAX_GAMEPLAY_SOUND_CUES) {
-                    GameplayAudioCue.VICTORY
-                } else {
-                    GameplayAudioCue.DASH
-                },
-            )
-        }
+        val emitted = GameplayAudioCue.entries.reversed()
+        repeat(3) { emitted.forEach(state::emitSound) }
 
         val cues = state.takeSoundCues()
-        assertEquals(MutableGameState.MAX_GAMEPLAY_SOUND_CUES, cues.size)
-        assertTrue(cues.all { it == GameplayAudioCue.DASH })
+        assertEquals(emitted, cues)
+        assertTrue(GameplayAudioCue.entries.size <= MutableGameState.MAX_GAMEPLAY_SOUND_CUES)
+
+        // A new reduction plays a cue again.
+        state.emitSound(GameplayAudioCue.DASH)
+        state.emitSound(GameplayAudioCue.DASH)
+        assertEquals(listOf(GameplayAudioCue.DASH), state.takeSoundCues())
     }
 
     @Test
