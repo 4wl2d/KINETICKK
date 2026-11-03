@@ -160,6 +160,9 @@ internal class MutableGameState(
     /** Omen, mutators, personality, world events and signals. */
     internal val varietyRun: VarietyRunState = VarietyRunState(copySource?.varietyRun)
 
+    /** World origin, obstacle window, layer and contact gates. */
+    internal val worldRun: WorldRunState = WorldRunState(copySource?.worldRun)
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -250,17 +253,8 @@ internal class MutableGameState(
     /** Content and seed are fixed for this state and all reduction siblings; rank the template pool only once. */
     internal val structureTemplatePool: Int = copySource?.structureTemplatePool
         ?: structureTemplateMask(content.structures, runSeed)
-    /** Accumulated rebase shift: an absolute world position is the run-local position plus this origin. */
-    internal var worldOriginX: Double = copySource?.worldOriginX ?: 0.0
-    internal var worldOriginY: Double = copySource?.worldOriginY ?: 0.0
-    /** Generated obstacle window around the Core; an immutable value replaced on change. */
-    internal var obstacleField: ObstacleField = copySource?.obstacleField ?: ObstacleField.EMPTY
-    /** Destroyed unstable asteroids, oldest first, at most [ContentBounds.MAX_DESTROYED_OBSTACLES]. */
-    internal var destroyedObstacleIds: List<Long> = copySource?.destroyedObstacleIds ?: emptyList()
     /** The run's world layer; only a layer switch writes it. */
     internal var worldLayer: WorldLayer = copySource?.worldLayer ?: WorldLayer.BASE
-    /** The active keep-out of the current layer's generation (null: the origin safe radius applies). */
-    internal var worldKeepOut: WorldKeepOut? = copySource?.worldKeepOut
     /** Run boons owned, in grant order, at most [ContentBounds.MAX_RUN_BOONS]. */
     internal var runBoons: ImmutableList<Int> = copySource?.runBoons ?: immutableListOf()
     /** Rift offers, visited and completed layers, the open glitch rift, the visit and its pending rewards; a value. */
@@ -273,24 +267,6 @@ internal class MutableGameState(
     internal var dimensionLocalClock: Float = copySource?.dimensionLocalClock ?: 0f
     /** The layer whose reward the open choice is (null: the open choice is no dimension reward). */
     internal var dimensionRewardLayer: WorldLayer? = copySource?.dimensionRewardLayer
-    /** Run time before which an asteroid collision deals no further damage and fires no ricochet. */
-    internal var obstacleHitReadyAt: Float = copySource?.obstacleHitReadyAt ?: 0f
-    /** The solid surface the last hurting collision struck ([NO_SURFACE_ID]: none). */
-    internal var obstacleHitSurfaceId: Long = copySource?.obstacleHitSurfaceId ?: NO_SURFACE_ID
-    /** Run time before which Near Miss grants no further Overdrive. */
-    internal var nearMissReadyAt: Float = copySource?.nearMissReadyAt ?: 0f
-    /** Gap from the Core's surface to the nearest solid obstacle surface within reach; +∞ when none (NearObstacle). */
-    internal var coreObstacleGap: Float = copySource?.coreObstacleGap ?: Float.POSITIVE_INFINITY
-    /** Run time before which GRAZE cannot fire again. */
-    internal var grazeReadyAt: Float = copySource?.grazeReadyAt ?: 0f
-    /** The gravity knot whose influence holds the Core ([NO_OBSTACLE_ID] outside) and the heading it entered with. */
-    internal var slingWellId: Long = copySource?.slingWellId ?: NO_OBSTACLE_ID
-    internal var slingEntryHeading: Float = copySource?.slingEntryHeading ?: 0f
-    /**
-     * End of the invulnerability a revive (Second Wind, Ouroboros) granted: the only window a lethal
-     * collision honours; other invulnerability (Glass Comet, Bulwark) does not stop it.
-     */
-    internal var reviveInvulnerableUntil: Float = copySource?.reviveInvulnerableUntil ?: 0f
     internal var dashBufferTime: Float = copySource?.dashBufferTime ?: 0f
     internal var bossSpawned: Boolean = copySource?.bossSpawned ?: false
     internal var keyboardBrakeActive: Boolean = copySource?.keyboardBrakeActive ?: false

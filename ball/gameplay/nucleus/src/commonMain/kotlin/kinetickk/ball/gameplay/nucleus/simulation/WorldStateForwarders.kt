@@ -11,12 +11,14 @@ import kinetickk.ball.content.api.OmenId
 import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.model.AmbientSiteWindow
+import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kinetickk.ball.gameplay.nucleus.model.SignalPrompt
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.model.WorldEventPlan
 import kinetickk.ball.gameplay.nucleus.render.EventSignalProjection
 import kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection
 import kinetickk.ball.gameplay.nucleus.render.WorldEventProjection
+import kinetickk.ball.gameplay.nucleus.simulation.world.WorldKeepOut
 import kinetickk.foundation.collections.ImmutableList
 
 /*
@@ -183,3 +185,57 @@ internal var MutableGameState.pendingSignalPrompts: ImmutableList<SignalPrompt>
 internal var MutableGameState.volatileBursts: ImmutableList<VolatileBurstProjection>
     get() = varietyRun.volatileBursts
     set(value) { varietyRun.volatileBursts = value }
+
+// WorldRunState
+
+internal var MutableGameState.worldOriginX: Double
+    get() = worldRun.worldOriginX
+    set(value) { worldRun.worldOriginX = value }
+
+internal var MutableGameState.worldOriginY: Double
+    get() = worldRun.worldOriginY
+    set(value) { worldRun.worldOriginY = value }
+
+internal var MutableGameState.obstacleField: ObstacleField
+    get() = worldRun.obstacleField
+    set(value) { worldRun.obstacleField = value }
+
+internal var MutableGameState.destroyedObstacleIds: List<Long>
+    get() = worldRun.destroyedObstacleIds
+    set(value) { worldRun.destroyedObstacleIds = value }
+
+internal var MutableGameState.worldKeepOut: WorldKeepOut?
+    get() = worldRun.worldKeepOut
+    set(value) { worldRun.worldKeepOut = value }
+
+internal var MutableGameState.obstacleHitReadyAt: Float
+    get() = worldRun.obstacleHitReadyAt
+    set(value) { worldRun.obstacleHitReadyAt = value }
+
+internal var MutableGameState.obstacleHitSurfaceId: Long
+    get() = worldRun.obstacleHitSurfaceId
+    set(value) { worldRun.obstacleHitSurfaceId = value }
+
+internal var MutableGameState.nearMissReadyAt: Float
+    get() = worldRun.nearMissReadyAt
+    set(value) { worldRun.nearMissReadyAt = value }
+
+internal var MutableGameState.coreObstacleGap: Float
+    get() = worldRun.coreObstacleGap
+    set(value) { worldRun.coreObstacleGap = value }
+
+internal var MutableGameState.grazeReadyAt: Float
+    get() = worldRun.grazeReadyAt
+    set(value) { worldRun.grazeReadyAt = value }
+
+internal var MutableGameState.slingWellId: Long
+    get() = worldRun.slingWellId
+    set(value) { worldRun.slingWellId = value }
+
+internal var MutableGameState.slingEntryHeading: Float
+    get() = worldRun.slingEntryHeading
+    set(value) { worldRun.slingEntryHeading = value }
+
+internal var MutableGameState.reviveInvulnerableUntil: Float
+    get() = worldRun.reviveInvulnerableUntil
+    set(value) { worldRun.reviveInvulnerableUntil = value }
