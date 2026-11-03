@@ -16,9 +16,10 @@ import kinetickk.foundation.design.KkPacifierSigilPaths
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.kkMix
 import kinetickk.foundation.design.kkStroke
-import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+import kinetickk.ball.gameplay.interaction.canvas.CanvasMath
+import kinetickk.foundation.design.KkStrokeWidth
 
 // Baby mode (the easy run mode) in the run: pastel accents, the diaper on the Core, the pacifier wings on the cursor and
 // the pacifier plate in the Rebirth strip's slot. Procedural and cached: a steady frame allocates nothing.
@@ -41,10 +42,10 @@ internal fun DrawScope.drawDiaper(engine: GameplayRenderModel, center: Offset, r
     val shapes = EasyModeShapes.of(engine.coreRadius * DIAPER_RADIUS_RATIO)
     translate(center.x, center.y) {
         drawPath(shapes.band, kkMix(Kk.Bone, roles.soft, 0.25f), alpha = alpha)
-        drawPath(shapes.band, Kk.Ink, alpha = alpha, style = kkStroke(1.5f))
+        drawPath(shapes.band, Kk.Ink, alpha = alpha, style = kkStroke(KkStrokeWidth.Line2))
         drawPath(shapes.tabs, easyPastelLilac(roles), alpha = alpha)
         drawPath(shapes.pin, Kk.Bone2, alpha = alpha)
-        drawPath(shapes.pin, Kk.Ink, alpha = alpha, style = kkStroke(1f))
+        drawPath(shapes.pin, Kk.Ink, alpha = alpha, style = kkStroke(KkStrokeWidth.Line))
     }
 }
 
@@ -155,6 +156,6 @@ private class DiaperPaths {
         const val BAND_STEPS = 12
         const val BAND_FROM = 10.4f
         const val BAND_TO = 169.6f
-        const val DEG_TO_RAD = (PI / 180.0).toFloat()
+        const val DEG_TO_RAD = CanvasMath.DEG_TO_RAD
     }
 }

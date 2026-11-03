@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.render.CombatFieldVisual
 import kinetickk.ball.gameplay.nucleus.render.EnemyControlBits
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
@@ -30,15 +31,15 @@ import kotlin.math.sqrt
 import kinetickk.ball.gameplay.interaction.canvas.*
 import kinetickk.ball.gameplay.interaction.canvas.fx.*
 
-private const val TAU = (2.0 * PI).toFloat()
+private const val TAU = CanvasMath.TAU
 
-private const val THERMAL = 0
-private const val CRYO = 1
-private const val ION = 2
-private const val GRAVITIC = 3
-private const val ENTROPY = 4
-private const val SONIC = 5
-private const val VOID = 6
+private val THERMAL = StatusElement.THERMAL.ordinal
+private val CRYO = StatusElement.CRYO.ordinal
+private val ION = StatusElement.ION.ordinal
+private val GRAVITIC = StatusElement.GRAVITIC.ordinal
+private val ENTROPY = StatusElement.ENTROPY.ordinal
+private val SONIC = StatusElement.SONIC.ordinal
+private val VOID = StatusElement.VOID.ordinal
 
 /** Mark kind ordinals (`MarkKind`, combat-final §2.2). */
 private const val MARK_SPALL = 0
@@ -80,7 +81,7 @@ internal fun DrawScope.drawEnemyControl(
             val turn = (if (circle == 0) 90f else -90f) * time
             for (arc in 0 until 4) {
                 drawArc(void, turn + arc * 90f, 50f, false, Offset(center.x - r, center.y - r), Size(r * 2f, r * 2f), alpha = 0.85f,
-                    style = kkStroke(1.5f))
+                    style = kkStroke(KkStrokeWidth.Line2))
             }
         }
     }
@@ -138,8 +139,8 @@ internal fun DrawScope.drawEnemyControl(
     if (bits and EnemyControlBits.SILENCED != 0 && FxDrawBudget.take(FxPool.GLYPHS, 3, signature = false)) {
         val at = polar(center, ring + 6f, -0.75f * PI.toFloat())
         val sonic = roles.element(SONIC)
-        drawArc(sonic, -125f, 70f, false, Offset(at.x - 6f, at.y - 6f), Size(12f, 12f), style = kkStroke(1.5f))
-        drawArc(sonic, -125f, 70f, false, Offset(at.x - 10f, at.y - 10f), Size(20f, 20f), style = kkStroke(1.5f))
+        drawArc(sonic, -125f, 70f, false, Offset(at.x - 6f, at.y - 6f), Size(12f, 12f), style = kkStroke(KkStrokeWidth.Line2))
+        drawArc(sonic, -125f, 70f, false, Offset(at.x - 10f, at.y - 10f), Size(20f, 20f), style = kkStroke(KkStrokeWidth.Line2))
         drawLine(roles.element(VOID), Offset(at.x - 7f + 7f * KkShape.ShearRatio, at.y + 7f), Offset(at.x + 7f - 7f * KkShape.ShearRatio, at.y - 7f), 2f)
     }
     if (bits and EnemyControlBits.THROWN != 0 && FxDrawBudget.take(FxPool.GLYPHS, 3, signature = false)) {
@@ -204,8 +205,8 @@ private fun DrawScope.drawMark(engine: GameplayRenderModel, enemy: EnemyProjecti
         }
         MARK_BOOMED -> {
             val sonic = roles.element(SONIC)
-            drawArc(sonic, -35f, 70f, false, Offset(at.x - 4f, at.y - 4f), Size(8f, 8f), style = kkStroke(1.5f))
-            drawArc(sonic, -35f, 70f, false, Offset(at.x - 7f, at.y - 7f), Size(14f, 14f), style = kkStroke(1.5f))
+            drawArc(sonic, -35f, 70f, false, Offset(at.x - 4f, at.y - 4f), Size(8f, 8f), style = kkStroke(KkStrokeWidth.Line2))
+            drawArc(sonic, -35f, 70f, false, Offset(at.x - 7f, at.y - 7f), Size(14f, 14f), style = kkStroke(KkStrokeWidth.Line2))
         }
         MARK_SUPPRESSED -> {
             drawCircle(Kk.Ink, 5f, at)
@@ -255,8 +256,8 @@ internal fun DrawScope.drawCoreStates(engine: GameplayRenderModel, core: Offset,
     if (state.blastJumpReady && FxDrawBudget.take(FxPool.CORE_STATES, 10, signature = false)) {
         val sonic = roles.element(SONIC)
         val alpha = 0.5f + 0.5f * pulse(time, 0.15f)
-        drawCircle(sonic, radius + 14f, core, alpha = alpha, style = kkStroke(2f))
-        drawCircle(sonic, radius + 20f, core, alpha = alpha, style = kkStroke(1.5f))
+        drawCircle(sonic, radius + 14f, core, alpha = alpha, style = kkStroke(KkStrokeWidth.Icon))
+        drawCircle(sonic, radius + 20f, core, alpha = alpha, style = kkStroke(KkStrokeWidth.Line2))
         val thermal = roles.element(THERMAL)
         for (tick in 0 until 8) {
             val angle = tick * TAU / 8f
@@ -264,7 +265,7 @@ internal fun DrawScope.drawCoreStates(engine: GameplayRenderModel, core: Offset,
         }
     }
     if (state.weave01 > 0f && FxDrawBudget.take(FxPool.CORE_STATES, 4, signature = false)) {
-        drawCircle(roles.element(SONIC), radius + 18f, core, alpha = 0.3f, style = kkStroke(1.5f))
+        drawCircle(roles.element(SONIC), radius + 18f, core, alpha = 0.3f, style = kkStroke(KkStrokeWidth.Line2))
         val ion = roles.element(ION)
         for (dot in 0 until 3) drawCircle(ion, 2.5f, polar(core, radius + 18f, time * 6f + dot * TAU / 3f))
     }
@@ -288,11 +289,11 @@ internal fun DrawScope.drawCoreStates(engine: GameplayRenderModel, core: Offset,
     if (stored > 0 && FxDrawBudget.take(FxPool.CORE_STATES, 2 + stored.coerceAtMost(8), signature = false)) {
         val void = roles.element(VOID)
         drawCircle(Kk.Ink, radius + 44f, core, alpha = 0.25f)
-        drawCircle(void, radius + 44f, core, style = kkStroke(2f))
+        drawCircle(void, radius + 44f, core, style = kkStroke(KkStrokeWidth.Icon))
         for (bead in 0 until stored.coerceAtMost(24)) drawCircle(void, 3f, polar(core, radius + 44f, time * 2f + bead * TAU / stored))
     }
     if (state.phased && FxDrawBudget.take(FxPool.CORE_STATES, 1, signature = false)) {
-        drawCircle(roles.element(VOID), radius + 3f, core, style = kkStroke(2f))
+        drawCircle(roles.element(VOID), radius + 3f, core, style = kkStroke(KkStrokeWidth.Icon))
     }
     if (state.primedDash && FxDrawBudget.take(FxPool.CORE_STATES, 1, signature = false)) {
         drawCircle(roles.you, radius + 10f, core, style = WorldStrokes.dashedHair)
@@ -302,12 +303,12 @@ internal fun DrawScope.drawCoreStates(engine: GameplayRenderModel, core: Offset,
         val turn = time * 3f * RAD_TO_DEG
         for (coil in 0 until 3) {
             val r = radius + 10f + coil * 4f
-            drawArc(cryo, turn + coil * 120f, 90f, false, Offset(core.x - r, core.y - r), Size(r * 2f, r * 2f), style = kkStroke(1.5f))
+            drawArc(cryo, turn + coil * 120f, 90f, false, Offset(core.x - r, core.y - r), Size(r * 2f, r * 2f), style = kkStroke(KkStrokeWidth.Line2))
         }
     }
     val mask = state.inFieldMask
     if (mask and (1 shl CombatFieldVisual.PLASMA.ordinal) != 0 && FxDrawBudget.take(FxPool.CORE_STATES, 1, signature = false)) {
-        drawCircle(roles.element(THERMAL), radius + 4f, core, alpha = 0.5f + 0.5f * pulse(time, 0.5f), style = kkStroke(2f))
+        drawCircle(roles.element(THERMAL), radius + 4f, core, alpha = 0.5f + 0.5f * pulse(time, 0.5f), style = kkStroke(KkStrokeWidth.Icon))
     }
     if (mask and (1 shl CombatFieldVisual.TIME_BUBBLE.ordinal) != 0 && FxDrawBudget.take(FxPool.CORE_STATES, 8, signature = false)) {
         val cryo = roles.element(CRYO)
@@ -336,11 +337,11 @@ internal fun DrawScope.drawApexActive(engine: GameplayRenderModel, core: Offset,
     val alpha = 0.35f + 0.25f * pulse(time, 1.2f)
     FxDrawBudget.take(FxPool.CORE_STATES, 7, signature = true)
     for (arc in 0 until 6) {
-        drawArc(gold, turn + arc * 60f - 20f, 40f, false, Offset(core.x - r, core.y - r), Size(r * 2f, r * 2f), alpha = alpha, style = kkStroke(2f))
+        drawArc(gold, turn + arc * 60f - 20f, 40f, false, Offset(core.x - r, core.y - r), Size(r * 2f, r * 2f), alpha = alpha, style = kkStroke(KkStrokeWidth.Icon))
     }
     val timer = radius + 36f
     drawArc(light, -90f, 360f * apex.active01.coerceIn(0f, 1f), false, Offset(core.x - timer, core.y - timer), Size(timer * 2f, timer * 2f),
-        style = kkStroke(1.5f))
+        style = kkStroke(KkStrokeWidth.Line2))
     val ability = engine.characterAbility
     when (engine.coreShape) {
         CoreShape.ORB -> for (bead in 0 until apex.held.coerceIn(0, 24)) {
@@ -350,7 +351,7 @@ internal fun DrawScope.drawApexActive(engine: GameplayRenderModel, core: Offset,
             val angle = time * 0.6f + facet * 1.5707964f
             val point = Offset(core.x + cos(angle) * 27f, core.y + sin(angle) * 27f)
             rotate(45f + angle * RAD_TO_DEG, point) {
-                drawRect(gold, Offset(point.x - 6f, point.y - 6f), Size(12f, 12f), style = kkStroke(2f))
+                drawRect(gold, Offset(point.x - 6f, point.y - 6f), Size(12f, 12f), style = kkStroke(KkStrokeWidth.Icon))
             }
         }
         CoreShape.RING -> {
@@ -368,24 +369,24 @@ internal fun DrawScope.drawApexActive(engine: GameplayRenderModel, core: Offset,
             val angle = atan2(pointerY - engine.renderCoreY, pointerX - engine.renderCoreX)
             val at = polar(core, radius + 30f, angle)
             rotate(45f + angle * RAD_TO_DEG, at) {
-                drawRect(gold, Offset(at.x - 31f, at.y - 31f), Size(62f, 62f), style = kkStroke(2f))
+                drawRect(gold, Offset(at.x - 31f, at.y - 31f), Size(62f, 62f), style = kkStroke(KkStrokeWidth.Icon))
             }
         }
         CoreShape.TESSERACT -> drawHypercube(engine, shakeX, shakeY, gold, light, time)
         CoreShape.STAR -> {
-            if (ability.stellarMass > 0) drawCircle(gold, radius * (1.6f + ability.stellarMass / 24f), core, style = kkStroke(2f))
+            if (ability.stellarMass > 0) drawCircle(gold, radius * (1.6f + ability.stellarMass / 24f), core, style = kkStroke(KkStrokeWidth.Icon))
             if (ability.novaFlash > 0f) {
-                drawCircle(gold, radius + (1f - ability.novaFlash) * 140f, core, alpha = ability.novaFlash, style = kkStroke(3f))
+                drawCircle(gold, radius + (1f - ability.novaFlash) * 140f, core, alpha = ability.novaFlash, style = kkStroke(KkStrokeWidth.Heavy))
             }
         }
         CoreShape.SPIRAL -> if (ability.ghostActive) {
             val ghost = world(engine, engine.interpolated(ability.previousGhostX, ability.ghostX),
                 engine.interpolated(ability.previousGhostY, ability.ghostY), shakeX, shakeY)
-            drawCircle(gold, radius * 1.4f, ghost, style = kkStroke(2f))
+            drawCircle(gold, radius * 1.4f, ghost, style = kkStroke(KkStrokeWidth.Icon))
         }
         CoreShape.DIPOLE -> {
             val reach = if (ability.polarity == 1) 308f else 420f
-            drawCircle(gold, reach, core, alpha = 0.8f, style = kkStroke(2f))
+            drawCircle(gold, reach, core, alpha = 0.8f, style = kkStroke(KkStrokeWidth.Icon))
             val flip = time % 1f
             if (flip < 0.12f) drawCircle(gold, reach, core, alpha = 1f - flip / 0.12f, style = kkStroke(4.5f))
         }
@@ -399,7 +400,7 @@ internal fun DrawScope.drawApexActive(engine: GameplayRenderModel, core: Offset,
             val period = ability.beatPeriod
             if (period > 0f) {
                 val phase = (time % period) / period
-                drawCircle(gold, max(1f, 140f * phase), core, alpha = 1f - phase, style = kkStroke(2f))
+                drawCircle(gold, max(1f, 140f * phase), core, alpha = 1f - phase, style = kkStroke(KkStrokeWidth.Icon))
             }
         }
         CoreShape.CRESCENT -> {
@@ -418,7 +419,7 @@ internal fun DrawScope.drawApexActive(engine: GameplayRenderModel, core: Offset,
                 val drone = drones[index]
                 val center = world(engine, engine.interpolated(drone.previousX, drone.x), engine.interpolated(drone.previousY, drone.y),
                     shakeX, shakeY)
-                drawCircle(gold, 8f, center, style = kkStroke(2f))
+                drawCircle(gold, 8f, center, style = kkStroke(KkStrokeWidth.Icon))
             }
             drawNearestDataLines(engine, core, shakeX, shakeY, gold)
         }

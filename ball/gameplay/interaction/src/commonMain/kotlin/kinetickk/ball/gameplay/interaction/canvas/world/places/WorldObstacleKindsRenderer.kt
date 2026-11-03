@@ -29,6 +29,8 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kinetickk.ball.gameplay.interaction.canvas.CanvasMath
+import kinetickk.foundation.design.KkStrokeWidth
 
 /*
  * The 0.6.0 obstacle kinds in the world and on the minimap. Each look is object-local, drawn from cached strokes and
@@ -72,19 +74,19 @@ internal fun DrawScope.drawGravityWell(
     val gravitic = roles.element(StatusElement.GRAVITIC.ordinal)
     val body = obstacle.radius
     val influence = max(kinds.wellInfluence, body)
-    drawCircle(gravitic.copy(alpha = 0.10f), influence, center, style = kkStroke(1f))
+    drawCircle(gravitic.copy(alpha = 0.10f), influence, center, style = kkStroke(KkStrokeWidth.Line))
     val drift = time * WELL_RING_RATE * (if (obstacle.repels) 1f else -1f)
     for (ring in 0 until WELL_RINGS) {
         val shifted = ring.toFloat() / WELL_RINGS + drift
         val phase = shifted - floor(shifted)
         val alpha = 0.22f * sin(PI.toFloat() * phase)
         if (alpha <= 0.004f) continue
-        drawCircle(gravitic.copy(alpha = alpha), body + (influence - body) * phase, center, style = kkStroke(1.5f))
+        drawCircle(gravitic.copy(alpha = alpha), body + (influence - body) * phase, center, style = kkStroke(KkStrokeWidth.Line2))
     }
     drawCircle(Kk.Ink2, body, center)
-    drawCircle(gravitic.copy(alpha = 0.85f), body, center, style = kkStroke(3f))
+    drawCircle(gravitic.copy(alpha = 0.85f), body, center, style = kkStroke(KkStrokeWidth.Heavy))
     if (obstacle.repels) {
-        drawCircle(gravitic.copy(alpha = 0.6f), body * 0.55f, center, style = kkStroke(2f))
+        drawCircle(gravitic.copy(alpha = 0.6f), body * 0.55f, center, style = kkStroke(KkStrokeWidth.Icon))
         drawCircle(Kk.Bone, body * 0.15f, center)
     } else {
         drawCircle(gravitic.copy(alpha = 0.9f), body * 0.35f, center)
@@ -106,7 +108,7 @@ internal fun DrawScope.drawMinimapGravityWell(
     val gravitic = roles.element(StatusElement.GRAVITIC.ordinal)
     drawCircle(gravitic.copy(alpha = 0.85f), max(dot * 0.9f, obstacle.radius * scale), center)
     val influence = kinds.wellInfluence * scale
-    if (influence >= 2f * dot) drawCircle(gravitic.copy(alpha = 0.2f), influence, center, style = kkStroke(1f))
+    if (influence >= 2f * dot) drawCircle(gravitic.copy(alpha = 0.2f), influence, center, style = kkStroke(KkStrokeWidth.Line))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -172,7 +174,7 @@ internal fun DrawScope.drawAccelGate(
     val pulse = (sin(time * GATE_PULSE_RATE + obstacle.shapeSeed % 5) + 1f) * 0.5f
     val bars = ObstaclePaths.gateBars(obstacle.shapeSeed, halfSpan)
     translate(center.x, center.y) {
-        drawPath(bars, roles.you.copy(alpha = 0.35f + 0.25f * pulse), style = kkStroke(2f))
+        drawPath(bars, roles.you.copy(alpha = 0.35f + 0.25f * pulse), style = kkStroke(KkStrokeWidth.Icon))
     }
     drawGatePost(first, kinds.gatePostRadius, roles)
     drawGatePost(second, kinds.gatePostRadius, roles)
@@ -180,7 +182,7 @@ internal fun DrawScope.drawAccelGate(
 
 private fun DrawScope.drawGatePost(center: Offset, radius: Float, roles: KkRolePalette) {
     drawCircle(Kk.Ink2, radius, center)
-    drawCircle(Kk.Bone.copy(alpha = 0.7f), radius, center, style = kkStroke(2f))
+    drawCircle(Kk.Bone.copy(alpha = 0.7f), radius, center, style = kkStroke(KkStrokeWidth.Icon))
     drawCircle(roles.you.copy(alpha = 0.8f), radius * 0.35f, center)
 }
 
@@ -230,10 +232,10 @@ internal fun DrawScope.drawThermalVent(
         drawCircle(heat.copy(alpha = 0.16f + 0.1f * flicker), plume, center)
     }
     drawCircle(Kk.Ink1, body, center)
-    drawCircle(heat.copy(alpha = 0.45f), body, center, style = kkStroke(1.5f))
+    drawCircle(heat.copy(alpha = 0.45f), body, center, style = kkStroke(KkStrokeWidth.Line2))
     val cracks = ObstaclePaths.cracks(seed, body)
     translate(center.x, center.y) {
-        drawPath(cracks, heat.copy(alpha = 0.5f), style = kkStroke(1.5f))
+        drawPath(cracks, heat.copy(alpha = 0.5f), style = kkStroke(KkStrokeWidth.Line2))
     }
     drawCircle(heat.copy(alpha = 0.4f), body * 0.12f, center)
     if (erupting) {
@@ -243,7 +245,7 @@ internal fun DrawScope.drawThermalVent(
             val phase = shifted - floor(shifted)
             val alpha = 0.5f * (1f - phase)
             if (alpha <= 0.004f) continue
-            drawCircle(heat.copy(alpha = alpha), body + (plume - body) * phase, center, style = kkStroke(2f))
+            drawCircle(heat.copy(alpha = alpha), body + (plume - body) * phase, center, style = kkStroke(KkStrokeWidth.Icon))
         }
         return
     }
@@ -271,7 +273,7 @@ internal fun DrawScope.drawMinimapThermalVent(
 // ---------------------------------------------------------------------------------------------
 // Crystals.
 
-private const val TWO_PI: Float = 6.2831855f
+private const val TWO_PI: Float = CanvasMath.TAU
 
 /** Corners of a crystal's facet hexagon. */
 internal const val CRYSTAL_CORNERS: Int = 6
@@ -334,8 +336,8 @@ internal fun DrawScope.drawCrystal(obstacle: ObstacleProjection, center: Offset,
     val lines = ObstaclePaths.crystalFacetLines(obstacle.shapeSeed, obstacle.radius)
     translate(center.x, center.y) {
         drawPath(facets, Kk.Ink2)
-        drawPath(facets, cryo.copy(alpha = 0.8f), style = kkStroke(2f))
-        drawPath(lines, cryo.copy(alpha = 0.45f), style = kkStroke(1f))
+        drawPath(facets, cryo.copy(alpha = 0.8f), style = kkStroke(KkStrokeWidth.Icon))
+        drawPath(lines, cryo.copy(alpha = 0.45f), style = kkStroke(KkStrokeWidth.Line))
     }
 }
 
@@ -422,7 +424,7 @@ internal fun DrawScope.drawDerelictMine(
     val threat = roles.threat
     val armed = obstacle.fuseAt > 0f
     val progress = if (armed) (1f - (obstacle.fuseAt - time) / kinds.mineFuseSeconds).coerceIn(0f, 1f) else 0f
-    if (armed) drawCircle(threat.copy(alpha = 0.15f + 0.45f * progress), kinds.mineBlastRadius, center, style = kkStroke(2f))
+    if (armed) drawCircle(threat.copy(alpha = 0.15f + 0.45f * progress), kinds.mineBlastRadius, center, style = kkStroke(KkStrokeWidth.Icon))
     val lights = if (armed) {
         val blinks = time * (MINE_BLINK_FIRST + (MINE_BLINK_LAST - MINE_BLINK_FIRST) * progress)
         if (blinks - floor(blinks) < 0.5f) 0.95f else 0.15f
@@ -436,7 +438,7 @@ internal fun DrawScope.drawDerelictMine(
     val glow = ObstaclePaths.mineLights(seed, radius)
     translate(center.x, center.y) {
         drawPath(pips, Kk.Ink2)
-        drawPath(stubs, threat.copy(alpha = if (armed) 0.9f else 0.55f), style = kkStroke(2f))
+        drawPath(stubs, threat.copy(alpha = if (armed) 0.9f else 0.55f), style = kkStroke(KkStrokeWidth.Icon))
         drawPath(glow, threat.copy(alpha = lights))
     }
 }
@@ -451,7 +453,7 @@ internal fun DrawScope.drawMinimapDerelictMine(
     roles: KkRolePalette,
 ) {
     drawCircle(roles.threat.copy(alpha = 0.85f), radius, center)
-    if (obstacle.fuseAt > 0f) drawCircle(roles.threat.copy(alpha = 0.5f), kinds.mineBlastRadius * scale, center, style = kkStroke(1f))
+    if (obstacle.fuseAt > 0f) drawCircle(roles.threat.copy(alpha = 0.5f), kinds.mineBlastRadius * scale, center, style = kkStroke(KkStrokeWidth.Line))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -519,7 +521,7 @@ internal fun DrawScope.drawPhaseShard(
         translate(center.x, center.y) {
             drawPath(outline, Kk.Ink3)
             drawPath(outline, Kk.Ink4, alpha = 0.6f, style = kkStroke(rimWidth(radius)))
-            drawPath(outline, void.copy(alpha = 0.7f), style = kkStroke(2f))
+            drawPath(outline, void.copy(alpha = 0.7f), style = kkStroke(KkStrokeWidth.Icon))
         }
         return
     }
@@ -532,7 +534,7 @@ internal fun DrawScope.drawPhaseShard(
             drawPath(outline, Kk.Ink3, alpha = fill)
             drawPath(outline, Kk.Ink4, alpha = 0.6f * fill, style = kkStroke(rimWidth(radius)))
         }
-        drawPath(dashes, void.copy(alpha = 0.3f + 0.5f * telegraph), style = kkStroke(1.5f))
+        drawPath(dashes, void.copy(alpha = 0.3f + 0.5f * telegraph), style = kkStroke(KkStrokeWidth.Line2))
     }
 }
 

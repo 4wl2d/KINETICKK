@@ -14,6 +14,7 @@ import kinetickk.ball.content.api.WorldLayer
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+import kinetickk.ball.gameplay.interaction.canvas.CanvasMath
 
 /*
  * The dimension sigils: one filled mark per layer, lines only, holes by the even-odd rule. The Zenith is a ring over a
@@ -132,7 +133,7 @@ private object DimensionSigilPaths {
     }
 }
 
-private const val DEGREES: Float = (PI / 180.0).toFloat()
+private const val DEGREES: Float = CanvasMath.DEG_TO_RAD
 
 private fun regularPolygon(cx: Float, cy: Float, radius: Float, sides: Int): FloatArray = FloatArray(sides * 2).also { points ->
     for (side in 0 until sides) {

@@ -14,6 +14,7 @@ import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.lostCursorFollows
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkRolePalette
+import kinetickk.foundation.design.KkStrokeWidth
 import kinetickk.foundation.design.isOnScreen
 import kinetickk.foundation.design.kkStroke
 import kotlin.math.PI
@@ -110,7 +111,7 @@ private fun DrawScope.drawQuietSignal(engine: GameplayRenderModel, point: SitePr
         val grown = phase - floor(phase)
         drawCircle(
             Kk.Bone.copy(alpha = QUIET_ALPHA * (1f - grown)), QUIET_INNER_RADIUS + QUIET_SPREAD * grown, center,
-            style = kkStroke(1.5f),
+            style = kkStroke(KkStrokeWidth.Line2),
         )
     }
     recordMark(center, AMBIENT_MARK_HALF)
@@ -154,7 +155,7 @@ internal fun DrawScope.drawSecretCompanions(
             )
             if (!isOnScreen(center, AMBIENT_CULL_MARGIN)) break
             val glint = GOLDEN_GLINT_ALPHA * (0.6f + 0.4f * sin(engine.renderElapsed * GOLDEN_GLINT_RATE))
-            drawCircle(roles.gold.base.copy(alpha = glint), enemy.radius + GOLDEN_GLINT_GAP, center, style = kkStroke(2f))
+            drawCircle(roles.gold.base.copy(alpha = glint), enemy.radius + GOLDEN_GLINT_GAP, center, style = kkStroke(KkStrokeWidth.Icon))
             break
         }
     }

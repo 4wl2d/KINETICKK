@@ -79,7 +79,7 @@ internal fun DrawScope.drawTotemPlates(
                 val edgeY = if (index < heights.size / 2) plateTop + height - 1f * scale else plateTop
                 drawRect(accent, Offset(center.x - width * 0.5f, edgeY), Size(width, max(1f, scale)))
             } else if (!keyBlock) {
-                drawRect(accent, Offset(center.x - width * 0.5f, plateTop), Size(width, height), style = kkStroke(1.5f))
+                drawRect(accent, Offset(center.x - width * 0.5f, plateTop), Size(width, height), style = kkStroke(KkStrokeWidth.Line2))
             }
         }
         if (middle && keyBlock && keyIcon) drawKkIcon(KkIcon.SYSTEM_KEY, Offset(center.x, plateTop + height * 0.5f), 16f * scale, Kk.Ink)

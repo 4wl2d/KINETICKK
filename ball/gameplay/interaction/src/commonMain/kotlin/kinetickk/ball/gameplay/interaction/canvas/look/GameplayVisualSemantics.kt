@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.Color
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.render.DamageNumberTier
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -135,7 +136,7 @@ internal fun GameplayRenderModel.breakThresholdOf(element: Int): Int {
 
 /** Cryo's Break comes this many stacks sooner on an Embrittled enemy (the nucleus's `breakThreshold`). */
 private const val EMBRITTLED_CRYO_CUT = 2
-private const val CRYO = 1
+private val CRYO = StatusElement.CRYO.ordinal
 
 /**
  * The Break threshold of [element] on an enemy carrying [bits]: the build's threshold, cut for

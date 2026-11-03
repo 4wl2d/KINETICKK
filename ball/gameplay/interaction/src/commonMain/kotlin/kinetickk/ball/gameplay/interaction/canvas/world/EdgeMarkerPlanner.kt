@@ -14,6 +14,7 @@ import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kinetickk.ball.gameplay.interaction.canvas.world.places.*
+import kinetickk.ball.gameplay.interaction.canvas.CanvasMath
 
 /**
  * Places off-screen markers at the screen edge (`HUD-Elite.png`): on a ring inset from the edges,
@@ -1126,7 +1127,7 @@ internal class EdgeMarkerPlanner {
          */
         const val DEPTH_COST_DEGREES = 30f
 
-        const val DEGREES = 57.29578f
+        const val DEGREES = CanvasMath.RAD_TO_DEG
 
         /** Placement orders [arrange] knows; [place] compares the first [PLACEMENT_PATTERNS], plus the tracking ones. */
         const val MIDDLE_OUT = 0

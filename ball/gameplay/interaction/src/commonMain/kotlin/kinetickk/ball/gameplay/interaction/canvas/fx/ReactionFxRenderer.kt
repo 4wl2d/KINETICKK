@@ -30,7 +30,6 @@ import kinetickk.ball.gameplay.nucleus.protocol.ReactionCueFlags
 import kinetickk.ball.gameplay.nucleus.protocol.SkillCueCodes
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.profile.api.ReactionEffectsLevel
-import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.max
 import kotlin.math.min
@@ -39,9 +38,9 @@ import kotlin.math.sqrt
 import kinetickk.ball.gameplay.interaction.canvas.*
 import kinetickk.ball.gameplay.interaction.canvas.world.*
 
-private const val TAU = (2.0 * PI).toFloat()
-private const val RAD_TO_DEG = 57.29578f
-private const val SONIC = 5
+private const val TAU = CanvasMath.TAU
+private const val RAD_TO_DEG = CanvasMath.RAD_TO_DEG
+private val SONIC = StatusElement.SONIC.ordinal
 private const val WEAPON_LINK_JITTER = 8f
 private const val WEAPON_LINK_OUTER_WIDTH = 6f
 private const val WEAPON_LINK_EXTENT = WEAPON_LINK_JITTER + WEAPON_LINK_OUTER_WIDTH * 0.5f
@@ -114,7 +113,7 @@ internal fun DrawScope.drawElementBursts(
             } else {
                 FxDrawBudget.take(FxPool.TRANSIENT, 1, signature = true)
                 val out = KkEase.Out.transform(progress)
-                drawCircle(roles.element(burst.primary), max(1f, reach * out), center, alpha = (1f - progress) * peak, style = kkStroke(3f))
+                drawCircle(roles.element(burst.primary), max(1f, reach * out), center, alpha = (1f - progress) * peak, style = kkStroke(KkStrokeWidth.Heavy))
             }
             continue
         }
@@ -141,7 +140,7 @@ internal fun DrawScope.drawElementBursts(
         if (echo && progress < 0.8f) {
             // A Resonator echo: its signature plus a thin Sonic ring.
             FxDrawBudget.take(FxPool.TRANSIENT, 1, signature = true)
-            drawCircle(roles.element(SONIC), max(1f, reach * 0.6f), center, alpha = (1f - progress) * peak, style = kkStroke(1.5f))
+            drawCircle(roles.element(SONIC), max(1f, reach * 0.6f), center, alpha = (1f - progress) * peak, style = kkStroke(KkStrokeWidth.Line2))
         }
     }
 }
@@ -426,7 +425,7 @@ private fun DrawScope.drawStyledLink(
                 val radius = if (head) 5f else 3.5f
                 if (look.inkDots) {
                     drawCircle(if (head) first else Kk.Ink, radius, point, alpha = alpha)
-                    if (!head) drawCircle(second, radius, point, alpha = alpha, style = kkStroke(1.5f))
+                    if (!head) drawCircle(second, radius, point, alpha = alpha, style = kkStroke(KkStrokeWidth.Line2))
                 } else {
                     val color = when {
                         head -> Kk.Bone
@@ -481,8 +480,8 @@ private fun DrawScope.drawStyledLink(
                 }
             }
             if (look.endRings) {
-                drawCircle(second, 4f, end, alpha = alpha, style = kkStroke(1.5f))
-                drawCircle(second, 7f, end, alpha = alpha, style = kkStroke(1.5f))
+                drawCircle(second, 4f, end, alpha = alpha, style = kkStroke(KkStrokeWidth.Line2))
+                drawCircle(second, 7f, end, alpha = alpha, style = kkStroke(KkStrokeWidth.Line2))
             }
         }
         LinkKind.BEAM -> {
@@ -494,8 +493,8 @@ private fun DrawScope.drawStyledLink(
                 drawCircle(first, 2f, Offset(start.x + dx * t, start.y + dy * t), alpha = alpha)
             }
             drawCircle(Kk.Ink, 14f, end, alpha = alpha * 0.85f)
-            drawCircle(second, 14f, end, alpha = alpha, style = kkStroke(2f))
-            drawCircle(second, 8.4f, end, alpha = alpha, style = kkStroke(1.5f))
+            drawCircle(second, 14f, end, alpha = alpha, style = kkStroke(KkStrokeWidth.Icon))
+            drawCircle(second, 8.4f, end, alpha = alpha, style = kkStroke(KkStrokeWidth.Line2))
         }
         LinkKind.TAUT -> {
             val bone = look.tone == LinkTone.BONE
@@ -514,7 +513,7 @@ private fun DrawScope.drawStyledLink(
                 val t = (arc + 1f) / (SOUND_ARCS + 1f)
                 val point = Offset(start.x + dx * t, start.y + dy * t)
                 drawArc(first, facing - 35f, 70f, false, Offset(point.x - 6f, point.y - 6f), Size(12f, 12f), alpha = alpha,
-                    style = kkStroke(1.5f))
+                    style = kkStroke(KkStrokeWidth.Line2))
             }
         }
     }

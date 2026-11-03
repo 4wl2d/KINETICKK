@@ -19,6 +19,7 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.sin
+import kinetickk.ball.gameplay.interaction.canvas.CanvasMath
 
 // Legendary scene (animated, looping on the card time, behind the text).
 
@@ -48,7 +49,7 @@ private const val Ticks = 48
 private const val Segments = 12
 private const val RingPoints = 72
 private const val EmberStride = 7
-private const val TAU = (PI * 2.0).toFloat()
+private const val TAU = CanvasMath.TAU
 
 /** The lean of the card face slab (its 22 dp cut over the card height, see `clipKkCardFace`). */
 private const val CardCutDp = 22f

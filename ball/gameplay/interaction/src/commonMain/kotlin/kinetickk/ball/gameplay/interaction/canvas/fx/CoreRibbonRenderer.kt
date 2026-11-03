@@ -18,6 +18,7 @@ import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkRolePalette
+import kinetickk.foundation.design.KkStrokeWidth
 import kinetickk.foundation.design.isOnScreen
 import kinetickk.foundation.design.kkStroke
 import kotlin.math.max
@@ -149,7 +150,7 @@ private fun DrawScope.drawDashGhosts(
         val distance = DashGhostDistance[ghost]
         if (distance > budget || !CoreRibbonGeometry.pointAlong(ribbon, engine.renderCoreX, engine.renderCoreY, distance, point)) return
         val center = world(engine, point[0], point[1], shakeX, shakeY)
-        drawCircle(tone.copy(alpha = (0.5f - ghost * 0.2f) * phase), 18f, center, style = kkStroke(2f))
+        drawCircle(tone.copy(alpha = (0.5f - ghost * 0.2f) * phase), 18f, center, style = kkStroke(KkStrokeWidth.Icon))
     }
 }
 

@@ -238,7 +238,7 @@ private fun DrawScope.drawMinimapSite(
                 if (point.active) {
                     drawRect(Kk.Bone, Offset(at.x - reach * 0.5f, at.y - reach * 0.5f), Size(reach, reach))
                 } else {
-                    drawRect(Kk.Bone, Offset(at.x - reach * 0.5f, at.y - reach * 0.5f), Size(reach, reach), style = kkStroke(1f))
+                    drawRect(Kk.Bone, Offset(at.x - reach * 0.5f, at.y - reach * 0.5f), Size(reach, reach), style = kkStroke(KkStrokeWidth.Line))
                 }
             }
         }
@@ -251,11 +251,11 @@ private fun DrawScope.drawMinimapSite(
         SiteKind.FAR_SIGIL -> {
             val at = pinned(centerX, centerY, half, dx, dy, dot * 2f)
             val color = sigilColor(roles)
-            drawCircle(color, dot * 1.6f, at, style = kkStroke(1f))
+            drawCircle(color, dot * 1.6f, at, style = kkStroke(KkStrokeWidth.Line))
             drawCircle(color, dot * 0.6f, at)
         }
         SiteKind.DRIFT_CACHE -> drawPinnedMark(centerX, centerY, half, dx, dy, dot * 1.4f, Kk.Bone.copy(alpha = 0.7f), filled = true)
-        SiteKind.QUIET_SIGNAL -> drawCircle(Kk.Mute, dot * 1.6f, pinned(centerX, centerY, half, dx, dy, dot * 2f), style = kkStroke(1f))
+        SiteKind.QUIET_SIGNAL -> drawCircle(Kk.Mute, dot * 1.6f, pinned(centerX, centerY, half, dx, dy, dot * 2f), style = kkStroke(KkStrokeWidth.Line))
         // Easter eggs are found, never shown.
         SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER -> Unit
     }
@@ -332,7 +332,7 @@ private fun DrawScope.drawOfferedPoint(
         }
         SiteKind.COLLAPSING_ORBIT -> {
             drawCircle(Kk.Bone.copy(alpha = 0.06f), 34f, center)
-            drawCircle(Kk.Bone.copy(alpha = 0.55f), 34f, center, style = kkStroke(2f))
+            drawCircle(Kk.Bone.copy(alpha = 0.55f), 34f, center, style = kkStroke(KkStrokeWidth.Icon))
             drawCircle(roles.you.copy(alpha = 0.18f), 40f, center, style = kkStroke(4f))
         }
         SiteKind.RESONANT_CIRCUIT -> drawTotemPlates(center, 1.2f, roles.you, keyBlock = true, keyIcon = true)
@@ -436,7 +436,7 @@ private fun DrawScope.drawActivePoint(
             if (!isOnScreen(center, 210f)) return
             val breathe = (sin(time * 3.9f) + 1f) * 0.5f
             drawCircle(Kk.Bone.copy(alpha = 0.05f), 155f, center, style = kkStroke(70f))
-            drawCircle(Kk.Bone.copy(alpha = 0.55f), 190f, center, style = kkStroke(2f))
+            drawCircle(Kk.Bone.copy(alpha = 0.55f), 190f, center, style = kkStroke(KkStrokeWidth.Icon))
             drawCircle(Kk.Bone.copy(alpha = 0.22f + breathe * 0.18f), 120f, center, style = WorldStrokes.dashedThin)
             drawCircle(roles.you.copy(alpha = 0.18f), 198f, center, style = WorldStrokes.arc6)
             val progress = point.progress.coerceIn(0f, 1f)

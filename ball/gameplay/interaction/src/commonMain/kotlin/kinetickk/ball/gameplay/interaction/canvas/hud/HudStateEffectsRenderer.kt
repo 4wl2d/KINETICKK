@@ -146,7 +146,7 @@ private fun DrawScope.drawCursorHaloArc(
     val radius = CURSOR_HALO_RADIUS
     val topLeft = Offset(cursor.x - radius, cursor.y - radius)
     val arcSize = Size(radius * 2f, radius * 2f)
-    val stroke = kkStroke(3f)
+    val stroke = kkStroke(KkStrokeWidth.Heavy)
     drawArc(roles.pol.copy(alpha = 0.18f), 120f, CURSOR_ARC_DEGREES, false, topLeft, arcSize, style = stroke)
     if (stability > 0f) {
         drawArc(if (low && !engine.easyMode) roles.threat else roles.pol, 120f, CURSOR_ARC_DEGREES * stability, false, topLeft, arcSize,
@@ -265,7 +265,7 @@ private fun DrawScope.drawOverdriveCore(roles: KkRolePalette, core: Offset, rend
 private fun DrawScope.drawCriticalRing(roles: KkRolePalette, core: Offset, renderTime: Float) {
     val t = KkEase.In.transform(kkLoop(renderTime, 0.9f))
     val scale = kkLerp(1.5f, 0.15f, t)
-    drawCircle(roles.threat.copy(alpha = t), 70f * scale, core, style = kkStroke(2f))
+    drawCircle(roles.threat.copy(alpha = t), 70f * scale, core, style = kkStroke(KkStrokeWidth.Icon))
 }
 
 /** "Overheat" stamp beside the Core while the dash is offline (pulsing). */

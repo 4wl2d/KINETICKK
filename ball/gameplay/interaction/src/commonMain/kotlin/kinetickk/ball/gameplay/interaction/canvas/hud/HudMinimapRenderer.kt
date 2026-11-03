@@ -22,6 +22,7 @@ import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkRolePalette
+import kinetickk.foundation.design.KkStrokeWidth
 import kinetickk.foundation.design.TextMeasurer
 import kinetickk.foundation.design.kkStroke
 import kotlin.math.abs
@@ -154,8 +155,8 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
     val dot = frame.u(1.6f)
     clipRect(left, top, left + side, top + side) {
         // Range rings at a third and two thirds.
-        drawCircle(Kk.Bone.copy(alpha = 0.06f), half * 0.66f, Offset(centerX, centerY), style = kkStroke(1f))
-        drawCircle(Kk.Bone.copy(alpha = 0.05f), half * 0.33f, Offset(centerX, centerY), style = kkStroke(1f))
+        drawCircle(Kk.Bone.copy(alpha = 0.06f), half * 0.66f, Offset(centerX, centerY), style = kkStroke(KkStrokeWidth.Line))
+        drawCircle(Kk.Bone.copy(alpha = 0.05f), half * 0.33f, Offset(centerX, centerY), style = kkStroke(KkStrokeWidth.Line))
         val obstacles = engine.obstacles
         for (index in obstacles.indices) {
             val obstacle = obstacles[index]
@@ -204,8 +205,8 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
                     val secret = rank == EnemyRank.SECRET_BOSS
                     val (x, y) = pinned(centerX, centerY, half, dx, dy, dot * if (secret) SECRET_RING_DOTS else 3f)
                     drawCircle(roles.threat, dot * 3f, Offset(x, y))
-                    drawCircle(Kk.Bone.copy(alpha = 0.8f), dot * 3f, Offset(x, y), style = kkStroke(1f))
-                    if (secret) drawCircle(Kk.Bone.copy(alpha = 0.8f), dot * SECRET_RING_DOTS, Offset(x, y), style = kkStroke(1f))
+                    drawCircle(Kk.Bone.copy(alpha = 0.8f), dot * 3f, Offset(x, y), style = kkStroke(KkStrokeWidth.Line))
+                    if (secret) drawCircle(Kk.Bone.copy(alpha = 0.8f), dot * SECRET_RING_DOTS, Offset(x, y), style = kkStroke(KkStrokeWidth.Line))
                 }
                 EnemyRank.ELITE -> {
                     val (x, y) = pinned(centerX, centerY, half, dx, dy, dot * 2.4f)
@@ -237,7 +238,7 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
         }
         drawCircle(roles.you, dot * 1.7f, Offset(centerX, centerY))
     }
-    drawPath(square, Kk.Bone.copy(alpha = 0.22f), style = kkStroke(1f))
+    drawPath(square, Kk.Bone.copy(alpha = 0.22f), style = kkStroke(KkStrokeWidth.Line))
 }
 
 /**
@@ -258,7 +259,7 @@ internal fun DrawScope.drawPinnedMark(
     if (filled) {
         drawRect(color, Offset(x - size * 0.5f, y - size * 0.5f), Size(size, size))
     } else {
-        drawRect(color, Offset(x - size * 0.5f, y - size * 0.5f), Size(size, size), style = kkStroke(1f))
+        drawRect(color, Offset(x - size * 0.5f, y - size * 0.5f), Size(size, size), style = kkStroke(KkStrokeWidth.Line))
     }
 }
 

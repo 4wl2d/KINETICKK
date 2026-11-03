@@ -20,7 +20,7 @@ import kotlin.math.max
 import kotlin.math.sin
 import kinetickk.ball.gameplay.interaction.canvas.*
 
-private const val RADIANS_TO_DEGREES = 57.29578f
+private const val RADIANS_TO_DEGREES = CanvasMath.RAD_TO_DEG
 
 /** Weapons in the world read as the player's: bone bodies with you-color accents. */
 internal fun DrawScope.drawWeapon(engine: GameplayRenderModel, core: Offset, shakeX: Float, shakeY: Float, roles: KkRolePalette) {
@@ -69,12 +69,12 @@ internal fun DrawScope.drawWeapon(engine: GameplayRenderModel, core: Offset, sha
             drawLine(Kk.Bone.copy(alpha = 0.2f), core, point, 1f, pathEffect = WorldStrokes.dashEffect)
             rotate(engine.renderElapsed * 240f + orbital.index * 45f, point) {
                 drawRect(Kk.Bone, Offset(point.x - 11f, point.y - 11f), Size(22f, 22f))
-                drawRect(you, Offset(point.x - 11f, point.y - 11f), Size(22f, 22f), style = kkStroke(2f))
+                drawRect(you, Offset(point.x - 11f, point.y - 11f), Size(22f, 22f), style = kkStroke(KkStrokeWidth.Icon))
             }
         }
         WeaponId.ARC_COIL -> {
             val pulse = (sin(engine.renderElapsed * 9f) + 1f) * 0.5f
-            drawCircle(you.copy(alpha = 0.3f), 31f + pulse * 7f, core, style = kkStroke(2f))
+            drawCircle(you.copy(alpha = 0.3f), 31f + pulse * 7f, core, style = kkStroke(KkStrokeWidth.Icon))
             drawCircle(Kk.Bone.copy(alpha = 0.4f), 22f - pulse * 4f, core, style = WorldStrokes.dashedHair)
         }
         WeaponId.QUASAR_CANNON -> {
@@ -86,7 +86,7 @@ internal fun DrawScope.drawWeapon(engine: GameplayRenderModel, core: Offset, sha
         }
         WeaponId.ENTROPY_FIELD -> drawEntropyField(engine, core, roles)
         WeaponId.SINGULARITY_SPEAR -> {
-            drawCircle(Kk.Bone.copy(alpha = 0.25f), 36f, core, style = kkStroke(2f))
+            drawCircle(Kk.Bone.copy(alpha = 0.25f), 36f, core, style = kkStroke(KkStrokeWidth.Icon))
             if (engine.weaponBeamTime > 0f) {
                 val start = world(engine, engine.weaponBeamStartX, engine.weaponBeamStartY, shakeX, shakeY)
                 val end = world(engine, engine.weaponBeamEndX, engine.weaponBeamEndY, shakeX, shakeY)
@@ -100,10 +100,10 @@ internal fun DrawScope.drawWeapon(engine: GameplayRenderModel, core: Offset, sha
             val pulse = (sin(engine.renderElapsed * 7f) + 1f) * 0.5f
             val outer = 19f + pulse * 3f
             rotate(engine.renderElapsed * 46f, core) {
-                drawRect(you, Offset(core.x - outer, core.y - outer), Size(outer * 2f, outer * 2f), style = kkStroke(2f))
+                drawRect(you, Offset(core.x - outer, core.y - outer), Size(outer * 2f, outer * 2f), style = kkStroke(KkStrokeWidth.Icon))
             }
             rotate(-engine.renderElapsed * 69f, core) {
-                drawRect(Kk.Bone.copy(alpha = 0.8f), Offset(core.x - 10f, core.y - 10f), Size(20f, 20f), style = kkStroke(1.5f))
+                drawRect(Kk.Bone.copy(alpha = 0.8f), Offset(core.x - 10f, core.y - 10f), Size(20f, 20f), style = kkStroke(KkStrokeWidth.Line2))
             }
         }
         // The 0.4.0 additions (WorldWeaponRenderer).

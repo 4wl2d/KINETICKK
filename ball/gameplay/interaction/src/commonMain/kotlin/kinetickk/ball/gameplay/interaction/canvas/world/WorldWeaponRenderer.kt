@@ -31,8 +31,8 @@ import kinetickk.ball.gameplay.interaction.canvas.*
  * last two fixed-step states; spins and pulses follow renderElapsed. Nothing here allocates per frame.
  */
 
-private const val RADIANS_TO_DEGREES = 57.29578f
-private const val TAU = (PI * 2.0).toFloat()
+private const val RADIANS_TO_DEGREES = CanvasMath.RAD_TO_DEG
+private const val TAU = CanvasMath.TAU
 
 /** Mirrors of the simulation's geometry the world draws (the nucleus keeps the authoritative values). */
 private const val PHASE_LATTICE_CENTER = 110f
@@ -62,7 +62,7 @@ internal fun DrawScope.drawPhaseLattice(engine: GameplayRenderModel, core: Offse
     val pulse = (sin(engine.renderElapsed * 4f) + 1f) * 0.5f
     val cryo = roles.element(StatusElement.CRYO)
     drawCircle(cryo.copy(alpha = 0.05f), center, core, style = kkStroke(half * 2f))
-    drawCircle(roles.you.copy(alpha = 0.4f), center - half * 0.5f + pulse * half, core, style = kkStroke(1.5f))
+    drawCircle(roles.you.copy(alpha = 0.4f), center - half * 0.5f + pulse * half, core, style = kkStroke(KkStrokeWidth.Line2))
     drawCircle(Kk.Bone.copy(alpha = 0.22f), center + half, core, style = WorldStrokes.dashedHair)
     if (engine.weaponLevel >= 6) {
         drawCircle(cryo.copy(alpha = 0.28f), center + PHASE_LATTICE_OUTER_OFFSET, core, style = WorldStrokes.dashedThin)
@@ -87,7 +87,7 @@ internal fun DrawScope.drawSecondMorningstar(engine: GameplayRenderModel, core: 
     val radius = 20f * MORNINGSTAR_SECOND_SIZE + 3f
     drawCircle(roles.you.copy(alpha = 0.12f), radius + 8f, second)
     drawCircle(Kk.Bone, radius, second)
-    drawCircle(roles.you, radius - 1f, second, style = kkStroke(2f))
+    drawCircle(roles.you, radius - 1f, second, style = kkStroke(KkStrokeWidth.Icon))
 }
 
 /** The Core-side marks of the twelve 0.4.0 weapons (their entities are drawn by [drawWeaponEntities]). */
@@ -140,7 +140,7 @@ internal fun DrawScope.drawAddedWeapon(
             drawCircle(gravitic.copy(alpha = 0.35f), 26f, core, style = WorldStrokes.dashedHair)
             drawCircle(gravitic, 3f, polar(core, 26f, time * 2.4f))
         }
-        WeaponId.SOLAR_SWEEP -> drawCircle(roles.element(StatusElement.THERMAL).copy(alpha = 0.3f), 30f, core, style = kkStroke(1.5f))
+        WeaponId.SOLAR_SWEEP -> drawCircle(roles.element(StatusElement.THERMAL).copy(alpha = 0.3f), 30f, core, style = kkStroke(KkStrokeWidth.Line2))
         WeaponId.AEGIS_SHARDS -> for (index in engine.weaponOrbitals.indices) {
             val orbital = engine.weaponOrbitals[index]
             val point = world(engine, engine.interpolated(orbital.previousX, orbital.x), engine.interpolated(orbital.previousY, orbital.y), shakeX, shakeY)
@@ -149,12 +149,12 @@ internal fun DrawScope.drawAddedWeapon(
         WeaponId.HOLLOW_RIFT -> {
             val void = roles.element(StatusElement.VOID)
             drawArc(void.copy(alpha = 0.6f), motionAngle * RADIANS_TO_DEGREES + 120f, 120f, false,
-                Offset(core.x - 30f, core.y - 30f), Size(60f, 60f), style = kkStroke(2f))
+                Offset(core.x - 30f, core.y - 30f), Size(60f, 60f), style = kkStroke(KkStrokeWidth.Icon))
         }
         WeaponId.RESONANCE_DRUM -> {
             val beat = (sin(time * 8.4f) + 1f) * 0.5f
             val sonic = roles.element(StatusElement.SONIC)
-            drawCircle(sonic.copy(alpha = 0.4f), 26f + beat * 4f, core, style = kkStroke(1.5f))
+            drawCircle(sonic.copy(alpha = 0.4f), 26f + beat * 4f, core, style = kkStroke(KkStrokeWidth.Line2))
             drawCircle(sonic.copy(alpha = 0.25f), 34f + beat * 6f, core, style = WorldStrokes.dashedHair)
         }
         else -> Unit
@@ -209,7 +209,7 @@ private fun DrawScope.drawSentry(engine: GameplayRenderModel, sentry: WeaponEnti
     val half = sentry.radius
     rotate(45f, center) {
         drawRect(Kk.Bone.copy(alpha = alpha), Offset(center.x - half, center.y - half), Size(half * 2f, half * 2f))
-        drawRect(roles.you.copy(alpha = alpha), Offset(center.x - half, center.y - half), Size(half * 2f, half * 2f), style = kkStroke(2f))
+        drawRect(roles.you.copy(alpha = alpha), Offset(center.x - half, center.y - half), Size(half * 2f, half * 2f), style = kkStroke(KkStrokeWidth.Icon))
     }
     drawLine(roles.you.copy(alpha = 0.5f * alpha), center, polar(center, half + 10f, engine.renderElapsed * 3f), 1.5f)
     drawCircle(Kk.Ink, half * 0.3f, center)
@@ -220,7 +220,7 @@ private fun DrawScope.drawLens(engine: GameplayRenderModel, lens: WeaponEntityPr
     val gravitic = roles.element(StatusElement.GRAVITIC)
     drawCircle(gravitic.copy(alpha = 0.18f), lens.radius + 6f, center)
     drawCircle(Kk.Bone, lens.radius, center)
-    drawCircle(gravitic, lens.radius - 1f, center, style = kkStroke(2f))
+    drawCircle(gravitic, lens.radius - 1f, center, style = kkStroke(KkStrokeWidth.Icon))
     drawCircle(gravitic, 3f, polar(center, lens.radius * 0.5f, engine.renderElapsed * 6f))
 }
 
@@ -265,7 +265,7 @@ private fun DrawScope.drawShard(center: Offset, radius: Float, degrees: Float, c
     rotate(degrees, center) {
         drawRect(color.copy(alpha = 0.25f), Offset(center.x - radius - 3f, center.y - radius - 3f), Size(radius * 2f + 6f, radius * 2f + 6f))
         drawRect(Kk.Bone, Offset(center.x - radius * 0.7f, center.y - radius * 0.7f), Size(radius * 1.4f, radius * 1.4f))
-        drawRect(color, Offset(center.x - radius * 0.7f, center.y - radius * 0.7f), Size(radius * 1.4f, radius * 1.4f), style = kkStroke(1.5f))
+        drawRect(color, Offset(center.x - radius * 0.7f, center.y - radius * 0.7f), Size(radius * 1.4f, radius * 1.4f), style = kkStroke(KkStrokeWidth.Line2))
     }
 }
 
