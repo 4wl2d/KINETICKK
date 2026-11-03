@@ -527,7 +527,7 @@ internal fun MutableGameState.arcCoilHopRange(): Float = ARC_COIL_HOP_RANGE + if
 internal const val MAX_ARC_COIL_TARGETS: Int = 6
 internal const val ARC_COIL_FIRST_RANGE: Float = 420f
 internal const val ARC_COIL_HOP_RANGE: Float = 220f
-internal const val ARC_COIL_FALLOFF: Float = 0.9f
+internal const val ARC_COIL_FALLOFF: Float = 0.95f
 
 internal fun MutableGameState.fireSingularitySpear(damage: Float, serial: Int) {
     val angle = aimedMovementAngle()
@@ -1168,7 +1168,7 @@ internal const val QUASAR_BURST_LIFE: Float = 1.3f
 internal const val QUASAR_SIDE_SHARE: Float = 0.1f
 internal const val QUASAR_BURST_SHARE: Float = 0.15f
 internal const val QUASAR_BURST_RADIUS: Float = 120f
-internal const val SPEAR_DAMAGE: Float = 97f
+internal const val SPEAR_DAMAGE: Float = 95f
 internal const val SPEAR_BLINK_COOLDOWN: Float = 2f
 internal const val SPEAR_CROSS_SHARE: Float = 1f
 internal const val SPEAR_REACH: Float = 28f
@@ -1177,7 +1177,7 @@ internal const val SPEAR_BLINK_REACH: Float = 320f
 internal const val SPEAR_SCAR_FUSE: Float = 0.4f
 internal const val SPEAR_SCAR_REACH: Float = 30f
 internal const val PRISM_RELAY_DAMAGE: Float = 17.2f
-internal const val PRISM_TWIN_SHARE: Float = 0.18f
+internal const val PRISM_TWIN_SHARE: Float = 0.14f
 /** Heading change per dp travelled that counts as a hard turn (60° over 100 dp). */
 internal const val FLUX_TURN_CURVATURE: Float = 0.0105f
 internal const val FLUX_LONG_LIFE: Float = 4f
@@ -1198,7 +1198,7 @@ internal const val GYRE_ORBIT_BONUS: Float = 1.25f
 internal const val GYRE_RETURN_BONUS: Float = 1.5f
 internal const val GYRE_EXTRA_SHARE: Float = 0.6f
 
-internal const val SCATTER_DAMAGE: Float = 7.7f
+internal const val SCATTER_DAMAGE: Float = 8f
 internal const val SCATTER_PIERCE: Int = 2
 internal const val SCATTER_PELLETS: Int = 7
 internal const val SCATTER_PASSIVE_PELLETS: Int = 7
@@ -1276,8 +1276,8 @@ internal const val LENS_SPREAD: Float = 0.7f
 internal const val LENS_EXTRA_SHARE: Float = 0.25f
 internal const val LENS_WELL_RADIUS: Float = 170f
 internal const val LENS_WELL_SECONDS: Float = 1.6f
-internal const val LENS_WELL_DPS: Float = 15f
-internal const val LENS_COLLAPSE_DAMAGE: Float = 32f
+internal const val LENS_WELL_DPS: Float = 13.5f
+internal const val LENS_COLLAPSE_DAMAGE: Float = 28.8f
 internal const val LENS_IMPLOSION_DAMAGE: Float = 10f
 internal const val LENS_PULL: Float = 240f
 

@@ -372,10 +372,10 @@ internal const val FLUX_WIDTH: Float = 20f
 internal const val FLUX_WIDTH_FORM: Float = 2f
 internal const val FLUX_SCORCH_INTERVAL: Float = 2f
 /** Enemies the Flux Wake trail burns at full heat at once; a larger crowd in it shares that heat. */
-internal const val FLUX_FULL_HEAT_ENEMIES: Int = 6
+internal const val FLUX_FULL_HEAT_ENEMIES: Int = 5
 internal const val MORNINGSTAR_DAMAGE: Float = 17f
 internal const val MORNINGSTAR_REACH: Float = 24f
-internal const val MORNINGSTAR_SPEED_SHARE: Float = 0.030f
+internal const val MORNINGSTAR_SPEED_SHARE: Float = 0.027f
 internal const val MORNINGSTAR_KNOCKBACK: Float = 160f
 internal const val MORNINGSTAR_SECOND_ORBIT: Float = 0.72f
 internal const val MORNINGSTAR_SECOND_SIZE: Float = 0.45f

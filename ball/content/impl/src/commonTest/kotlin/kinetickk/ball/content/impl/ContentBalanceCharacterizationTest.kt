@@ -58,10 +58,11 @@ class ContentBalanceCharacterizationTest {
         // 0.6.0 retuned six of them back over the 5 % perceptible floor under the new flight law
         // (6ae3869a3317ee94 -> 17777e466f80fc29), and again when Empty Chamber's damage rose 20 -> 25 % after the
         // Solar Flare retune (17777e466f80fc29 -> bfc80fdf55b64617), and when Loader Sigil's refresh rose 0.5 -> 0.6 s
-        // after the Orbit retune (bfc80fdf55b64617 -> ef1306c885aae256).
+        // after the Orbit retune (bfc80fdf55b64617 -> ef1306c885aae256), and when Field Marshal forced three reactions
+        // instead of two under the slower flight law (ef1306c885aae256 -> d9c6c8717293226d).
         val appended = items.subList(ITEMS_THROUGH_040, EXPANSION_050_END)
         assertEquals(
-            "ef1306c885aae256",
+            "d9c6c8717293226d",
             goldenFingerprint {
                 add("items-0.5.0")
                 add(appended.size)
@@ -326,8 +327,10 @@ class ContentBalanceCharacterizationTest {
     @Test
     fun skillApexAndUpgradeContentIsGolden() {
         assertEquals(18, ui.skills.size)
+        // Mass Driver's mass 1.17/1.2/1.24 -> 1.4/1.52/1.65 and Sonic Boom's cooldowns 8/7/6 -> 7/6/5 under the slower
+        // flight law (e73bd70a41ae42f0 -> 6f57bbc082aececf).
         assertEquals(
-            "e73bd70a41ae42f0",
+            "6f57bbc082aececf",
             goldenFingerprint {
                 add("skills")
                 ui.skills.forEach { skill ->

@@ -14,6 +14,7 @@ import kinetickk.ball.gameplay.nucleus.model.FieldSource
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.SkillCell
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
+import kinetickk.ball.gameplay.nucleus.model.TAU
 import kinetickk.ball.gameplay.nucleus.model.profile
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
@@ -29,9 +30,10 @@ import kotlin.test.assertTrue
 
 /**
  * Skill balance bands (combat-final §10 Skills), on the character-balance fight: the Orb, the pointer tracing a
- * figure eight, a Dash every 1.25 to 1.75 s meeting packs of three Drifters set ahead of the aim, a Sniper bolt every
- * 3.2 to 4.3 s answered by a short brake (each interval drawn from the seed, so no cooldown keeps casting at the
- * same moment of the script's cycle), the Core held 200 below its maximum integrity (so a heal lands) and its level
+ * figure eight from a phase drawn from the seed, a Dash every 1.25 to 1.75 s meeting packs of three Drifters set ahead
+ * of the aim, a Sniper bolt every 3.2 to 4.3 s answered by a short brake (each interval drawn from the seed, so no
+ * cooldown keeps casting at the same moment of the script's cycle: the eight's 4.49 s period would otherwise lock a
+ * 9 s cooldown to one part of it), the Core held 200 below its maximum integrity (so a heal lands) and its level
  * frozen. One skill sits in slot Z and is requested every frame, so it casts whenever it can. Each skill and rank is
  * the mean of 96 seeded 60 s fights; a no-skill fight on each seed is the baseline.
  *
@@ -279,8 +281,8 @@ class SkillBalanceTest {
     }
 
     /**
-     * The character-balance script with seeded timing: figure-eight pointer, Dashes into packs (carrying the
-     * skill's [setup]), Sniper bolts.
+     * The character-balance script with seeded timing: figure-eight pointer from a seeded phase, Dashes into packs
+     * (carrying the skill's [setup]), Sniper bolts.
      */
     private class Script(seed: Int, private val setup: Setup) : (MutableGameState, Int) -> Unit {
         private val random = Random(seed)
@@ -288,9 +290,11 @@ class SkillBalanceTest {
         private var nextShot = SHOT_FRAMES_FIRST
         private var brakeFrom = Int.MIN_VALUE
         private var brakeUntil = Int.MIN_VALUE
+        /** Its own stream, so the Dash and bolt draws stay as they were. */
+        private val phase = Random(seed.inv()).nextFloat() * TAU
 
         override fun invoke(state: MutableGameState, frame: Int) {
-            val angle = frame / 60f * 1.4f
+            val angle = frame / 60f * 1.4f + phase
             state.updatePointer(state.screenWidth * 0.5f + cos(angle) * 300f, state.screenHeight * 0.5f + sin(angle * 2f) * 220f)
             if (frame == nextDash) {
                 nextDash += random.nextInt(DASH_FRAMES.first, DASH_FRAMES.last + 1)

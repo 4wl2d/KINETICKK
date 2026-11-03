@@ -871,7 +871,7 @@ private val Drafts: List<ItemDraft> = listOf(
         clauses = listOf(on(EffectTrigger.KILL, EffectAction.Zone(ZoneKind.MAW, 150f, 3f), every = 8)),
         unlock = 7),
     ItemDraft("Field Marshal", "Step into a field and command everything inside to react.", RARE, listOf(CHAIN),
-        clauses = listOf(on(EffectTrigger.FIELD_ENTER, EffectAction.ForceReaction(180f, 2), cooldown = 1.5f)),
+        clauses = listOf(on(EffectTrigger.FIELD_ENTER, EffectAction.ForceReaction(180f, 3), cooldown = 1.5f)),
         unlock = 10),
     ItemDraft("Surveyor's Stakes", "Stake the field a little wider.", COMMON, listOf(FORTUNE),
         rules = listOf(ItemRule.FieldTuning(FieldAspect.RADIUS, 0.15f)),

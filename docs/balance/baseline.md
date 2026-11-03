@@ -1464,3 +1464,47 @@ rested on that single ray. The test now requires a hazard on every seed, as it
 did before 0.6.0, and the room for long straight travel stays with
 `ObstacleNavigationTest` (at least 75% of 1,200 u paths clear across 12 seeds
 and every heading).
+
+### Combat content under forward thrust 0.36
+
+The weapon checks above were calibrated at forward thrust 0.32: there
+`WeaponBalanceTest`, Upgrade J5 and the ApexActive vocabulary probe pass, and
+the later move to 0.36 failed them. `SkillBalanceTest` failed at both 0.32 and
+0.36. No band, threshold or seed changed; content was restored for 0.36.
+
+`SkillBalanceTest`'s figure eight started at the same phase on every seed. Its
+4.49 s period locked a 9 s cooldown to one part of the eight, which the slower
+flight made decisive: Mass Driver's rank III read 0.40 of its rank I. The eight
+now starts at a phase drawn from its own seeded stream (Mass Driver's rank III
+1.77 of its rank I; Solar Flare's rank III 1.53 -> 1.17 of the STRIKE median).
+Two skills were then retuned: Mass Driver's mass 1.17/1.2/1.24 ->
+1.4/1.52/1.65 (MOTION 0.93 and 0.91 of the median at ranks I and III, Arc
+Hook's rank III 1.56 -> 1.34, Void Step's 0.63) and Sonic Boom's cooldown
+8/7/6 -> 7/6/5 s (STRIKE 0.54 -> 0.75 and 0.51 -> 0.73).
+
+| Weapon | Change | Reason |
+|---|---|---|
+| Event Lens | collapse 32 -> 28.8, well 15 -> 13.5/s, Mass every 3 s (2.5) | Ascended crowd 1.59, Honing 1.63; at 2.5 s its crowd sat on a Gravity Break threshold (1.31 to 1.43 at Honing between nearby damage values) |
+| Morningstar | speed share 0.030 -> 0.027 | Ascended crowd 1.42 |
+| Prism Relay | twin share 0.18 -> 0.14 | Honing crowd 1.37 |
+| Flux Wake | full heat for 5 enemies (6) | its crowd 1.34 left no room for a crowd weapon to lead below 1.35 |
+| Arc Coil | hop falloff 0.9 -> 0.95 (crowd hops only) | J5: Honing does not scale the Ion its level-10 Overload adds, about half the crowd's weapon side |
+| Scatter Bloom | 7.7 -> 8 per pellet | Arc Coil led the fresh single arena (1.21 against 1.18) |
+| Singularity Spear | 97 -> 95 | Event Lens's single fell below the median, lifting Spear to 1.36 at Honing |
+
+Measured after the change (single / crowd of the median): fresh Scatter Bloom
+1.22 / 0.68 and Arc Coil 1.21 / 0.51; Ascended crowd leads Resonance Drum 1.30
+and Phase Lattice 1.30 over Flux Wake 1.23, Event Lens 0.94 / 1.26, Morningstar
+1.03 / 1.23, Prism Relay 1.08 / 1.28; Honing 10 Glacier Bell and Phase Lattice
+crowd 1.32, Spear single 1.33. J5's Pentagon/Arc Coil weapon side 1.116 ->
+1.160 (Orb/Flux Wake 1.243). Field Marshal forces three reactions instead of
+two (2.1 % over fifteen fights -> 11.1 %).
+
+Still failing: Blast Rider moves no output. Its Rocket Clap launches the Core
+away from each clap at 560; under the slower re-acceleration that brakes every
+head-on pass, so the at-speed reduction rarely holds (RUSH taken -8 %; the
+reduction alone gives +63 % integrity, the keystone alone -12 %). Only a launch
+of about 200 passes, so it is left to the owner. The ApexActive probe reads
++4.0 % (3.2 to 4.1 % over fifteen fights): +50 % during the Apex covers about a
+fifth of the fight and touches only direct hits, while the Orb's Orbit deals
+about half the APEX arena's damage.

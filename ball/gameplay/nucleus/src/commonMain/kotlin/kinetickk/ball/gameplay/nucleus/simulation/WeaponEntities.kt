@@ -616,7 +616,7 @@ internal const val SENTRY_PIERCE: Int = 1
 internal const val SENTRY_SPLASH_RADIUS: Float = 40f
 internal const val SENTRY_SPLASH_SHARE: Float = 0.32f
 internal const val LENS_THROW: Float = 420f
-internal const val LENS_MASS_INTERVAL: Float = 2.5f
+internal const val LENS_MASS_INTERVAL: Float = 3f
 internal const val HOLLOW_PULL: Float = 120f
 internal const val AEGIS_TURN_RATE: Float = 9f
 /** The share of its damage a shard keeps for each enemy it pierces on to. */

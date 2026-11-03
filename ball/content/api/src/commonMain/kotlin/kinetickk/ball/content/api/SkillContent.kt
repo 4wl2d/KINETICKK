@@ -203,9 +203,9 @@ private fun defaultSkill(id: SkillId): SkillDefinition = when (id) {
         "Your Core turns heavy: fast impacts throw enemies and add Mass.",
         "Slams while it runs add 1 Mass to both enemies.",
         StatusElement.GRAVITIC, BuildTag.RAM, BuildTag.BULWARK, SkillTargeting.SELF, 0f, SkillFamily.MOTION,
-        rank(11f, 2f, 1.17f, 0.1f, 700f, 500f),
-        rank(10f, 2.25f, 1.2f, 0.15f, 760f, 500f),
-        rank(9f, 2.5f, 1.24f, 0.2f, 820f, 500f),
+        rank(11f, 2f, 1.4f, 0.1f, 700f, 500f),
+        rank(10f, 2.25f, 1.52f, 0.15f, 760f, 500f),
+        rank(9f, 2.5f, 1.65f, 0.2f, 820f, 500f),
     )
     SkillId.DECAY_SPORES -> skill(
         id, "Decay Spores",
@@ -230,9 +230,9 @@ private fun defaultSkill(id: SkillId): SkillDefinition = when (id) {
         "A cone of sound blasts enemies away and erases shots; the recoil hops you back.",
         "Thrown enemies ring for 0.8 s; a slam into one forces Shatter.",
         StatusElement.SONIC, BuildTag.RAM, BuildTag.PRECISION, SkillTargeting.AIM, 300f, SkillFamily.STRIKE,
-        rank(8f, 300f, 65f, 3f, 8f, 620f, 420f),
-        rank(7f, 330f, 85f, 3f, 10f, 620f, 420f),
-        rank(6f, 360f, 100f, 4f, 12f, 620f, 420f),
+        rank(7f, 300f, 65f, 3f, 8f, 620f, 420f),
+        rank(6f, 330f, 85f, 3f, 10f, 620f, 420f),
+        rank(5f, 360f, 100f, 4f, 12f, 620f, 420f),
     )
     SkillId.RESONATOR -> skill(
         id, "Resonator",
