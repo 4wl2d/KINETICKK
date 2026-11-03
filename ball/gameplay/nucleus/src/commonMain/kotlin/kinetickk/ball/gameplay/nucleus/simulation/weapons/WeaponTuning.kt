@@ -209,3 +209,32 @@ internal const val RIFT_GROWING: Int = 0
 internal const val RIFT_ARMED: Int = 1
 internal const val RIFT_DETONATED: Int = 2
 internal const val RIFT_SPEAR_SCAR: Int = 3
+
+internal const val GYRE_CATCH_RADIUS: Float = 30f
+/** Seconds a returning disc must run free of rocks before its next glance sparks again. */
+internal const val GYRE_GLANCE_SPARK_GAP: Float = 0.2f
+internal const val GYRE_SPIN: Float = 18f
+internal const val SENTRY_SHOT_SPEED: Float = 900f
+internal const val SENTRY_PIERCE: Int = 1
+internal const val SENTRY_SPLASH_RADIUS: Float = 40f
+internal const val SENTRY_SPLASH_SHARE: Float = 0.32f
+internal const val LENS_THROW: Float = 420f
+internal const val LENS_MASS_INTERVAL: Float = 3f
+internal const val HOLLOW_PULL: Float = 120f
+internal const val AEGIS_TURN_RATE: Float = 9f
+/** The share of its damage a shard keeps for each enemy it pierces on to. */
+internal const val AEGIS_PIERCE_SHARE: Float = 0.9f
+internal const val HUNTER_SEEK_RANGE: Float = 900f
+internal const val HUNTER_ACCELERATION: Float = 900f
+internal const val TETHER_CHARGE_INTERVAL: Float = 0.8f
+internal const val TETHER_OVERLOAD_LINKS: Int = 3
+internal const val TETHER_OVERLOAD_STACKS: Float = 3f
+internal const val SOLAR_REACH: Float = 10f
+internal const val SOLAR_SCORCH_INTERVAL: Float = 1.5f
+internal const val RIFT_SPENT: Int = 4
+
+internal const val ION_SWARM_CHARGE_EVERY: Int = 2
+internal const val QUASAR_KNOCKBACK: Float = 220f
+internal const val PRISM_BURST_RADIUS: Float = 60f
+internal const val PRISM_BURST_SHARE: Float = 0.12f
+internal const val PRISM_LATTICE_SHARE: Float = 0.4f
