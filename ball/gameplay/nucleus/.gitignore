@@ -1,0 +1,2 @@
+# `simulation.build` is a source package, not a build output: keep it tracked despite the root `build/` rule.
+!/src/*/kotlin/kinetickk/ball/gameplay/nucleus/simulation/build/
