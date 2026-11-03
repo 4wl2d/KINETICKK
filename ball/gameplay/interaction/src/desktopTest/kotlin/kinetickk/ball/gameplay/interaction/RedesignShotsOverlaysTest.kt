@@ -357,15 +357,25 @@ class RedesignShotsOverlaysTest {
                 WorldShot(rewardFixtureModel(phase = GamePhase.PAUSED, relics = relics3, language = l, width = w, height = h, textScale = textScale,
                     weaponLevel = 10))
             },
+            // Rebirth 10: the shield and damage totals at the tier's number scale (×3,600).
+            Scene("pause-tier10") { w, h, l ->
+                WorldShot(rewardFixtureModel(phase = GamePhase.PAUSED, relics = relics3, language = l, width = w, height = h, textScale = textScale,
+                    rebirthLevel = 10, numberScale = 3_600.0).with("maxShield" to 60f))
+            },
+            // Rebirth 10 item cards without previews: integrity stats and rule amounts at the tier's number scale.
+            Scene("levelup-cards-tier10") { w, h, l ->
+                RewardShot(rewardFixtureModel(choices = listOf(itemChoice(0), itemChoice(1), itemChoice(4)), discoveredItems = setOf(0), language = l,
+                    width = w, height = h, textScale = textScale, rebirthLevel = 10, numberScale = 3_600.0))
+            },
             Scene("report-victory") { w, h, l ->
                 TerminalShot(rewardFixtureModel(phase = GamePhase.VICTORY, relics = relics4, language = l, width = w, height = h, textScale = textScale,
                     message = "ARCHITECT DISMANTLED", runMatter = 640L, totalMatter = 1_924L, kills = 1_412, elapsed = 846f, level = 22, weaponLevel = 10))
             },
-            // The final tier's clear: the gold crown and the Ascendant line.
+            // The final tier's clear: the gold crown and the Ascendant line, its totals at the tier's number scale (×3,600).
             Scene("report-victory-ascendant") { w, h, l ->
                 TerminalShot(rewardFixtureModel(phase = GamePhase.VICTORY, relics = relics4, language = l, width = w, height = h, textScale = textScale,
                     message = "ARCHITECT DISMANTLED", runMatter = 640L, totalMatter = 1_924L, kills = 1_412, elapsed = 846f, level = 22, weaponLevel = 10,
-                    rebirthLevel = 10))
+                    rebirthLevel = 10, numberScale = 3_600.0))
             },
             Scene("report-defeat") { w, h, l ->
                 TerminalShot(rewardFixtureModel(phase = GamePhase.GAME_OVER, relics = relics4, language = l, width = w, height = h, textScale = textScale,

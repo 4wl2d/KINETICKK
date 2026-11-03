@@ -303,7 +303,10 @@ class RedesignShotsHudTest {
                 else -> 0
             },
             "easyMode" to (shot == Shot.EASY || shot == Shot.EASY_TIER),
+            "numberScale" to if (shot == Shot.REBIRTH_10) 3_600.0 else 1.0,
         ).let { if (shot == Shot.DUNGEON) dungeonShot(it) else it }.let { dimensionShot(shot, it) ?: it }
+            // Rebirth 10 integrity in the millions (300 of 320 at ×3,600: 1.08M), the widest compact HUD number.
+            .let { if (shot == Shot.REBIRTH_10) it.with("hp" to 300f, "maxHp" to 320f) else it }
         val time = 3.37f
         val memory = HudPresentationMemory()
         val boss = BossTarget()

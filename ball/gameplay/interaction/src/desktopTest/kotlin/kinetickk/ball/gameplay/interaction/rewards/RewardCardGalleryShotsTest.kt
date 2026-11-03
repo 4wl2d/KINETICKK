@@ -25,6 +25,7 @@ import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.showsIntegrityAmounts
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RewardFocus
@@ -89,6 +90,13 @@ class RewardCardGalleryShotsTest {
             render(File(folder, "items-board-deutan-$number.png"), english, Board, KkRolePalette.Deutan)
             render(File(folder, "items-board-mono-$number.png"), english, Board, KkRolePalette.Mono)
         }
+        // Rebirth 10 (×3,600): the items whose lines carry integrity amounts and the signal deck, in both languages.
+        val scaled = items.filter { it.showsIntegrityAmounts }.take(8)
+        render(File(folder, "items-board-tier10.png"), itemCards(scaled, AppLanguage.English, TIER_TEN_SCALE), Board, KkRolePalette.Default)
+        render(File(folder, "items-phone-tier10-ru.png"), itemCards(scaled, AppLanguage.Russian, TIER_TEN_SCALE), Phone, KkRolePalette.Default,
+            AppLanguage.Russian)
+        render(File(folder, "signals-phone-tier10-ru.png"), signalCards(AppLanguage.Russian, TIER_TEN_SCALE).take(8), Phone, KkRolePalette.Default,
+            AppLanguage.Russian)
         val russian = if (only != null) items.take(8) else representativeItems()
         render(File(folder, "items-board-default-ru.png"), itemCards(russian, AppLanguage.Russian), Board, KkRolePalette.Default, AppLanguage.Russian)
         if (only == null) {
@@ -173,7 +181,7 @@ class RewardCardGalleryShotsTest {
      * Every signal card with mid-run terms (the Merchant's offers locked, as an unbanked purse of 40 Matter leaves them),
      * then Ignore.
      */
-    private fun signalCards(language: AppLanguage): List<RewardCardPresentation> {
+    private fun signalCards(language: AppLanguage, numberScale: Double = 1.0): List<RewardCardPresentation> {
         val terms = mapOf(
             SignalOption.MERCHANT_RARE_OFFER to Triple(85, 0, true), SignalOption.MERCHANT_EPIC_OFFER to Triple(210, 0, true),
             SignalOption.MERCHANT_REROLLS to Triple(40, 2, false), SignalOption.SHRINE_BLOOD to Triple(54, 0, false),
@@ -186,7 +194,8 @@ class RewardCardGalleryShotsTest {
             val (cost, payout, locked) = terms[option] ?: Triple(0, 0, false)
             signal(option, option.kind ?: SignalKind.DERELICT, cost, payout, locked)
         }
-        val model = rewardFixtureModel(content = content, choiceType = ChoiceType.SIGNAL, choices = choices, language = language)
+        val model = rewardFixtureModel(content = content, choiceType = ChoiceType.SIGNAL, choices = choices, language = language,
+            numberScale = numberScale)
         return choices.mapIndexed { index, choice -> model.rewardCardPresentation(choice, index, language) }
     }
 
@@ -226,9 +235,10 @@ class RewardCardGalleryShotsTest {
 
     private class CardSize(val width: Int, val height: Int, val phone: Boolean)
 
-    private fun itemCards(items: List<ItemDefinition>, language: AppLanguage): List<RewardCardPresentation> {
+    private fun itemCards(items: List<ItemDefinition>, language: AppLanguage, numberScale: Double = 1.0): List<RewardCardPresentation> {
         val choices = items.map { ChoiceOption(ChoiceType.ITEM, it.name, it.description, it.rarity.displayLabel.uppercase(), itemId = it.id) }
-        val model = rewardFixtureModel(content = content, choices = choices, discoveredItems = content.items.map { it.id }.toSet(), language = language)
+        val model = rewardFixtureModel(content = content, choices = choices, discoveredItems = content.items.map { it.id }.toSet(), language = language,
+            numberScale = numberScale)
         return choices.mapIndexed { index, choice -> model.rewardCardPresentation(choice, index, language) }
     }
 
@@ -315,6 +325,8 @@ class RewardCardGalleryShotsTest {
     }
 
     private companion object {
+        /** Rebirth 10's number scale. */
+        const val TIER_TEN_SCALE = 3_600.0
         val Board = CardSize(300, 450, phone = false)
         val Phone = CardSize(195, 254, phone = true)
         const val Pad = 18
