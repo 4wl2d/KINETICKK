@@ -22,6 +22,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.sites.*
+import kinetickk.ball.gameplay.nucleus.simulation.flight.*
 
 class CharacterPoiRegressionTest {
     @Test

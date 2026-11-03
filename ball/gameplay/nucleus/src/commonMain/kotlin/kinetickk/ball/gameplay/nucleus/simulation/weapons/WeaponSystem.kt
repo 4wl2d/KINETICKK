@@ -25,6 +25,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
 import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
+import kinetickk.ball.gameplay.nucleus.simulation.flight.*
 
 /*
  * Weapon activations (SPEC 10.3). Numbers are at weapon power 1; [effectiveWeaponPower] carries level,

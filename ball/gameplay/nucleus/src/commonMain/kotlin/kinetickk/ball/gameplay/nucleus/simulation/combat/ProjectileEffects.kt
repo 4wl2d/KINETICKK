@@ -8,7 +8,6 @@ import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
-import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kinetickk.ball.gameplay.nucleus.simulation.*
@@ -143,13 +142,6 @@ internal fun MutableGameState.eraseHostileShot(shot: Projectile, cause: EraseCau
 }
 
 internal const val MAX_SHOT_ERASURES_SHOWN_PER_STEP: Int = 4
-
-internal fun MutableGameState.movementAngle(): Float {
-    if (speed > 20f) return atan2(velocityY, velocityX)
-    val targetX = cameraX + pointerX - screenWidth * 0.5f
-    val targetY = cameraY + pointerY - screenHeight * 0.5f
-    return atan2(targetY - coreY, targetX - coreX)
-}
 
 /**
  * Power of the equipped weapon's own hits: item weapon power, Rebirth, level, generic mastery, run growth

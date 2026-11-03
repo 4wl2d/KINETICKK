@@ -7,6 +7,7 @@ import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.SkillRank
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
+import kinetickk.ball.gameplay.nucleus.simulation.flight.*
 import kinetickk.ball.gameplay.nucleus.simulation.skills.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.math.floor
