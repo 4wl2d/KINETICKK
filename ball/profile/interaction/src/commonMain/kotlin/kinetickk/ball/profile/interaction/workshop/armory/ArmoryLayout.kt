@@ -145,91 +145,13 @@ internal fun armoryLayout(
     val back = profileHeaderBackRect(frame, backWidth)
     // Room for the selected lift (−8) and echo (+7) inside the scroll viewport.
     val pad = d(12f)
-    val gridLeft: Float
-    val gridRight: Float
-    val gridTop: Float
-    val gridBottom: Float
-    val detailLeft: Float
-    val detailRight: Float
-    val detailTop: Float
-    val detailBottom: Float
-    val columns: Int
-    val gap: Float
-    val tileHeight: (width: Float, available: Float) -> Float
-    when (frame.mode) {
-        ProfileLayoutMode.REGULAR -> {
-            gridLeft = frame.x(56f)
-            gridRight = frame.x(886f)
-            gridTop = frame.headerHeight + d(24f)
-            gridBottom = frame.height - d(16f)
-            detailLeft = frame.x(950f)
-            detailRight = frame.right
-            detailTop = d(108f)
-            detailBottom = frame.height - d(16f)
-            columns = 4
-            gap = d(12f)
-            tileHeight = { _, _ -> d(172f) * grow }
-        }
-        ProfileLayoutMode.COMPACT_LANDSCAPE -> {
-            val detailWidth = (frame.width * 0.38f).coerceIn(d(250f), d(340f))
-            detailRight = frame.right
-            detailLeft = detailRight - detailWidth
-            gridLeft = frame.left
-            gridRight = detailLeft - d(28f)
-            gridTop = frame.headerHeight + d(4f)
-            gridBottom = frame.height - d(4f)
-            detailTop = frame.headerHeight + d(8f)
-            detailBottom = frame.height - d(8f)
-            columns = if (gridRight - gridLeft >= d(430f)) 4 else 3
-            gap = d(8f)
-            // Rows stay at least 84 px tall (the press target), even when tiles are narrower than that.
-            tileHeight = { width, available -> available.coerceIn(d(84f) * grow, max(d(84f) * grow, width * 0.95f * grow)) }
-        }
-        ProfileLayoutMode.COMPACT_PORTRAIT -> {
-            // The detail dock grows with the text so the ladder starts above the pinned action.
-            val dock = d(300f) * grow
-            gridLeft = frame.left
-            gridRight = frame.right
-            gridTop = frame.headerHeight
-            gridBottom = frame.height - dock
-            detailLeft = frame.left
-            detailRight = frame.right
-            detailTop = gridBottom + d(12f)
-            detailBottom = frame.height - d(10f)
-            columns = 3
-            gap = d(8f)
-            // Rows stay at least 84 px tall (the press target), even when tiles are narrower than that.
-            tileHeight = { width, available -> available.coerceIn(d(84f) * grow, max(d(84f) * grow, width * 0.95f * grow)) }
-        }
-    }
-    val tileWidth = ((gridRight - gridLeft) - gap * (columns - 1)) / columns
-    val rows = if (weaponCount <= 0) 0 else (weaponCount + columns - 1) / columns
-    // Compact grids size their rows to fit the viewport when a row stays at least 84 px tall.
-    val fitHeight = if (rows == 0) 0f else (gridBottom - gridTop - pad - gap * (rows - 1)) / rows
+    val regions = armoryRegions(frame, grow)
+    val detailLeft = regions.detailLeft
+    val detailRight = regions.detailRight
+    val detailTop = regions.detailTop
+    val detailBottom = regions.detailBottom
+    val grid = armoryTileGrid(frame, regions, weaponCount, pad, tileText)
     val type = armoryType(frame.mode)
-    // Every tile draws its icon at one size, between the tallest status line and the tallest
-    // name block of the grid, so a name that wraps never shrinks its own icon; when large text
-    // leaves less than the smallest icon, the tiles grow (the grid scrolls) instead.
-    val insets = armoryTileInsets(frame)
-    val tileMetrics = tileText?.invoke(tileWidth - insets.left - insets.right)
-    val iconMax = d(type.tileIcon)
-    val iconMin = iconMax * ARMORY_TILE_ICON_MIN
-    val iconGap = d(ARMORY_TILE_ICON_GAP)
-    val iconBandTop = if (tileMetrics == null) 0f else insets.top + tileMetrics.statusHeight + iconGap
-    val iconBandBelow = if (tileMetrics == null) 0f else insets.bottom + tileMetrics.nameBlockHeight + iconGap
-    val tileH = max(tileHeight(tileWidth, fitHeight), if (tileMetrics == null) 0f else iconBandTop + iconMin + iconBandBelow)
-    val tileIcon = if (tileMetrics == null) iconMax else (tileH - iconBandTop - iconBandBelow).coerceIn(iconMin, iconMax)
-    val tileIconY = if (tileMetrics == null) tileH * 0.5f else (iconBandTop + tileH - iconBandBelow) * 0.5f
-    val tiles = List(weaponCount) { index ->
-        val column = index % columns
-        val row = index / columns
-        val left = pad + column * (tileWidth + gap)
-        val top = pad + row * (tileH + gap)
-        Rect(left, top, left + tileWidth, top + tileH)
-    }
-    val gridViewport = Rect(gridLeft - pad, gridTop - pad, gridRight + pad, max(gridTop, gridBottom))
-    val gridContentHeight = if (rows == 0) 0f else pad * 2f + rows * tileH + (rows - 1) * gap
-
     val t = textScale.coerceIn(0.75f, 2f)
     val regular = frame.regular
     val plateSize = d(if (regular) 92f else 44f)
@@ -292,6 +214,36 @@ internal fun armoryLayout(
         Rect(detailLeft, factsTop, detailRight, factsTop + (metrics?.factsHeight ?: (labelLine * 5f + d(16f))))
     } else hidden()
     val visibleBottom = maxOf(upgrade.bottom, forms.bottom, facts.bottom)
+    val placement = armoryActionPlacement(frame, detailLeft, detailRight, detailTop, detailBottom, pad, visibleBottom, actionWidth, needRoom)
+    val action = placement.action
+    return ArmoryLayout(frame, back, grid.gridViewport, grid.tiles, grid.gridContentHeight, grid.tileH + regions.gap, regions.columns,
+        placement.detailViewport, placement.detailContentHeight, plate, name, description, tags, mastery, ladder, action, placement.need,
+        placement.actionPinned, grid.tileIcon, grid.tileIconY, ladderStacked, forms, synergy, facts, segments, segment, upgrade)
+}
+
+
+/** The primary action under the visible details (pinned to the panel's bottom when they run past it), and the detail viewport. */
+private class ArmoryActionPlacement(
+    val action: Rect,
+    val need: Rect,
+    val actionPinned: Boolean,
+    val detailViewport: Rect,
+    val detailContentHeight: Float,
+)
+
+private fun armoryActionPlacement(
+    frame: ProfileFrame,
+    detailLeft: Float,
+    detailRight: Float,
+    detailTop: Float,
+    detailBottom: Float,
+    pad: Float,
+    visibleBottom: Float,
+    actionWidth: Float,
+    needRoom: Boolean,
+): ArmoryActionPlacement {
+    fun d(value: Float) = frame.d(value)
+    val regular = frame.regular
     val actionHeight = d(if (regular) 72f else 52f)
     // A locked weapon keeps room beside the button for "Need N more matter".
     val actionRoom = (detailRight - detailLeft) * if (needRoom) 0.64f else 1f
@@ -307,9 +259,138 @@ internal fun armoryLayout(
     val detailViewport = Rect(detailLeft - pad, detailTop - pad, detailRight + pad,
         if (actionPinned) action.top - d(8f) else limit)
     val detailContentHeight = visibleBottom + pad - detailViewport.top
-    return ArmoryLayout(frame, back, gridViewport, tiles, gridContentHeight, tileH + gap, columns, detailViewport,
-        detailContentHeight, plate, name, description, tags, mastery, ladder, action, need, actionPinned,
-        tileIcon, tileIconY, ladderStacked, forms, synergy, facts, segments, segment, upgrade)
+    return ArmoryActionPlacement(action, need, actionPinned, detailViewport, detailContentHeight)
+}
+/** Where [armoryLayout] puts the weapon grid and the detail panel in each layout mode, and how tall a tile row may grow. */
+private class ArmoryRegions(
+    val gridLeft: Float,
+    val gridRight: Float,
+    val gridTop: Float,
+    val gridBottom: Float,
+    val detailLeft: Float,
+    val detailRight: Float,
+    val detailTop: Float,
+    val detailBottom: Float,
+    val columns: Int,
+    val gap: Float,
+    val tileHeight: (width: Float, available: Float) -> Float,
+)
+
+private fun armoryRegions(frame: ProfileFrame, grow: Float): ArmoryRegions {
+    fun d(value: Float) = frame.d(value)
+    val gridLeft: Float
+    val gridRight: Float
+    val gridTop: Float
+    val gridBottom: Float
+    val detailLeft: Float
+    val detailRight: Float
+    val detailTop: Float
+    val detailBottom: Float
+    val columns: Int
+    val gap: Float
+    val tileHeight: (width: Float, available: Float) -> Float
+    when (frame.mode) {
+        ProfileLayoutMode.REGULAR -> {
+            gridLeft = frame.x(56f)
+            gridRight = frame.x(886f)
+            gridTop = frame.headerHeight + d(24f)
+            gridBottom = frame.height - d(16f)
+            detailLeft = frame.x(950f)
+            detailRight = frame.right
+            detailTop = d(108f)
+            detailBottom = frame.height - d(16f)
+            columns = 4
+            gap = d(12f)
+            tileHeight = { _, _ -> d(172f) * grow }
+        }
+        ProfileLayoutMode.COMPACT_LANDSCAPE -> {
+            val detailWidth = (frame.width * 0.38f).coerceIn(d(250f), d(340f))
+            detailRight = frame.right
+            detailLeft = detailRight - detailWidth
+            gridLeft = frame.left
+            gridRight = detailLeft - d(28f)
+            gridTop = frame.headerHeight + d(4f)
+            gridBottom = frame.height - d(4f)
+            detailTop = frame.headerHeight + d(8f)
+            detailBottom = frame.height - d(8f)
+            columns = if (gridRight - gridLeft >= d(430f)) 4 else 3
+            gap = d(8f)
+            // Rows stay at least 84 px tall (the press target), even when tiles are narrower than that.
+            tileHeight = { width, available -> available.coerceIn(d(84f) * grow, max(d(84f) * grow, width * 0.95f * grow)) }
+        }
+        ProfileLayoutMode.COMPACT_PORTRAIT -> {
+            // The detail dock grows with the text so the ladder starts above the pinned action.
+            val dock = d(300f) * grow
+            gridLeft = frame.left
+            gridRight = frame.right
+            gridTop = frame.headerHeight
+            gridBottom = frame.height - dock
+            detailLeft = frame.left
+            detailRight = frame.right
+            detailTop = gridBottom + d(12f)
+            detailBottom = frame.height - d(10f)
+            columns = 3
+            gap = d(8f)
+            // Rows stay at least 84 px tall (the press target), even when tiles are narrower than that.
+            tileHeight = { width, available -> available.coerceIn(d(84f) * grow, max(d(84f) * grow, width * 0.95f * grow)) }
+        }
+    }
+    return ArmoryRegions(gridLeft, gridRight, gridTop, gridBottom, detailLeft, detailRight, detailTop, detailBottom, columns, gap, tileHeight)
+}
+
+/** The weapon tiles of [armoryLayout]: their boxes, row height, icon size and line, and the grid viewport. */
+private class ArmoryTileGrid(
+    val tiles: List<Rect>,
+    val tileH: Float,
+    val tileIcon: Float,
+    val tileIconY: Float,
+    val gridViewport: Rect,
+    val gridContentHeight: Float,
+)
+
+private fun armoryTileGrid(
+    frame: ProfileFrame,
+    regions: ArmoryRegions,
+    weaponCount: Int,
+    pad: Float,
+    tileText: ((innerWidth: Float) -> ArmoryTileMetrics)?,
+): ArmoryTileGrid {
+    fun d(value: Float) = frame.d(value)
+    val gridLeft = regions.gridLeft
+    val gridRight = regions.gridRight
+    val gridTop = regions.gridTop
+    val gridBottom = regions.gridBottom
+    val columns = regions.columns
+    val gap = regions.gap
+    val tileHeight = regions.tileHeight
+    val tileWidth = ((gridRight - gridLeft) - gap * (columns - 1)) / columns
+    val rows = if (weaponCount <= 0) 0 else (weaponCount + columns - 1) / columns
+    // Compact grids size their rows to fit the viewport when a row stays at least 84 px tall.
+    val fitHeight = if (rows == 0) 0f else (gridBottom - gridTop - pad - gap * (rows - 1)) / rows
+    val type = armoryType(frame.mode)
+    // Every tile draws its icon at one size, between the tallest status line and the tallest
+    // name block of the grid, so a name that wraps never shrinks its own icon; when large text
+    // leaves less than the smallest icon, the tiles grow (the grid scrolls) instead.
+    val insets = armoryTileInsets(frame)
+    val tileMetrics = tileText?.invoke(tileWidth - insets.left - insets.right)
+    val iconMax = d(type.tileIcon)
+    val iconMin = iconMax * ARMORY_TILE_ICON_MIN
+    val iconGap = d(ARMORY_TILE_ICON_GAP)
+    val iconBandTop = if (tileMetrics == null) 0f else insets.top + tileMetrics.statusHeight + iconGap
+    val iconBandBelow = if (tileMetrics == null) 0f else insets.bottom + tileMetrics.nameBlockHeight + iconGap
+    val tileH = max(tileHeight(tileWidth, fitHeight), if (tileMetrics == null) 0f else iconBandTop + iconMin + iconBandBelow)
+    val tileIcon = if (tileMetrics == null) iconMax else (tileH - iconBandTop - iconBandBelow).coerceIn(iconMin, iconMax)
+    val tileIconY = if (tileMetrics == null) tileH * 0.5f else (iconBandTop + tileH - iconBandBelow) * 0.5f
+    val tiles = List(weaponCount) { index ->
+        val column = index % columns
+        val row = index / columns
+        val left = pad + column * (tileWidth + gap)
+        val top = pad + row * (tileH + gap)
+        Rect(left, top, left + tileWidth, top + tileH)
+    }
+    val gridViewport = Rect(gridLeft - pad, gridTop - pad, gridRight + pad, max(gridTop, gridBottom))
+    val gridContentHeight = if (rows == 0) 0f else pad * 2f + rows * tileH + (rows - 1) * gap
+    return ArmoryTileGrid(tiles, tileH, tileIcon, tileIconY, gridViewport, gridContentHeight)
 }
 
 /** Height in px of one detail tag chip at the board-relative text multiplier [textScale]. */
