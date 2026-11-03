@@ -16,8 +16,8 @@ import kotlin.math.abs
 
 /**
  * Reads never choose an offer, draw randomness, dispatch outputs or publish the scratch state. A card that changes the
- * build is applied to its own isolated candidate; a card that changes nothing (No omen, a decline or keep action) and a
- * card answered without one read this state itself, so they cost no copy. The previews compare stat values only.
+ * build is applied to its own isolated candidate; a card that changes nothing (No omen, a decline or keep action)
+ * previews nothing and costs no copy. The previews compare stat values only.
  */
 internal fun MutableGameState.rewardPreviews(): ImmutableList<RewardPreview> {
     if (phase != GamePhase.CHOICE) return immutableListOf()
@@ -71,7 +71,7 @@ private fun MutableGameState.rewardPreview(
         // A signal card previews only its deterministic stat part (the Shrine blessings).
         ChoiceType.SIGNAL -> option.signalOption?.let { candidate().previewSignalOption(it) }
         // A boon previews its run modifiers on the candidate; the Refuse card changes nothing.
-        ChoiceType.BOON -> option.boonId?.let { candidate().applyRunBoon(it, preview = true) } ?: return RewardPreview()
+        ChoiceType.BOON -> option.boonId?.let { candidate().applyRunBoon(it, preview = true) }
         ChoiceType.RELIC_BIND -> option.relicSlot?.let { slot ->
             when (option.relicAction) {
                 RelicChoiceAction.REPLACE -> (option.relicId ?: pendingBindingRelic)?.let { candidate().replaceRelic(slot, it) }
@@ -80,8 +80,8 @@ private fun MutableGameState.rewardPreview(
             }
         }
     }
-    // An unchanged candidate is this state: every read below is a read of it.
-    val candidate = copy ?: this
+    // A card that made no candidate changes nothing, so it previews nothing.
+    val candidate = copy ?: return RewardPreview()
     val changes = candidate.buildStats(withContributions = false).mapIndexedNotNull { index, stat ->
         val before = beforeStats.getOrNull(index)?.takeIf { it.name == stat.name }?.value ?: return@mapIndexedNotNull null
         if (abs(stat.value - before) < 0.00001f) null

@@ -103,6 +103,7 @@ internal fun MutableGameState.startRun() {
     spawnClock = 0.2f
     nextEliteAt = rebirthProfile.eliteInterval(content.tempo.firstEliteAtSeconds)
     elitesSpawned = 0
+    resetRunVariety()
     startRunVariety()
     resetSpawnDirector()
     bossSpawned = false
@@ -189,7 +190,6 @@ internal fun MutableGameState.startRun() {
     weaponRuntime = WeaponRuntime()
     resetWeaponRuntime()
     resetSites()
-    resetRunVariety()
     resetStructures()
     resetObstacles()
     emitSound(GameplayAudioCue.UI_CLICK)

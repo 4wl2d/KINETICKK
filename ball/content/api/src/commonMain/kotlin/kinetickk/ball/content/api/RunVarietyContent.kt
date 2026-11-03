@@ -18,13 +18,16 @@ enum class OmenId {
 enum class DirectorPersonalityId { TIDE, HUNTER_CELL, SIEGE, AMBUSHERS, ELEMENTAL_STORM, LONG_CALM }
 
 /** Elite affixes (append-only: the ordinal is carried in the enemy affinity bits). */
-enum class EliteAffix(val displayName: String, val signalNotice: String) {
-    SHIELDED("Shielded", "ELITE SIGNAL // SHIELDED"),
-    SPLITTING("Splitting", "ELITE SIGNAL // SPLITTING"),
-    MAGNETIC("Magnetic", "ELITE SIGNAL // MAGNETIC"),
-    LINKED("Linked", "ELITE SIGNAL // LINKED"),
-    VOLATILE("Volatile", "ELITE SIGNAL // VOLATILE"),
-    HASTED("Hasted", "ELITE SIGNAL // HASTED"),
+enum class EliteAffix(val displayName: String) {
+    SHIELDED("Shielded"),
+    SPLITTING("Splitting"),
+    MAGNETIC("Magnetic"),
+    LINKED("Linked"),
+    VOLATILE("Volatile"),
+    HASTED("Hasted"),
+    ;
+
+    val signalNotice: String = "ELITE SIGNAL // " + displayName.uppercase()
 }
 
 /** Ambient world events (append-only). */

@@ -325,29 +325,12 @@ internal fun MutableGameState.openNextPendingChoice() {
         openHeirloomChoice()
         if (phase != GamePhase.RUNNING) return
     }
+    while (phase == GamePhase.RUNNING && pendingLevelChoices > 0) {
+        pendingLevelChoices--
+        openItemChoice()
+    }
+    if (phase != GamePhase.RUNNING) return
     when {
-        pendingLevelChoices > 0 -> {
-            pendingLevelChoices--
-            openItemChoice()
-            while (phase == GamePhase.RUNNING && pendingLevelChoices > 0) {
-                pendingLevelChoices--
-                openItemChoice()
-            }
-            if (phase == GamePhase.RUNNING && pendingDirectedRewards.isNotEmpty()) {
-                val reward = pendingDirectedRewards.first()
-                pendingDirectedRewards = pendingDirectedRewards.drop(1)
-                openDirectedReward(reward)
-            } else if (phase == GamePhase.RUNNING && pendingFloorOffers.isNotEmpty()) {
-                openNextFloorOffer()
-            } else if (phase == GamePhase.RUNNING && pendingRelicChoices > 0) {
-                pendingRelicChoices--
-                openRelicChoice()
-            } else if (phase == GamePhase.RUNNING && hasPendingDimensionReward()) {
-                openPendingDimensionReward()
-            } else if (phase == GamePhase.RUNNING && pendingSignalPrompts.isNotEmpty()) {
-                openSignalPrompt()
-            }
-        }
         pendingDirectedRewards.isNotEmpty() -> {
             val reward = pendingDirectedRewards.first()
             pendingDirectedRewards = pendingDirectedRewards.drop(1)

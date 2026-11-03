@@ -82,10 +82,6 @@ internal fun signalSlotChosen(runSeed: Int, policy: SignalPolicy, slot: Int): Bo
     return lower < policy.perRun
 }
 
-/** The run's signal slots in time order (empty when signals are off). */
-internal fun plannedSignalSlots(runSeed: Int, policy: SignalPolicy): List<Int> =
-    (0 until policy.slots).filter { signalSlotChosen(runSeed, policy, it) }
-
 /** The run's signal kinds in spawn order: `perRun` distinct kinds drawn by weight (empty when signals are off). */
 internal fun plannedSignalKinds(runSeed: Int, policy: SignalPolicy): List<SignalKind> {
     if (!policy.enabled) return emptyList()
@@ -202,8 +198,9 @@ private fun MutableGameState.signalCard(option: SignalOption, kind: SignalKind):
  * Rebirth 0 and 1).
  */
 private fun MutableGameState.unlockedRarityFloor(floor: ItemRarity): ItemRarity =
-    ItemRarity.entries.filter { it.rank <= floor.rank }.sortedByDescending { it.rank }
-        .firstOrNull { tier -> content.items.any { it.rarity == tier && it.minimumRebirth <= rebirthRank } } ?: floor
+    ItemRarity.entries.lastOrNull { tier ->
+        tier.rank <= floor.rank && content.items.any { it.rarity == tier && it.minimumRebirth <= rebirthRank }
+    } ?: floor
 
 /** What a card costs and pays now (Matter, integrity, rerolls or a stake, by option), and whether the run can take it. */
 private class SignalTerms(val cost: Int, val payout: Int, val locked: Boolean)

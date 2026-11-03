@@ -43,37 +43,15 @@ internal fun MutableGameState.openOmenChoice() {
     val policy = content.variety.omens
     val pool = policy.definitions.filter { omenEligible(it) }
     if (pool.isEmpty()) return
-    val offered = drawOmens(pool, min(policy.offers, pool.size), CloneableXorWowRandom(runSeed xor OMEN_SEED_SALT))
+    val random = CloneableXorWowRandom(runSeed xor OMEN_SEED_SALT)
+    val offered = drawWeightedOrder(FloatArray(pool.size) { pool[it].weight }, min(policy.offers, pool.size), random)
     activeChoiceType = ChoiceType.OMEN
-    choices = offered.map { omen ->
+    choices = offered.map { pick ->
+        val omen = pool[pick]
         ChoiceOption(type = ChoiceType.OMEN, title = omen.name, description = omen.upside, tag = "OMEN", omenId = omen.id)
     } + ChoiceOption(type = ChoiceType.OMEN, title = NO_OMEN_TITLE, description = NO_OMEN_TEXT, tag = "DECLINE")
     clearInputBuffers()
     phase = GamePhase.CHOICE
-}
-
-/**
- * [count] omens of [pool] by weight without replacement, the draft deck's loop: each draw rolls over the untaken
- * weights in pool order. Float sums run in a fixed order, so every platform deals the same cards.
- */
-private fun drawOmens(pool: List<OmenDefinition>, count: Int, random: CloneableXorWowRandom): List<OmenDefinition> {
-    val taken = BooleanArray(pool.size)
-    val offered = ArrayList<OmenDefinition>(count)
-    repeat(count) {
-        var total = 0f
-        for (index in pool.indices) if (!taken[index]) total += pool[index].weight
-        var roll = random.nextFloat() * total
-        var pick = -1
-        for (index in pool.indices) {
-            if (taken[index]) continue
-            pick = index
-            roll -= pool[index].weight
-            if (roll <= 0f) break
-        }
-        taken[pick] = true
-        offered += pool[pick]
-    }
-    return offered
 }
 
 /**

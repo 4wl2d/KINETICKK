@@ -25,6 +25,7 @@ import kinetickk.ball.gameplay.nucleus.render.WorldEventProjection
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
+import kinetickk.foundation.collections.toImmutableListAppending
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
@@ -231,20 +232,17 @@ private fun MutableGameState.consumePassedWorldEventPlans() {
 private fun MutableGameState.pulseUnit(slot: Int): Float =
     hashUnit(runHash(runSeed, WORLD_EVENT_SALT, PULSE_KEY + worldEventPulse * 4L + slot))
 
-/** The Core's heading, which meteors and Data storms fall around. */
-private fun MutableGameState.eventHeading(): Float = movementAngle()
-
 private fun MutableGameState.pulseWorldEvent(event: WorldEventProjection, policy: WorldEventPolicy) {
     when (event.kind) {
         WorldEventKind.METEOR_SHOWER -> {
             val meteor = policy.meteor
-            val angle = eventHeading() + (pulseUnit(0) - 0.5f) * meteor.angleSpread
+            val angle = movementAngle() + (pulseUnit(0) - 0.5f) * meteor.angleSpread
             val distance = meteor.minDistance + pulseUnit(1) * meteor.distanceSpread
             armStrike(event, coreX + cos(angle) * distance, coreY + sin(angle) * distance, meteor.radius, meteor.armSeconds)
         }
         WorldEventKind.DATA_STORM -> {
             val storm = policy.dataStorm
-            val angle = eventHeading() + (pulseUnit(0) - 0.5f) * storm.angleSpread
+            val angle = movementAngle() + (pulseUnit(0) - 0.5f) * storm.angleSpread
             val distance = storm.minDistance + pulseUnit(1) * (storm.maxDistance - storm.minDistance)
             addPickup(Pickup(PickupType.DATA, coreX + cos(angle) * distance, coreY + sin(angle) * distance))
         }
@@ -269,8 +267,9 @@ private fun MutableGameState.pulseWorldEvent(event: WorldEventProjection, policy
 private fun MutableGameState.armStrike(event: WorldEventProjection, x: Float, y: Float, radius: Float, armSeconds: Float) {
     if (event.strikes.size >= ContentBounds.MAX_EVENT_STRIKES || elapsed + armSeconds > event.endsAt) return
     worldEvent = event.copy(
-        strikes = (event.strikes + EventStrikeProjection(x, y, radius, armedAt = elapsed, strikesAt = elapsed + armSeconds))
-            .toImmutableList(),
+        strikes = event.strikes.toImmutableListAppending(
+            EventStrikeProjection(x, y, radius, armedAt = elapsed, strikesAt = elapsed + armSeconds),
+        ),
     )
 }
 

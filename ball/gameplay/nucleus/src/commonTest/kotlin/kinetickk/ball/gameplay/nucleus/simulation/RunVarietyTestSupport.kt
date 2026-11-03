@@ -8,6 +8,7 @@ import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.KeynotePolicy
 import kinetickk.ball.content.api.OmenId
 import kinetickk.ball.content.api.RunVarietyContent
+import kinetickk.ball.content.api.SignalPolicy
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.nucleus.GameplayDecision
 import kinetickk.ball.gameplay.nucleus.GameplayNucleus
@@ -46,6 +47,10 @@ internal fun GameplayContentSnapshot.withoutKeynote(): GameplayContentSnapshot =
 /** The content with [keynote] in place of the shipped Keynote policy. */
 internal fun GameplayContentSnapshot.withKeynote(keynote: KeynotePolicy): GameplayContentSnapshot =
     copy(variety = variety.copy(keynote = keynote))
+
+/** The run's signal slots in time order (empty when signals are off). */
+internal fun plannedSignalSlots(runSeed: Int, policy: SignalPolicy): List<Int> =
+    (0 until policy.slots).filter { signalSlotChosen(runSeed, policy, it) }
 
 /** Accepts omen [id] at once (null: No omen) and drops a pending offer, as a harness arm that plays one omen. */
 internal fun MutableGameState.forceRunOmenForTesting(id: OmenId?) {

@@ -136,15 +136,17 @@ fun defaultDirectorPersonalities(): ImmutableList<DirectorPersonalityDefinition>
 ).toImmutableList()
 
 /** Every run notice the run-variety systems emit (the uppercase forms come from the uppercase mirror). */
-val RunVarietyNotices: List<String> = buildList {
-    defaultDirectorPersonalities().forEach { add("HOSTILE PATTERN // ${it.name.uppercase()}") }
-    add("KEYNOTE")
-    add("ONSLAUGHT")
-    defaultOmenDefinitions().forEach { add("OMEN // ${it.name.uppercase()}") }
-    EliteAffix.entries.forEach { add(it.signalNotice) }
-    WorldEventKind.entries.forEach { add(it.displayName.uppercase()) }
-    add("SKIES CLEAR")
-    SignalKind.entries.forEach { add("SIGNAL DETECTED // ${it.displayName.uppercase()}") }
-    add("SIGNAL LOST")
-    addAll(listOf("WAGER WON", "WAGER LOST", "TRADE COMPLETE", "BLESSING RECEIVED", "CURSE BOUND", "SALVAGE COMPLETE"))
+val RunVarietyNotices: List<String> by lazy {
+    buildList {
+        defaultDirectorPersonalities().forEach { add("HOSTILE PATTERN // ${it.name.uppercase()}") }
+        add("KEYNOTE")
+        add("ONSLAUGHT")
+        defaultOmenDefinitions().forEach { add("OMEN // ${it.name.uppercase()}") }
+        EliteAffix.entries.forEach { add(it.signalNotice) }
+        WorldEventKind.entries.forEach { add(it.displayName.uppercase()) }
+        add("SKIES CLEAR")
+        SignalKind.entries.forEach { add("SIGNAL DETECTED // ${it.displayName.uppercase()}") }
+        add("SIGNAL LOST")
+        addAll(listOf("WAGER WON", "WAGER LOST", "TRADE COMPLETE", "BLESSING RECEIVED", "CURSE BOUND", "SALVAGE COMPLETE"))
+    }
 }

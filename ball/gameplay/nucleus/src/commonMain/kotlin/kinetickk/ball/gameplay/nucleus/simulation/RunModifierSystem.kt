@@ -6,7 +6,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.RebirthMutator
 import kinetickk.ball.content.api.RunModifierEffect
 import kinetickk.foundation.collections.immutableListOf
-import kinetickk.foundation.collections.toImmutableList
+import kinetickk.foundation.collections.mapToImmutableList
 import kotlin.math.max
 
 /*
@@ -78,10 +78,10 @@ internal fun MutableGameState.startRunVariety() {
 internal fun MutableGameState.rebaseRunVariety(dx: Float, dy: Float) {
     worldEvent?.let { event ->
         if (event.strikes.isNotEmpty()) {
-            worldEvent = event.copy(strikes = event.strikes.map { it.copy(x = it.x - dx, y = it.y - dy) }.toImmutableList())
+            worldEvent = event.copy(strikes = event.strikes.mapToImmutableList { it.copy(x = it.x - dx, y = it.y - dy) })
         }
     }
     if (eventSignals.isNotEmpty()) {
-        eventSignals = eventSignals.map { it.copy(x = it.x - dx, y = it.y - dy) }.toImmutableList()
+        eventSignals = eventSignals.mapToImmutableList { it.copy(x = it.x - dx, y = it.y - dy) }
     }
 }

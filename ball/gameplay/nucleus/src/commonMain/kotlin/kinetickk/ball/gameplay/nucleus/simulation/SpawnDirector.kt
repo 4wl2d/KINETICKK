@@ -289,12 +289,12 @@ private fun MutableGameState.rollEventKind(): SpawnEventKind {
             wall = if (elapsed >= wallReadyAt) 15f else 0f
         }
     }
-    single *= personalityEventScale(SpawnEventKind.SINGLE.ordinal)
-    pack *= personalityEventScale(SpawnEventKind.PACK.ordinal)
-    flank *= personalityEventScale(SpawnEventKind.FLANK.ordinal)
-    swarm *= personalityEventScale(SpawnEventKind.SWARM.ordinal)
-    wall *= personalityEventScale(SpawnEventKind.WALL.ordinal)
-    encircle *= personalityEventScale(SpawnEventKind.ENCIRCLE.ordinal)
+    single *= personalityEventScale(SpawnEventKind.SINGLE)
+    pack *= personalityEventScale(SpawnEventKind.PACK)
+    flank *= personalityEventScale(SpawnEventKind.FLANK)
+    swarm *= personalityEventScale(SpawnEventKind.SWARM)
+    wall *= personalityEventScale(SpawnEventKind.WALL)
+    encircle *= personalityEventScale(SpawnEventKind.ENCIRCLE)
     var roll = spawnRandom.nextFloat() * (single + pack + flank + swarm + wall + encircle)
     roll -= single
     if (roll < 0f) return SpawnEventKind.SINGLE

@@ -74,10 +74,10 @@ internal fun MutableGameState.personalityRateScale(phase: SpawnDirectorPhase): F
 
 internal fun MutableGameState.personalityBudgetScale(): Float = personality()?.budgetScale ?: 1f
 
-/** Scale of the [SpawnEventKind] with ordinal [kind] in the event roll; ambushes are planned outside the roll. */
-internal fun MutableGameState.personalityEventScale(kind: Int): Float {
+/** Scale of [kind] in the event roll; ambushes are planned outside the roll. */
+internal fun MutableGameState.personalityEventScale(kind: SpawnEventKind): Float {
     val weights = personality()?.eventWeights ?: return 1f
-    return when (SpawnEventKind.entries[kind]) {
+    return when (kind) {
         SpawnEventKind.SINGLE -> weights.single
         SpawnEventKind.PACK -> weights.pack
         SpawnEventKind.FLANK -> weights.flank

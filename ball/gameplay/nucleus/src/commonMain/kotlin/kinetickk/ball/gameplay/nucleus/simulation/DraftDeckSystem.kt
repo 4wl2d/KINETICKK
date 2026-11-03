@@ -17,6 +17,32 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
+ * [count] indices of [weights] by weight without replacement: each draw rolls over the untaken weights in index order
+ * and takes the last untaken index when Float rounding leaves the roll above zero. Float sums run in a fixed order, so
+ * every platform draws the same order. [drawDistinctByWeight] differs on purpose (it skips zero weights and stops on
+ * `remaining < weight`), so the two are not interchangeable.
+ */
+internal fun drawWeightedOrder(weights: FloatArray, count: Int, random: CloneableXorWowRandom): IntArray {
+    val taken = BooleanArray(weights.size)
+    val order = IntArray(count)
+    for (draw in 0 until count) {
+        var total = 0f
+        for (index in weights.indices) if (!taken[index]) total += weights[index]
+        var roll = random.nextFloat() * total
+        var pick = -1
+        for (index in weights.indices) {
+            if (taken[index]) continue
+            pick = index
+            roll -= weights[index]
+            if (roll <= 0f) break
+        }
+        taken[pick] = true
+        order[draw] = pick
+    }
+    return order
+}
+
+/**
  * Deals the run's draft deck from its own stream (seed xor [MutableGameState.DECK_SEED_SALT]), so no reward draw moves.
  * Called once when the run starts. The universe is every item the run's Rebirth rank allows (unlock levels gate offers,
  * not the deal). Each rarity tier is ordered by weighted draws without replacement in id order, each weight the item's
@@ -52,22 +78,8 @@ internal fun MutableGameState.drawItemDeck() {
             val id = ids[index]
             itemHistory.deckWeight(id) * if (id in discoveredItemIds) 1f else policy.undiscoveredWeight
         }
-        val taken = BooleanArray(ids.size)
         val start = next
-        repeat(ids.size) {
-            var total = 0f
-            for (index in ids.indices) if (!taken[index]) total += weights[index]
-            var roll = random.nextFloat() * total
-            var pick = -1
-            for (index in ids.indices) {
-                if (taken[index]) continue
-                pick = index
-                roll -= weights[index]
-                if (roll <= 0f) break
-            }
-            taken[pick] = true
-            order[next++] = ids[pick]
-        }
+        for (pick in drawWeightedOrder(weights, ids.size, random)) order[next++] = ids[pick]
         tierSizes[tier.ordinal] = ids.size
         val share = (policy.shares[tier.ordinal] * ids.size).roundToInt()
         val dealtCount = share.coerceIn(min(policy.minimums[tier.ordinal], ids.size), ids.size)
