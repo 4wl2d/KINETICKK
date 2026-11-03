@@ -786,6 +786,25 @@ class SecretSiteTest {
     }
 
     @Test
+    fun aGoldenDrifterAtZeroIntegrityBeforeTheStepsKillSweepIsCaughtNotLost() {
+        // Skills, the Core and character abilities strike before the site step; the kill resolves in the later sweep.
+        val game = released()
+        val drifter = game.goldenDrifter()!!
+        drifter.hp = 0f
+        // Even with its time up, it waits for the sweep.
+        game.elapsed = game.goldenDrifterUntil
+        game.standAt(game.coreX, game.coreY)
+        assertEquals(drifter.id, game.goldenDrifterId, "the chase waits for the kill sweep")
+        assertNotNull(game.encounter(GOLDEN_DRIFTER_TAG))
+        game.sweepKills()
+        assertTrue(game.hasSecret(RunSecretFlag.GOLDEN_DRIFTER_CAUGHT))
+        assertTrue(game.discovered(WorldDiscovery.GOLDEN_DRIFTER))
+        assertEquals(SiteNotice.GOLDEN_CAUGHT.english, game.message)
+        assertTrue(game.pickups.count { it.type == PickupType.DATA } >= 40, "its forty Data were paid")
+        assertEquals(-1, game.goldenDrifterId)
+    }
+
+    @Test
     fun leavingTheDuelPastItsLeashRemovesTheCartographerForTheRunAndGrantsNothing() {
         val game = summoned()
         val sigil = game.secretSigil!!

@@ -343,8 +343,8 @@ internal fun MutableGameState.releaseGoldenDrifter(site: SiteState) {
 
 /**
  * The Golden Drifter's step before the enemies move: it gets away (removed without a kill) once its time is up or it
- * is farther from the Core than the escape distance; a drifter gone some other way just ends the chase, and a caught
- * one's encounter closes.
+ * is farther from the Core than the escape distance, unless it is at zero integrity awaiting the step's kill sweep; a
+ * drifter gone some other way just ends the chase, and a caught one's encounter closes.
  */
 private fun MutableGameState.updateGoldenDrifter() {
     if (goldenDrifterId < 0) {
@@ -359,6 +359,8 @@ private fun MutableGameState.updateGoldenDrifter() {
         endEncounter(GOLDEN_DRIFTER_TAG, despawn = false)
         return
     }
+    // Brought to zero integrity before the site step: the kill sweep catches it.
+    if (drifter.hp <= 0f) return
     val escape = content.sites.secrets.goldenEscapeDistance
     if (elapsed >= goldenDrifterUntil || distanceSquared(coreX, coreY, drifter.x, drifter.y) > escape * escape) {
         releaseGoldenDrifterWithoutKill()
@@ -367,8 +369,8 @@ private fun MutableGameState.updateGoldenDrifter() {
     }
 }
 
-/** The flying Golden Drifter, or null. */
-internal fun MutableGameState.goldenDrifter(): Enemy? = enemyById(goldenDrifterId)?.takeIf { it.alive }
+/** The flying Golden Drifter (also one at zero integrity until the step's kill sweep catches it), or null. */
+internal fun MutableGameState.goldenDrifter(): Enemy? = enemyById(goldenDrifterId)?.takeIf { !it.dead }
 
 /** Removes a flying Golden Drifter without a kill or reward (it got away, or the Architect arrived). */
 internal fun MutableGameState.releaseGoldenDrifterWithoutKill() {
