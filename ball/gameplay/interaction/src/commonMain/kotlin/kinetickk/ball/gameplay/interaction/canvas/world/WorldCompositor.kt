@@ -104,6 +104,7 @@ private fun DrawScope.drawWorldLayer(
     if (engine.phase != GamePhase.GAME_OVER) {
         drawCore(engine, core, roles)
         drawCoreStates(engine, core, roles)
+        drawCoreFrost(engine, core, roles)
         drawApexActive(engine, core, shakeX, shakeY, roles)
         drawSecretCompanions(engine, core, shakeX, shakeY, roles)
     }

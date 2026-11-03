@@ -251,6 +251,23 @@ internal fun MutableGameState.updateCore(delta: Float) {
     previousSingularityY = targetY
 }
 
+/**
+ * Forgets how the Core has moved at a run start: the saturation heading, the smoothed velocity, the turn hold, the
+ * straightness and Core Stasis (its anchor on the Core, which the start has already placed).
+ */
+internal fun MutableGameState.resetCoreMotionMemory() {
+    saturationHeadingX = 1f
+    saturationHeadingY = 0f
+    smoothedVelocityX = 0f
+    smoothedVelocityY = 0f
+    turnHeadingEstablished = false
+    turnHoldTime = 0f
+    turnRecoveryCooldown = 0f
+    turnDirection = 0
+    coreStraightness = 0f
+    coreStasis.reset(coreX, coreY)
+}
+
 internal fun MutableGameState.updatePolarityStability(delta: Float) {
     val tuning = content.tempo.fatigue
     val stabilityBefore = polarityStability

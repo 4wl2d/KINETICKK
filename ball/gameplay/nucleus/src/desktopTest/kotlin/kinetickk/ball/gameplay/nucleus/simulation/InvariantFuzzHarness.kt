@@ -983,6 +983,7 @@ private class FuzzSession(private val plan: FuzzPlan, private val options: FuzzO
         for (enemy in m.enemies) if (!ids.add(enemy.id)) record(FuzzInvariant.STAT_RANGE, "enemy id ${enemy.id} twice")
         if (abs(m.coreX) > 300_000f || abs(m.coreY) > 300_000f) record(FuzzInvariant.STAT_RANGE, "Core at ${m.coreX},${m.coreY} beyond the rebase bound")
         if (m.speed > RUNAWAY_CORE_SPEED) record(FuzzInvariant.STAT_RANGE, "the Core runs away at ${m.speed.toInt()} u/s")
+        coreStasisRangeProblem(m)?.let { record(FuzzInvariant.STAT_RANGE, it) }
     }
 
     /**
@@ -1191,9 +1192,8 @@ private class FuzzSession(private val plan: FuzzPlan, private val options: FuzzO
         if (m.phase == GamePhase.GAME_OVER && m.message == "SINGULARITY CONTACT") record(FuzzInvariant.EASY_MODE, "a Baby mode run ended on singularity contact")
         if (m.phase == GamePhase.GAME_OVER && m.message == OBSTACLE_COLLISION_REASON) record(FuzzInvariant.EASY_MODE, "a Baby mode run died to an obstacle")
         if (m.hasPublishableProgress()) record(FuzzInvariant.EASY_MODE, "a Baby mode run holds publishable progress")
-        if (m.heirloomPending || m.heirloomOfferActive || m.choices.any { it.heirloom }) {
-            record(FuzzInvariant.EASY_MODE, "a Baby mode run offers Heirlooms")
-        }
+        if (m.heirloomPending || m.heirloomOfferActive || m.choices.any { it.heirloom }) record(FuzzInvariant.EASY_MODE, "a Baby mode run offers Heirlooms")
+        coreStasisEasyProblem(m)?.let { record(FuzzInvariant.EASY_MODE, it) }
     }
 
     private fun coverage(m: MutableGameState) {

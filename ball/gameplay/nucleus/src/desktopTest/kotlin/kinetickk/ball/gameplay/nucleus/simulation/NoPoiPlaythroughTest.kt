@@ -102,7 +102,7 @@ class NoPoiPlaythroughTest {
         assertTrue(!forced.skillLoadout.owns(SkillId.DECAY_SPORES), "never Decay Spores")
     }
 
-    private companion object {
+    internal companion object {
         const val REFERENCE_SEED = 2026
 
         /** The least share of [PopulationSeeds] runs that win as the reference does (0.6.0 base 0.620, SE 0.028). */
@@ -116,11 +116,16 @@ class NoPoiPlaythroughTest {
 
         /**
          * One fresh run on [seed]; [reportAttempt] (the reference replays) also writes its minutes to the evidence
-         * file.
+         * file. Probes pass their own [content] and an [observer] that sees the state after every input frame.
          */
-        fun fly(seed: Int, reportAttempt: Int? = null): NoPoiRun {
+        fun fly(
+            seed: Int,
+            reportAttempt: Int? = null,
+            content: GameplayContentSnapshot = canonicalGameplayContent,
+            observer: (MutableGameState) -> Unit = {},
+        ): NoPoiRun {
             if (reportAttempt != null) report("REFERENCE attempt=$reportAttempt seed=$seed simulationSpeed=1.0 inputHz=50 freshLab=true")
-            val state = MutableGameState(canonicalGameplayContent, seed = seed)
+            val state = MutableGameState(content, seed = seed)
             state.unlockWeaponsForTesting(ReferenceArmory)
             state.startingWeapon = botLoadout(BotWeaponOrder, ReferenceArmory)
             state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
@@ -158,6 +163,7 @@ class NoPoiPlaythroughTest {
                 if (state.elapsed >= 360f && fourSlotOpportunity == null) fourSlotOpportunity = milestone(state, observedEliteIds.size)
                 damage += max(0f, previousHealth - state.hp)
                 previousHealth = state.hp
+                observer(state)
                 state.takeSoundCues()
                 state.takeVisualFxCues()
                 if (reportAttempt != null && state.elapsed >= minute * 60f) {
@@ -175,7 +181,7 @@ class NoPoiPlaythroughTest {
 }
 
 /** One fresh no-POI run as the rules read it: its end, the Architect's arrival, POI contact and the two milestones. */
-private data class NoPoiRun(
+internal data class NoPoiRun(
     val seed: Int, val phase: GamePhase, val seconds: Float, val reason: String, val remainingHp: Float, val level: Int,
     val weapon: WeaponId, val weaponLevel: Int, val kills: Int, val itemStacks: List<Int>, val relics: List<EquippedRelic>,
     val bossObservedAt: Float?, val poiEngaged: Boolean, val pendingCompletedOrbits: Int,
@@ -194,7 +200,7 @@ private data class NoPoiRun(
     fun summary(): String = "$seed:$phase@${seconds.toInt()}s(L$level $reason)"
 }
 
-private data class Milestone(val level: Int, val weaponLevel: Int, val items: Int, val relicSlots: Int, val eliteOpportunities: Int)
+internal data class Milestone(val level: Int, val weaponLevel: Int, val items: Int, val relicSlots: Int, val eliteOpportunities: Int)
 private fun milestone(state: MutableGameState, eliteOpportunities: Int) = Milestone(
     state.level, state.weaponLevel, state.acquiredItemCount, state.equippedRelics.size, eliteOpportunities,
 )

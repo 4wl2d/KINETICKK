@@ -182,7 +182,7 @@ class DimensionPilotGateTest {
             "$label ${"%.3f".format(share)} of ${runs.size} runs, outside [$low, $high]")
     }
 
-    private companion object {
+    internal companion object {
         /** The gate seeds: the first 120 of the population (C42), never tuned on. */
         val GateSeeds: List<Int> = PopulationSeeds.take(120)
 
@@ -195,12 +195,20 @@ class DimensionPilotGateTest {
             }
         }
 
-        /** [arm] on [seeds]: the first half forced to the arm's first objective, the rest to its last. */
-        fun flyArm(arm: DimensionArm, seeds: List<Int>, content: GameplayContentSnapshot): List<DimensionVisitRun> {
+        /**
+         * [arm] on [seeds]: the first half forced to the arm's first objective, the rest to its last. Probes pass an
+         * [observer] per seed that sees the state after every input frame.
+         */
+        fun flyArm(
+            arm: DimensionArm,
+            seeds: List<Int>,
+            content: GameplayContentSnapshot,
+            observer: (Int) -> (MutableGameState) -> Unit = { {} },
+        ): List<DimensionVisitRun> {
             val half = (seeds.size + 1) / 2
             return populationOf(seeds.withIndex().toList()) { (index, seed) ->
                 val objective = if (index < half) arm.objectives.first() else arm.objectives.last()
-                flyDimensionRun(seed, arm.profile, arm.target, arm.riftAt, objective, arm.takeRefuse, content = content)
+                flyDimensionRun(seed, arm.profile, arm.target, arm.riftAt, objective, arm.takeRefuse, content = content, observer = observer(seed))
             }
         }
 

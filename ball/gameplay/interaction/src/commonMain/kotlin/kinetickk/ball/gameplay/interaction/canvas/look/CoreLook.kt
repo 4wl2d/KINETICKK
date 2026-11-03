@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kotlin.math.cos
 import kotlin.math.sin
@@ -19,22 +20,30 @@ import kinetickk.ball.gameplay.interaction.canvas.world.*
 
 /**
  * The Core: a bone form silhouette ([KkFormGeometry]) with a hard ink rim and a soft glow; you-color
- * in overdrive and heat-tinted while overheated (`HUD.dc.html`). Integrity/heat/shield arcs are
- * the HUD's Core halo. In Baby mode the form wears a diaper ([drawDiaper]).
+ * in overdrive and heat-tinted while overheated (`HUD.dc.html`), paled toward ice by Core Stasis.
+ * Integrity/heat/shield arcs are the HUD's Core halo. In Baby mode the form wears a diaper ([drawDiaper]).
  */
 internal fun DrawScope.drawCore(engine: GameplayRenderModel, center: Offset, roles: KkRolePalette) {
     val overdrive = engine.overdriveTime > 0f
-    val fill = when {
+    var fill = when {
         overdrive -> roles.you
         engine.overheated -> kkMix(Kk.Bone, roles.heat, 0.35f)
         else -> Kk.Bone
     }
-    val glow = when {
+    var glow = when {
         overdrive -> roles.you
         engine.overheated -> roles.heat
         else -> Kk.Bone
     }
-    val glowAlpha = if (overdrive || engine.overheated) 0.26f else 0.12f
+    var glowAlpha = if (overdrive || engine.overheated) 0.26f else 0.12f
+    // Core Stasis pales the form toward ice and dims its glow; overdrive and overheat still show through.
+    val stasis = engine.coreStasis
+    if (stasis > 0f) {
+        val cryo = roles.element(StatusElement.CRYO.ordinal)
+        fill = kkMix(fill, kkMix(Kk.Bone, cryo, 0.35f), 0.6f * stasis)
+        glow = kkMix(glow, cryo, 0.5f * stasis)
+        glowAlpha *= 1f - 0.45f * stasis
+    }
     drawCircle(glow.copy(alpha = glowAlpha), 24f, center)
     drawCircle(glow.copy(alpha = glowAlpha * 0.5f), 32f, center)
     if (overdrive) drawCircle(glow.copy(alpha = 0.1f), 44f, center)

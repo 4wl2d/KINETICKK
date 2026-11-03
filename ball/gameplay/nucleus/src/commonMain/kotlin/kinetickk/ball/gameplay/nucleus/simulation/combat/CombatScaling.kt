@@ -14,6 +14,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.build.*
 import kinetickk.ball.gameplay.nucleus.simulation.characters.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
+import kinetickk.ball.gameplay.nucleus.simulation.flight.coreStasisActivationMultiplier
 import kinetickk.ball.gameplay.nucleus.simulation.skills.*
 import kinetickk.ball.gameplay.nucleus.simulation.weapons.*
 import kotlin.math.max
@@ -186,5 +187,6 @@ internal fun MutableGameState.cooldown(base: Float): Float =
             (1f + currentWeaponMastery.activationSpeedBonus) *
             buildActivationBonus() *
             characterActivationMultiplier() *
+            coreStasisActivationMultiplier() *
             (if (overdriveTime > 0f) 1.35f else 1f)
         ).coerceAtLeast(0.2f)

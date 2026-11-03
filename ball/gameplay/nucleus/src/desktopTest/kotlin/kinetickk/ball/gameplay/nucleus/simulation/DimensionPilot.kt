@@ -430,6 +430,7 @@ internal fun flyDimensionRun(
     takeRefuse: Boolean = false,
     runToEnd: Boolean = false,
     content: GameplayContentSnapshot = canonicalGameplayContent,
+    observer: (MutableGameState) -> Unit = {},
 ): DimensionVisitRun {
     val state = startGateRun(seed, profile.snapshot(content), profile.relics, content)
     // Without a target the pilot's rift never comes due, so the bot plays the whole run.
@@ -501,6 +502,7 @@ internal fun flyDimensionRun(
         }
         // A rift that closed unentered ends a visit's run: nothing is left to measure.
         if (target != null && opened && enteredAt.isNaN() && !runToEnd && !riftOffered(state, target)) break
+        observer(state)
         state.takeSoundCues()
         state.takeVisualFxCues()
     }

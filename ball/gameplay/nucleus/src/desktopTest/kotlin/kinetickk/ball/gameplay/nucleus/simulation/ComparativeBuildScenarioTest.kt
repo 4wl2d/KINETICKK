@@ -23,7 +23,7 @@ import kotlin.test.*
 class ComparativeBuildScenarioTest {
     @Test
     fun economicItemsImproveEarnedProgressAndDefenseExtendsSurvivalUnderEqualDamage() {
-        fun fresh() = MutableGameState(canonicalGameplayContent, seed = 81_006).apply {
+        fun fresh() = MutableGameState(scriptedEncounterContent, seed = 81_006).apply {
             startRun()
             settings = settings.copy(simulationSpeed = 1f)
         }
@@ -187,11 +187,14 @@ private data class EncounterResult(
     val clearedSeconds: Float = -1f,
 )
 
+/** Scripted orbits measure builds, not player behaviour; Core Stasis is off. */
+private val scriptedEncounterContent = canonicalGameplayContent.copy(coreStasis = CoreStasisTuning.DISABLED)
+
 private fun runEncounter(
     shape: CoreShape, build: BuildDirection, profile: ProfileCondition, encounter: Encounter,
     weaponOverride: WeaponId = build.weapon, secondsOverride: Int = encounter.seconds, seed: Int = COVERAGE_SEEDS.first(),
 ): EncounterResult {
-    val game = MutableGameState(canonicalGameplayContent, seed = seed, initialRebirthLevel = profile.rebirth).apply {
+    val game = MutableGameState(scriptedEncounterContent, seed = seed, initialRebirthLevel = profile.rebirth).apply {
         coreShape = shape
         startingWeapon = weaponOverride
         matrixRanks.fill(profile.matrixRank)

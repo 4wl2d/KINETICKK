@@ -266,7 +266,13 @@ private fun MutableGameState.endedOutcome(before: FrameBefore): Pair<SiteOutcome
  * Flies one site run of [arm] on [seed]: the fresh tier-0 Orb of the NoPoi gates (or [SiteRunSetup.profile]), 0.02 s
  * input frames until the run ends or 900 s, sound and visual cues taken every frame, on seeds fixed by definition.
  */
-internal fun flySiteRun(seed: Int, arm: SiteArm, setup: SiteRunSetup = SiteRunSetup(), tuning: SitePilotTuning = SitePilotTuning()): SiteRun {
+internal fun flySiteRun(
+    seed: Int,
+    arm: SiteArm,
+    setup: SiteRunSetup = SiteRunSetup(),
+    tuning: SitePilotTuning = SitePilotTuning(),
+    observer: (MutableGameState) -> Unit = {},
+): SiteRun {
     val content = arm.content(setup.base)
     val state = MutableGameState(content, seed = seed, bootstrapProgress = setup.profile)
     state.unlockWeaponsForTesting(ReferenceArmory)
@@ -308,6 +314,7 @@ internal fun flySiteRun(seed: Int, arm: SiteArm, setup: SiteRunSetup = SiteRunSe
             running = now
         }
         touched = touched || state.optionalSitesTouched()
+        observer(state)
         state.takeSoundCues()
         state.takeVisualFxCues()
         if (setup.stopAfterWindows && running == null && arm.windowsDone(state, windowsEnd)) break
@@ -323,7 +330,11 @@ internal fun flySiteRun(seed: Int, arm: SiteArm, setup: SiteRunSetup = SiteRunSe
  * One NoPoi run of the fresh tier-0 Orb on [seed] with the shipped site weights, flown like NoPoiPlaythroughTest's
  * population but in the site arms' viewport: the S-G4 baseline of runs that never opt into a site.
  */
-internal fun flyNoPoiRun(seed: Int, base: GameplayContentSnapshot = canonicalGameplayContent): SiteRun {
+internal fun flyNoPoiRun(
+    seed: Int,
+    base: GameplayContentSnapshot = canonicalGameplayContent,
+    observer: (MutableGameState) -> Unit = {},
+): SiteRun {
     val state = MutableGameState(base, seed = seed)
     state.unlockWeaponsForTesting(ReferenceArmory)
     state.startingWeapon = botLoadout(BotWeaponOrder, ReferenceArmory)
@@ -340,6 +351,7 @@ internal fun flyNoPoiRun(seed: Int, base: GameplayContentSnapshot = canonicalGam
             state.update(0.02f)
         }
         touched = touched || state.optionalSitesTouched()
+        observer(state)
         state.takeSoundCues()
         state.takeVisualFxCues()
     }

@@ -1544,7 +1544,7 @@ private fun worldContractFingerprint(current: Long, state: MutableGameState): Lo
     signature = mix(signature, state.dimensionScorchClock.toRawBits())
     signature = mix(signature, state.dimensionLocalClock.toRawBits())
     signature = mix(signature, state.dimensionRewardLayer?.ordinal ?: -1)
-    return signature
+    return mixLong(signature, coreStasisStateFingerprint(state))
 }
 
 private fun canonicalRenderFingerprint(state: MutableGameState): Long {
@@ -1615,6 +1615,7 @@ private fun canonicalRenderFingerprint(state: MutableGameState): Long {
     // 0.6.0 world facts: data-class text keeps enum names (stable across processes) where a hash code would not.
     signature = mix(signature, render.coreStraightness.toRawBits())
     signature = mix(signature, if (render.easyMode) 1 else 0)
+    signature = mixLong(signature, coreStasisRenderFingerprint(render))
     signature = mix(signature, render.ambientSites.toString().hashCode())
     signature = mix(signature, render.trial.toString().hashCode())
     signature = mix(signature, render.secretFlags)
@@ -1844,8 +1845,7 @@ internal fun obstacleProjectionFingerprint(current: Long, obstacles: List<Obstac
     return signature
 }
 
-private fun mix(current: Long, value: Int): Long =
-    (current xor value.toLong()) * -7046029254386353131L
+private fun mix(current: Long, value: Int): Long = (current xor value.toLong()) * -7046029254386353131L
 
 private fun mixLong(current: Long, value: Long): Long =
     (current xor value) * -7046029254386353131L

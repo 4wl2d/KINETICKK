@@ -220,6 +220,7 @@ internal fun MutableGameState.populateAdditionalRetainedState() {
     lastAnnouncedStructureId = 13L
     structures.totemChests = listOf(kinetickk.ball.gameplay.nucleus.model.TotemChest(14L shl 8, 2_100f, 1_600f, 2, 3f, 3.6f))
     coreStraightness = 0.25f
+    populateCoreStasisRetainedState()
     gripStrength = 1.5f
     slingStrength = 0.75f
     pendingDirectedRewards = listOf(DirectedReward.ITEM_AND_REPAIR, DirectedReward.WEAPON)
@@ -843,6 +844,7 @@ internal fun MutableGameState.exactSimulationFingerprint(): List<Pair<String, An
         float("turnRecoveryCooldown", turnRecoveryCooldown)
         value("turnDirection", turnDirection)
         float("coreStraightness", coreStraightness)
+        coreStasisFingerprint(this@exactSimulationFingerprint)
         float("timeSinceDamage", timeSinceDamage)
         float("hurtCooldown", hurtCooldown)
         float("lastAimDirectionX", lastAimDirectionX)
@@ -1153,9 +1155,7 @@ internal fun ExactFingerprint.buildFingerprint(state: MutableGameState) {
 internal class ExactFingerprint {
     val fields = mutableListOf<Pair<String, Any?>>()
 
-    fun value(name: String, value: Any?) {
-        fields += name to value
-    }
+    fun value(name: String, value: Any?) { fields += name to value }
 
     fun float(name: String, value: Float) {
         fields += name to value.toRawBits()
