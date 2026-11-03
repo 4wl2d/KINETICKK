@@ -28,6 +28,7 @@ import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
 import kinetickk.ball.gameplay.nucleus.reducer.GameReduction
 import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
+import kinetickk.ball.gameplay.nucleus.reducer.ReductionOutcome
 import kinetickk.ball.gameplay.nucleus.reducer.initialEngineState
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
@@ -71,6 +72,51 @@ object GameplayNucleus {
         }
     }
 
+    /** Production frame/input path: mutates [state]'s engine model in place (deep copy only while progress is pending). */
+    fun tick(
+        state: GameplayState,
+        pulse: GameplayInteractionPulse,
+        outputs: GameplayTickOutputs,
+    ): GameplayTickResult {
+        outputs.reset()
+        lifecycleGate(state)?.let { return GameplayTickResult.Rejected(it) }
+        val engine = state.engine!!
+        val sink = outputs.sink
+        val outcome = reducer.admit(engine.model, pulse, sink)
+        if (outcome == ReductionOutcome.REJECTED) return GameplayTickResult.Rejected(checkNotNull(sink.rejection))
+        // Earned progress awaits its Profile reply: a step that could publish more runs on a copy a rejection drops.
+        val isolated = outcome == ReductionOutcome.STEPPED && state.progressPending
+        val model = if (isolated) engine.model.copyForReduction() else engine.model
+        reducer.reduceInPlace(model, pulse, outcome, sink)
+        val publishesProgress = sink.progressUpdate != null
+        if (publishesProgress && state.progressPending) {
+            return GameplayTickResult.Rejected(GameplayRejection.ProgressPending)
+        }
+        outputs.visualFxCues = sink.visualFxCues
+        outputs.audioCues = sink.soundCues
+        outputs.progressUpdate = sink.progressUpdate
+        if (pulse is GameplayInteractionPulse.FrameElapsed) {
+            outputs.frameAccepted = true
+            outputs.frameRealDeltaSeconds = pulse.realDeltaSeconds
+        }
+        outputs.ensuresAudioUnlocked = outcome == ReductionOutcome.AUDIO_UNLOCKED
+        outputs.renderNeutral = when (outcome) {
+            ReductionOutcome.AUDIO_UNLOCKED,
+            ReductionOutcome.IDLE_FRAME,
+            ReductionOutcome.UNCHANGED,
+            -> true
+            else -> pulse === GameplayInteractionPulse.DashRequested
+        }
+        return GameplayTickResult.Accepted(
+            state.copy(
+                revision = state.revision.next(),
+                phase = model.phase.toRunPhase(),
+                engine = if (isolated) EngineState(model) else engine,
+                progressPending = publishesProgress || state.progressPending,
+            ),
+        )
+    }
+
     fun renderSnapshot(state: GameplayState): GameplayRenderSnapshot =
         GameplayRenderSnapshot(
             instanceId = state.instanceId,
@@ -99,6 +145,26 @@ object GameplayNucleus {
             renderModel = model?.toRenderModel(
                 reusableCollections = reusableModel,
                 identitySource = reusableSource,
+            ),
+            projectionSourceIdentity = state.engine?.renderProjectionIdentity,
+        )
+    }
+
+    /** Tick path: no identity reuse against the (same, mutated) source; content equality against [previous]. */
+    fun renderSnapshot(state: GameplayState, previous: GameplayRenderSnapshot): GameplayRenderSnapshot {
+        require(previous.instanceId == state.instanceId) {
+            "Previous Gameplay render snapshot belongs to another instance"
+        }
+        val reusableModel = previous.renderModel
+        require(reusableModel == null || reusableModel.content === state.content) {
+            "Previous Gameplay render model belongs to different content"
+        }
+        return GameplayRenderSnapshot(
+            instanceId = state.instanceId,
+            revision = state.revision,
+            renderModel = state.engine?.model?.toRenderModel(
+                reusableCollections = reusableModel,
+                identitySource = null,
             ),
             projectionSourceIdentity = state.engine?.renderProjectionIdentity,
         )

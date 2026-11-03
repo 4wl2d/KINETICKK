@@ -10,11 +10,17 @@ import kinetickk.ball.gameplay.nucleus.GameplayNucleus
 import kinetickk.ball.gameplay.nucleus.GameplayNucleusPulse
 import kinetickk.ball.gameplay.nucleus.GameplayOutput
 import kinetickk.ball.gameplay.nucleus.GameplayState
+import kinetickk.ball.gameplay.nucleus.GameplayTickOutputs
+import kinetickk.ball.gameplay.nucleus.GameplayTickResult
 import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
+import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
 import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
 import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
+import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.ProfileRevision
 import kotlin.math.atan2
@@ -22,13 +28,19 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlin.test.fail
 
 /**
  * Characterizes the nucleus decision path by state fingerprints: [GameplayNucleus.decide] over a scripted tape of
  * pointer sweeps, brakes, dashes, skills, Apex, choices, a pause, a viewport change and a 144 Hz sub-step segment, for
  * three seeds. Every 60 frames it prints the revision, the canonical state fingerprint, a render digest and rolling
  * hashes of the FX and audio outputs; a fork deep-copied at frame 900 must replay the same 300 frames identically.
+ * A parallel copy runs every pulse through the production [GameplayNucleus.tick] and its snapshot rule; after every
+ * pulse its outputs and revision, and after every frame its state fingerprint and whole render model, must equal the
+ * pure path's (every stored render fact, as [exactRenderValueFacts] reads them).
  */
 class GameplayNucleusTraceCharacterizationTest {
     @Test
@@ -72,6 +84,9 @@ private class NucleusTraceRunner(
     private var choiceFrames = 0
     private var rerolled = false
     private var cursorAngle = (seed and 7).toFloat()
+    private var ticked = state.copy(engine = EngineState(checkNotNull(state.engine).model.copyForReduction()))
+    private var tickedSnapshot: GameplayRenderSnapshot = GameplayNucleus.renderSnapshot(ticked)
+    private val tickOutputs = GameplayTickOutputs()
     var choices = 0
         private set
     var rerolls = 0
@@ -144,38 +159,102 @@ private class NucleusTraceRunner(
         )
         val delta = if (frame in SUB_STEP_FRAMES) 1f / 144f else 1f / 60f
         decide(GameplayInteractionPulse.FrameElapsed.fromValidated(delta))
+        assertTickParity(frame)
     }
 
     private fun decide(pulse: GameplayInteractionPulse) {
-        when (val decision = GameplayNucleus.decide(state, GameplayNucleusPulse.Intent(pulse))) {
+        val decision = GameplayNucleus.decide(state, GameplayNucleusPulse.Intent(pulse))
+        val tick = GameplayNucleus.tick(ticked, pulse, tickOutputs)
+        when (decision) {
             is GameplayDecision.Rejected -> {
                 rejected++
                 fxHash = nucleusFnvString(fxHash, "R:${decision.reason}")
+                assertEquals(decision.reason, assertIs<GameplayTickResult.Rejected>(tick, "seed=$seed $pulse").reason)
             }
             is GameplayDecision.Accepted -> {
                 state = decision.frame.nextState
                 var sentProgress = false
+                var visualFx = emptyList<VisualFxCue>()
+                var audio = emptyList<GameplayAudioCue>()
+                var audioDeltaBits: Int? = null
+                var unlock = false
+                var update: GameplayProgressUpdate? = null
                 decision.frame.outputs.forEach { output ->
                     when (output) {
-                        is GameplayOutput.EmitVisualFx -> output.cues.forEach { cue -> fxHash = nucleusFnvString(fxHash, cue.toString()) }
+                        is GameplayOutput.EmitVisualFx -> {
+                            visualFx = output.cues
+                            output.cues.forEach { cue -> fxHash = nucleusFnvString(fxHash, cue.toString()) }
+                        }
                         is GameplayOutput.AdvanceAudio -> {
+                            audio = output.cues
+                            audioDeltaBits = output.realDeltaSeconds.toRawBits()
                             audioHash = nucleusFnvInt(audioHash, output.realDeltaSeconds.toRawBits())
                             output.cues.forEach { cue -> audioHash = nucleusFnvString(audioHash, cue.name) }
                         }
-                        GameplayOutput.EnsureAudioUnlocked -> audioHash = nucleusFnvString(audioHash, "unlock")
-                        is GameplayOutput.SendProfileCommand -> sentProgress = true
+                        GameplayOutput.EnsureAudioUnlocked -> {
+                            unlock = true
+                            audioHash = nucleusFnvString(audioHash, "unlock")
+                        }
+                        is GameplayOutput.SendProfileCommand -> {
+                            update = output.update
+                            sentProgress = true
+                        }
                         else -> error("Unexpected interaction output $output")
                     }
                 }
+                acceptTick(pulse, tick)
+                assertEquals(visualFx, tickOutputs.visualFxCues.toList(), "seed=$seed $pulse fx")
+                assertEquals(audio, tickOutputs.audioCues.toList(), "seed=$seed $pulse audio")
+                assertEquals(unlock, tickOutputs.ensuresAudioUnlocked, "seed=$seed $pulse unlock")
+                assertEquals(update, tickOutputs.progressUpdate, "seed=$seed $pulse progress")
+                val frameDeltaBits = if (tickOutputs.frameAccepted) tickOutputs.frameRealDeltaSeconds.toRawBits() else null
+                if (pulse is GameplayInteractionPulse.FrameElapsed) {
+                    assertEquals(audioDeltaBits, frameDeltaBits, "seed=$seed $pulse music")
+                } else {
+                    assertEquals(null, frameDeltaBits, "seed=$seed $pulse music")
+                }
                 if (sentProgress) {
                     progress++
-                    val completion = GameplayNucleus.decide(
-                        state,
-                        GameplayNucleusPulse.ProgressApplied(ProfileProgressApplied(ProfileRevision(progress.toLong()))),
-                    )
-                    state = (completion as GameplayDecision.Accepted).frame.nextState
+                    val completed = GameplayNucleusPulse.ProgressApplied(ProfileProgressApplied(ProfileRevision(progress.toLong())))
+                    state = (GameplayNucleus.decide(state, completed) as GameplayDecision.Accepted).frame.nextState
+                    val before = ticked
+                    ticked = (GameplayNucleus.decide(ticked, completed) as GameplayDecision.Accepted).frame.nextState
+                    tickedSnapshot = GameplayNucleus.reuseRenderSnapshot(ticked, before, tickedSnapshot)
                 }
+                assertEquals(state.revision, ticked.revision, "seed=$seed $pulse revision")
+                assertEquals(state.phase, ticked.phase, "seed=$seed $pulse phase")
+                assertEquals(state.progressPending, ticked.progressPending, "seed=$seed $pulse pending")
             }
+        }
+    }
+
+    /** Commits an accepted tick the way the owner does: restamp a render-neutral one, project the rest against the last. */
+    private fun acceptTick(pulse: GameplayInteractionPulse, tick: GameplayTickResult) {
+        val before = ticked
+        ticked = assertIs<GameplayTickResult.Accepted>(tick, "seed=$seed $pulse").nextState
+        tickedSnapshot = if (tickOutputs.renderNeutral) {
+            GameplayNucleus.reuseRenderSnapshot(ticked, before, tickedSnapshot)
+        } else {
+            GameplayNucleus.renderSnapshot(ticked, tickedSnapshot)
+        }
+    }
+
+    /** The ticked copy matches the pure path: state fingerprint, and every field of the published render model. */
+    private fun assertTickParity(frame: Int) {
+        val pure = checkNotNull(state.engine).model
+        assertEquals(
+            canonicalStateFingerprint(pure),
+            canonicalStateFingerprint(checkNotNull(ticked.engine).model),
+            "seed=$seed f=$frame state fingerprint",
+        )
+        val pureRender = checkNotNull(GameplayNucleus.renderSnapshot(state).renderModel)
+        val tickRender = checkNotNull(tickedSnapshot.renderModel)
+        assertEquals(nucleusRenderDigest(pureRender), nucleusRenderDigest(tickRender), "seed=$seed f=$frame render digest")
+        val expected = exactRenderValueFacts(pureRender)
+        val actual = exactRenderValueFacts(tickRender)
+        if (expected != actual) {
+            val (want, got) = expected.zip(actual).first { (want, got) -> want != got }
+            fail("seed=$seed f=$frame render ${want.first}: expected ${want.second}, ticked ${got.second}")
         }
     }
 
