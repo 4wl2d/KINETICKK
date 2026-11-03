@@ -26,6 +26,11 @@ import kotlin.test.assertTrue
  * Elite-resonance base: the base population meets each with room to spare). The rising medians keep the five gate
  * seeds, which pass with probability 0.996 on the Elite-resonance base (medians 2,448, 5,353, 12,983 and 23,329 over
  * 300 population runs per arm) and 0.994 on the tree before it (2,416, 5,271, 12,707 and 22,558).
+ *
+ * The progression curves (docs/balance/progression.md) priced the Core Matrix from Matter income over whole campaigns
+ * and kept these locks for Refit and Honing: the tier's Matter reward became `1.16^t` (tier 6 ×2.44 for ×2.2), and the
+ * full-Matrix tier-6 median over [PopulationSeeds] read 22,663, so the derivation still gives the bases 55 and 40
+ * (Refit 10 at 1.24 and Honing 10 at 0.90 of it; the five gate seeds' medians read 2,432, 5,452, 11,872 and 23,695).
  */
 class MatterIncomeProbeTest {
     /**
