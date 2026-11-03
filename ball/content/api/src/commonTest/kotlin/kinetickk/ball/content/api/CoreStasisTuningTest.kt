@@ -16,7 +16,7 @@ class CoreStasisTuningTest {
         assertTrue(shipped.enabled)
         assertTrue(shipped.applyEffects)
         assertEquals(240f, shipped.anchorRadius)
-        assertEquals(220f, shipped.stillSpeed)
+        assertEquals(120f, shipped.stillSpeed)
         assertEquals(30f, shipped.travelSpeed)
         assertEquals(1.5f, shipped.speedEmaSeconds)
         assertEquals(4f, shipped.decayRate)
@@ -41,7 +41,7 @@ class CoreStasisTuningTest {
         val cases: List<Triple<String, List<Float>, (Float) -> CoreStasisTuning>> = listOf(
             Triple("anchorRadius", listOf(60f, 1_200f, 59.9f, 1_200.1f)) { CoreStasisTuning(anchorRadius = it) },
             Triple("stillSpeed", listOf(20f, 1_000f, 19.9f, 1_000.1f)) { CoreStasisTuning(stillSpeed = it, travelSpeed = 0f) },
-            Triple("travelSpeed", listOf(0f, 219.9f, -0.01f, 220f)) { CoreStasisTuning(travelSpeed = it) },
+            Triple("travelSpeed", listOf(0f, 119.9f, -0.01f, 120f)) { CoreStasisTuning(travelSpeed = it) },
             Triple("speedEmaSeconds", listOf(0.1f, 10f, 0.099f, 10.01f)) { CoreStasisTuning(speedEmaSeconds = it) },
             Triple("decayRate", listOf(1f, 20f, 0.99f, 20.01f)) { CoreStasisTuning(decayRate = it) },
             Triple("graceSeconds", listOf(1f, 120f, 0.99f, 120.01f)) { CoreStasisTuning(graceSeconds = it) },
