@@ -51,6 +51,7 @@ Calibration windows (seeds `i × 7,919 + 13`):
 | 3,401..4,400 | item rarity: the full-run rarity probe and the offer-only runs (`RarityDistributionProbeTest`, `KK_RARITY_SYNTH`) |
 | 4,401..6,400 | the offer-only rarity design gate (`RarityDistributionGateTest`), never tuned on |
 | 6,401..16,400 | the offer-only rarity tails (10,000 runs per arm, `KK_RARITY_SYNTH`), a report, never tuned on |
+| 16,401..17,000 | Rebirth curves and permanent progression ([progression.md](progression.md)): the `balanceSweep` cells (16,401..16,500 by default) and campaigns |
 
 | Rule | Selection |
 |---|---|

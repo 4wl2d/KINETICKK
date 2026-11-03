@@ -64,14 +64,17 @@ class PermanentUpgradeRunTest {
     @Test fun refitAddsIntegrityAndScalesOnlyCharacterMechanicDamage() {
         val plain = run()
         val refitted = run(refit = 10)
-        assertEquals(plain.maxHp + 20f, refitted.maxHp)
+        val policy = canonicalGameplayContent.upgrades
+        // +5 % of the Orb's base integrity per level: +50 % at level 10.
+        assertEquals(plain.maxHp * 1.5f, refitted.maxHp, 1e-4f)
         assertEquals(refitted.maxHp, refitted.hp)
         assertEquals(10, refitted.characterUpgradeLevel)
-        assertEquals(1.2f, refitted.characterUpgradePower, 1e-6f)
-        // Character damage takes ×1.2; weapon and ability power (items, weapons) never see Refit.
+        assertEquals(policy.characterPower(10), refitted.characterUpgradePower, 1e-6f)
+        assertEquals(1.967f, refitted.characterUpgradePower, 1e-3f)
+        // Character damage takes ×1.07^10; weapon and ability power (items, weapons) never see Refit.
         val plainHit = plain.dealCharacterDamage(plain.addEnemyForTesting(400f, 0f, hp = 10_000f), 50f).amount
         val refittedHit = refitted.dealCharacterDamage(refitted.addEnemyForTesting(400f, 0f, hp = 10_000f), 50f).amount
-        assertEquals(plainHit * 1.2f, refittedHit, 1e-3f)
+        assertEquals(plainHit * policy.characterPower(10), refittedHit, 1e-3f)
         assertEquals(plain.effectiveWeaponPower(), refitted.effectiveWeaponPower())
         assertEquals(plain.abilityPower(), refitted.abilityPower())
         // Another character's Refit does nothing for the selected one.
@@ -88,18 +91,48 @@ class PermanentUpgradeRunTest {
         assertEquals(1f, otherRefit.characterUpgradePower)
     }
 
+    /**
+     * Refit reaches every character damage, also what rides the proc pipeline or a projectile (map-numbers §1c): the
+     * Hive's drones (and the Echo ghost through the same call) and the Diamond's parry shot used to skip it.
+     */
+    @Test fun refitRaisesCharacterDamageOutsideTheAbilityApplicator() {
+        val power = canonicalGameplayContent.upgrades.characterPower(10)
+        fun droneDamage(refit: Int): Float {
+            val hive = run(shape = CoreShape.HEXAGON, refit = refit)
+            hive.characterRuntime.droneCount = 2
+            val target = hive.addEnemyForTesting(300f, 0f, hp = 100_000f)
+            val ability = hive.characterRuntime.abilityDamage
+            hive.dronesDartAt(target)
+            assertEquals(100_000.0 - target.hp, hive.characterRuntime.abilityDamage - ability, 1e-2, "drones count as ability output")
+            return 100_000f - target.hp
+        }
+        assertTrue(droneDamage(0) > 0f)
+        assertEquals(droneDamage(0) * power, droneDamage(10), droneDamage(10) * 1e-4f)
+
+        fun parryShot(refit: Int): Float {
+            val diamond = run(shape = CoreShape.DIAMOND, refit = refit)
+            diamond.characterRuntime.parryWindow = PARRY_WINDOW_SECONDS
+            diamond.addEnemyForTesting(diamond.coreX + 300f, diamond.coreY)
+            assertTrue(diamond.tryCharacterParry(diamond.coreX + 60f, diamond.coreY, -600f, 0f, damage = 10f, projectile = true))
+            return diamond.projectiles.single { !it.hostile }.damage
+        }
+        assertEquals(parryShot(0) * power, parryShot(10), parryShot(10) * 1e-4f)
+    }
+
     @Test fun honingScalesTheCurrentWeaponOnlyAndFollowsAMidRunSwitch() {
         val plain = run()
         val honed = run(honing = mapOf(WeaponId.FLUX_WAKE to 10, WeaponId.MORNINGSTAR to 5))
-        assertEquals(1.3f, honed.weaponUpgradePower(), 1e-6f)
-        assertEquals(plain.effectiveWeaponPower() * 1.3f, honed.effectiveWeaponPower(), 1e-5f)
+        val policy = canonicalGameplayContent.upgrades
+        // ×1.085 per level: ×2.26 at level 10, ×1.50 at level 5.
+        assertEquals(2.261f, honed.weaponUpgradePower(), 1e-3f)
+        assertEquals(plain.effectiveWeaponPower() * policy.weaponPower(10), honed.effectiveWeaponPower(), 1e-5f)
         // Honing is the weapon's own hits only: abilities and weapon-based item effects use abilityPower.
         assertEquals(plain.abilityPower(), honed.abilityPower())
         assertEquals(plain.maxHp, honed.maxHp)
         honed.equipRunWeapon(WeaponId.MORNINGSTAR)
         plain.equipRunWeapon(WeaponId.MORNINGSTAR)
-        assertEquals(1.15f, honed.weaponUpgradePower(), 1e-6f)
-        assertEquals(plain.effectiveWeaponPower() * 1.15f, honed.effectiveWeaponPower(), 1e-5f)
+        assertEquals(policy.weaponPower(5), honed.weaponUpgradePower(), 1e-6f)
+        assertEquals(plain.effectiveWeaponPower() * policy.weaponPower(5), honed.effectiveWeaponPower(), 1e-5f)
         honed.equipRunWeapon(WeaponId.ARC_COIL)
         assertEquals(1f, honed.weaponUpgradePower())
     }
@@ -205,9 +238,11 @@ class PermanentUpgradeRunTest {
         val integrity = summary.stats.single { it.name == "Integrity" }
         val plainIntegrity = plain.buildStats().single { it.name == "Integrity" }
         assertEquals(upgraded.maxHp, integrity.value)
+        // Refit 3: +15 % of the Orb's 100 base integrity.
         assertEquals(
-            plainIntegrity.contributions.single { it.source == BuildStatSource.CHARACTER }.amount + 6f,
+            plainIntegrity.contributions.single { it.source == BuildStatSource.CHARACTER }.amount + 15f,
             integrity.contributions.single { it.source == BuildStatSource.CHARACTER }.amount,
+            1e-4f,
         )
         assertNull(integrity.contributions.firstOrNull { it.source == BuildStatSource.ITEMS })
         // Honing reports with the weapon's own progression, never as a temporary effect.

@@ -297,8 +297,8 @@ class EventSignalTest {
         // f = 0.5 + 115 / 480: 44.4, 110.9 and 22.2 round to the nearest five.
         assertEquals(listOf(45, 110, 20), prices(115f))
         assertEquals(listOf(60, 150, 30), prices(240f))
-        // Tier 10 gains Matter three times as fast, and pays three times as much.
-        assertEquals(listOf(180, 450, 90), prices(240f, rebirth = 10))
+        // Tier 10 gains Matter 1.16^10 = 4.41 times as fast, and pays as much more (264.7, 661.6, 132.3 to the nearest five).
+        assertEquals(listOf(265, 660, 130), prices(240f, rebirth = 10))
         // A price never rounds below one step.
         val cheap = content.copy(variety = content.variety.copy(signals = policy.copy(tuning = tuning.copy(merchantRerollCost = 1f))))
         assertEquals(5, prices(0f, content = cheap)[2])

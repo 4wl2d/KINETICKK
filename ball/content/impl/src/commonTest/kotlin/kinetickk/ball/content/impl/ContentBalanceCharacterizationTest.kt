@@ -234,44 +234,45 @@ class ContentBalanceCharacterizationTest {
         )
         assertEquals(
             listOf(
-                MatrixNodeId.IMPACT_DRIVER to listOf(150, 400, 900),
-                MatrixNodeId.WEAPON_CALIBRATION to listOf(200, 500, 1_000),
-                MatrixNodeId.CRITICAL_LATTICE to listOf(600, 1_400),
-                MatrixNodeId.ARMED_START to listOf(800, 2_000),
-                MatrixNodeId.CATALYST_CORE to listOf(1_600),
-                MatrixNodeId.OVERDRIVE_COIL to listOf(1_800),
-                MatrixNodeId.REBORN_ARSENAL to listOf(4_200),
-                MatrixNodeId.GLASS_ENGINE to listOf(3_500),
-                MatrixNodeId.REINFORCED_HULL to listOf(120, 350, 800),
-                MatrixNodeId.HARDLIGHT_RESERVE to listOf(300, 800),
-                MatrixNodeId.IMPACT_DAMPERS to listOf(400, 1_000),
-                MatrixNodeId.SECOND_WIND to listOf(2_200),
-                MatrixNodeId.NANOFORGE to listOf(700, 1_600),
-                MatrixNodeId.BASTION_PROTOCOL to listOf(2_600),
-                MatrixNodeId.AEGIS_LATTICE to listOf(4_500),
-                MatrixNodeId.JUGGERNAUT to listOf(3_800),
-                MatrixNodeId.MAGNET_ARRAY to listOf(100, 300, 700),
-                MatrixNodeId.CRYO_LOOP to listOf(250, 700),
-                MatrixNodeId.VECTOR_THRUSTERS to listOf(400, 1_000),
-                MatrixNodeId.NEAR_MISS to listOf(900),
-                MatrixNodeId.RICOCHET_RIG to listOf(1_500),
-                MatrixNodeId.OVERCLOCKED_REFLEXES to listOf(1_200, 2_600),
-                MatrixNodeId.GRAVITY_SURFER to listOf(5_000),
-                MatrixNodeId.PERPETUAL_DRIFT to listOf(4_000),
-                MatrixNodeId.SALVAGE_PROTOCOL to listOf(150, 400, 900),
-                MatrixNodeId.DATA_ARCHIVE to listOf(150, 400, 900),
-                MatrixNodeId.REROLL_CACHE to listOf(500, 1_500),
-                MatrixNodeId.WIDE_OFFER to listOf(1_200),
-                MatrixNodeId.LUCKY_CHARM to listOf(800, 2_000),
-                MatrixNodeId.ELITE_BOUNTY to listOf(2_400),
-                MatrixNodeId.HEIRLOOM_VAULT to listOf(3_000),
-                MatrixNodeId.PROSPECTOR to listOf(3_200),
+                MatrixNodeId.IMPACT_DRIVER to listOf(400, 1_500, 6_000),
+                MatrixNodeId.WEAPON_CALIBRATION to listOf(500, 2_000, 8_000),
+                MatrixNodeId.CRITICAL_LATTICE to listOf(2_400, 10_000),
+                MatrixNodeId.ARMED_START to listOf(3_000, 12_000),
+                MatrixNodeId.CATALYST_CORE to listOf(7_600),
+                MatrixNodeId.OVERDRIVE_COIL to listOf(7_600),
+                MatrixNodeId.REBORN_ARSENAL to listOf(25_000),
+                MatrixNodeId.GLASS_ENGINE to listOf(25_000),
+                MatrixNodeId.REINFORCED_HULL to listOf(300, 1_200, 5_000),
+                MatrixNodeId.HARDLIGHT_RESERVE to listOf(800, 3_000),
+                MatrixNodeId.IMPACT_DAMPERS to listOf(1_000, 2_400),
+                MatrixNodeId.SECOND_WIND to listOf(7_600),
+                MatrixNodeId.NANOFORGE to listOf(1_800, 7_000),
+                MatrixNodeId.BASTION_PROTOCOL to listOf(22_000),
+                MatrixNodeId.AEGIS_LATTICE to listOf(30_000),
+                MatrixNodeId.JUGGERNAUT to listOf(25_000),
+                MatrixNodeId.MAGNET_ARRAY to listOf(200, 800, 1_800),
+                MatrixNodeId.CRYO_LOOP to listOf(600, 1_800),
+                MatrixNodeId.VECTOR_THRUSTERS to listOf(1_000, 2_400),
+                MatrixNodeId.NEAR_MISS to listOf(2_200),
+                MatrixNodeId.RICOCHET_RIG to listOf(3_800),
+                MatrixNodeId.OVERCLOCKED_REFLEXES to listOf(5_000, 20_000),
+                MatrixNodeId.GRAVITY_SURFER to listOf(15_000),
+                MatrixNodeId.PERPETUAL_DRIFT to listOf(25_000),
+                MatrixNodeId.SALVAGE_PROTOCOL to listOf(400, 1_000, 2_200),
+                MatrixNodeId.DATA_ARCHIVE to listOf(400, 1_000, 2_200),
+                MatrixNodeId.REROLL_CACHE to listOf(1_200, 3_800),
+                MatrixNodeId.WIDE_OFFER to listOf(3_000),
+                MatrixNodeId.LUCKY_CHARM to listOf(2_000, 5_000),
+                MatrixNodeId.ELITE_BOUNTY to listOf(6_000),
+                MatrixNodeId.HEIRLOOM_VAULT to listOf(7_600),
+                MatrixNodeId.PROSPECTOR to listOf(25_000),
             ),
             ui.matrixNodes.map { node -> node.id to node.costs.toList() },
         )
-        // Tether Arc's mastery description now matches the recalibrated sevenfold damage ramp.
+        // The progression curves (docs/balance/progression.md): percent integrity and shield nodes, the deep Bulwark and
+        // keystone power, the Matrix priced from Matter income (a7ad525faae809a3 -> 73b5d3e78d148de4).
         assertEquals(
-            "a7ad525faae809a3",
+            "73b5d3e78d148de4",
             goldenFingerprint {
                 add("weapons")
                 ui.weapons.forEach { weapon ->
@@ -319,8 +320,9 @@ class ContentBalanceCharacterizationTest {
         assertEquals(0.09f, rebirth.minSpawnIntervalSeconds)
         assertEquals(24f, rebirth.minEliteIntervalSeconds)
         assertEquals((0..10).toList(), profiles.map(RebirthProfile::tier))
+        // H(t) = 1.27^t, D(t) = 1.18^t, Matter 1.16^t and no player power from the tier (461252b1f47728a5 -> f6b4b0fdf10a4d14).
         assertEquals(
-            "461252b1f47728a5",
+            "f6b4b0fdf10a4d14",
             goldenFingerprint {
                 profiles.forEach { profile ->
                     add(profile.tier)
@@ -350,9 +352,10 @@ class ContentBalanceCharacterizationTest {
     fun skillApexAndUpgradeContentIsGolden() {
         assertEquals(18, ui.skills.size)
         // Mass Driver's mass 1.17/1.2/1.24 -> 1.4/1.52/1.65 and Sonic Boom's cooldowns 8/7/6 -> 7/6/5 under the slower
-        // flight law (e73bd70a41ae42f0 -> 6f57bbc082aececf).
+        // flight law (e73bd70a41ae42f0 -> 6f57bbc082aececf); multiplicative Refit and Honing, Refit integrity +5 % of the
+        // base per level and the weapon level cap of 30 (-> 10a350f2ecca3b6d).
         assertEquals(
-            "6f57bbc082aececf",
+            "10a350f2ecca3b6d",
             goldenFingerprint {
                 add("skills")
                 ui.skills.forEach { skill ->
@@ -391,8 +394,8 @@ class ContentBalanceCharacterizationTest {
                 add("upgrades")
                 add(ui.upgrades.maxLevel)
                 add(ui.upgrades.characterIntegrityPerLevel)
-                add(ui.upgrades.characterPowerPerLevel)
-                add(ui.upgrades.weaponPowerPerLevel)
+                add(ui.upgrades.characterPowerGrowth)
+                add(ui.upgrades.weaponPowerGrowth)
                 ui.weapons.forEach { weapon ->
                     add(weapon.id.name)
                     add(weapon.upgradeBaseCost)
@@ -403,6 +406,8 @@ class ContentBalanceCharacterizationTest {
                 add(ui.tempo.levelIntegrity)
                 add(ui.tempo.levelRepair)
                 add(ui.tempo.rebirthScaleFromLevel)
+                add(ui.tempo.weaponLevelStep)
+                add(ui.tempo.maximumWeaponLevel)
                 ui.rebirth.profiles.forEach { add(it.dataRequirementScale) }
             },
         )
@@ -618,6 +623,8 @@ private const val TERRAIN_060_END = 302
 private fun GoldenFingerprint.addMatrixEffect(effect: MatrixEffect) {
     when (effect) {
         is MatrixEffect.Stat -> { add("stat"); add(effect.delta.effect.name); add(effect.delta.amount) }
+        is MatrixEffect.IntegrityShare -> { add("integrity-share"); add(effect.fraction) }
+        is MatrixEffect.ShieldShare -> { add("shield-share"); add(effect.fraction) }
         is MatrixEffect.DamageMultiplier -> { add("damage"); add(effect.fraction) }
         is MatrixEffect.ReactionPower -> { add("reaction"); add(effect.fraction) }
         is MatrixEffect.StatusPotency -> { add("potency"); add(effect.fraction) }

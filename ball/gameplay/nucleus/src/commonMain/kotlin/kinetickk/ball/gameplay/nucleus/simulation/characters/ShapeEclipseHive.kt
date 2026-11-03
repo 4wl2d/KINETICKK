@@ -63,8 +63,7 @@ internal fun MutableGameState.dronesDartAt(target: Enemy) {
         drones[base + DRONE_TARGET_X] = target.x
         drones[base + DRONE_TARGET_Y] = target.y
         drones[base + DRONE_DART] = DRONE_DART_SECONDS
-        val integrity = target.hp
-        recordAbilityDamage(integrity, dealProcDamage(target, DRONE_DAMAGE * abilityPower()))
+        dealCharacterProcDamage(target, DRONE_DAMAGE * abilityPower())
     }
 }
 
@@ -138,7 +137,8 @@ internal fun MutableGameState.crescentBlink(
     val endX = coreX + directionX * range
     val endY = coreY + directionY * range
     val impact = impactPower(max(speed, 600f))
-    val strike = if (drive) impact * strikeMass * relicValue(RelicId.BLINK_DRIVE, 0) / 100f else 0f
+    // The Blink strike is the Crescent's mechanic: Refit raises it like every character damage.
+    val strike = if (drive) impact * strikeMass * relicValue(RelicId.BLINK_DRIVE, 0) / 100f * characterUpgradePower else 0f
     val assassin = drive && build.pairing(RelicPairingId.ASSASSINS_LINE)
     for (index in enemies.indices) {
         val enemy = enemies[index]
@@ -323,12 +323,8 @@ internal fun MutableGameState.updateHive(ability: CharacterRuntime, delta: Float
                 drones[base + DRONE_TARGET_X] = target.x
                 drones[base + DRONE_TARGET_Y] = target.y
                 dart = DRONE_DART_SECONDS
-                val integrity = target.hp
                 val strike = target.isBossClass && apexActive() && apexStrike(target) > 0f
-                if (!strike) {
-                    val damage = (if (queen) apexValue(SWARM_DART_DAMAGE) else DRONE_DAMAGE) * abilityPower()
-                    recordAbilityDamage(integrity, dealProcDamage(target, damage))
-                }
+                if (!strike) dealCharacterProcDamage(target, (if (queen) apexValue(SWARM_DART_DAMAGE) else DRONE_DAMAGE) * abilityPower())
                 if (!target.alive && elapsed >= ability.droneHealReadyAt) {
                     ability.droneHealReadyAt = elapsed + DRONE_HEAL_INTERVAL
                     heal(DRONE_KILL_HEAL, HealSource.ITEM)

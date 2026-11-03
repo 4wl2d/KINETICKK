@@ -33,12 +33,15 @@ class WorkshopUpgradeBlockTest {
         assertEquals(55L, track.nextPrice)
         assertTrue(track.affordable && track.canBuy)
         assertEquals(0L, track.shortfall)
-        assertEquals(listOf(UpgradeEffectLine(UpgradeStat.INTEGRITY, 0f, 2f), UpgradeEffectLine(UpgradeStat.CHARACTER_DAMAGE, 0f, 2f)),
-            track.effects)
+        // Refit's first level: +5 % of the base integrity and ×1.07 character damage, both shown as percent bonuses.
+        assertEquals(UpgradeStat.INTEGRITY, track.effects[0].stat)
+        assertEquals(0f, track.effects[0].now)
+        assertEquals(5f, track.effects[0].next!!, 1e-3f)
+        assertEquals(7f, track.effects[1].next!!, 1e-3f)
         // Nothing yet: Now shows the dash; Next the first level.
         assertEquals("—", UpgradeStat.INTEGRITY.value(track.effects[0].now, english))
-        assertEquals("+2", UpgradeStat.INTEGRITY.value(track.effects[0].next!!, english))
-        assertEquals("+2%", UpgradeStat.CHARACTER_DAMAGE.value(track.effects[1].next!!, english))
+        assertEquals("+5%", UpgradeStat.INTEGRITY.value(track.effects[0].next!!, english))
+        assertEquals("+7%", UpgradeStat.CHARACTER_DAMAGE.value(track.effects[1].next!!, english))
         val texts = workshopUpgradeTexts(track, english)
         assertEquals("Upgrade", texts.label)
         assertEquals("55", texts.cost)
@@ -54,8 +57,11 @@ class WorkshopUpgradeBlockTest {
         assertFalse(short.affordable || short.canBuy)
         assertEquals(1L, short.shortfall)
         assertEquals("Need 1 more matter", workshopUpgradeTexts(short, english).need)
-        assertEquals("+10", UpgradeStat.INTEGRITY.value(short.effects[0].now, english))
-        assertEquals("+12", UpgradeStat.INTEGRITY.value(short.effects[0].next!!, english))
+        assertEquals("+25%", UpgradeStat.INTEGRITY.value(short.effects[0].now, english))
+        assertEquals("+30%", UpgradeStat.INTEGRITY.value(short.effects[0].next!!, english))
+        // Character damage compounds: 1.07^5 and 1.07^6.
+        assertEquals("+40.3%", UpgradeStat.CHARACTER_DAMAGE.value(short.effects[1].now, english))
+        assertEquals("+50,1%", UpgradeStat.CHARACTER_DAMAGE.value(short.effects[1].next!!, AppLanguage.Russian))
         assertTrue(characterUpgradeTrack(policy, orb, level = 5, matter = 1_760L, unlocked = true).canBuy)
     }
 
@@ -66,7 +72,8 @@ class WorkshopUpgradeBlockTest {
         assertFalse(top.canBuy)
         assertNull(top.nextPrice)
         assertTrue(top.effects.all { it.next == null })
-        assertEquals("+20%", UpgradeStat.CHARACTER_DAMAGE.value(top.effects[1].now, english))
+        assertEquals("+96.7%", UpgradeStat.CHARACTER_DAMAGE.value(top.effects[1].now, english))
+        assertEquals("+50%", UpgradeStat.INTEGRITY.value(top.effects[0].now, english))
         val texts = workshopUpgradeTexts(top, english)
         assertEquals("Maximum", texts.label)
         assertNull(texts.cost)
@@ -81,7 +88,8 @@ class WorkshopUpgradeBlockTest {
         val weapon = TestWeapons.first()
         val track = weaponUpgradeTrack(policy, weapon, level = 0, matter = Long.MAX_VALUE, owned = false)
         assertFalse(track.owned || track.affordable || track.canBuy)
-        assertEquals(listOf(UpgradeEffectLine(UpgradeStat.WEAPON_DAMAGE, 0f, 3f)), track.effects)
+        assertEquals(UpgradeStat.WEAPON_DAMAGE, track.effects.single().stat)
+        assertEquals(8.5f, track.effects.single().next!!, 1e-3f)
         val texts = workshopUpgradeTexts(track, english)
         assertEquals("Locked", texts.label)
         assertNull(texts.cost)
@@ -101,9 +109,9 @@ class WorkshopUpgradeBlockTest {
         assertEquals("Already at level 10", upgradeRefusalText(ProfileRejection.UpgradeMaxLevel, track, english))
         assertEquals("Unlock this character first", upgradeRefusalText(ProfileRejection.CoreShapeLocked, track, english))
         assertEquals("Not applied. Try again", upgradeRefusalText(ProfileRejection.NoChange, track, english))
-        // Honing values keep their tenths (3 % per level on a 2.5 % policy shows one decimal).
-        val half = weaponUpgradeTrack(UpgradePolicy(weaponPowerPerLevel = 0.025f), TestWeapons.first(), 1, 0L, owned = true)
-        assertEquals("+2.5%", UpgradeStat.WEAPON_DAMAGE.value(half.effects.single().now, english))
+        // Honing values keep their tenths: the maximum level of the shipped ×1.085 track is +126.1 %.
+        val top = weaponUpgradeTrack(policy, TestWeapons.first(), policy.maxLevel, 0L, owned = true)
+        assertEquals("+126.1%", UpgradeStat.WEAPON_DAMAGE.value(top.effects.single().now, english))
     }
 
     /** Every character's Refit signature sentence (economy §7) in both languages, its numbers from the content steps. */

@@ -214,14 +214,17 @@ class ProfileUpgradeTest {
         assertEquals(false, home(state(matter = 54L, unlocked = armed, weapons = honed)).workshopAffordable)
         assertEquals(true, home(state(matter = 55L, unlocked = armed, weapons = honed)).workshopAffordable)
 
-        // Every weapon up to 100 owned and honed, Orb at Refit 10: only the Magnet Array rank at 100 is left.
-        val cheapWeapons = setOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR, WeaponId.PHASE_LATTICE, WeaponId.NULL_LANCE)
+        // Every weapon up to 200 owned and honed, Orb at Refit 10: only the Magnet Array rank at 200 is left.
+        val cheapWeapons = setOf(
+            WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR, WeaponId.PHASE_LATTICE, WeaponId.NULL_LANCE, WeaponId.GYRE_DISC,
+            WeaponId.GRAVITY_MINES,
+        )
         val maxed = cheapWeapons.associateWith { 10 }
         val orb = mapOf(CoreShape.ORB to 10)
-        assertEquals(false, home(state(matter = 99L, unlocked = cheapWeapons, weapons = maxed, characters = orb)).workshopAffordable)
-        val matrixOnly = state(matter = 100L, unlocked = cheapWeapons, weapons = maxed, characters = orb)
+        assertEquals(false, home(state(matter = 199L, unlocked = cheapWeapons, weapons = maxed, characters = orb)).workshopAffordable)
+        val matrixOnly = state(matter = 200L, unlocked = cheapWeapons, weapons = maxed, characters = orb)
         assertEquals(true, home(matrixOnly).workshopAffordable)
-        assertEquals(10 + 4 * 10, home(matrixOnly).upgradeLevels)
+        assertEquals(10 + 6 * 10, home(matrixOnly).upgradeLevels)
     }
 
     private fun upgrades(

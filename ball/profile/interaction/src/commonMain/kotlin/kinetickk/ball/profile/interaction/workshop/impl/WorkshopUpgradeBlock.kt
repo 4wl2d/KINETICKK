@@ -143,7 +143,7 @@ internal data class UpgradeTrackRenderModel(
 
 /**
  * The track of a definition priced from [base] at [level] (clamped to the policy's range) for a
- * balance of [matter]: each of [stats] adds its per-level amount.
+ * balance of [matter]: each of [stats] gives its percent bonus at a level.
  */
 internal fun upgradeTrack(
     policy: UpgradePolicy,
@@ -151,7 +151,7 @@ internal fun upgradeTrack(
     level: Int,
     matter: Long,
     owned: Boolean,
-    stats: List<Pair<UpgradeStat, Float>>,
+    stats: List<Pair<UpgradeStat, (level: Int) -> Float>>,
 ): UpgradeTrackRenderModel {
     val current = level.coerceIn(0, policy.maxLevel)
     val maxed = current >= policy.maxLevel
@@ -164,11 +164,11 @@ internal fun upgradeTrack(
         affordable = affordable,
         owned = owned,
         shortfall = if (price == null || affordable) 0L else (price - matter).coerceAtLeast(0L),
-        effects = stats.map { (stat, perLevel) -> UpgradeEffectLine(stat, perLevel * current, if (maxed) null else perLevel * (current + 1)) },
+        effects = stats.map { (stat, percent) -> UpgradeEffectLine(stat, percent(current), if (maxed) null else percent(current + 1)) },
     )
 }
 
-/** A character's Refit: maximum integrity and character-mechanic damage per level. */
+/** A character's Refit: maximum integrity and character-mechanic damage, as percent bonuses at a level. */
 internal fun characterUpgradeTrack(
     policy: UpgradePolicy,
     definition: CoreShapeDefinition,
@@ -176,11 +176,11 @@ internal fun characterUpgradeTrack(
     matter: Long,
     unlocked: Boolean,
 ): UpgradeTrackRenderModel = upgradeTrack(policy, definition.upgradeBaseCost, level, matter, unlocked, listOf(
-    UpgradeStat.INTEGRITY to policy.characterIntegrityPerLevel,
-    UpgradeStat.CHARACTER_DAMAGE to policy.characterPowerPerLevel * 100f,
+    UpgradeStat.INTEGRITY to { level -> percentBonus(policy.characterIntegrity(level)) },
+    UpgradeStat.CHARACTER_DAMAGE to { level -> percentBonus(policy.characterPower(level)) },
 )).copy(signature = UpgradeSignatureLine(definition.id, definition.upgradeSignature.perLevel, definition.upgradeSignature.secondaryPerLevel))
 
-/** A weapon's Honing: the weapon's own hits per level. */
+/** A weapon's Honing: the weapon's own hits, as a percent bonus at a level. */
 internal fun weaponUpgradeTrack(
     policy: UpgradePolicy,
     definition: WeaponDefinition,
@@ -188,8 +188,11 @@ internal fun weaponUpgradeTrack(
     matter: Long,
     owned: Boolean,
 ): UpgradeTrackRenderModel = upgradeTrack(policy, definition.upgradeBaseCost, level, matter, owned, listOf(
-    UpgradeStat.WEAPON_DAMAGE to policy.weaponPowerPerLevel * 100f,
+    UpgradeStat.WEAPON_DAMAGE to { level -> percentBonus(policy.weaponPower(level)) },
 ))
+
+/** A multiplier as the percent it adds: 1.5 is +50. */
+private fun percentBonus(multiplier: Float): Float = (multiplier - 1f) * 100f
 
 /** The effect line's name: [mechanic] names the character's damage. */
 internal fun UpgradeStat.label(language: AppLanguage, mechanic: String?): String = when (this) {
@@ -198,13 +201,13 @@ internal fun UpgradeStat.label(language: AppLanguage, mechanic: String?): String
     UpgradeStat.WEAPON_DAMAGE -> language.text(ProfileScreensRedesignText.UpgradeWeaponDamage)
 }
 
-/** "+20" or "+20%"; a level-0 value is the dash (nothing yet). */
+/** "+50%" or "+8.5%" (the language's decimal separator); a level-0 value is the dash (nothing yet). */
 internal fun UpgradeStat.value(value: Float, language: AppLanguage): String {
     if (value <= 0f) return language.text(ProfileScreensRedesignText.NoValue)
     val tenths = (value * 10f).roundToInt()
-    val number = if (tenths % 10 == 0) (tenths / 10).toString() else (tenths / 10).toString() + "." + (tenths % 10)
-    return language.text(if (this == UpgradeStat.INTEGRITY) ProfileScreensRedesignText.UpgradePlus else ProfileScreensRedesignText.UpgradePlusPercent,
-        number)
+    val separator = if (language == AppLanguage.Russian) "," else "."
+    val number = if (tenths % 10 == 0) (tenths / 10).toString() else (tenths / 10).toString() + separator + (tenths % 10)
+    return language.text(ProfileScreensRedesignText.UpgradePlusPercent, number)
 }
 
 /** "Lvl N" on an owned tile once a level is bought; null for a tile without one. */

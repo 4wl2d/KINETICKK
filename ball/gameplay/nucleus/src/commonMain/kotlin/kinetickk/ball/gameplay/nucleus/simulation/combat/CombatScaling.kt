@@ -131,7 +131,7 @@ internal fun MutableGameState.runDamageMultiplier(): Float = matrix.damageMultip
 
 internal fun MutableGameState.shieldCapacity(): Float {
     if (build.liability(RelicId.GLASS_COMET)) return 0f
-    var capacity = maxShield
+    var capacity = maxShield + matrix.shieldShare * maxHp
     if (tagTier(BuildTag.BULWARK) >= 1) capacity += 18f
     // Aegis Shards add shield capacity while equipped.
     if (weapon == WeaponId.AEGIS_SHARDS) capacity += AEGIS_SHIELD_CAPACITY
@@ -160,7 +160,7 @@ internal fun MutableGameState.effectiveDamageReduction(): Float {
 internal fun MutableGameState.effectiveWeaponPower(): Float =
     weaponPower *
         rebirthProfile.playerPowerMultiplier *
-        (1f + (weaponLevel - 1) * 0.08f) *
+        content.tempo.weaponLevelFactor(weaponLevel) *
         (1f + currentWeaponMastery.damageBonus) *
         weaponRunGrowth() *
         weaponSynergyPower() *
@@ -172,7 +172,7 @@ internal fun MutableGameState.effectiveWeaponPower(): Float =
  * bonus follows a Totem choice's weapon change or a weapon choice.
  */
 internal fun MutableGameState.weaponUpgradePower(): Float =
-    1f + content.upgrades.weaponPowerPerLevel * weaponUpgradeLevels[weapon.ordinal]
+    content.upgrades.weaponPower(weaponUpgradeLevels[weapon.ordinal])
 
 /**
  * Power of character abilities and weapon-based item effects. It shares the weapon's level, mastery and
@@ -182,7 +182,7 @@ internal fun MutableGameState.weaponUpgradePower(): Float =
 internal fun MutableGameState.abilityPower(): Float =
     weaponPower *
         rebirthProfile.playerPowerMultiplier *
-        (1f + (weaponLevel - 1) * 0.08f) *
+        content.tempo.weaponLevelFactor(weaponLevel) *
         (1f + currentWeaponMastery.damageBonus) *
         content.tempo.abilityRunGrowth(elapsed) *
         if (overdriveTime > 0f) 1.45f else 1f

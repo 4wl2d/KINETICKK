@@ -146,7 +146,8 @@ internal fun MutableGameState.buildStats(
         matrix.statValue(effect, base, content.pickups.minimumMagnetRadius) - base
     // The character's traits and its Refit are part of its base column.
     val traits = content.coreShape(coreShape).traits
-    val baseIntegrity = 100f + traits.integrityBonus + content.upgrades.characterIntegrityPerLevel * characterUpgradeLevel
+    val classIntegrity = 100f + traits.integrityBonus
+    val baseIntegrity = classIntegrity * content.upgrades.characterIntegrity(characterUpgradeLevel)
     val baseMass = traits.massMultiplier
     val baseDashHeat = 36f * traits.dashHeatMultiplier
     val baseCritChance = 0.05f + traits.critChanceBonus
@@ -155,7 +156,7 @@ internal fun MutableGameState.buildStats(
     stat("Impact power", damageMultiplier, 1f, matrixShare(ItemEffect.IMPACT_DAMAGE, 1f), unit = "×")
     val globalPower = rebirthProfile.playerPowerMultiplier
     // Run growth and the weapon's Honing report with mastery: progression of the weapon, not items.
-    val masteryPower = (1f + (weaponLevel - 1) * 0.08f) * (1f + currentWeaponMastery.damageBonus) * weaponRunGrowth() *
+    val masteryPower = content.tempo.weaponLevelFactor(weaponLevel) * (1f + currentWeaponMastery.damageBonus) * weaponRunGrowth() *
         weaponUpgradePower()
     // Weapon synergies: tag resonance, signature and Relic key harmony last; the scaling stat and Overdrive are live.
     val synergyPower = permanentWeaponSynergy()
@@ -183,8 +184,9 @@ internal fun MutableGameState.buildStats(
         BuildStatContribution(BuildStatSource.SYNERGIES, buildSpeed - masterySpeed),
         BuildStatContribution(BuildStatSource.TEMPORARY, effectiveSpeed - buildSpeed),
     ).filter { it.amount != 0f }.toImmutableList())
-    stat("Integrity", maxHp, baseIntegrity, matrixShare(ItemEffect.MAX_INTEGRITY, baseIntegrity) + rebirthProfile.playerIntegrityBonus)
-    stat("Shield", shieldCapacity(), 0f, matrixShare(ItemEffect.SHIELD_CAPACITY, 0f), relics = shieldCapacity() - maxShield)
+    stat("Integrity", maxHp, baseIntegrity, classIntegrity * matrix.integrityShare + rebirthProfile.playerIntegrityBonus)
+    val matrixShield = matrix.shieldShare * maxHp
+    stat("Shield", shieldCapacity(), 0f, matrixShield, relics = shieldCapacity() - maxShield - matrixShield)
     stat("Damage reduction", effectiveDamageReduction() * 100f, 0f, matrixShare(ItemEffect.DAMAGE_REDUCTION, 0f) * 100f,
         relics = (effectiveDamageReduction() - damageReduction) * 100f, unit = "%")
     stat("Regeneration", regenPerSecond, 0f, matrixShare(ItemEffect.REGEN, 0f), unit = "/s")

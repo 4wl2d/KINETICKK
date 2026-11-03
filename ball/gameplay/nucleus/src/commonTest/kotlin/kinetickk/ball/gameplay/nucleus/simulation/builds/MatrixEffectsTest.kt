@@ -64,8 +64,9 @@ class MatrixEffectsTest {
         }
 
         assertEquals(3, game.matrixRanks[MatrixNodeId.DATA_ARCHIVE.ordinal])
-        assertEquals(175f, game.maxHp)
-        assertEquals(175f, game.hp)
+        // Reinforced Hull: +15 % of the character's base integrity per rank.
+        assertEquals(145f, game.maxHp, 1e-4f)
+        assertEquals(game.maxHp, game.hp)
         assertEquals(1.45f, game.damageMultiplier, 1e-5f)
         assertEquals(19f * 1.4f, game.coolingRate, 1e-4f)
         assertEquals(36f * 0.8f, game.dashHeatCost, 1e-4f)
@@ -412,9 +413,13 @@ class MatrixEffectsTest {
             shieldRechargeDelay
         }
         assertEquals(delay(false) * 0.6f, delay(true), 1e-5f)
+        // Aegis Lattice's shield is a share of maximum integrity: it starts full and follows integrity gains.
         val aegis = isolated(null, true, MatrixNodeId.AEGIS_LATTICE)
-        assertEquals(30f, aegis.maxShield)
-        assertEquals(30f, aegis.shield)
+        assertEquals(0f, aegis.maxShield)
+        assertEquals(0.5f * aegis.maxHp, aegis.shieldCapacity(), 1e-4f)
+        assertEquals(aegis.shieldCapacity(), aegis.shield)
+        aegis.maxHp += 20f
+        assertEquals(0.5f * aegis.maxHp, aegis.shieldCapacity(), 1e-4f)
     }
 
     @Test
@@ -471,8 +476,13 @@ class MatrixEffectsTest {
     fun buildSummaryReportsMatrixContributionsFromContent() {
         val game = isolated(null, true, MatrixNodeId.REINFORCED_HULL, rank = 3)
         val integrity = game.buildStats().first { it.name == "Integrity" }
-        assertEquals(175f, integrity.value)
-        assertEquals(75f, integrity.contributions.first { it.source == kinetickk.ball.gameplay.api.BuildStatSource.LAB }.amount)
+        assertEquals(145f, integrity.value, 1e-4f)
+        assertEquals(45f, integrity.contributions.first { it.source == kinetickk.ball.gameplay.api.BuildStatSource.LAB }.amount, 1e-4f)
+        // A shield share reports as the Matrix's contribution to the shield.
+        val shielded = isolated(null, true, MatrixNodeId.HARDLIGHT_RESERVE, rank = 2)
+        val shield = shielded.buildStats().first { it.name == "Shield" }
+        assertEquals(0.2f * shielded.maxHp, shield.value, 1e-4f)
+        assertEquals(shield.value, shield.contributions.single { it.source == kinetickk.ball.gameplay.api.BuildStatSource.LAB }.amount, 1e-4f)
     }
 
     @Test

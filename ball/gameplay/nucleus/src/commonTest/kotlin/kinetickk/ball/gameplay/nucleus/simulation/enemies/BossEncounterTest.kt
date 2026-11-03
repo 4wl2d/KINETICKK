@@ -50,7 +50,7 @@ class BossEncounterTest {
                 // Both round integrities divide into exact parts; the tier-scaled and the odd one do not.
                 for (maxHp in floatArrayOf(3_000f, 13_524f, 3_000f * multiplier, 7_777.7f)) {
                     val boss = state.addEnemyForTesting(400f, 0f, hp = maxHp, radius = 74f, type = EnemyType.ARCHITECT)
-                    val cap = legacyHitCap(maxHp, multiplier, tier)
+                    val cap = architectHitCapOf(maxHp, tier)
                     assertBits(cap, state.bossHitCap(boss, spec), "cap, tier $tier")
                     assertBits(cap, state.bossHitCap(boss), "default cap, tier $tier")
                     assertBits(cap, state.architectHitCap(boss), "Architect cap, tier $tier")
@@ -125,7 +125,7 @@ class BossEncounterTest {
     }
 
     @Test
-    fun aMiniBossCapsEveryDealerAtSixPercentOfItsTierZeroIntegrity() {
+    fun aMiniBossCapsEveryDealerAtSixPercentOfItsIntegrity() {
         val state = buildTestState()
         // Past its last gate (thirds: phase 2 is final), so only the cap holds a hit: 6 % of 3,000.
         val boss = state.addEnemyForTesting(400f, 0f, hp = 3_000f, radius = 44f, type = EnemyType.WARDEN_PRIME)
@@ -147,12 +147,12 @@ class BossEncounterTest {
         assertEquals(3_000f - 8 * 180f, boss.hp, 0.01f)
         assertEquals(1_440.0, state.damageDealt - dealt, 0.01)
 
-        // The tier shrink and the integrity multiplier apply as they do to the Architect.
+        // The tier shrink applies as it does to the Architect; the cap is a share of the tier-scaled integrity.
         val hard = buildTestState(rebirth = 10)
         val scale = hard.rebirthProfile.enemyHealthMultiplier
         val strong = hard.addEnemyForTesting(400f, 0f, hp = 3_000f * scale, radius = 44f, type = EnemyType.WARDEN_PRIME)
             .apply { phase = 2 }
-        assertEquals(144f, hard.damageEnemy(strong, 100_000f).amount, 0.05f)
+        assertEquals(144f * scale, hard.damageEnemy(strong, 100_000f).amount, 0.05f * scale)
     }
 
     @Test
@@ -492,8 +492,8 @@ class BossEncounterTest {
     // The 0.5.0 Architect formulas, copied with their literals so the generic gate is compared against them.
     private fun legacyFinalPhase(singularity: Boolean): Int = if (singularity) 2 + 1 else 2
 
-    private fun legacyHitCap(maxHp: Float, healthMultiplier: Float, tier: Int): Float =
-        0.015f * maxHp / healthMultiplier.coerceAtLeast(1f) * (1f - 0.02f * tier).coerceIn(0.5f, 1f)
+    /** The Architect's cap since the progression curves: 1.5 % of its own integrity, 2 % less per tier (at least half). */
+    private fun architectHitCapOf(maxHp: Float, tier: Int): Float = 0.015f * maxHp * (1f - 0.02f * tier).coerceIn(0.5f, 1f)
 
     private fun legacyGate(maxHp: Float, phase: Int, finalPhase: Int): Float =
         maxHp * (finalPhase - phase) / (finalPhase + 1f)

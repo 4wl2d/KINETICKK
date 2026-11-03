@@ -10,87 +10,60 @@ import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.TAU
 import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.projection.*
 import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
 import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kinetickk.ball.gameplay.nucleus.simulation.flight.*
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
-import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.sin
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Refit and Honing cannot buy past the Rebirth gates (economy §4.6). J1-J4 replay RebirthBalanceGateTest's
- * setups and thresholds with maxed upgrades on the same harness and seeds; J5 shows the upgrades are
- * perceptible in a scripted encounter with equal resources.
- *
- * - J1 (D at max): tier 10, strong build + Pentagon Refit 10 + Honing 10 on every owned weapon: at most 3/5
- *   wins and a median survival of at least 480 s, the median over [PopulationSeeds] (a population gate).
- * - J2 (G at max): tier 10, full Matrix Pentagon/Arc Coil + the same upgrades: fewer than 5/5 wins.
- * - J3 (E's ceiling): tier 8, half Matrix + Orb Refit 5 + Honing 5 on every owned weapon: at least 4/5 losses.
- * - J4 (upgrades are not progression): tier 6, no Matrix, Orb Refit 10 + Honing 10 on every owned weapon: no win.
- * - J5 (perceptible): Orb/Flux Wake and Pentagon/Arc Coil, maxed against 0, in a 25 s crowd and a 180 s Architect
- *   fight on four fixed seeds: weapon-side damage per engaged second +12 %, character-ability damage per engaged
- *   second +8 %, and no more integrity lost (as a share of maximum integrity; in the Architect fight a Core below half
- *   its integrity is repaired, the loss counted, so both flights meet the whole fight).
- *
- * Knob order if a gate fails (economy §4.6): weaponPowerPerLevel 0.03 → 0.025, characterPowerPerLevel
- * 0.02 → 0.015, characterIntegrityPerLevel 2 → 1.5, then the signature step that breaks a band.
+ * The fully progressed profiles at tier 10 and the perceptibility of the permanent upgrades (docs/balance/progression.md,
+ * P4, P5 and P7), on the gate harness ([sweepRun], the arms of [SweepArm]) over the first [TOP_RUNS] [PopulationSeeds]:
+ * - P4: the full Matrix, the Pentagon with its signature Arc Coil, Refit and Honing at the maximum and the strong Relics
+ *   bound from the start ([SweepArm.STRONG]) win tier 10 in at least [P4_MIN_WIN] of the runs: comfortable;
+ * - P5: the same profile with the bot's own Relics ([SweepArm.FULL]) wins tier 10 in [P5_WIN]: contested;
+ * - P7 in play: Orb/Flux Wake and Pentagon/Arc Coil, maxed against 0, in a 25 s crowd and a 180 s Architect fight on four
+ *   fixed seeds: character-ability damage per engaged second at least [P7_MIN_ABILITY_GAIN] times, weapon-side damage at
+ *   least [P7_MIN_WEAPON_GAIN] times (it includes impacts and procs that Honing never touches) and no more integrity
+ *   lost (as a share of maximum integrity; in the Architect fight a Core below half its integrity is repaired, the loss
+ *   counted, so both flights meet the whole fight). The exact P7 bounds on the hits (Honing ×1.8, Refit ×1.6, a full
+ *   Matrix ×1.8 offense and effective integrity) are PermanentPowerBudgetTest's.
+ * These replace J1-J4 (the owner superseded "tier 10 at most 3 of 5" and the "upgrades cannot buy a tier" bounds: Refit
+ * and Honing are now half of the permanent power by design). Thresholds are the design's; the population rule of
+ * policy.md restates them on the integrated base.
  */
 class UpgradeBalanceGateTest {
-    /**
-     * J1's survival bound is a population gate (0.5.0 active items; policy.md, "Balance gate populations"): five seeds
-     * reached a median of 480 s with probability 0.94 on the 05885fa9 base but 0.80 with the shipped active items, so
-     * it re-rolled with the reward stream. On the Elite-resonance base the median survival over the 300
-     * [PopulationSeeds] runs is 900.01 s (0.70 of the runs are alive at the 900 s cap, so the bootstrap SE is 0.00 s;
-     * mean 779.40 s); the population's median must be at least [J1_MIN_MEDIAN_SURVIVAL] s, by the population threshold
-     * rule the lower of the design's eight minutes and the base minus two standard errors. The win bound keeps the five
-     * gate seeds (7 of the 300 population runs win; the seeds pass with probability 1.00 on that base and on the tree
-     * before it), as do J2-J4 (1.00, 0.997 and 1.00 on that base; 1.00, 0.999 and 1.00 before it).
-     */
-    @Test fun maxedUpgradesKeepTierTenSurvivableButRareForTheStrongBuild() {
-        fun strong(seed: Int): Outcome =
-            play(seed, maxed(GateMatrix.FULL, tier = 10, CoreShape.PENTAGON, WeaponId.ARC_COIL, level = 10), StrongRelics)
-        val outcomes = EconomyGateSeeds.map(::strong)
-        val population = populationOf(PopulationSeeds, ::strong)
-        report("UPGRADE_GATE J1 tier=10 strong+", outcomes)
-        val median = population.map { it.seconds }.gateMedian()
-        println("UPGRADE_GATE J1 population median survival $median s, wins ${population.count { it.won }} of ${population.size}")
-        assertTrue(median >= J1_MIN_MEDIAN_SURVIVAL,
-            "tier 10 must stay survivable for a maxed strong build: population median $median s, below $J1_MIN_MEDIAN_SURVIVAL s")
-        assertTrue(outcomes.count { it.won } <= 3, "maxed upgrades must not make tier 10 routine: ${outcomes.summary()}")
+    @Test fun p4TheFullyProgressedStrongBuildClearsTierTenComfortably() {
+        // The setup is what it claims: the Pentagon's signature and Stormheart Capacitor's Charge-key harmony are live.
+        val start = startGateRun(PopulationSeeds.first(), SweepArm.STRONG.profile(10, canonicalGameplayContent), SweepArm.STRONG.relics)
+        val synergy = start.toRenderModel().weaponSynergy
+        assertTrue(synergy.signatureActive, "the signature bonus is active")
+        assertEquals(RelicId.STORMHEART_CAPACITOR, synergy.harmonizingRelic, "the key-harmony Relic")
+        val runs = top(SweepArm.STRONG)
+        val share = runs.shareOf { it.won }
+        println("UPGRADE_GATE P4 tier=10 strong+maxed win share ${"%.3f".format(share)} of ${runs.size} " +
+            "ends ${runs.groupingBy { it.cause }.eachCount()}")
+        assertTrue(share >= P4_MIN_WIN, "a fully progressed strong build must clear tier 10 comfortably: ${"%.3f".format(share)}")
     }
 
-    @Test fun maxedUpgradesDoNotMakeTierTenAFormalityForAFullMatrix() {
-        val outcomes = EconomyGateSeeds.map { seed ->
-            play(seed, maxed(GateMatrix.FULL, tier = 10, CoreShape.PENTAGON, WeaponId.ARC_COIL, level = 10))
-        }
-        report("UPGRADE_GATE J2 tier=10 signature+", outcomes)
-        assertTrue(outcomes.count { it.won } < outcomes.size, "tier 10 must not be a formality with maxed upgrades: ${outcomes.summary()}")
+    @Test fun p5AFullyProgressedOrdinaryBuildContestsTierTen() {
+        val runs = top(SweepArm.FULL)
+        val share = runs.shareOf { it.won }
+        println("UPGRADE_GATE P5 tier=10 full+maxed win share ${"%.3f".format(share)} of ${runs.size} " +
+            "ends ${runs.groupingBy { it.cause }.eachCount()}")
+        assertTrue(share in P5_WIN, "a fully progressed ordinary build must contest tier 10: ${"%.3f".format(share)}")
     }
 
-    @Test fun halfUpgradesDoNotCarryHalfAMatrixThroughTierEight() {
-        val outcomes = EconomyGateSeeds.map { seed ->
-            play(seed, maxed(GateMatrix.HALF, tier = 8, CoreShape.ORB, WeaponId.FLUX_WAKE, level = 5))
-        }
-        report("UPGRADE_GATE J3 tier=8 half+", outcomes)
-        assertTrue(outcomes.count { !it.won } >= 4, "tier 8 must outgrow half the Matrix with half the upgrades: ${outcomes.summary()}")
-    }
-
-    @Test fun maxedUpgradesCannotReplaceTheMatrixAtTierSix() {
-        val outcomes = EconomyGateSeeds.map { seed ->
-            play(seed, maxed(GateMatrix.NONE, tier = 6, CoreShape.ORB, WeaponId.FLUX_WAKE, level = 10))
-        }
-        report("UPGRADE_GATE J4 tier=6 fresh+maxed", outcomes)
-        assertTrue(outcomes.none { it.won }, "tier 6 must still demand the Matrix: ${outcomes.summary()}")
-    }
-
-    @Test fun maxedUpgradesArePerceptibleInEqualEncounters() {
+    @Test fun p7MaxedUpgradesArePerceptibleInEqualEncounters() {
         val failures = mutableListOf<String>()
         for ((shape, weapon) in listOf(CoreShape.ORB to WeaponId.FLUX_WAKE, CoreShape.PENTAGON to WeaponId.ARC_COIL)) {
             val plain = Totals()
@@ -98,16 +71,16 @@ class UpgradeBalanceGateTest {
             for (seed in PerceptibleSeeds) for (boss in listOf(false, true)) {
                 val base = encounter(shape, weapon, level = 0, boss = boss, seed = seed)
                 val maxed = encounter(shape, weapon, level = canonicalGameplayContent.upgrades.maxLevel, boss = boss, seed = seed)
-                println("UPGRADE_J5 $shape/$weapon seed=$seed ${if (boss) "BOSS" else "CROWD"} base=$base maxed=$maxed")
+                println("UPGRADE_P7 $shape/$weapon seed=$seed ${if (boss) "BOSS" else "CROWD"} base=$base maxed=$maxed")
                 plain += base
                 upgraded += maxed
             }
             val weaponGain = upgraded.weaponRate / plain.weaponRate
             val abilityGain = upgraded.abilityRate / plain.abilityRate
-            println("UPGRADE_GATE J5 $shape/$weapon weapon=${weaponGain}x ability=${abilityGain}x " +
+            println("UPGRADE_GATE P7 $shape/$weapon weapon=${weaponGain}x ability=${abilityGain}x " +
                 "integrityLost=${upgraded.integrityLost}/${plain.integrityLost}")
-            if (weaponGain < 1.12f) failures += "$shape/$weapon weapon-side damage only ${weaponGain}x"
-            if (abilityGain < 1.08f) failures += "$shape/$weapon ability damage only ${abilityGain}x"
+            if (weaponGain < P7_MIN_WEAPON_GAIN) failures += "$shape/$weapon weapon-side damage only ${weaponGain}x"
+            if (abilityGain < P7_MIN_ABILITY_GAIN) failures += "$shape/$weapon ability damage only ${abilityGain}x"
             if (upgraded.integrityLost > plain.integrityLost) {
                 failures += "$shape/$weapon lost more integrity maxed (${upgraded.integrityLost}) than at 0 (${plain.integrityLost})"
             }
@@ -115,21 +88,13 @@ class UpgradeBalanceGateTest {
         assertTrue(failures.isEmpty(), "maxed upgrades must be perceptible: $failures")
     }
 
-    private data class Outcome(val seed: Int, val won: Boolean, val seconds: Float, val reason: String) {
-        override fun toString(): String = "$seed:${if (won) "WIN" else "LOSS"}@${seconds.toInt()}s" + if (won) "" else "($reason)"
-    }
-
-    private fun List<Outcome>.summary(): String = joinToString(" ")
-
-    private fun report(label: String, outcomes: List<Outcome>) = println("$label ${outcomes.summary()}")
-
-    /** A RebirthBalanceGateTest setup with Refit [level] for [shape] and Honing [level] on every owned weapon. */
-    private fun maxed(matrix: GateMatrix, tier: Int, shape: CoreShape, weapon: WeaponId, level: Int): GameplayProfileSnapshot =
-        gateProfile(matrix, tier, shape, weapon, upgrades = gateUpgrades(shape, level, gateOwnedWeapons(weapon), level))
-
-    private fun play(seed: Int, profile: GameplayProfileSnapshot, relics: List<RelicId> = emptyList()): Outcome {
-        val state = playGateRun(seed, profile, NoPoiBot(), relics)
-        return Outcome(seed, state.phase == GamePhase.VICTORY, state.elapsed, state.message)
+    /** The arm's tier-10 runs over the first [TOP_RUNS] [PopulationSeeds], played once per test JVM. */
+    private fun top(arm: SweepArm): List<SweepRun> = synchronized(TopRuns) {
+        TopRuns.getOrPut(arm) {
+            populationOf(PopulationSeeds.take(TOP_RUNS)) { seed ->
+                sweepRun(seed, arm.profile(10, canonicalGameplayContent), arm.relics, canonicalGameplayContent)
+            }
+        }
     }
 
     /** One encounter's output per engaged second (until every target is down, else the whole encounter). */
@@ -298,11 +263,23 @@ class UpgradeBalanceGateTest {
     }
 
     private companion object {
+        /** The tier-10 populations: the first 150 [PopulationSeeds] (binomial SE about 0.03 near P4's bound). */
+        const val TOP_RUNS = 150
+
+        /** P4: the least tier-10 win share of the fully progressed strong build. */
+        const val P4_MIN_WIN = 0.80
+
+        /** P5: the tier-10 win share band of the fully progressed ordinary build. */
+        val P5_WIN = 0.30..0.85
+
+        /** P7 in play: the least gain of character-ability damage per engaged second, maxed against 0 (Refit ×1.97). */
+        const val P7_MIN_ABILITY_GAIN = 1.6f
+
         /**
-         * J1: the least median survival over [PopulationSeeds] (design 480 s; Elite-resonance base 900.01 s, SE 0.00 s,
-         * n 300; the population threshold rule).
+         * P7 in play: the least gain of weapon-side damage per engaged second, maxed against 0 (Honing ×2.26 on the weapon's
+         * own hits, diluted by impacts, procs and the Architect's hit cap).
          */
-        const val J1_MIN_MEDIAN_SURVIVAL = 480f
+        const val P7_MIN_WEAPON_GAIN = 1.4f
 
         /** In the Architect fight a Core below this share of its integrity is repaired to full before the next step. */
         const val REPAIR_BELOW = 0.5f
@@ -310,11 +287,9 @@ class UpgradeBalanceGateTest {
         /** The crowd Drifters' integrity pool (WeaponBalanceTest's crowd arena). */
         const val CROWD_INTEGRITY = 900f
 
-        /** RebirthBalanceGateTest's strong build Relics. */
-        val StrongRelics: List<RelicId> =
-            listOf(RelicId.STORMHEART_CAPACITOR, RelicId.PANDEMIC_CODEX, RelicId.THUNDER_CHOIR, RelicId.CINDER_CROWN)
-
         /** The comparative scenario's canonical seed and its three coverage seeds, fixed by definition. */
         val PerceptibleSeeds: List<Int> = listOf(81_006) + List(3) { 73_199 + it * 7_919 }
+
+        val TopRuns = HashMap<SweepArm, List<SweepRun>>()
     }
 }

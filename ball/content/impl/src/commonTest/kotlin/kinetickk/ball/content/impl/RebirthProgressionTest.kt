@@ -6,6 +6,7 @@ package kinetickk.ball.content.impl
 import kinetickk.ball.content.api.RebirthMutator
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.foundation.collections.immutableListOf
+import kotlin.math.pow
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -82,15 +83,17 @@ class RebirthProgressionTest {
         rebirth.profiles.forEach { profile ->
             val t = profile.tier.toFloat()
             val where = "tier ${profile.tier}"
-            assertEquals(1f + 0.32f * t + 0.05f * t * t, profile.enemyHealthMultiplier, 0.0001f, where)
-            assertEquals(1f + 0.14f * t + 0.008f * t * t, profile.incomingDamageMultiplier, 0.0001f, where)
+            // The tier layer's curves: H(t) = 1.27^t, D(t) = 1.18^t and the Matter reward 1.16^t.
+            assertEquals(1.27.pow(profile.tier).toFloat(), profile.enemyHealthMultiplier, 0.0001f * profile.enemyHealthMultiplier, where)
+            assertEquals(1.18.pow(profile.tier).toFloat(), profile.incomingDamageMultiplier, 0.0001f * profile.incomingDamageMultiplier, where)
             assertEquals(1f + 0.035f * t, profile.enemySpeedMultiplier, 0.0001f, where)
             assertEquals(1f + 0.09f * t, profile.spawnRateMultiplier, 0.0001f, where)
             assertEquals(1f + 0.10f * t, profile.enemyCapMultiplier, 0.0001f, where)
             assertEquals(1f + 0.07f * t, profile.eliteRateMultiplier, 0.0001f, where)
             assertEquals(12f * t, profile.threatTimeOffsetSeconds, 0.0001f, where)
-            assertEquals(1f + 0.2f * t, profile.matterGainMultiplier, 0.0001f, where)
-            assertEquals(1f + 0.03f * t, profile.playerPowerMultiplier, 0.0001f, where)
+            assertEquals(1.16.pow(profile.tier).toFloat(), profile.matterGainMultiplier, 0.0001f * profile.matterGainMultiplier, where)
+            // The tier gives the player no power: permanent progression does.
+            assertEquals(1f, profile.playerPowerMultiplier, where)
             assertEquals(0f, profile.playerIntegrityBonus, where)
             assertEquals(profile.tier / 4, profile.bonusRerolls, where)
             assertEquals(5 + profile.tier, profile.openingEnemyCount, where)
