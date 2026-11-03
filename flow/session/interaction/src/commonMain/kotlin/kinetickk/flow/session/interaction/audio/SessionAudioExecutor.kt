@@ -4,10 +4,9 @@
 package kinetickk.flow.session.interaction.audio
 
 import kinetickk.ball.profile.api.PlayerPreferences
-import kinetickk.resource.audio.api.AudioPreferences
+import kinetickk.ball.profile.interaction.audio.toAudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
-import kinetickk.resource.audio.api.ToneWave
+import kinetickk.resource.audio.api.SoundId
 
 internal enum class SessionAudioCue {
     UI_CLICK,
@@ -22,13 +21,7 @@ class SessionAudioExecutor(
     }
 
     fun updatePreferences(preferences: PlayerPreferences) {
-        audioService.updatePreferences(
-            AudioPreferences(
-                soundEnabled = preferences.soundEnabled,
-                musicEnabled = preferences.musicEnabled,
-                masterVolume = preferences.masterVolume,
-            ),
-        )
+        audioService.updatePreferences(preferences.toAudioPreferences())
     }
 
     fun ensureUnlocked() {
@@ -37,12 +30,11 @@ class SessionAudioExecutor(
 
     internal fun play(cue: SessionAudioCue) {
         audioService.ensureUnlocked()
-        audioService.advance(0f, listOf(cue.toToneRequest()))
+        // A menu click is an effect only; it never moves the music clock.
+        audioService.play(listOf(cue.soundId()))
     }
 }
 
-private fun SessionAudioCue.toToneRequest(): ToneRequest = when (this) {
-    SessionAudioCue.UI_CLICK -> ToneRequest(520f, 0.035f, 0.11f, ToneWave.SINE)
+private fun SessionAudioCue.soundId(): SoundId = when (this) {
+    SessionAudioCue.UI_CLICK -> SoundId.UI_CLICK
 }
-
-fun sessionPreloadToneRequests(): List<ToneRequest> = SessionAudioCue.entries.map { it.toToneRequest() }

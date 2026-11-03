@@ -6,8 +6,7 @@ package kinetickk.ball.profile.interaction.audio
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
-import kinetickk.resource.audio.api.ToneWave
+import kinetickk.resource.audio.api.SoundId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -19,15 +18,18 @@ class ProfileAudioExecutorTest {
 
         executor.play(ProfileAudioCue.UI_CLICK)
         executor.play(ProfileAudioCue.PURCHASE)
-        assertEquals(2, service.unlockCalls)
+        executor.play(ProfileAudioCue.REFUSED)
+        assertEquals(3, service.unlockCalls)
 
         assertEquals(
             listOf(
-                listOf(ToneRequest(520f, 0.035f, 0.11f, ToneWave.SINE)),
-                listOf(ToneRequest(490f, 0.1f, 0.16f, ToneWave.SINE)),
+                listOf(SoundId.UI_CLICK),
+                listOf(SoundId.UI_CONFIRM),
+                listOf(SoundId.UI_REFUSED),
             ),
-            service.requestBatches,
+            service.soundBatches,
         )
+        assertEquals(0, service.tickCalls)
     }
 
     @Test
@@ -48,16 +50,20 @@ class ProfileAudioExecutorTest {
 private class RecordingProfileAudioService : AudioService {
     var unlockCalls = 0
     var preferences = AudioPreferences()
-    val requestBatches = mutableListOf<List<ToneRequest>>()
+    val soundBatches = mutableListOf<List<SoundId>>()
+    var tickCalls = 0
 
     override fun updatePreferences(preferences: AudioPreferences) {
         this.preferences = preferences
     }
 
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) {
-        assertEquals(requestBatches.size + 1, unlockCalls, "Pointer feedback must unlock audio before advancing it")
-        assertEquals(0f, realDeltaSeconds)
-        requestBatches += requests
+    override fun play(sounds: List<SoundId>) {
+        assertEquals(soundBatches.size + 1, unlockCalls, "Pointer feedback must unlock audio before playing it")
+        soundBatches += sounds
+    }
+
+    override fun tick(realDeltaSeconds: Float) {
+        tickCalls++
     }
 
     override fun ensureUnlocked() { unlockCalls++ }

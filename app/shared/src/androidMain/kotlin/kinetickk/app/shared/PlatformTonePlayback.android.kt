@@ -3,101 +3,18 @@
 
 package kinetickk.app.shared
 
-import kinetickk.foundation.diagnostics.CrashDiagnostics
-
-import android.content.Context
-import android.content.SharedPreferences
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
-import kinetickk.ball.profile.impl.ProfilePersistenceCapability
-import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
-import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kinetickk.resource.audio.api.ToneRequest
 import kinetickk.resource.audio.impl.PreparedPcmTones
 import kinetickk.resource.audio.impl.pcmSample
 import kinetickk.resource.audio.impl.TonePlaybackCapability
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-
-private const val ANDROID_PROFILE_PREFERENCES = "kinetickk.profile.v2"
-private const val ANDROID_SNAPSHOT = "snapshot"
-
-internal actual fun createPlatformProfilePersistenceCapability(diagnostics: CrashDiagnostics): ProfilePersistenceCapability {
-    val context = AndroidApplicationContext.requireContext()
-    return AndroidProfilePersistenceCapability(
-        profile = context.getSharedPreferences(ANDROID_PROFILE_PREFERENCES, Context.MODE_PRIVATE),
-    )
-}
-
-private class AndroidProfilePersistenceCapability(
-    private val profile: SharedPreferences,
-) : ProfilePersistenceCapability {
-    override fun readSnapshot(): ProfilePersistenceReadResult =
-        androidProfileReadCall(profile, ANDROID_SNAPSHOT)
-
-    override fun writeSnapshot(payload: String): ProfilePersistenceMutationResult =
-        androidProfileMutationCall {
-            profile.edit().putString(ANDROID_SNAPSHOT, payload)
-        }
-}
-
-private fun androidProfileReadCall(
-    preferences: SharedPreferences,
-    exactKey: String,
-): ProfilePersistenceReadResult {
-    val keyIsPresent = try {
-        preferences.contains(exactKey)
-    } catch (_: SecurityException) {
-        return ProfilePersistenceReadResult.Failed
-    } catch (_: IllegalStateException) {
-        return ProfilePersistenceReadResult.Failed
-    }
-    if (!keyIsPresent) return ProfilePersistenceReadResult.Observed(null)
-
-    val payload = try {
-        preferences.getString(exactKey, null)
-    } catch (_: ClassCastException) {
-        return ProfilePersistenceReadResult.Failed
-    } catch (_: SecurityException) {
-        return ProfilePersistenceReadResult.Failed
-    } catch (_: IllegalStateException) {
-        return ProfilePersistenceReadResult.Failed
-    }
-    return if (payload == null) {
-        ProfilePersistenceReadResult.Failed
-    } else {
-        ProfilePersistenceReadResult.Observed(payload)
-    }
-}
-
-private fun androidProfileMutationCall(
-    prepare: () -> SharedPreferences.Editor,
-): ProfilePersistenceMutationResult {
-    val editor = try {
-        prepare()
-    } catch (_: SecurityException) {
-        return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
-    } catch (_: IllegalArgumentException) {
-        return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
-    } catch (_: IllegalStateException) {
-        return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
-    }
-    return try {
-        if (editor.commit()) {
-            ProfilePersistenceMutationResult.COMPLETED
-        } else {
-            ProfilePersistenceMutationResult.POSSIBLE_EXECUTION
-        }
-    } catch (_: SecurityException) {
-        ProfilePersistenceMutationResult.POSSIBLE_EXECUTION
-    } catch (_: IllegalStateException) {
-        ProfilePersistenceMutationResult.POSSIBLE_EXECUTION
-    }
-}
 
 internal object AndroidAudioExecutionPolicy {
     const val WORKER_COUNT = 1
@@ -185,6 +102,10 @@ internal class AndroidTonePlaybackCapability(
         } catch (_: SecurityException) {
             outputUnavailable = true
             null
+        } catch (_: IllegalStateException) {
+            // The silent priming write failed on a track that never became usable.
+            outputUnavailable = true
+            null
         }
     }
 
@@ -210,21 +131,29 @@ internal class AndroidTonePlaybackCapability(
         if (waveform.size < previousSampleCount) samples.fill(0, waveform.size, previousSampleCount)
         previousSampleCount = waveform.size
         try {
-            // Some OEM AudioTrack implementations transiently report STATE_UNINITIALIZED after
-            // native setup has succeeded. The blocking write is the authoritative capability
-            // operation and still returns a negative error code for a genuinely unusable track.
-            val written = output.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
-            check(written == samples.size) { "Android tone AudioTrack accepted $written samples" }
-            check(output.reloadStaticData() == AudioTrack.SUCCESS) { "Android tone AudioTrack could not rewind" }
-            output.play()
-            Thread.sleep((request.durationSeconds * 1_000f).toLong().coerceAtLeast(1L))
+            try {
+                // Some OEM AudioTrack implementations transiently report STATE_UNINITIALIZED after
+                // native setup has succeeded. The blocking write is the authoritative capability
+                // operation and still returns a negative error code for a genuinely unusable track.
+                val written = output.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
+                check(written == samples.size) { "Android tone AudioTrack accepted $written samples" }
+                check(output.reloadStaticData() == AudioTrack.SUCCESS) { "Android tone AudioTrack could not rewind" }
+                output.play()
+                Thread.sleep((request.durationSeconds * 1_000f).toLong().coerceAtLeast(1L))
+            } finally {
+                output.stop()
+            }
         } catch (failure: InterruptedException) {
             // Closing the app cancels an in-flight tone through shutdownNow().
             // Preserve cancellation without allowing the audio worker to crash the process.
             Thread.currentThread().interrupt()
             if (!executor.isShutdown) throw failure
-        } finally {
-            output.stop()
+        } catch (_: RuntimeException) {
+            // A dead track (audioserver restart, route change) fails write, rewind, play or stop.
+            // An uncaught worker exception would kill the process: drop this track and open a
+            // fresh one for the next tone, as desktop does for a line that stops accepting samples.
+            output.release()
+            track = null
         }
     }
 }

@@ -6,8 +6,7 @@ package kinetickk.flow.session.interaction.audio
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
-import kinetickk.resource.audio.api.ToneWave
+import kinetickk.resource.audio.api.SoundId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -20,10 +19,8 @@ class SessionAudioExecutorTest {
 
         assertEquals(1, service.unlockCalls)
 
-        assertEquals(
-            listOf(ToneRequest(520f, 0.035f, 0.11f, ToneWave.SINE)),
-            service.requests,
-        )
+        assertEquals(listOf(SoundId.UI_CLICK), service.sounds)
+        assertEquals(0, service.tickCalls)
     }
 
     @Test
@@ -48,7 +45,8 @@ class SessionAudioExecutorTest {
 }
 
 private class RecordingSessionAudioService : AudioService {
-    var requests = emptyList<ToneRequest>()
+    var sounds = emptyList<SoundId>()
+    var tickCalls = 0
     var preferences = AudioPreferences()
     var unlockCalls = 0
 
@@ -56,10 +54,13 @@ private class RecordingSessionAudioService : AudioService {
         this.preferences = preferences
     }
 
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) {
-        assertEquals(1, unlockCalls, "Pointer feedback must unlock audio before advancing it")
-        assertEquals(0f, realDeltaSeconds)
-        this.requests = requests
+    override fun play(sounds: List<SoundId>) {
+        assertEquals(1, unlockCalls, "Pointer feedback must unlock audio before playing it")
+        this.sounds = sounds
+    }
+
+    override fun tick(realDeltaSeconds: Float) {
+        tickCalls++
     }
 
     override fun ensureUnlocked() {
