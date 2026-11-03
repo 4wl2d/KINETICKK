@@ -1610,3 +1610,44 @@ window's fresh attempts and dies in 0.017. Even the largest damage multiplier
 (1.5) leaves the clear share at 0.895, and the 0.85 ceiling needs integrity
 and damage of about 1.5 each (0.715 clear, 0.234 died). That pilot was not
 adopted.
+
+## 2026-11-03 bounty, sigil and Data-avoiding gate repairs
+
+A bounty or sigil boss brought to zero integrity before the site step (by a
+skill, the Core, an obstacle or a character ability, or by a death effect after
+the previous step's kill sweep) read as gone: the bounty was abandoned, or the
+sigil faded, and the despawned boss paid no kill, Key, Relic or site reward.
+Such a boss now stays until the kill sweep counts it. On the SITES window
+i = 2,201..2,300 at `bossIntegrityShare` 0.55, every ABANDONED bounty had
+been this case (fresh 10 of 142, tier-6 veteran 26 of 156); none was a Core
+leaving the arena.
+
+| S-G2 on `PopulationSeeds` (first 150) | Before | After |
+|---|---:|---:|
+| Fresh clear | 0.866 (200/231) | 0.948 (219/231) |
+| Veteran clear | 0.855 (213/249) | 0.984 (245/249) |
+| Fresh / veteran median fight, s | 52.53 / 48.83 | 52.11 / 50.27 |
+
+The bands [0.40, 0.85] and [0.40, 0.90] were met only through the dropped
+kills; with kills credited, an arm fails only by dying. On the SITES window,
+`bossIntegrityShare` 0.55 to 1.0 gives fresh 0.909 to 0.833 (median fight
+48.7 to 72.5 s) and veteran 0.974 to 0.987 at every share, so no share meets
+the veteran band. The share stays 0.55 and S-G2 is left to the owner. S-G4
+still passes (bounty value ratio 2.084 against 1.0-2.2).
+
+`farSigilRunChance` 0.25 reveals the far sigil in a quarter of the seeds, so
+the sigil arm summoned in 0.220 of its runs against its 0.5 pilot check. Like
+the window arms, which force their family into every window, the arm now
+plays with run chance 1; ExplorationRarityTest keeps the seed lottery. Gate:
+summoned 0.893 (134 duels), broken 0.560, median fight 133.57 s.
+
+The Data-avoiding bot took a Data card over an active it would only salvage
+for Matter, without a reroll or a counted breach: tier-3 seed 79203 took Data
+Siphon at 403.4 s and reached level 42 at 703.7 s. It now salvages; that run
+reaches 42 at 781.2 s, and tier-6 seed 71284 at 817.0 s instead of 737.2 s.
+The 2026-10-29 movement adjustment did not move this arm: on i = 1,901..2,100,
+of 200 runs per tier, none reached 42 before 720 s with the shipped flight law
+or the earlier steering knobs, and one (tier 6) with the earlier obstacle
+field. With the fix, 0 of 300 `PopulationSeeds` runs at tier 3 and 1 of
+300 at tier 6 reach 42 before 720 s, so the seeded arm passes with
+probability 0.98, as recorded for the 0.6.0 tree.
