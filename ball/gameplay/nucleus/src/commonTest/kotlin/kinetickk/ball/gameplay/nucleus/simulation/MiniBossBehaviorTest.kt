@@ -617,14 +617,6 @@ class MiniBossBehaviorTest {
         return (PRIME_WELL_BASE_PULL + (1f - distance / PRIME_WELL_RADIUS) * PRIME_WELL_PULL) * FIXED
     }
 
-    /** Brings [boss] to the next gate with a hit, starting its next phase (and its shift). */
-    private fun MutableGameState.crossGate(boss: Enemy) {
-        val gate = bossGate(boss, assertNotNull(encounterSpec(boss)))
-        boss.hp = gate + 5f
-        damageEnemy(boss, 20f)
-        assertTrue(isShifting(boss), "${boss.type} reached its gate")
-    }
-
     /** Replaces the live projectiles with [count] still player shots far from every boss. */
     private fun MutableGameState.fillProjectiles(count: Int) {
         projectiles.clear()
@@ -666,27 +658,6 @@ class MiniBossBehaviorTest {
 
     private fun MutableGameState.distanceToCore(enemy: Enemy): Float =
         sqrt((enemy.x - coreX) * (enemy.x - coreX) + (enemy.y - coreY) * (enemy.y - coreY))
-
-    /** Steps until [done] holds, at most five seconds. */
-    private fun MutableGameState.runUntil(done: () -> Boolean) {
-        var seconds = 0f
-        while (!done() && seconds < 5f) {
-            runFor(FIXED)
-            seconds += FIXED
-        }
-        assertTrue(done(), "reached within five seconds")
-    }
-
-    /** Enemy steps with the encounter step after them (phase starts), as the run orders them. */
-    private fun MutableGameState.runFor(seconds: Float) {
-        var left = seconds
-        while (left > 1e-6f) {
-            elapsed += FIXED
-            updateEnemies(FIXED)
-            updateBossEncounter()
-            left -= FIXED
-        }
-    }
 
     private companion object {
         const val FIXED = MutableGameState.FIXED_STEP

@@ -591,14 +591,6 @@ class SecretBossBehaviorTest {
         if (skipShift) elapsed = boss.shiftUntil
     }
 
-    /** Brings [boss] to the next gate with a hit, starting its next phase (and its shift). */
-    private fun MutableGameState.crossGate(boss: Enemy) {
-        val gate = bossGate(boss, assertNotNull(encounterSpec(boss)))
-        boss.hp = gate + 5f
-        damageEnemy(boss, 20f)
-        assertTrue(isShifting(boss), "${boss.type} reached its gate")
-    }
-
     /** A quiet arena with the pointer on the Core; the grace keeps the singularity from ending the run. */
     private fun quietState(seed: Int = 5_150): MutableGameState = buildTestState(seed = seed).apply {
         updatePointer(640f, 360f)
@@ -613,27 +605,6 @@ class SecretBossBehaviorTest {
         val enemy = spawnedEnemy(type, coreX + x, coreY + y)
         enemies += enemy
         return enemy
-    }
-
-    /** Steps until [done] holds, at most [limit] seconds. */
-    private fun MutableGameState.runUntil(limit: Float = 5f, done: () -> Boolean) {
-        var seconds = 0f
-        while (!done() && seconds < limit) {
-            runFor(FIXED)
-            seconds += FIXED
-        }
-        assertTrue(done(), "reached within $limit seconds")
-    }
-
-    /** Enemy steps with the encounter step after them (phase starts, enrage notices), as the run orders them. */
-    private fun MutableGameState.runFor(seconds: Float) {
-        var left = seconds
-        while (left > 1e-6f) {
-            elapsed += FIXED
-            updateEnemies(FIXED)
-            updateBossEncounter()
-            left -= FIXED
-        }
     }
 
     private companion object {

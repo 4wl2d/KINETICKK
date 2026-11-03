@@ -402,13 +402,6 @@ class EliteAffixTest {
         assertEquals(ELITE_SIGNAL, plain)
     }
 
-    private fun angleBetween(a: Float, b: Float): Float {
-        var difference = (b - a) % TAU
-        if (difference > TAU / 2f) difference -= TAU
-        if (difference < -TAU / 2f) difference += TAU
-        return difference
-    }
-
     private companion object {
         const val ELITE_SAMPLE = 2_000
         const val CHAMPION_SAMPLE = 10_000
