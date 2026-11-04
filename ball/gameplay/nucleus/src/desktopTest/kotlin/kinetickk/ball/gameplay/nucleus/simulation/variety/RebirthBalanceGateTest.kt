@@ -19,8 +19,8 @@ import kotlin.test.assertTrue
  *   clear tier 9 (at most [P3_MAX_TIER_NINE_WIN]);
  * - P6: for each of these profiles the win share never rises with the tier (beyond two binomial standard errors).
  * The fully progressed profiles at tier 10 (P4, P5) and the perceptibility of each permanent family (P7) are
- * UpgradeBalanceGateTest's. These targets replace the 0.6.0 gates A-H (the owner superseded "tier 10 clears at most 3 of
- * 5": a fully progressed player now clears tier 10 comfortably), so the old fixed-seed statements are gone. Gate I keeps
+ * UpgradeBalanceGateTest's (P4 keeps gate D's bounds: tier 10 stays hard for a fully progressed player). These targets
+ * replace the 0.6.0 gates A-H, so the old fixed-seed statements are gone. Gate I keeps
  * active items from trivialising tier 0. Thresholds are the design's; the population rule of policy.md restates them on
  * the integrated base (a design target never weakens).
  */

@@ -2318,11 +2318,22 @@ integrated tree is the new base (policy.md).
 ### Progression targets (design bounds)
 
 Gates A-H (0.6.0) are retired; `RebirthBalanceGateTest` and
-`UpgradeBalanceGateTest` hold P1-P7. On the window 16,401..16,500 (100 runs per
-cell): fresh 0.99 / 0.98 / 0.55 / 0.19 / 0.01 at tiers 0-4; half 0.88 / 0.49 /
-0.07 / 0.02 at tiers 6-9; full 0.85 and strong 0.90 at tier 10. P2, P3 and P5
-were restated once on this tree (progression.md explains why); the curve
-constants came from five `H`/`D` sets on that window.
+`UpgradeBalanceGateTest` hold P1-P7. P4 keeps gate D's bounds (the strong
+build clears tier 10 in at most 3 of 5 and survives a median of at least
+480 s): the owner wants tier 10 hard even for a fully progressed player, with
+progression only making it easier. A late surge `1 + 0.05 × max(0, t − 7)²` on
+`H` and `D` holds it there. On the window 16,401..16,500 (100 runs per cell):
+fresh 0.99 / 0.98 / 0.58 / 0.18 / 0.01 at tiers 0-4; half 0.88 / 0.50 / 0.02 /
+0.00 at tiers 6-9; full 0.98 / 0.92 / 0.27 and strong 0.98 / 0.96 / 0.37 at
+tiers 8-10 (tier-10 median survival 533 s and 565 s). P2, P3 and P5 were
+restated once on this tree (progression.md explains why); the constants came
+from five `H`/`D` sets and seven surge strengths on that window.
+
+The Nadir's scorch is a share of max integrity and took the tier's whole
+incoming curve on top (tier 10 burned 8.25 times the share, about a fifth of
+max integrity a second, and the strong build survived 0.660 of its tier-10
+Nadir visits); it now grows with the tier like an obstacle hit
+(`1 + 0.04 × tier`): N10 survival 0.856, Z10 0.959, N0 unchanged.
 
 ### Population and seeded gates restated
 
@@ -2349,13 +2360,14 @@ constants came from five `H`/`D` sets on that window.
 - `DimensionPilotGateTest`: tier-10 arms fly P4's build; a locked rift keeps
   its clock (one A3 run had lost its rift to a living Herald); Archive boss
   share 0.80 (window A3 0.63; gate A3 defeat 0.550, every rift entered).
-- `DimensionRunOutcomeGateTest`: "the strong build clears at most 3 of 5"
-  followed the retired gate D; it now asks at least 3 of 5.
+- `DimensionRunOutcomeGateTest`: the strong arm flies P4's build and keeps
+  gate D's "at most 3 of 5 clears" (Zenith 1, Nadir 2 of 5).
 
 ### For the owner
 
-- P4 says a fully progressed strong build clears tier 10 in at least 0.80 of
-  the runs (0.90 measured); the old "at most 3 of 5" is gone.
+- P4: a fully progressed strong build clears tier 10 in 0.20-0.60 of its runs
+  (0.37 measured) and survives a median of at least 480 s; tiers 8 and 9 are
+  reliable for it (0.98, 0.96), tier 10 is the wall.
 - Meld: +5 % damage per Meld is the most that keeps the strong Relic build
   ahead of an all-Meld run (fresh tier 2: 0.607 vs 0.550); at half tier 7 and
   full tier 10 all arms sit within about one standard error.

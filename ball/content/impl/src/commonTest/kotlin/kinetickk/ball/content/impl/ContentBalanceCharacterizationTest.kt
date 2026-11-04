@@ -321,9 +321,10 @@ class ContentBalanceCharacterizationTest {
         assertEquals(0.09f, rebirth.minSpawnIntervalSeconds)
         assertEquals(24f, rebirth.minEliteIntervalSeconds)
         assertEquals((0..10).toList(), profiles.map(RebirthProfile::tier))
-        // H(t) = 1.29^t, D(t) = 1.19^t, Matter 1.16^t and no player power from the tier (461252b1f47728a5 -> f6b4b0fdf10a4d14 -> 5b31f26d8217a3c3).
+        // H(t) = 1.29^t, D(t) = 1.19^t, Matter 1.16^t and no player power from the tier (461252b1f47728a5 -> f6b4b0fdf10a4d14 ->
+        // 5b31f26d8217a3c3); the late surge 1 + 0.05 max(0, t - 7)² on H and D keeps tier 10 hard (-> efffd7feaffcd83e).
         assertEquals(
-            "5b31f26d8217a3c3",
+            "efffd7feaffcd83e",
             goldenFingerprint {
                 profiles.forEach { profile ->
                     add(profile.tier)

@@ -21,12 +21,15 @@ decides which tier a player can beat. The gates that hold the design targets are
 ## Tier layer
 
 The tier multiplies what the enemy brings and never the player's power (`playerPowerMultiplier` is 1 at every tier).
+The last three tiers surge on top of the plain growth, so tier 10 stays a hard fight even for a fully progressed
+profile: progression makes it possible and easier, never easy.
 Each curve is a product of t Float factors, identical on every platform.
 
 | Quantity | Formula | Constant |
 |---|---|---|
-| enemy integrity `H(t)` | `1.29^t` | `REBIRTH_ENEMY_INTEGRITY_GROWTH` |
-| incoming damage `D(t)` | `1.19^t` | `REBIRTH_INCOMING_DAMAGE_GROWTH` |
+| enemy integrity `H(t)` | `1.29^t × S(t)` | `REBIRTH_ENEMY_INTEGRITY_GROWTH` |
+| incoming damage `D(t)` | `1.19^t × S(t)` | `REBIRTH_INCOMING_DAMAGE_GROWTH` |
+| late surge `S(t)` | `1 + 0.05 × max(0, t − 7)²` (×1.05, ×1.20, ×1.45 at tiers 8-10) | `REBIRTH_LATE_SURGE`, `REBIRTH_LATE_SURGE_FROM` |
 | Matter reward | `1.16^t` | `REBIRTH_MATTER_GROWTH` |
 | enemy speed, spawn rate, enemy cap, Elite rate | `1 + 0.035t`, `1 + 0.09t`, `1 + 0.10t`, `1 + 0.07t` | `defaultRebirthProfile` |
 | threat offset, opening enemies, bonus rerolls, obstacles | `12t` s, `5 + t`, `t / 4`, `1 + 0.05t` | `defaultRebirthProfile` |
@@ -43,9 +46,9 @@ Each curve is a product of t Float factors, identical on every platform.
 | 5 | 3.57 | 2.39 | 2.10 | 8.7 |
 | 6 | 4.61 | 2.84 | 2.44 | 21 |
 | 7 | 5.94 | 3.38 | 2.83 | 61 |
-| 8 | 7.67 | 4.02 | 3.28 | 200 |
-| 9 | 9.89 | 4.79 | 3.80 | 790 |
-| 10 | 12.76 | 5.69 | 4.41 | 3,600 |
+| 8 | 8.05 | 4.22 | 3.28 | 200 |
+| 9 | 11.87 | 5.74 | 3.80 | 790 |
+| 10 | 18.50 | 8.26 | 4.41 | 3,600 |
 
 The boss hit cap is a share of the boss's own integrity: one damage instance removes at most `hitCapShare × maxHp ×
 clamp(1 − hitCapTierShrink × t, hitCapMinimumScale, 1)` (the Architect 1.5 %, 2 % less per tier, at least half;
@@ -160,36 +163,41 @@ bound from the start (the Relics that fit Arc Coil).
 | Target | Statement | Window, 100 runs (SE) |
 |---|---|---|
 | P1 | fresh, tier 0: win ≥ 0.75 | 0.99 (0.01) |
-| P2 | fresh: tier 2 ≤ 0.65 (contested), tier 3 ≤ 0.30, tier 4 ≤ 0.05 | 0.55 (0.05); 0.19 (0.04); 0.01 (0.01) |
-| P3 | half: tier 7 in [0.30, 0.85] (contested), tier 9 ≤ 0.10 | 0.49 (0.05); 0.02 (0.01) |
-| P4 | strong, tier 10: win ≥ 0.80 (comfortable) | 0.90 (0.03) |
-| P5 | full, tier 10: win in [0.30, 0.92] (winnable, never a formality) | 0.85 (0.04) |
+| P2 | fresh: tier 2 ≤ 0.65 (contested), tier 3 ≤ 0.30, tier 4 ≤ 0.05 | 0.58 (0.05); 0.18 (0.04); 0.01 (0.01) |
+| P3 | half: tier 7 in [0.30, 0.85] (contested), tier 9 ≤ 0.10 | 0.50 (0.05); 0.00 |
+| P4 | strong, tier 10: win in [0.20, 0.60] (at most 3 of 5: hard, but winnable) and a median survival of at least 480 s | 0.37 (0.05), median survival 565 s |
+| P5 | full, tier 10: win in [0.10, 0.50] (possible, rarely) | 0.27 (0.04), median survival 533 s |
 | P6 | win share never rises with the tier for a profile | holds for all four arms (table below) |
 | P7 | maxed Honing ≥ ×1.8 weapon hit, maxed Refit ≥ ×1.6 character hit, full Matrix ≥ ×1.8 offense and effective integrity | ×2.26, ×1.97, ×3.56 / ×3.16 |
 
 | Tier | fresh | half | full | strong |
 |---|---|---|---|---|
-| 0 | 0.99 | 1.00 | 1.00 | 1.00 |
-| 1 | 0.98 | 1.00 | 1.00 | 1.00 |
-| 2 | 0.55 | 1.00 | 1.00 | 1.00 |
-| 3 | 0.19 | 1.00 | 1.00 | 1.00 |
-| 4 | 0.01 | 1.00 | 1.00 | 1.00 |
-| 5 | 0.00 | 0.99 | 1.00 | 1.00 |
-| 6 | 0.00 | 0.88 | 1.00 | 0.99 |
-| 7 | 0.00 | 0.49 | 1.00 | 1.00 |
-| 8 | 0.00 | 0.07 | 0.97 | 0.99 |
-| 9 | 0.00 | 0.02 | 0.98 | 0.97 |
-| 10 | 0.00 | 0.00 | 0.85 | 0.90 |
+| 0 | 1.00 | 1.00 | 1.00 | 1.00 |
+| 1 | 1.29 | 1.19 | 1.00 | 1.00 |
+| 2 | 1.66 | 1.42 | 1.00 | 1.00 |
+| 3 | 2.15 | 1.69 | 1.00 | 1.00 |
+| 4 | 2.77 | 2.01 | 1.00 | 1.00 |
+| 5 | 3.57 | 2.39 | 1.00 | 1.00 |
+| 6 | 4.61 | 2.84 | 1.00 | 0.99 |
+| 7 | 5.94 | 3.38 | 1.00 | 1.00 |
+| 8 | 8.05 | 4.22 | 0.97 | 0.99 |
+| 9 | 11.87 | 5.74 | 0.98 | 0.97 |
+| 10 | 18.50 | 8.26 | 0.85 | 0.90 |
 
 A fresh profile clears tiers 0 and 1, contests tier 2, mostly loses tier 3 and cannot clear tier 4, so it must bank
 Matter on the low tiers first; half the progression opens the middle tiers and stalls at 7-8; the full progression
-clears tier 10 comfortably with a fitting build. The first cut of these targets (P2 tier 2 ≤ 0.35, P3 tier 5 in
+clears tiers 8 and 9 reliably and makes tier 10 possible: with a fitting build about two runs in five, and never
+easily (the owner's call: tier 10 stays hard, full progression only makes it easier to play). The first cut of these targets (P2 tier 2 ≤ 0.35, P3 tier 5 in
 [0.30, 0.85] and tier 8 ≤ 0.10, P5 ≤ 0.85) was restated once on the integrated tree, after the Relic value pass made
 every Relic pay for its liability: the tier-2 win share of a fresh profile and the tier-5 share of the half arm do not
 move with `H` or `D` (fresh tier 2 read 0.52-0.56 and half tier 5 0.97-1.00 for `H` 1.27-1.31 and `D` 1.18-1.20), so the
 statements moved to the tiers where the profiles actually meet their wall. `H` 1.29 and `D` 1.19 were chosen on the
 window from the sets (1.27, 1.18), (1.29, 1.18), (1.27, 1.20), (1.29, 1.20) and (1.31, 1.19) (`calib` sweeps in the
-change notes): the highest strong tier-10 win share that keeps the full arm below 0.92.
+change notes). The plain curves left tier 10 easy for the full progression (strong 0.90, full 0.85), so the late surge
+`S(t)` restores the 0.6.0 bound of at most 3 of 5 and gate D's 480 s survival floor as P4. Its strength came from the
+same window (strong / full win share at tier 10, 200 runs: s = 0.03 → 0.60 / 0.52, 0.04 → 0.48 / 0.43, 0.05 → 0.37 /
+0.28 with median survival 552 s, 0.06 → 0.31 / 0.24 below 480 s, 0.08 → 0.15 / 0.10, 0.20 → 0.00); tiers 0-7 do not
+move.
 
 ## Calibration recipe
 

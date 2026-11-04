@@ -7,6 +7,11 @@ import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.REBIRTH_ENEMY_INTEGRITY_GROWTH
+import kinetickk.ball.content.api.REBIRTH_INCOMING_DAMAGE_GROWTH
+import kinetickk.ball.content.api.REBIRTH_LATE_SURGE
+import kinetickk.ball.content.api.REBIRTH_MATTER_GROWTH
+import kinetickk.ball.content.api.rebirthLateSurge
 import kinetickk.ball.content.api.rebirthTierPower
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
@@ -113,26 +118,30 @@ internal fun sweepRun(seed: Int, profile: GameplayProfileSnapshot, relics: List<
 
 /**
  * The content a sweep plays: the canonical catalog with [knobs] applied. Knobs are the calibration constants of
- * docs/balance/progression.md: `health`, `damage`, `matter` (the per-tier bases of H, D and the Matter reward),
+ * docs/balance/progression.md: `health`, `damage`, `matter` (the per-tier bases of H, D and the Matter reward), `surge`
+ * (the late surge of H and D above tier 7; `surgeHealth` and `surgeDamage` set one of them),
  * `honing`, `refit` (per-level damage growth), `refitIntegrity` (integrity per Refit level), `weaponCap`, `costScale`
  * (every Matrix price and Refit/Honing base) and `bossCapShrink` (the boss hit cap's shrink per tier).
  */
 internal fun sweepContent(knobs: Map<String, String>): GameplayContentSnapshot {
     var content = canonicalGameplayContent
-    knobs.forEach { (name, raw) ->
-        val value = raw.toFloat()
-        content = when (name) {
-            "health", "damage", "matter" -> content.copy(rebirth = content.rebirth.copy(profiles = content.rebirth.profiles.map { profile ->
-                val scale = rebirthTierPower(value, profile.tier)
-                when (name) {
-                    "health" -> profile.copy(enemyHealthMultiplier = scale)
-                    "damage" -> profile.copy(incomingDamageMultiplier = scale)
-                    else -> profile.copy(matterGainMultiplier = scale)
-                }
-            }.let { ImmutableList.copyOf(it) }))
-            else -> sweepUpgradeKnob(content, name, value)
-        }
+    val tierKnobs = setOf("health", "damage", "matter", "surge", "surgeHealth", "surgeDamage")
+    if (knobs.keys.any { it in tierKnobs }) {
+        fun knob(name: String, shipped: Float) = knobs[name]?.toFloat() ?: shipped
+        val health = knob("health", REBIRTH_ENEMY_INTEGRITY_GROWTH)
+        val damage = knob("damage", REBIRTH_INCOMING_DAMAGE_GROWTH)
+        val matter = knob("matter", REBIRTH_MATTER_GROWTH)
+        val surgeHealth = knob("surgeHealth", knob("surge", REBIRTH_LATE_SURGE))
+        val surgeDamage = knob("surgeDamage", knob("surge", REBIRTH_LATE_SURGE))
+        content = content.copy(rebirth = content.rebirth.copy(profiles = content.rebirth.profiles.map { profile ->
+            profile.copy(
+                enemyHealthMultiplier = rebirthTierPower(health, profile.tier) * rebirthLateSurge(profile.tier, surgeHealth),
+                incomingDamageMultiplier = rebirthTierPower(damage, profile.tier) * rebirthLateSurge(profile.tier, surgeDamage),
+                matterGainMultiplier = rebirthTierPower(matter, profile.tier),
+            )
+        }.let { ImmutableList.copyOf(it) }))
     }
+    knobs.forEach { (name, raw) -> if (name !in tierKnobs) content = sweepUpgradeKnob(content, name, raw.toFloat()) }
     return content
 }
 

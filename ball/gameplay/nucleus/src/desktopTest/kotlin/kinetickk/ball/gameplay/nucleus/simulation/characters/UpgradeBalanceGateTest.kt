@@ -29,20 +29,21 @@ import kotlin.test.assertTrue
  * The fully progressed profiles at tier 10 and the perceptibility of the permanent upgrades (docs/balance/progression.md,
  * P4, P5 and P7), on the gate harness ([sweepRun], the arms of [SweepArm]) over the first [TOP_RUNS] [PopulationSeeds]:
  * - P4: the full Matrix, the Pentagon with its signature Arc Coil, Refit and Honing at the maximum and the strong Relics
- *   bound from the start ([SweepArm.STRONG]) win tier 10 in at least [P4_MIN_WIN] of the runs: comfortable;
- * - P5: the same profile with the bot's own Relics ([SweepArm.FULL]) wins tier 10 in [P5_WIN]: winnable, never a formality;
+ *   bound from the start ([SweepArm.STRONG]) win tier 10 in [P4_WIN] of the runs (at most 3 of 5: tier 10 stays hard)
+ *   and survive a median of at least [P4_MIN_MEDIAN_SURVIVAL] s (it is never hopeless);
+ * - P5: the same profile with the bot's own Relics ([SweepArm.FULL]) wins tier 10 in [P5_WIN]: possible, rarely;
  * - P7 in play: Orb/Flux Wake and Pentagon/Arc Coil, maxed against 0, in a 25 s crowd and a 180 s Architect fight on four
  *   fixed seeds: character-ability damage per engaged second at least [P7_MIN_ABILITY_GAIN] times, weapon-side damage at
  *   least [P7_MIN_WEAPON_GAIN] times (it includes impacts and procs that Honing never touches) and no more integrity
  *   lost (as a share of maximum integrity; in the Architect fight a Core below half its integrity is repaired, the loss
  *   counted, so both flights meet the whole fight). The exact P7 bounds on the hits (Honing ×1.8, Refit ×1.6, a full
  *   Matrix ×1.8 offense and effective integrity) are PermanentPowerBudgetTest's.
- * These replace J1-J4 (the owner superseded "tier 10 at most 3 of 5" and the "upgrades cannot buy a tier" bounds: Refit
- * and Honing are now half of the permanent power by design). Thresholds are the design's; the population rule of
- * policy.md restates them on the integrated base.
+ * These replace J1-J4 and keep J1's design bounds (tier 10 at most 3 of 5, a strong build survives eight minutes of it);
+ * the "upgrades cannot buy a tier" bounds are gone, since Refit and Honing are now half of the permanent power by design.
+ * Thresholds are the design's; the population rule of policy.md restates them on the integrated base.
  */
 class UpgradeBalanceGateTest {
-    @Test fun p4TheFullyProgressedStrongBuildClearsTierTenComfortably() {
+    @Test fun p4TheFullyProgressedStrongBuildFindsTierTenHardButWinnable() {
         // The setup is what it claims: the Pentagon's signature and Stormheart Capacitor's Charge-key harmony are live.
         val start = startGateRun(PopulationSeeds.first(), SweepArm.STRONG.profile(10, canonicalGameplayContent), SweepArm.STRONG.relics)
         val synergy = start.toRenderModel().weaponSynergy
@@ -50,17 +51,20 @@ class UpgradeBalanceGateTest {
         assertEquals(RelicId.STORMHEART_CAPACITOR, synergy.harmonizingRelic, "the key-harmony Relic")
         val runs = top(SweepArm.STRONG)
         val share = runs.shareOf { it.won }
-        println("UPGRADE_GATE P4 tier=10 strong+maxed win share ${"%.3f".format(share)} of ${runs.size} " +
-            "ends ${runs.groupingBy { it.cause }.eachCount()}")
-        assertTrue(share >= P4_MIN_WIN, "a fully progressed strong build must clear tier 10 comfortably: ${"%.3f".format(share)}")
+        val survival = runs.map { it.seconds }.sorted()[runs.size / 2]
+        println("UPGRADE_GATE P4 tier=10 strong+maxed win share ${"%.3f".format(share)} of ${runs.size} median survival " +
+            "${"%.1f".format(survival)} s ends ${runs.groupingBy { it.cause }.eachCount()}")
+        assertTrue(share in P4_WIN, "tier 10 must stay hard but winnable for a fully progressed strong build: ${"%.3f".format(share)}")
+        assertTrue(survival >= P4_MIN_MEDIAN_SURVIVAL,
+            "a fully progressed strong build must survive tier 10 for a while: median $survival s, below $P4_MIN_MEDIAN_SURVIVAL s")
     }
 
-    @Test fun p5AFullyProgressedOrdinaryBuildContestsTierTen() {
+    @Test fun p5AFullyProgressedOrdinaryBuildRarelyClearsTierTen() {
         val runs = top(SweepArm.FULL)
         val share = runs.shareOf { it.won }
         println("UPGRADE_GATE P5 tier=10 full+maxed win share ${"%.3f".format(share)} of ${runs.size} " +
             "ends ${runs.groupingBy { it.cause }.eachCount()}")
-        assertTrue(share in P5_WIN, "a fully progressed ordinary build must contest tier 10: ${"%.3f".format(share)}")
+        assertTrue(share in P5_WIN, "a fully progressed ordinary build must clear tier 10 rarely: ${"%.3f".format(share)}")
     }
 
     @Test fun p7MaxedUpgradesArePerceptibleInEqualEncounters() {
@@ -266,11 +270,14 @@ class UpgradeBalanceGateTest {
         /** The tier-10 populations: the first 150 [PopulationSeeds] (binomial SE about 0.03 near P4's bound). */
         const val TOP_RUNS = 150
 
-        /** P4: the least tier-10 win share of the fully progressed strong build. */
-        const val P4_MIN_WIN = 0.80
+        /** P4: the tier-10 win share band of the fully progressed strong build: at most 3 of 5, never out of reach. */
+        val P4_WIN = 0.20..0.60
+
+        /** P4: the least median survival of the fully progressed strong build at tier 10 (0.6.0 gate D's floor). */
+        const val P4_MIN_MEDIAN_SURVIVAL = 480f
 
         /** P5: the tier-10 win share band of the fully progressed ordinary build. */
-        val P5_WIN = 0.30..0.92
+        val P5_WIN = 0.10..0.50
 
         /** P7 in play: the least gain of character-ability damage per engaged second, maxed against 0 (Refit ×1.97). */
         const val P7_MIN_ABILITY_GAIN = 1.6f

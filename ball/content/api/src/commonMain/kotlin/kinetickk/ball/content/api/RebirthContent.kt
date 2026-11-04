@@ -136,11 +136,27 @@ const val REBIRTH_INCOMING_DAMAGE_GROWTH: Float = 1.19f
 /** Matter a run earns grows by this factor per Rebirth tier: `1.16^t` (tier 10: ×4.41), so pushing a tier pays. */
 const val REBIRTH_MATTER_GROWTH: Float = 1.16f
 
+/** The last tier the late surge leaves alone; tiers above it add [REBIRTH_LATE_SURGE] per squared step. */
+const val REBIRTH_LATE_SURGE_FROM: Int = 7
+
+/**
+ * The top tiers' surge on enemy integrity and incoming damage: `1 + s × max(0, t − 7)²` with s = [REBIRTH_LATE_SURGE]
+ * (tiers 8, 9 and 10: ×1.05, ×1.20 and ×1.45), so tier 10 stays a hard fight even for a fully progressed profile while
+ * the lower tiers keep their plain growth.
+ */
+const val REBIRTH_LATE_SURGE: Float = 0.05f
+
 /** `growth^tier` as a product of [tier] Float factors (no platform `pow`), 1 at tier 0. */
 fun rebirthTierPower(growth: Float, tier: Int): Float {
     var power = 1f
     repeat(tier.coerceAtLeast(0)) { power *= growth }
     return power
+}
+
+/** The late surge of [tier] at strength [surge]: `1 + surge × max(0, tier − REBIRTH_LATE_SURGE_FROM)²`. */
+fun rebirthLateSurge(tier: Int, surge: Float = REBIRTH_LATE_SURGE): Float {
+    val steps = (tier - REBIRTH_LATE_SURGE_FROM).coerceAtLeast(0)
+    return 1f + surge * steps * steps
 }
 
 /** Pack Hunters' extra members in every pack, at a tier that runs it or in a run an omen adds it to. */
@@ -158,7 +174,8 @@ val RebirthTierNames: List<String> = listOf(
  * The shipped tuning of Rebirth tier [tier] (selected tier t), the tier layer of docs/balance/progression.md. The tier
  * multiplies what the enemy brings and never the player's power ([RebirthProfile.playerPowerMultiplier] is 1 at every
  * tier): enemy integrity `H(t) = 1.29^t` ([REBIRTH_ENEMY_INTEGRITY_GROWTH]), incoming damage `D(t) = 1.19^t`
- * ([REBIRTH_INCOMING_DAMAGE_GROWTH]) and the Matter reward `1.16^t` ([REBIRTH_MATTER_GROWTH]), so a tier is beaten by
+ * ([REBIRTH_INCOMING_DAMAGE_GROWTH]), both times the top tiers' surge ([rebirthLateSurge]), and the Matter reward
+ * `1.16^t` ([REBIRTH_MATTER_GROWTH]), so a tier is beaten by
  * permanent progression (the Core Matrix, Refit and Honing) and pushing a tier pays. Each power is a product of t
  * factors in Float, the same on every platform. Besides: enemy speed `1 + 0.035t`, spawn rate `1 + 0.09t`, enemy cap
  * `1 + 0.10t`, Elite rate `1 + 0.07t`, threat `12t` s ahead, `t / 4` bonus rerolls, `5 + t` opening enemies, obstacle
@@ -181,9 +198,9 @@ fun defaultRebirthProfile(
         openingEnemyCount = 5 + tier,
         enemyCapMultiplier = 1f + t * 0.10f,
         spawnRateMultiplier = 1f + t * 0.09f,
-        enemyHealthMultiplier = rebirthTierPower(REBIRTH_ENEMY_INTEGRITY_GROWTH, tier),
+        enemyHealthMultiplier = rebirthTierPower(REBIRTH_ENEMY_INTEGRITY_GROWTH, tier) * rebirthLateSurge(tier),
         enemySpeedMultiplier = 1f + t * 0.035f,
-        incomingDamageMultiplier = rebirthTierPower(REBIRTH_INCOMING_DAMAGE_GROWTH, tier),
+        incomingDamageMultiplier = rebirthTierPower(REBIRTH_INCOMING_DAMAGE_GROWTH, tier) * rebirthLateSurge(tier),
         eliteRateMultiplier = 1f + t * 0.07f,
         threatTimeOffsetSeconds = t * 12f,
         playerPowerMultiplier = 1f,

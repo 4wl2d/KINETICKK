@@ -13,9 +13,9 @@ import kotlin.test.assertTrue
  * through a Zenith (or Nadir) rift at 165 s, playing the objective its visit rolls and taking the first card of its
  * reward, wins neither much less nor much more often than the same seed with no rift: a dimension is neither a trap nor
  * a must. The progression model's strong tier-10 build ([DimensionProfile.STRONG_TIER_10], P4 of
- * docs/balance/progression.md) that visits a dimension at 285 s still clears tier 10 on at least three of the five
- * [EconomyGateSeeds]: a visit does not undo P4's comfortable clear. The first gate plays the first 120 [PopulationSeeds]
- * (i = 1,001..1,120).
+ * docs/balance/progression.md) that visits a dimension at 285 s still clears tier 10 in at most three of the five
+ * [EconomyGateSeeds] (the spirit of gate D, kept by P4): a visit never makes tier 10 easy. The first gate plays the first
+ * 120 [PopulationSeeds] (i = 1,001..1,120).
  *
  * Measured on the 0.6.0 lane tree: on the window i = 2,401..2,500 the Zenith moves the win share by +0.02 and the Nadir
  * by +0.06 (control 0.78); on the gate seeds by +0.025 (paired SE 0.038) and -0.008 (0.046) against the control's 88 of
@@ -23,9 +23,8 @@ import kotlin.test.assertTrue
  * flight law: window +0.10 and -0.02 (control 0.76); gate seeds -0.008 (0.050) and +0.050 (0.045) against the control's
  * 83 of 120, and still no strong win.
  *
- * The strong statement was gate D's bound (at most three of five clears), which the progression model superseded: its
- * strong build carries Refit and Honing 10 and wins tier 10 in at least 0.80 of its runs (P4). With that build the
- * Zenith visit cleared five of five seeds; three of five holds with probability 0.94 at P4's 0.80.
+ * The strong build is the progression model's (Refit and Honing 10, P4), which wins tier 10 in 0.20-0.60 of its runs;
+ * the statement keeps gate D's bound of at most three of five clears.
  */
 class DimensionRunOutcomeGateTest {
     /**
@@ -53,14 +52,14 @@ class DimensionRunOutcomeGateTest {
         }
     }
 
-    /** A strong tier-10 build with a Zenith visit, and with a Nadir visit, at 285 s clears at least three of five seeds. */
-    @Test fun aStrongBuildWithAVisitStillClearsTierTen() {
+    /** A strong tier-10 build with a Zenith visit, and with a Nadir visit, at 285 s clears at most three of five seeds. */
+    @Test fun aStrongBuildWithAVisitStillRarelyClearsTierTen() {
         for (target in listOf(WorldLayer.ZENITH, WorldLayer.NADIR)) {
             val runs = EconomyGateSeeds.map { seed ->
                 flyDimensionRun(seed, DimensionProfile.STRONG_TIER_10, target, STRONG_RIFT_AT, runToEnd = true)
             }
             println("DIMENSION OUTCOME strong-t10 $target ${runs.joinToString(" ") { "${it.seed}:${it.phase}@${it.seconds.toInt()}s(entered=${it.entered})" }}")
-            assertTrue(runs.count { it.won } >= MIN_STRONG_WINS, "a $target visit must not undo the strong build's clear: $runs")
+            assertTrue(runs.count { it.won } <= MAX_STRONG_WINS, "a $target visit must not make tier 10 easy: $runs")
         }
     }
 
@@ -73,6 +72,6 @@ class DimensionRunOutcomeGateTest {
 
         /** The strong arms' rift time (the pilot gate's Z10 and N10) and P4's least clears of the five seeds. */
         const val STRONG_RIFT_AT = 285f
-        const val MIN_STRONG_WINS = 3
+        const val MAX_STRONG_WINS = 3
     }
 }

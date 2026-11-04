@@ -83,9 +83,11 @@ class RebirthProgressionTest {
         rebirth.profiles.forEach { profile ->
             val t = profile.tier.toFloat()
             val where = "tier ${profile.tier}"
-            // The tier layer's curves: H(t) = 1.29^t, D(t) = 1.19^t and the Matter reward 1.16^t.
-            assertEquals(1.29.pow(profile.tier).toFloat(), profile.enemyHealthMultiplier, 0.0001f * profile.enemyHealthMultiplier, where)
-            assertEquals(1.19.pow(profile.tier).toFloat(), profile.incomingDamageMultiplier, 0.0001f * profile.incomingDamageMultiplier, where)
+            // The tier layer's curves: H(t) = 1.29^t and D(t) = 1.19^t, both times the late surge 1 + 0.05 max(0, t - 7)²,
+            // and the Matter reward 1.16^t.
+            val surge = 1f + 0.05f * (profile.tier - 7).coerceAtLeast(0).let { it * it }
+            assertEquals(1.29.pow(profile.tier).toFloat() * surge, profile.enemyHealthMultiplier, 0.0001f * profile.enemyHealthMultiplier, where)
+            assertEquals(1.19.pow(profile.tier).toFloat() * surge, profile.incomingDamageMultiplier, 0.0001f * profile.incomingDamageMultiplier, where)
             assertEquals(1f + 0.035f * t, profile.enemySpeedMultiplier, 0.0001f, where)
             assertEquals(1f + 0.09f * t, profile.spawnRateMultiplier, 0.0001f, where)
             assertEquals(1f + 0.10f * t, profile.enemyCapMultiplier, 0.0001f, where)
