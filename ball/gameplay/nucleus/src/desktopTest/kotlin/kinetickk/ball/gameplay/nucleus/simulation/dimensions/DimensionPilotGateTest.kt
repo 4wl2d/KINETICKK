@@ -62,6 +62,11 @@ import kotlin.test.assertTrue
  * (0.056), Judgement 0.533 (0.065); N0 survival 1.000, Harvest 1.000, Pyre 0.750 (0.056), scorch 0.291 (0.031); H200
  * 0.933 (0.023); Z10 0.975 (0.014) and 0.849 (0.033); N10 0.958 (0.018) and 0.933 (0.023); A3 1.000 and 0.658 (0.044);
  * A0 0.992 (0.008) and 0.025 (0.014).
+ *
+ * The Relic value pass then strengthened every arm, and a locked rift now keeps its clock until the fight that locks it
+ * ends (one A3 run had lost its glitch rift to a living Herald). The Archive's boss share was recalibrated on the window
+ * to 0.80 (window A3 0.63, A0 0.03; 0.85 at 0.68, 0.76 at 0.72, 0.69 at 0.76); on the gate seeds A3 survival 1.000 and
+ * defeat 0.550 (0.045), A0 1.000 and 0.033 (0.017), every opened rift entered.
  */
 class DimensionPilotGateTest {
     /**

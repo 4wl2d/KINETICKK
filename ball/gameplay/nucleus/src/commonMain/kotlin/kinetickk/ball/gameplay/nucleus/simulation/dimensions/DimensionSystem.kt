@@ -109,6 +109,14 @@ internal fun MutableGameState.dimensionEntryLock(): RiftLock {
     return RiftLock.NONE
 }
 
+/**
+ * True while realspace's rifts wait instead of running down their clocks: a boss-class enemy locks entry
+ * ([RiftLock.BOSS]) or another engagement runs. A fight never costs the player the rift it locked; the Architect's lock
+ * holds nothing, since that rift can no longer be visited at all.
+ */
+internal fun MutableGameState.riftClocksHeld(): Boolean =
+    worldLayer == WorldLayer.BASE && (engagementActive() || dimensionEntryLock() == RiftLock.BOSS)
+
 /** Enters [target] at the Core; false (nothing changes) when [canEnterDimension] refuses. */
 internal fun MutableGameState.enterDimension(target: WorldLayer): Boolean {
     if (!canEnterDimension(target)) return false
@@ -438,11 +446,16 @@ internal fun MutableGameState.openArchiveRiftAt(x: Float, y: Float): Boolean {
 }
 
 /**
- * Realspace step of the glitch rift: it closes at its expiry; flying through it enters the Archive unless another
- * engagement runs (the window sites' rule: one engagement at a time) or entry is refused, and then it stays open.
+ * Realspace step of the glitch rift: it closes at its expiry, and its clock waits while [riftClocksHeld]; flying through
+ * it enters the Archive unless another engagement runs (the window sites' rule: one engagement at a time) or entry is
+ * refused, and then it stays open.
  */
-private fun MutableGameState.updateGlitchPortal() {
-    val portal = dimensionRun.glitchPortal ?: return
+private fun MutableGameState.updateGlitchPortal(delta: Float) {
+    var portal = dimensionRun.glitchPortal ?: return
+    if (riftClocksHeld()) {
+        portal = portal.copy(expiresAt = portal.expiresAt + delta)
+        dimensionRun = dimensionRun.copy(glitchPortal = portal)
+    }
     if (elapsed >= portal.expiresAt) {
         dimensionRun = dimensionRun.copy(glitchPortal = null)
         return
@@ -460,7 +473,7 @@ private fun MutableGameState.updateGlitchPortal() {
 internal fun MutableGameState.updateDimension(delta: Float) {
     if (phase != GamePhase.RUNNING) return
     if (worldLayer == WorldLayer.BASE) {
-        updateGlitchPortal()
+        updateGlitchPortal(delta)
         return
     }
     val visit = dimensionRun.visit ?: return

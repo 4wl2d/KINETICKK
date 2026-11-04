@@ -95,6 +95,7 @@ internal fun MutableGameState.updateSites(delta: Float) {
 private fun MutableGameState.advanceWindowSites(delta: Float) {
     val active = activeWindowSite()
     if (active == null) {
+        if (riftClocksHeld()) holdOfferedRifts(delta)
         if (sites.anyExpired(elapsed)) sites = sites.filter { elapsed < it.expiresAt }
         val selected = sites.firstOrNull {
             segmentCircleIntersects(
@@ -115,6 +116,12 @@ private fun MutableGameState.advanceWindowSites(delta: Float) {
         SiteFamily.PORTAL, SiteFamily.CACHE, SiteFamily.SECRET, SiteFamily.SIGNAL,
         -> error("${active.kind} never runs as a window trial")
     }
+}
+
+/** An offered rift's clock waits while entry is held ([riftClocksHeld]): a boss fight never lets it close unentered. */
+private fun MutableGameState.holdOfferedRifts(delta: Float) {
+    if (sites.none { it.kind.family == SiteFamily.PORTAL }) return
+    sites = sites.map { if (it.kind.family == SiteFamily.PORTAL) it.copy(expiresAt = it.expiresAt + delta) else it }
 }
 
 /**

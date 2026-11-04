@@ -239,7 +239,8 @@ class DimensionSystemTest {
         game.flyThroughForTesting(x, y)
         game.updateSites(0.01f)
         assertEquals(WorldLayer.BASE, game.worldLayer)
-        assertEquals(offered, game.sites, "a refused rift stays offered")
+        assertEquals(offered.map { it.copy(expiresAt = 0f) }, game.sites.map { it.copy(expiresAt = 0f) }, "a refused rift stays offered")
+        assertEquals(offered.single().expiresAt + 0.01f, game.sites.single().expiresAt, "and its clock waits for the fight")
         assertTrue(herald in game.enemies)
         game.enemies.remove(herald)
         assertTrue(game.canEnterDimension(WorldLayer.NADIR))
@@ -773,5 +774,36 @@ class DimensionSystemTest {
         assertEquals(WorldLayer.BASE, game.worldLayer)
         assertTrue(game.optionalSitesTouched(), "an opted-in run stays opted in")
         assertEquals(0, game.optionalSiteMarks(marks))
+    }
+
+    /**
+     * A rift waits while a boss fight locks it: its clock stops and resumes once the fight ends, so a Herald alive when
+     * a rift opens never makes the rift close unentered (regression: the clock ran down through the lock).
+     */
+    @Test
+    fun aRiftLockedByABossFightKeepsItsClockUntilTheFightEnds() {
+        val game = game()
+        game.openPortalForTesting(WorldLayer.NADIR)
+        game.openPortalForTesting(WorldLayer.ARCHIVE)
+        val siteLeft = game.sites.single().expiresAt - game.elapsed
+        val glitchLeft = checkNotNull(game.dimensionRun.glitchPortal).expiresAt - game.elapsed
+        val herald = game.addEnemyForTesting(1_200f, 0f, type = EnemyType.HERALD)
+        fun step(seconds: Float) {
+            repeat((seconds / MutableGameState.FIXED_STEP).toInt()) {
+                game.elapsed += MutableGameState.FIXED_STEP
+                game.updateSites(MutableGameState.FIXED_STEP)
+                game.updateDimension(MutableGameState.FIXED_STEP)
+            }
+        }
+        step(maxOf(siteLeft, glitchLeft) + 5f)
+        assertEquals(SiteKind.NADIR_RIFT, game.sites.singleOrNull()?.kind, "the locked window rift is still offered")
+        assertNotNull(game.dimensionRun.glitchPortal, "the locked glitch rift is still open")
+
+        game.enemies.remove(herald)
+        step(minOf(siteLeft, glitchLeft) - 1f)
+        assertEquals(SiteKind.NADIR_RIFT, game.sites.singleOrNull()?.kind, "the clock resumes from where the lock stopped it")
+        step(maxOf(siteLeft, glitchLeft) - minOf(siteLeft, glitchLeft) + 2f)
+        assertTrue(game.sites.none { it.kind.family == SiteFamily.PORTAL }, "the window rift closes on its resumed clock")
+        assertNull(game.dimensionRun.glitchPortal, "the glitch rift closes on its resumed clock")
     }
 }
