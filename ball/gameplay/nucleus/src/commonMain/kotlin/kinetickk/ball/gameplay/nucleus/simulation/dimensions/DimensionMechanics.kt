@@ -379,7 +379,7 @@ private fun MutableGameState.mendAtHalo(ring: HaloRing, physics: DimensionPhysic
  * Heat: below the pace the slow clock runs; past the layer's grace each full tick scorches a share of max integrity
  * as a self hit (no hit i-frames or HURT clauses, damage reduction ignored, shields absorb it, a revival answers a
  * lethal tick). Flying at pace resets both clocks. Baby mode scales only incoming kinds, so the scorch applies the
- * run's incoming-damage factor itself.
+ * run's incoming-damage factor itself. A share of max integrity, it grows with the tier like an obstacle hit.
  */
 private fun MutableGameState.updateScorch(delta: Float, physics: DimensionPhysics) {
     if (speed >= dimensionPace()) {
@@ -397,5 +397,6 @@ private fun MutableGameState.updateScorch(delta: Float, physics: DimensionPhysic
         ignoreReduction = true,
         kind = IncomingDamage.SELF,
         lethalReason = DimensionNotices.SCORCHED,
+        shareOfIntegrity = true,
     )
 }

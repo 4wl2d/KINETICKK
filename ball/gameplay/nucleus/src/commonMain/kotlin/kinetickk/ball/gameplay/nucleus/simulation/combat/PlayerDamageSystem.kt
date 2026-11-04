@@ -72,6 +72,12 @@ internal fun MutableGameState.takeDamage(
     kind: IncomingDamage = IncomingDamage.HIT,
     obstacle: kinetickk.ball.content.api.ObstacleKind? = null,
     lethalReason: String = CORE_FRACTURED_REASON,
+    /**
+     * True for a hazard sized as a share of max integrity: it grows with the tier like an obstacle hit
+     * (`1 + damagePerTier × tier`), not with the tier's incoming-damage curve, which would stack on a share that never
+     * shrinks with the tier.
+     */
+    shareOfIntegrity: Boolean = false,
 ) {
     if (kind == IncomingDamage.OBSTACLE) {
         takeObstacleDamage(rawAmount, obstacle)
@@ -82,7 +88,8 @@ internal fun MutableGameState.takeDamage(
     // Self-inflicted damage neither uses nor grants the hit i-frames, so real hits are never dropped behind it.
     val incoming = kind != IncomingDamage.SELF
     if ((incoming && hurtCooldown > 0f) || invulnerableUntil > elapsed) return
-    var amount = rawAmount * rebirthProfile.incomingDamageMultiplier * (if (incoming) incomingDamageFactor else 1f)
+    val tierScale = if (shareOfIntegrity) 1f + content.obstacles.damagePerTier * rebirthLevel else rebirthProfile.incomingDamageMultiplier
+    var amount = rawAmount * tierScale * (if (incoming) incomingDamageFactor else 1f)
     if (kind == IncomingDamage.CONTACT) amount *= matrix.contactDamageMultiplier
     var taken = 1f + buffAmount(BuffStat.DAMAGE_TAKEN) + whileAmount(BuffStat.DAMAGE_TAKEN, null)
     if (build.liability(RelicId.HOLLOW_CROWN)) taken += 0.1f * emptyRelicSlots()

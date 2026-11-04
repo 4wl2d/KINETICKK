@@ -381,6 +381,28 @@ class DimensionMechanicsTest {
         assertEquals(windy.maxHp * 0.3f, windy.hp, 0.01f)
     }
 
+    /**
+     * The scorch is a share of max integrity, so a high tier grows it like an obstacle hit (`1 + damagePerTier × tier`),
+     * never by the tier's incoming-damage curve (regression: tier 10 burned 8.25 times the share, about a fifth of max
+     * integrity a second).
+     */
+    @Test
+    fun aHighTierScorchesLikeAnObstacleNotByTheIncomingCurve() {
+        fun scorchLoss(tier: Int): Float = visiting(WorldLayer.NADIR).run {
+            rebirthLevel = tier
+            activeRebirthProfile = content.rebirth.profile(tier)
+            shield = 0f
+            val before = hp
+            dimensionStepsFor(nadir.physics.scorchGraceSeconds + nadir.physics.scorchTickSeconds + 2f * step)
+            before - hp
+        }
+        val base = scorchLoss(0)
+        assertTrue(base > 0f)
+        val top = canonicalGameplayContent.rebirth.profile(10)
+        assertTrue(top.incomingDamageMultiplier > 5f, "the incoming curve is steep at tier 10")
+        assertEquals(base * (1f + canonicalGameplayContent.obstacles.damagePerTier * 10), scorchLoss(10), 1e-3f)
+    }
+
     @Test
     fun babyModeHalvesTheScorch() {
         val standard = visiting(WorldLayer.NADIR)
