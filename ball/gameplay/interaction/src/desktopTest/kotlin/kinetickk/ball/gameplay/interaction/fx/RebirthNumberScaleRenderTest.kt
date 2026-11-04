@@ -37,6 +37,7 @@ import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
+import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.RebirthProgress
@@ -101,7 +102,7 @@ class RebirthNumberScaleRenderTest {
 }
 
 /**
- * A started run at Rebirth [tier] that steers at the nearest enemy and records each damage number the reducer formats
+ * A started run at Rebirth [tier] (with the full Matrix above tier 0) that steers at the nearest enemy and records each damage number the reducer formats
  * (the newest projected number after each damage cue; a full number list drops later cues, and those record nothing new).
  */
 private class ScaledRun(tier: Int) {
@@ -114,6 +115,9 @@ private class ScaledRun(tier: Int) {
         val profile = PlayerProfile(
             preferences = PlayerPreferences(language = AppLanguage.English),
             rebirthProgress = RebirthProgress(level = tier, highestCleared = tier - 1),
+            // A player at a high tier owns the Matrix (a fresh profile there dies in the first second of the pack); the
+            // keystones stay out, since their flight changes carry this straight-at-the-pack steering into the singularity.
+            matrix = if (tier > 0) MatrixProgress(content.matrixNodes.map { if (it.keystone) 0 else it.maxRanks }) else MatrixProgress(),
         )
         state = (GameplayNucleus.decide(
             GameplayState.initial(RunId(3), content),
