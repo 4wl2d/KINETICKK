@@ -84,7 +84,7 @@ fun defaultApexDefinition(shape: CoreShape): ApexDefinition = when (shape) {
     CoreShape.SHARD -> apex(
         "Vivisect",
         "For 8 s Dashes cost no heat, punctures come faster and every puncture marks the next enemy.",
-        8f, 0, 8, 0.12f, 260f, 0.35f,
+        8f, 0, 7, 0.12f, 260f, 0.35f,
     )
     CoreShape.RING -> apex(
         "Corona",
@@ -129,7 +129,7 @@ fun defaultApexDefinition(shape: CoreShape): ApexDefinition = when (shape) {
     CoreShape.HEXAGON -> apex(
         "Swarm Queen",
         "Fills the hive; for 10 s drones dart three times as often, intercept shots and pull Data to you.",
-        10f, 32, 12, 0.35f, 18f, 600f, 12f,
+        10f, 32, 11, 0.35f, 18f, 600f, 12f,
     )
 }
 

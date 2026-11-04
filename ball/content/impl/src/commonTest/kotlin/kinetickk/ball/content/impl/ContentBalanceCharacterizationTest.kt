@@ -321,9 +321,9 @@ class ContentBalanceCharacterizationTest {
         assertEquals(0.09f, rebirth.minSpawnIntervalSeconds)
         assertEquals(24f, rebirth.minEliteIntervalSeconds)
         assertEquals((0..10).toList(), profiles.map(RebirthProfile::tier))
-        // H(t) = 1.27^t, D(t) = 1.18^t, Matter 1.16^t and no player power from the tier (461252b1f47728a5 -> f6b4b0fdf10a4d14).
+        // H(t) = 1.29^t, D(t) = 1.19^t, Matter 1.16^t and no player power from the tier (461252b1f47728a5 -> f6b4b0fdf10a4d14 -> 5b31f26d8217a3c3).
         assertEquals(
-            "f6b4b0fdf10a4d14",
+            "5b31f26d8217a3c3",
             goldenFingerprint {
                 profiles.forEach { profile ->
                     add(profile.tier)
@@ -354,9 +354,10 @@ class ContentBalanceCharacterizationTest {
         assertEquals(18, ui.skills.size)
         // Mass Driver's mass 1.17/1.2/1.24 -> 1.4/1.52/1.65 and Sonic Boom's cooldowns 8/7/6 -> 7/6/5 under the slower
         // flight law (e73bd70a41ae42f0 -> 6f57bbc082aececf); multiplicative Refit and Honing, Refit integrity +5 % of the
-        // base per level and the weapon level cap of 30 (-> 10a350f2ecca3b6d).
+        // base per level and the weapon level cap of 30 (-> 10a350f2ecca3b6d); Shard and Hexagon Apex boss strikes 8 -> 7 and
+        // 12 -> 11 after the Relic value pass lifted their Architect benefit past the character band (-> 0dd5b0a92be99e85).
         assertEquals(
-            "10a350f2ecca3b6d",
+            "0dd5b0a92be99e85",
             goldenFingerprint {
                 add("skills")
                 ui.skills.forEach { skill ->
