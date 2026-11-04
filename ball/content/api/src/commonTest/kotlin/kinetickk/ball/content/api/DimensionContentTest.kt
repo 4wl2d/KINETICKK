@@ -39,7 +39,7 @@ class DimensionContentTest {
         assertEquals(0.25f, archive.physics.desyncMinimumScale)
         assertEquals(listOf(0.9f, 1.2f, 0.85f), listOf(zenith, nadir, archive).map { it.spawnRateMultiplier })
         assertEquals(listOf(0.9f, 1.15f, 0.8f), listOf(zenith, nadir, archive).map { it.ordinaryCapMultiplier })
-        assertEquals(listOf(0.16f, 0.12f, 0.77f), listOf(zenith, nadir, archive).map { it.bossIntegrityShare })
+        assertEquals(listOf(0.16f, 0.12f, 0.68f), listOf(zenith, nadir, archive).map { it.bossIntegrityShare })
         assertEquals(listOf(1f, 0.6f, 1f), listOf(zenith, nadir, archive).map { it.bossDamageShare })
         // The Ascent's split and the Harvest's thrown embers; the Harvest's instruction names its goal.
         val objectives = policy.objectives

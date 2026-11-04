@@ -53,6 +53,15 @@ import kotlin.test.assertTrue
  * (0.012), Ascent 0.817 (0.050), Judgement 0.633 (0.062); N0 survival 0.992 (0.008), Harvest 0.983 (0.017), Pyre 0.717
  * (0.059), scorch 0.298 (0.034); H200 0.908 (0.027); Z10 0.960 (0.020) and 0.720 (0.045); N10 0.940 (0.024) and 0.920
  * (0.027); A3 1.000 and 0.475 (0.046); A0 0.966 (0.017) and 0.197 (0.037).
+ *
+ * The progression model (tier power gone, incoming damage 1.18^t, the boss hit cap a share of the boss's own
+ * integrity) read N10 survival 0.689 and A3 defeat 0.975 on the gate seeds. The tier-10 arms now fly the model's strong
+ * build (Refit and Honing 10, P4), and the Antecedent's cap fell with the secret bosses' to 0.55 % of its integrity, so
+ * the Archive's boss share was recalibrated on the window: 0.68 (window A3 0.57, A0 0.03; 0.64 at 0.66, 0.53 at 0.70),
+ * about 130 capped hits at tier 3 as before the model. On the gate seeds: Z0 survival 0.992 (0.008), Ascent 0.750
+ * (0.056), Judgement 0.533 (0.065); N0 survival 1.000, Harvest 1.000, Pyre 0.750 (0.056), scorch 0.291 (0.031); H200
+ * 0.933 (0.023); Z10 0.975 (0.014) and 0.849 (0.033); N10 0.958 (0.018) and 0.933 (0.023); A3 1.000 and 0.658 (0.044);
+ * A0 0.992 (0.008) and 0.025 (0.014).
  */
 class DimensionPilotGateTest {
     /**

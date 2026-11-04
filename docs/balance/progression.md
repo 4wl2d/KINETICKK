@@ -49,10 +49,12 @@ Each curve is a product of t Float factors, identical on every platform.
 
 The boss hit cap is a share of the boss's own integrity: one damage instance removes at most `hitCapShare × maxHp ×
 clamp(1 − hitCapTierShrink × t, hitCapMinimumScale, 1)` (the Architect 1.5 %, 2 % less per tier, at least half;
-mini-bosses 6 %). A build whose hits reach the cap clears the bar in the same number of hits at every tier, so the
-power that answers `H(t)` also reaches the cap. Before this model the cap was a share of the tier-0 integrity: the
-Architect at tier 10 needed about 900 capped hits whatever the build, and the fully upgraded strong build timed out in
-two thirds of its tier-10 runs.
+mini-bosses 6 %; the secret bosses 0.55 %). A build whose hits reach the cap clears the bar in the same number of hits
+at every tier, so the power that answers `H(t)` also reaches the cap. Before this model the cap was a share of the
+tier-0 integrity: the Architect at tier 10 needed about 900 capped hits whatever the build, and the fully upgraded
+strong build timed out in two thirds of its tier-10 runs. The secret bosses' share keeps their duels at the strong
+build's tier 3 inside 60-180 s (`EncounterDuelGateTest`): at 1.5 % a capped build felled them in 71 hits and about
+40 s.
 
 ## Permanent layer
 

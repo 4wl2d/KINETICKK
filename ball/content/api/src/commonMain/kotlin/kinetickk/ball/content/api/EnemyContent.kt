@@ -129,6 +129,12 @@ val ARCHITECT_ENCOUNTER: BossEncounterSpec = BossEncounterSpec(
     enragePhases = 1, enrageMutator = RebirthMutator.SINGULARITY, enrageAttackRate = 1.45f,
 )
 
+/**
+ * The secret bosses' hit-cap share: a capped hit removes 0.55 % of their integrity (about 190 capped hits at tier 3),
+ * calibrated by the secret-boss duels (a strong tier-3 build's median kill within 60-180 s).
+ */
+private const val SECRET_BOSS_HIT_CAP_SHARE: Float = 0.0055f
+
 /** Hit-cap share calibrated by the mini-boss duels (a strong tier-10 build's median kill within 20-120 s). */
 private val MINI_BOSS_ENCOUNTER = BossEncounterSpec(
     phases = 3, hitCapShare = 0.06f, hitCapTierShrink = 0.02f, hitCapMinimumScale = 0.5f, shiftSeconds = 2f,
@@ -428,8 +434,8 @@ fun defaultEnemyDefinitions(): ImmutableList<EnemyDefinition> = listOf(
         "A secret boss that draws lanes of fire and lines of mines, then jumps between obstacles.",
         threat = 5, timeGateSeconds = 60f, minimumRebirth = 0, weight = 0f, rank = EnemyRank.SECRET_BOSS,
         encounter = BossEncounterSpec(
-            phases = 3, hitCapShare = 0.015f, hitCapTierShrink = 0.02f, hitCapMinimumScale = 0.5f, shiftSeconds = 4f,
-            enrageAttackRate = 1.35f, enrageAfterSeconds = 120f,
+            phases = 3, hitCapShare = SECRET_BOSS_HIT_CAP_SHARE, hitCapTierShrink = 0.02f, hitCapMinimumScale = 0.5f,
+            shiftSeconds = 4f, enrageAttackRate = 1.35f, enrageAfterSeconds = 120f,
         ),
         revealedBy = WorldDiscovery.CARTOGRAPHER,
         arrival = "When its far sigil is touched",
@@ -440,8 +446,8 @@ fun defaultEnemyDefinitions(): ImmutableList<EnemyDefinition> = listOf(
         threat = 5, timeGateSeconds = 300f, minimumRebirth = 0, weight = 0f, rank = EnemyRank.SECRET_BOSS,
         habitats = EnemyHabitat.ARCHIVE.bit,
         encounter = BossEncounterSpec(
-            phases = 4, hitCapShare = 0.015f, hitCapTierShrink = 0.02f, hitCapMinimumScale = 0.5f, shiftSeconds = 5f,
-            enrageAttackRate = 1.35f, enrageAfterSeconds = 150f,
+            phases = 4, hitCapShare = SECRET_BOSS_HIT_CAP_SHARE, hitCapTierShrink = 0.02f, hitCapMinimumScale = 0.5f,
+            shiftSeconds = 5f, enrageAttackRate = 1.35f, enrageAfterSeconds = 150f,
         ),
         revealedBy = WorldDiscovery.ANTECEDENT,
     ),
