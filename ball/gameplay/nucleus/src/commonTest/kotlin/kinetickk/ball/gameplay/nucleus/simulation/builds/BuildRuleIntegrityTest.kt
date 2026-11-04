@@ -166,7 +166,7 @@ class BuildRuleIntegrityTest {
 
         state.applyStatus(target, StatusElement.THERMAL, state.breakThreshold(StatusElement.THERMAL, target), generation = 0)
 
-        assertEquals(before - state.maxHp * 0.04f, state.hp, 0.01f)
+        assertEquals(before - state.maxHp * 0.03f, state.hp, 0.01f)
         assertEquals(40f, state.shield, "The burn is not an incoming hit")
         assertEquals(0f, state.hurtCooldown)
         state.takeDamage(5f, kind = IncomingDamage.CONTACT)
@@ -180,7 +180,7 @@ class BuildRuleIntegrityTest {
         val target = cinder.dummy(x = 50f)
         val before = cinder.hp
         cinder.applyStatus(target, StatusElement.THERMAL, cinder.breakThreshold(StatusElement.THERMAL, target), generation = 0)
-        assertEquals(before - cinder.maxHp * 0.04f, cinder.hp, 0.01f, "A severed Cinder Crown still burns")
+        assertEquals(before - cinder.maxHp * 0.03f, cinder.hp, 0.01f, "A severed Cinder Crown still burns")
 
         val crowned = buildTestState(RelicId.HOLLOW_CROWN, RelicId.GYRE_ENGINE, rebirth = 3)
         crowned.replaceRelic(0, RelicId.STASIS_ANCHOR)
@@ -203,7 +203,7 @@ class BuildRuleIntegrityTest {
         state.takeDamage(0f, kind = IncomingDamage.PROJECTILE)
 
         assertEquals(0f, state.shield)
-        assertEquals(before - (state.maxHp * 0.1f - 1f), state.hp, 0.01f)
+        assertEquals(before - (state.maxHp * 0.05f - 1f), state.hp, 0.01f)
         assertEquals(0f, state.stormCharge)
     }
 
@@ -270,7 +270,7 @@ class BuildRuleIntegrityTest {
         sealed.gainData(40f)
         open.gainData(40f)
 
-        assertEquals(30L, sealed.dataCollected)
+        assertEquals(34L, sealed.dataCollected)
         assertEquals(40L, open.dataCollected)
     }
 

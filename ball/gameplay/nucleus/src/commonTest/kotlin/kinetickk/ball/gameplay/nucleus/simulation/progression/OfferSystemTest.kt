@@ -88,17 +88,20 @@ class OfferSystemTest {
 
     @Test
     fun offersHoldDistinctCardsAndExcludeFullyDisabledItems() {
-        val state = buildTestState(RelicId.GLASS_COMET).apply { lifetimeMatter = 4_000L }
-        val shieldCell = state.itemNamed("Shield Cell")
-        val capacitorAegis = state.itemNamed("Capacitor Aegis")
-        assertFalse(shieldCell in state.offerableItems())
-        assertFalse(capacitorAegis in state.offerableItems())
+        // Absolute Zero lets no Thermal land, so Kindling's and Flashpoint's Thermal rules are all disabled.
+        val state = buildTestState(RelicId.ABSOLUTE_ZERO).apply { lifetimeMatter = 4_000L }
+        val kindling = state.itemNamed("Kindling")
+        val flashpoint = state.itemNamed("Flashpoint")
+        val free = buildTestState().apply { lifetimeMatter = 4_000L }.offerableItems()
+        assertTrue(kindling in free && flashpoint in free, "Both are offered without the Relic")
+        assertFalse(kindling in state.offerableItems())
+        assertFalse(flashpoint in state.offerableItems())
         repeat(60) {
             state.buildItemChoices()
             val ids = state.choices.mapNotNull { it.itemId }
             assertEquals(3, ids.size)
             assertEquals(ids.size, ids.toSet().size, "An offer never repeats a card")
-            assertTrue(shieldCell.id !in ids && capacitorAegis.id !in ids)
+            assertTrue(kindling.id !in ids && flashpoint.id !in ids)
         }
     }
 

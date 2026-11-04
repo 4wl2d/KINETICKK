@@ -28,7 +28,13 @@ internal const val SHATTER_THROW_SPEED: Float = 680f
 /** Thunder Choir: radius in which a Shatter looks for Resonant enemies. */
 internal const val THUNDER_CHOIR_RADIUS: Float = 260f
 /** Thunder Choir: bonus to the knockback you deal, and the extra recoil you take. */
-internal const val THUNDER_CHOIR_KNOCKBACK: Float = 0.2f
+internal const val THUNDER_CHOIR_KNOCKBACK: Float = 0.4f
 internal const val THUNDER_CHOIR_RECOIL: Float = 0.15f
 /** Null Covenant: share of maximum integrity the liability removes. */
-internal const val NULL_COVENANT_INTEGRITY_CUT: Float = 0.1f
+internal const val NULL_COVENANT_INTEGRITY_CUT: Float = 0.05f
+
+/** Cinder Crown's liability: an Ignite near the Core burns this share of maximum integrity. */
+internal const val CINDER_SELF_BURN: Float = 0.03f
+
+/** Pandemic Codex's liability: enemies carrying a status move this share faster. */
+internal const val PANDEMIC_CARRIER_HASTE: Float = 0.1f

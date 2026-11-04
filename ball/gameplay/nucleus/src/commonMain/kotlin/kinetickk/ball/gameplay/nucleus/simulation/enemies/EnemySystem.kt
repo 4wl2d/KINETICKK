@@ -100,8 +100,9 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
             EnemyType.REFLECTOR -> updateReflector(enemy, dx, dy, distance, delta)
             EnemyType.HERALD -> updateHerald(enemy, dx, dy, distance, cadence, delta)
         }
-        enemy.x += enemy.vx * delta * motion
-        enemy.y += enemy.vy * delta * motion
+        val travel = motion * carrierHaste(enemy)
+        enemy.x += enemy.vx * delta * travel
+        enemy.y += enemy.vy * delta * travel
     }
     resolveEnemyObstacles()
     // Detonated Bombers leave without a kill.

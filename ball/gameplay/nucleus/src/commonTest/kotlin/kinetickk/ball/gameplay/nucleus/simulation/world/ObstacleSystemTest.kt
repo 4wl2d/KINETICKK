@@ -697,18 +697,15 @@ class ObstacleSystemTest {
     }
 
     @Test
-    fun glassCometDoublesCollisionDamageAndKeepsShieldsOut() {
+    fun glassCometRaisesCollisionDamageByHalf() {
         val plain = buildTestState()
         val speed = plain.bandSpeed(0.4f)
         plain.ramAsteroid(speed)
         val plainShare = (plain.maxHp - plain.hp) / plain.maxHp
         assertTrue(plainShare > 0f)
         val glass = buildTestState(RelicId.GLASS_COMET)
-        glass.maxShield = 300f
-        glass.shield = 300f
         glass.ramAsteroid(speed)
-        assertEquals(300f, glass.shield, "the liability keeps shields from absorbing it")
-        assertEquals(plainShare * 2f, (glass.maxHp - glass.hp) / glass.maxHp, 0.0005f)
+        assertEquals(plainShare * 1.5f, (glass.maxHp - glass.hp) / glass.maxHp, 0.0005f)
     }
 
     @Test

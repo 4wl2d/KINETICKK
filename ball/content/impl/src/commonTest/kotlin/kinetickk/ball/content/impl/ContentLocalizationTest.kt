@@ -187,8 +187,8 @@ class ContentLocalizationTest {
         assertTrue(perpetual.upsideText(AppLanguage.English, 1).contains("adds 12 % damage"))
         assertTrue(perpetual.upsideText(AppLanguage.English, 3).contains("adds 18 % damage"))
         val verdant = content.relics.first { it.name == "Verdant Rot" }
-        assertTrue(verdant.upsideText(AppLanguage.English, 2).contains("heals you 0.3 per second"))
-        assertTrue(verdant.upsideText(AppLanguage.Russian, 1).contains("лечит вас на 0,25 в секунду"))
+        assertTrue(verdant.upsideText(AppLanguage.English, 2).contains("heals you 0.45 per second"))
+        assertTrue(verdant.upsideText(AppLanguage.Russian, 1).contains("лечит вас на 0,4 в секунду"))
     }
 
     @Test

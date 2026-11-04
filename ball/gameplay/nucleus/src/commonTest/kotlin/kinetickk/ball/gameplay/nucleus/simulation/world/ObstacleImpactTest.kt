@@ -229,8 +229,8 @@ class ObstacleImpactTest {
             shield = 200f
         }
         glass.ramRock(speed)
-        assertEquals(200f, glass.shield, "Glass Comet keeps shields out")
-        assertEquals(damage * 2f, glass.lost(), 0.01f, "all of the doubled hit reaches integrity")
+        assertEquals(damage * 1.5f * 0.4f, glass.lost(), 0.01f, "Glass Comet's larger hit bleeds through the shield as any hit")
+        assertEquals(200f - damage * 1.5f * 0.6f, glass.shield, 0.01f)
     }
 
     @Test

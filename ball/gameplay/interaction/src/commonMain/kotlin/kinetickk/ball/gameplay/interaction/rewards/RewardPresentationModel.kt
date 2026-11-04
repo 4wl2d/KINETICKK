@@ -511,8 +511,6 @@ internal data class RewardStatPresentation(
     val improved: Boolean,
     val source: String? = null,
     val condition: String? = null,
-    /** A bound relic's liability voids this stat (struck through in the threat role). */
-    val suppressed: Boolean = false,
 )
 
 internal data class RewardConnection(

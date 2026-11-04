@@ -21,6 +21,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kinetickk.ball.gameplay.nucleus.simulation.flight.*
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.weapons.*
+import kotlin.math.max
 import kotlin.math.sqrt
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -95,7 +96,7 @@ class RelicRulesTest {
     }
 
     @Test
-    fun glassCometGrantsCooldownBoundInvulnerabilityAndRemovesEveryDefense() {
+    fun glassCometGrantsCooldownBoundInvulnerabilityAndTakesHalfAgainAsMuchDamage() {
         val state = buildTestState(RelicId.GLASS_COMET)
         assertEquals(surge(1f), state.relicSurge(), 0.0001f)
         state.setVelocityForTesting(1_000f, 0f)
@@ -113,12 +114,11 @@ class RelicRulesTest {
 
         val fragile = buildTestState(RelicId.GLASS_COMET).apply {
             maxShield = 50f
-            shield = 50f
             damageReduction = 0.5f
         }
-        assertEquals(0f, fragile.shieldCapacity())
+        assertEquals(50f, fragile.shieldCapacity(), "Shields still hold")
         fragile.takeDamage(10f, kind = IncomingDamage.PROJECTILE)
-        assertEquals(fragile.maxHp - 20f, fragile.hp, 0.001f)
+        assertEquals(fragile.maxHp - 10f * 1.5f * 0.5f, fragile.hp, 0.001f, "Damage reduction still applies to the larger hit")
     }
 
     @Test
@@ -127,12 +127,12 @@ class RelicRulesTest {
         val healthy = state.dummy()
         val plain = state.dealHit(healthy, 100f, HitSource.WEAPON)
         assertFalse(plain.critical)
-        assertEquals(80f, plain.amount, 0.01f)
+        assertEquals(90f, plain.amount, 0.01f)
 
-        val wounded = state.dummy().apply { hp = maxHp * 0.3f }
+        val wounded = state.dummy().apply { hp = maxHp * 0.45f }
         val execution = state.dealHit(wounded, 100f, HitSource.WEAPON)
-        assertTrue(execution.critical)
-        assertEquals(100f * (1.5f + 0.05f * 3f), execution.amount, 0.01f)
+        assertTrue(execution.critical, "Below half integrity every hit that can crit crits")
+        assertEquals(100f * (1.5f + 0.05f * 4f), execution.amount, 0.01f)
 
         val nearBreak = state.dummy().apply { status[StatusCell.STACKS + StatusElement.ION.ordinal] = 6f }
         assertTrue(state.dealHit(nearBreak, 100f, HitSource.WEAPON).critical)
@@ -141,7 +141,7 @@ class RelicRulesTest {
 
         // Critical chance converts only up to 50 %.
         state.critChance = 0.75f
-        assertEquals(100f * (1.5f + 0.5f * 3f), state.dealHit(wounded, 100f, HitSource.WEAPON).amount, 0.01f)
+        assertEquals(100f * (1.5f + 0.5f * 4f), state.dealHit(wounded, 100f, HitSource.WEAPON).amount, 0.01f)
     }
 
     @Test
@@ -208,7 +208,7 @@ class RelicRulesTest {
         assertEquals(0f, target.status[StatusCell.CINDER_BANK], "Ignite releases the bank")
         assertTrue(target.maxHp - target.hp > bank)
         assertEquals(2, neighbor.stacksOf(StatusElement.THERMAL), "A direct Ignite spreads two Thermal")
-        assertEquals(state.maxHp * 0.96f, state.hp, 0.001f, "An Ignite next to the Core burns 4 % integrity")
+        assertEquals(state.maxHp * 0.97f, state.hp, 0.001f, "An Ignite next to the Core burns 3 % integrity")
     }
 
     @Test
@@ -228,7 +228,7 @@ class RelicRulesTest {
         assertTrue(state.overdriveExtension > OVERDRIVE_EXTENSION_CAP - 0.01f)
 
         state.overdriveTime = 0f
-        assertEquals(70f, state.dealHit(state.dummy(), 100f, HitSource.WEAPON, canCrit = false).amount, 0.01f)
+        assertEquals(85f, state.dealHit(state.dummy(), 100f, HitSource.WEAPON, canCrit = false).amount, 0.01f)
     }
 
     @Test
@@ -288,7 +288,7 @@ class RelicRulesTest {
         assertEquals(1f - 0.45f, state.enemyMotionScale(slowed), 0.0001f)
 
         state.setBrake(false)
-        assertEquals(0.7f, state.buildActivationBonus(), 0.0001f, "Activation −30 % while not braking")
+        assertEquals(0.85f, state.buildActivationBonus(), 0.0001f, "Activation −15 % while not braking")
         state.relicOnBrakeRelease()
         assertEquals(0, state.stasisBank)
         assertEquals(STASIS_MAX_BANK, state.projectiles.count { !it.hostile })
@@ -365,14 +365,14 @@ class RelicRulesTest {
 
         state.stormCharge = 0.6f
         state.takeDamage(1f, kind = IncomingDamage.PROJECTILE)
-        assertEquals(state.maxHp - 1f - state.maxHp * 0.1f, state.hp, 0.001f)
+        assertEquals(state.maxHp - 1f - state.maxHp * 0.05f, state.hp, 0.001f)
         assertEquals(0f, state.stormCharge)
     }
 
     @Test
     fun aegisInversionTurnsHealingIntoShieldAndNovasOnABreakButNeverRestoresIntegrity() {
         val state = buildTestState(RelicId.AEGIS_INVERSION)
-        assertEquals(state.maxHp * 0.6f, state.shieldCapacity(), 0.001f)
+        assertEquals(state.maxHp * AEGIS_INVERSION_CAPACITY, state.shieldCapacity(), 0.001f)
         state.hp = 50f
         state.heal(20f, HealSource.ITEM)
         assertEquals(50f, state.hp)
@@ -388,7 +388,8 @@ class RelicRulesTest {
         state.timeSinceDamage = 10f
         state.shieldRechargeDelay = 0f
         state.updateSurvival(1f)
-        assertEquals(0f, state.shield, "Shields no longer recharge on their own")
+        assertEquals(max(2f, state.shieldCapacity() * 0.09f) * AEGIS_INVERSION_RECHARGE, state.shield, 0.001f,
+            "Shields recharge on their own at half speed")
     }
 
     @Test
@@ -410,28 +411,31 @@ class RelicRulesTest {
     }
 
     @Test
-    fun eventHorizonDragsEnemiesInAndPunishesGraviticTargetsButDoublesContactRisk() {
+    fun eventHorizonDragsEnemiesWhileBrakingButStopsShortAndHardensImpacts() {
         val state = buildTestState(RelicId.EVENT_HORIZON)
         val pulled = state.dummy(x = 200f)
         state.updateRelicRuntime(0.1f)
+        assertEquals(0f, pulled.vx, "Without the brake the horizon holds nothing")
+        state.setBrake(true)
+        state.updateRelicRuntime(0.1f)
         assertTrue(pulled.vx < 0f)
         val far = state.dummy(x = 400f)
+        val close = state.dummy(x = 100f)
         state.updateRelicRuntime(0.1f)
         assertEquals(0f, far.vx)
+        assertEquals(0f, close.vx, "Inside the standoff the pull lets go")
 
+        assertEquals(0.3f, state.vulnerability(pulled, HitSource.IMPACT), 0.0001f)
         pulled.status[StatusCell.STACKS + StatusElement.GRAVITIC.ordinal] = 1f
-        assertEquals(0.04f + 0.4f, state.vulnerability(pulled, HitSource.IMPACT), 0.0001f)
+        assertEquals(0.04f + 2 * 0.3f, state.vulnerability(pulled, HitSource.IMPACT), 0.0001f)
         assertEquals(0f, state.vulnerability(pulled, HitSource.WEAPON), 0.0001f)
 
-        // The liability removes the latched and level-up vacuums; the radius itself is unchanged.
-        assertEquals(state.pickupRadius, state.effectivePickupRadius(), 0.001f)
-        assertFalse(state.latchedVacuumActive())
         state.takeDamage(10f, kind = IncomingDamage.CONTACT)
-        assertEquals(state.maxHp - 15f, state.hp, 0.001f)
+        assertEquals(state.maxHp - 10f, state.hp, 0.001f)
     }
 
     @Test
-    fun verdantRotHealsFromNearbyRotOnlyAndMakesItDangerous() {
+    fun verdantRotHealsFromNearbyRotAndHalvesEveryOtherHeal() {
         val state = buildTestState(RelicId.VERDANT_ROT)
         val struck = state.dummy()
         state.dealHit(struck, 10f, HitSource.IMPACT, canCrit = false)
@@ -439,18 +443,13 @@ class RelicRulesTest {
 
         state.hp = 50f
         state.heal(20f, HealSource.REPAIR)
-        assertEquals(50f, state.hp, "All other healing is disabled")
+        assertEquals(60f, state.hp, "All other healing is halved")
         val rotting = state.dummy(x = 100f).apply { status[StatusCell.STACKS + StatusElement.ENTROPY.ordinal] = 4f }
         state.updateRelicRuntime(1f)
-        assertEquals(51f, state.hp, 0.001f)
+        assertEquals(60f + 4 * 0.4f, state.hp, 0.001f)
         rotting.status[StatusCell.STACKS + StatusElement.ENTROPY.ordinal] = 40f
         state.updateRelicRuntime(1f)
-        assertEquals(51f + state.verdantCap(), state.hp, 0.001f)
-
-        rotting.status[StatusCell.STACKS + StatusElement.ENTROPY.ordinal] = 10f
-        state.hp = 50f
-        state.takeDamage(10f, kind = IncomingDamage.PROJECTILE)
-        assertEquals(50f - 11.5f, state.hp, 0.001f)
+        assertEquals(61.6f + state.verdantCap(), state.hp, 0.001f)
     }
 
     @Test
@@ -460,13 +459,16 @@ class RelicRulesTest {
         val first = state.dummy(x = 50f)
         val second = state.dummy(x = 100f)
         val third = state.dummy(x = 150f)
-        assertEquals(1.2f, state.enemyMotionScale(carrier), 0.0001f)
+        assertEquals(1f, state.enemyMotionScale(carrier), 0.0001f, "Carriers attack at their usual cadence")
+        assertEquals(1.1f, state.carrierHaste(carrier), 0.0001f)
+        assertEquals(1f, state.carrierHaste(first), 0.0001f)
 
         carrier.hp = 0f
         state.sweepKills()
-        assertEquals(3, first.stacksOf(StatusElement.ION))
+        // 80 % of the carrier's five stacks, rounded down.
+        assertEquals(4, first.stacksOf(StatusElement.ION))
         assertEquals(1, first.generationOf(StatusElement.ION))
-        assertEquals(3, second.stacksOf(StatusElement.ION))
+        assertEquals(4, second.stacksOf(StatusElement.ION))
         assertEquals(0, third.stacksOf(StatusElement.ION))
     }
 
@@ -507,7 +509,7 @@ class RelicRulesTest {
     @Test
     fun ouroborosSealAnswersOneLethalBlowThenLocksItsSlot() {
         val state = buildTestState(RelicId.OUROBOROS_SEAL, rebirth = 5)
-        assertEquals(0.75f, state.dataGainLiability())
+        assertEquals(0.85f, state.dataGainLiability())
         state.acquireRelic(RelicId.GYRE_ENGINE)
         val near = state.dummy(x = 100f)
         state.elapsed = 10f
@@ -553,7 +555,7 @@ class RelicRulesTest {
         assertFalse(state.build.upside(RelicId.GLASS_COMET))
         assertTrue(state.build.liability(RelicId.GLASS_COMET))
         state.takeDamage(10f, kind = IncomingDamage.PROJECTILE)
-        assertEquals(state.maxHp - 20f, state.hp, 0.001f, "The severed Glass Comet still doubles damage")
+        assertEquals(state.maxHp - 15f, state.hp, 0.001f, "The severed Glass Comet still makes hits land half again as hard")
 
         state.elapsed = 5f + state.content.build.policy.severanceSeconds + 0.01f
         state.updateRelicRuntime(MutableGameState.FIXED_STEP)
@@ -599,25 +601,6 @@ class RelicRulesTest {
     }
 
     @Test
-    fun verdantRotDamageTakenFromNearbyRotIsCappedAtThirtyPercent() {
-        val state = buildTestState(RelicId.VERDANT_ROT)
-        val rotting = state.dummy(x = 100f)
-        val distant = state.dummy(x = 200f).apply { status[StatusCell.STACKS + StatusElement.ENTROPY.ordinal] = 10f }
-        fun taken(stacks: Int): Float {
-            rotting.status[StatusCell.STACKS + StatusElement.ENTROPY.ordinal] = stacks.toFloat()
-            state.hp = 50f
-            state.hurtCooldown = 0f
-            state.takeDamage(10f, kind = IncomingDamage.PROJECTILE)
-            return 50f - state.hp
-        }
-        assertEquals(10f, taken(0), 0.001f, "Rot beyond 160 u does not count")
-        assertEquals(11.5f, taken(10), 0.001f)
-        assertEquals(13f, taken(20), 0.001f)
-        assertEquals(13f, taken(40), 0.001f)
-        assertEquals(10, distant.stacksOf(StatusElement.ENTROPY))
-    }
-
-    @Test
     fun cinderCrownBurnsAtMostOncePerThreeQuartersOfASecondAndOnlyDirectIgnitesSpread() {
         val state = buildTestState(RelicId.CINDER_CROWN)
         fun igniteAt(time: Float, x: Float, y: Float, generation: Int = 0) = state.dummy(x = x, y = y).also { target ->
@@ -626,17 +609,17 @@ class RelicRulesTest {
             assertEquals(0, target.stacksOf(StatusElement.THERMAL), "Ignite at $time")
         }
         igniteAt(0f, 60f, 0f)
-        assertEquals(96f, state.hp, 0.001f)
+        assertEquals(97f, state.hp, 0.001f)
         igniteAt(0.5f, -60f, 0f)
-        assertEquals(96f, state.hp, 0.001f, "The self-burn rests for 0.75 s")
+        assertEquals(97f, state.hp, 0.001f, "The self-burn rests for 0.75 s")
         igniteAt(0.8f, 0f, 60f)
-        assertEquals(92f, state.hp, 0.001f)
+        assertEquals(94f, state.hp, 0.001f)
 
         // A cascaded Ignite neither spreads nor burns the Core.
         val neighbor = state.dummy(x = 0f, y = -140f)
         igniteAt(2f, 0f, -60f, generation = 1)
         assertEquals(0, neighbor.stacksOf(StatusElement.THERMAL))
-        assertEquals(92f, state.hp, 0.001f)
+        assertEquals(94f, state.hp, 0.001f)
         igniteAt(4f, 0f, -60f)
         assertEquals(2, neighbor.stacksOf(StatusElement.THERMAL), "A direct Ignite spreads")
     }

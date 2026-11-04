@@ -5,13 +5,11 @@ package kinetickk.ball.gameplay.nucleus.simulation.builds
 
 import kinetickk.ball.content.api.BuffStat
 import kinetickk.ball.content.api.BuildTag
-import kinetickk.ball.content.api.ConversionKind
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.EffectAction
 import kinetickk.ball.content.api.EffectCondition
 import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.ItemDefinition
-import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
@@ -79,23 +77,11 @@ internal fun MutableGameState.itemSuppressedShare(item: ItemDefinition): Float {
         total++
         if (disabled) suppressed++
     }
-    val verdant = build.liability(RelicId.VERDANT_ROT)
-    val glass = build.liability(RelicId.GLASS_COMET)
     val frozenOut = build.liability(RelicId.ABSOLUTE_ZERO)
-    item.stats.forEach { stat ->
-        count(
-            (verdant && stat.effect == ItemEffect.REGEN && build.regenerationToDecay == 0f) ||
-                (glass && (stat.effect == ItemEffect.SHIELD_CAPACITY || stat.effect == ItemEffect.DAMAGE_REDUCTION)),
-        )
-    }
+    // No liability disables a stat or an action; each still counts as a part.
+    total += item.stats.size
     item.clauses.forEach { clause ->
-        clause.actions.forEach { action ->
-            count(
-                (verdant && action is EffectAction.Heal) ||
-                    (glass && action is EffectAction.Shield) ||
-                    (glass && clause.trigger == EffectTrigger.SHIELD_BREAK),
-            )
-        }
+        total += clause.actions.size
         clause.conditions.forEach { condition ->
             if (frozenOut && condition is EffectCondition.ElementIs && condition.element == StatusElement.THERMAL) count(true)
             // No Thermal lands, so no Thermal reaction fires, leaves a field or a mark.
@@ -113,7 +99,7 @@ internal fun MutableGameState.itemSuppressedShare(item: ItemDefinition): Float {
                 is ItemRule.ReactionKeystone -> rule.reaction.involves(StatusElement.THERMAL)
                 is ItemRule.ReactionTuning -> rule.reaction?.involves(StatusElement.THERMAL) == true
                 else -> false
-            } || glass && rule is ItemRule.Convert && rule.kind == ConversionKind.OVERHEAL_TO_SHIELD,
+            },
         )
     }
     return if (total == 0) 0f else suppressed.toFloat() / total

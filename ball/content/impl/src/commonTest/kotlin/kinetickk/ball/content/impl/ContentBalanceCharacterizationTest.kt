@@ -113,9 +113,10 @@ class ContentBalanceCharacterizationTest {
         val build = ui.build
 
         // Rocket Clap's text says its launch never runs against the Core's travel
-        // (c5ea14c28212923a -> 7ddff247e2f622d1).
+        // (c5ea14c28212923a -> 7ddff247e2f622d1); Shattered Aegis no longer says Glass ignores shields, since Glass
+        // Comet's liability is now only damage taken (7ddff247e2f622d1 -> b20ec3dba57e1e72).
         assertEquals(
-            "7ddff247e2f622d1",
+            "b20ec3dba57e1e72",
             goldenFingerprint {
                 build.elements.forEach { element ->
                     add(element.element.name)
@@ -424,13 +425,15 @@ class ContentBalanceCharacterizationTest {
         // The Relic budget (one per slot, so a bind always finds an open slot), its Elite-drop schedule and the Meld.
         assertEquals(ui.relicPolicy.maxSlots, ui.relicPolicy.acquisitionsPerRun)
         assertEquals(listOf(30f, 165f), listOf(ui.relicPolicy.firstUnlockSeconds, ui.relicPolicy.unlockIntervalSeconds))
-        assertEquals(listOf(0.04f, 0.03f), listOf(ui.relicPolicy.meldDamage, ui.relicPolicy.meldIntegrity))
+        assertEquals(listOf(0.05f, 0.03f), listOf(ui.relicPolicy.meldDamage, ui.relicPolicy.meldIntegrity))
         // One weapon change a run, keeping 60 % of the weapon level.
         assertEquals(1, ui.tempo.weaponChangesPerRun)
         assertEquals(0.6f, ui.tempo.weaponChangeKeptLevelShare)
         assertEquals(RelicId.entries.toList(), relics.map(RelicDefinition::id))
+        // The Relic value pass softened the liabilities that outweighed their rules and raised weak upsides
+        // (ac78cf6e774b74ca -> 4aecfc2879898449; work notes relics.md).
         assertEquals(
-            "ac78cf6e774b74ca",
+            "4aecfc2879898449",
             goldenFingerprint {
                 add(relics.size)
                 relics.forEach { relic ->

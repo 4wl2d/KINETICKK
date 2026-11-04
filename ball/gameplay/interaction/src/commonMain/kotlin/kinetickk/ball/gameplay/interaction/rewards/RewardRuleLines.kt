@@ -4,13 +4,9 @@
 package kinetickk.ball.gameplay.interaction.rewards
 
 import kinetickk.ball.content.api.ContentBounds
-import kinetickk.ball.content.api.ConversionKind
-import kinetickk.ball.content.api.EffectAction
 import kinetickk.ball.content.api.EffectClause
 import kinetickk.ball.content.api.EffectCondition
-import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.ItemDefinition
-import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RuleLineKind
@@ -70,9 +66,8 @@ internal fun GameplayRenderModel.rewardItemRules(
     val lines = ArrayList<RewardRuleLine>()
     // Each stat cost, clause and rule is written on its own so every line knows the part it came from.
     item.stats.filter { it.amount < 0f }.forEach { stat ->
-        val void = suppressor(stat, liable) != null
         item.copy(stats = immutableListOf(stat), clauses = immutableListOf(), rules = immutableListOf(), risk = false)
-            .ruleLines(language, context).forEach { lines += RewardRuleLine(it.kind, it.text, it.element, void) }
+            .ruleLines(language, context).forEach { lines += RewardRuleLine(it.kind, it.text, it.element) }
     }
     item.clauses.forEach { clause ->
         val void = clause.suppressor(liable) != null
@@ -208,19 +203,13 @@ private val SpaceBeforeNumber = Regex(" (?=[−+]?\\d)")
 internal val ChoiceOption.keepsActiveLoadout: Boolean get() = type == ChoiceType.ACTIVE_SLOT && activeSlot == null
 
 /**
- * The bound relic whose liability voids this clause, mirroring the nucleus suppression read:
- * Glass Comet voids shields, Verdant Rot voids healing, Absolute Zero voids Thermal conditions.
+ * The bound relic whose liability voids this clause, mirroring the nucleus suppression read: Absolute Zero voids
+ * Thermal conditions.
  */
-private fun EffectClause.suppressor(liable: Set<RelicId>): RelicId? = when {
-    liable.isEmpty() -> null
-    RelicId.GLASS_COMET in liable && trigger == EffectTrigger.SHIELD_BREAK -> RelicId.GLASS_COMET
-    RelicId.ABSOLUTE_ZERO in liable && conditions.any { it is EffectCondition.ElementIs && it.element == StatusElement.THERMAL } ->
+private fun EffectClause.suppressor(liable: Set<RelicId>): RelicId? =
+    if (RelicId.ABSOLUTE_ZERO in liable && conditions.any { it is EffectCondition.ElementIs && it.element == StatusElement.THERMAL }) {
         RelicId.ABSOLUTE_ZERO
-    actions.isNotEmpty() && actions.all { action ->
-        (RelicId.GLASS_COMET in liable && action is EffectAction.Shield) || (RelicId.VERDANT_ROT in liable && action is EffectAction.Heal)
-    } -> if (actions.any { it is EffectAction.Shield }) RelicId.GLASS_COMET else RelicId.VERDANT_ROT
-    else -> null
-}
+    } else null
 
 private fun ItemRule.suppressor(liable: Set<RelicId>): RelicId? {
     if (liable.isEmpty()) return null
@@ -232,40 +221,9 @@ private fun ItemRule.suppressor(liable: Set<RelicId>): RelicId? {
         is ItemRule.BreakSpread -> element
         else -> null
     } == StatusElement.THERMAL
-    return when {
-        RelicId.ABSOLUTE_ZERO in liable && thermal -> RelicId.ABSOLUTE_ZERO
-        RelicId.GLASS_COMET in liable && this is ItemRule.Convert && kind == ConversionKind.OVERHEAL_TO_SHIELD -> RelicId.GLASS_COMET
-        else -> null
-    }
+    return if (RelicId.ABSOLUTE_ZERO in liable && thermal) RelicId.ABSOLUTE_ZERO else null
 }
 
-/**
- * The bound relic whose liability voids this passive stat, mirroring the nucleus: Glass Comet
- * voids shield capacity and damage reduction, Verdant Rot voids regeneration unless an owned item
- * turns regeneration into decay.
- */
-internal fun GameplayRenderModel.suppressor(stat: StatDelta, liable: Set<RelicId>): RelicId? = when {
-    liable.isEmpty() -> null
-    RelicId.GLASS_COMET in liable && (stat.effect == ItemEffect.SHIELD_CAPACITY || stat.effect == ItemEffect.DAMAGE_REDUCTION) ->
-        RelicId.GLASS_COMET
-    RelicId.VERDANT_ROT in liable && stat.effect == ItemEffect.REGEN && !regenerationDecays() -> RelicId.VERDANT_ROT
-    else -> null
-}
-
-/** Whether an owned item turns regeneration into decay (Verdant Rot then leaves regeneration alone). */
-private fun GameplayRenderModel.regenerationDecays(): Boolean = content.items.any { item ->
-    itemStack(item.id) > 0 && item.rules.any { it is ItemRule.Convert && it.kind == ConversionKind.REGENERATION_TO_DECAY }
-}
-
-/** The nucleus preview row of a passive stat the suppression mirror can void. */
-internal fun ItemEffect.previewStatName(): String? = when (this) {
-    ItemEffect.SHIELD_CAPACITY -> "Shield"
-    ItemEffect.DAMAGE_REDUCTION -> "Damage reduction"
-    ItemEffect.REGEN -> "Regeneration"
-    else -> null
-}
-
-/** The first bound relic that voids part of [item]. */
-internal fun GameplayRenderModel.suppressor(item: ItemDefinition, liable: Set<RelicId>): RelicId? =
-    item.stats.firstNotNullOfOrNull { suppressor(it, liable) } ?: item.clauses.firstNotNullOfOrNull { it.suppressor(liable) }
-        ?: item.rules.firstNotNullOfOrNull { it.suppressor(liable) }
+/** The first bound relic that voids part of [item] (a clause or a rule; no liability voids a stat). */
+internal fun suppressor(item: ItemDefinition, liable: Set<RelicId>): RelicId? =
+    item.clauses.firstNotNullOfOrNull { it.suppressor(liable) } ?: item.rules.firstNotNullOfOrNull { it.suppressor(liable) }

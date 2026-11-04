@@ -85,11 +85,14 @@ internal fun MutableGameState.enemyMotionScale(enemy: Enemy): Float {
     if (stasisActive() && distanceSquared(enemy.x, enemy.y, coreX, coreY) <= square(stasisRadius())) {
         scale *= 1f - stasisSlow()
     }
-    if (build.liability(RelicId.PANDEMIC_CODEX) && totalStacks(enemy) > 0) scale *= 1.2f
     // Hypercube's cage slows the ordinary enemies inside.
     scale *= hypercubeMotionScale(enemy)
     scale *= layerTimeScale(enemy)
     return scale
 }
+
+/** Pandemic Codex's liability: an enemy carrying a status travels faster; its attack cadence is unchanged. */
+internal fun MutableGameState.carrierHaste(enemy: Enemy): Float =
+    if (build.liability(RelicId.PANDEMIC_CODEX) && totalStacks(enemy) > 0) 1f + PANDEMIC_CARRIER_HASTE else 1f
 
 internal val MutableGameState.anchorBreaksOnRelease: Boolean get() = tagTier(BuildTag.ANCHOR) >= 3

@@ -8,7 +8,6 @@ import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RewardFocus
-import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.RuleLineKind
 import kinetickk.ball.content.api.liabilityText
 import kinetickk.ball.content.api.localizedContent
@@ -71,11 +70,10 @@ internal fun GameplayRenderModel.rewardCardPresentation(
         preview?.forecasts?.any { it.kind == ForecastKind.SUPPRESSED } == true)
     // The liabilities voiding parts of a suppressed item (only read when the nucleus reports it).
     val liable = if (suppressedNow) liableRelics() else emptySet()
-    val voidedStats = if (item != null && liable.isNotEmpty()) item.stats.filter { suppressor(it, liable) != null } else emptyList()
-    val previewChanges = rewardPreviewChanges(choice, preview, displayedRelicId, voidedStats, language)
+    val previewChanges = rewardPreviewChanges(choice, preview, displayedRelicId, language)
     val itemStackAfter = item?.let { (itemStack(it.id) + 1).coerceAtMost(it.maxStacks) } ?: 0
     val reborn = item != null && (choice.reborn || item.id in build.rebornItemIds)
-    val itemEffects = rewardItemEffects(item, preview, itemStackAfter, reborn, voidedStats, language)
+    val itemEffects = rewardItemEffects(item, preview, itemStackAfter, reborn, language)
     val passiveRules = item?.let { rewardItemRules(it, reborn, itemStackAfter, liable, language) }.orEmpty()
     // An active item leads with its active part (the effect at the rank it reaches), then labels its passive.
     val itemRules = if (item?.active != null) rewardActiveRules(item, itemStackAfter, language) + passiveRules else passiveRules
@@ -139,7 +137,6 @@ private fun GameplayRenderModel.rewardItemEffects(
     preview: RewardPreview?,
     itemStackAfter: Int,
     reborn: Boolean,
-    voidedStats: List<StatDelta>,
     language: AppLanguage,
 ): List<RewardStatPresentation> {
     val stackPolicy = content.build.policy
@@ -148,23 +145,21 @@ private fun GameplayRenderModel.rewardItemEffects(
         // amounts are the item's costs: they read as cost lines with the rules, never as stats.
         val marginal = stackPolicy.stackMagnitude(itemStackAfter) - stackPolicy.stackMagnitude(itemStackAfter - 1)
         val scale = marginal * if (reborn) stackPolicy.rebornMagnitude else 1f
-        item.stats.filter { it.amount > 0f }.map { stat -> stat.presentation(scale, numberScale, language).copy(suppressed = stat in voidedStats) }
+        item.stats.filter { it.amount > 0f }.map { stat -> stat.presentation(scale, numberScale, language) }
     } else emptyList()
 }
 
-/** A preview's stat changes, each naming the relic it comes from (unless it is the offered one) and whether it is voided. */
+/** A preview's stat changes, each naming the relic it comes from (unless it is the offered one). */
 private fun GameplayRenderModel.rewardPreviewChanges(
     choice: ChoiceOption,
     preview: RewardPreview?,
     displayedRelicId: RelicId?,
-    voidedStats: List<StatDelta>,
     language: AppLanguage,
 ): List<RewardStatPresentation> = preview?.changes?.map { change ->
     change.presentation(language).copy(
         source = change.sourceRelic?.takeIf {
             it != displayedRelicId || choice.relicAction == RelicChoiceAction.REPLACE
         }?.let { content.relic(it).name.localizedContent(language) },
-        suppressed = voidedStats.any { it.effect.previewStatName() == change.name },
     )
 }.orEmpty()
 
@@ -219,7 +214,7 @@ private fun GameplayRenderModel.rewardDescriptions(
     }
 }.filter(String::isNotBlank).distinct()
 
-/** What one Meld gives: "Seals the empty slot for this run: damage dealt +4%, max integrity +3%". */
+/** What one Meld gives: "Seals the empty slot for this run: damage dealt +5%, max integrity +3%". */
 private fun GameplayRenderModel.meldEffect(language: AppLanguage): String {
     val policy = content.relicPolicy
     fun percent(share: Float) = overlayDecimal((share * 100f).roundToLong().toFloat(), language)

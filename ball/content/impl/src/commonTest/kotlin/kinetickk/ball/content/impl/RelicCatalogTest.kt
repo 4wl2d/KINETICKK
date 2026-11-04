@@ -57,14 +57,14 @@ class RelicCatalogTest {
         assertEquals(StatusElement.SONIC, choir.aspect.element)
         assertEquals(listOf(RelicKey.ECHO, RelicKey.SHIELD), choir.keys.toList())
         assertEquals(listOf(kinetickk.ball.content.api.BuildTag.RAM, kinetickk.ball.content.api.BuildTag.ANCHOR), choir.attunedTags.toList())
-        assertEquals(listOf(2f, 3f, 4f), (1..3).map { choir.value(0, it) })
-        assertEquals(listOf(60f, 80f, 100f), (1..3).map { choir.value(1, it) })
+        assertEquals(listOf(3f, 4f, 5f), (1..3).map { choir.value(0, it) })
+        assertEquals(listOf(100f, 120f, 140f), (1..3).map { choir.value(1, it) })
 
         assertEquals(RelicAspect.VOID, covenant.aspect)
         assertEquals(StatusElement.VOID, covenant.aspect.element)
         assertEquals(listOf(RelicKey.VOID, RelicKey.SHIELD), covenant.keys.toList())
         assertEquals(listOf(kinetickk.ball.content.api.BuildTag.PRECISION, kinetickk.ball.content.api.BuildTag.CHAIN), covenant.attunedTags.toList())
-        assertEquals(listOf(40f, 60f, 80f), (1..3).map { covenant.value(0, it) })
+        assertEquals(listOf(80f, 100f, 120f), (1..3).map { covenant.value(0, it) })
 
         listOf(choir, covenant).forEach { relic ->
             assertEquals(0, relic.minimumRebirth)

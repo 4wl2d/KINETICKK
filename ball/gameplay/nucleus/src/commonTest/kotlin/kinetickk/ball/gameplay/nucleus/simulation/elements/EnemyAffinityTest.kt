@@ -389,7 +389,10 @@ class EnemyAffinityTest {
                 addTestField(CombatFieldKind.DARK_STAR, x = target.x - 40f, y = target.y, radius = 100f, pull = 240f)
                 updateCombatFields(0.1f)
             },
-            Triple("Event Horizon pull", RelicId.EVENT_HORIZON) { updateRelicRuntime(0.1f) },
+            Triple("Event Horizon pull", RelicId.EVENT_HORIZON) {
+                setBrake(true)
+                updateRelicRuntime(0.1f)
+            },
             Triple("Entropy Field drag", null) {
                 equipWeaponForTesting(WeaponId.ENTROPY_FIELD)
                 resolveWeaponDamage(0.5f)

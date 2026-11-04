@@ -331,7 +331,7 @@ private fun MutableGameState.updateCrescendo() {
 
 /**
  * Swarm Queen: every intercept interval each drone erases one hostile bolt near it (bolt budget), and loose Data
- * in reach latches onto the Core (Event Horizon's liability keeps the latch off).
+ * in reach latches onto the Core.
  */
 private fun MutableGameState.updateSwarmQueen() {
     val ability = characterRuntime
@@ -350,7 +350,6 @@ private fun MutableGameState.updateSwarmQueen() {
             }
         }
     }
-    if (!latchedVacuumActive()) return
     val reach = square(apexValue(SWARM_DATA_RANGE))
     for (index in pickups.indices) {
         val pickup = pickups[index]

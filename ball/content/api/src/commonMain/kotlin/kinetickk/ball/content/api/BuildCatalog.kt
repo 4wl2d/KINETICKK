@@ -309,7 +309,7 @@ private val DefaultBuildCatalog = BuildCatalog(
         pairing(RelicPairingId.EXTINGUISHED, RelicId.CINDER_CROWN, RelicId.ABSOLUTE_ZERO, RelicPairingKind.DISCORD,
             "Extinguished", "The crown banks Cryo instead, and every Freeze releases the bank at 60 %."),
         pairing(RelicPairingId.SHATTERED_AEGIS, RelicId.GLASS_COMET, RelicId.AEGIS_INVERSION, RelicPairingKind.DISCORD,
-            "Shattered Aegis", "Glass ignores shields: inverted healing becomes 1 % damage per 3 points instead, lost when hit."),
+            "Shattered Aegis", "Inverted healing becomes 1 % damage per 3 points instead of shield, lost when hit."),
         pairing(RelicPairingId.CONTRADICTION, RelicId.PERPETUAL_VECTOR, RelicId.STASIS_ANCHOR, RelicPairingKind.DISCORD,
             "Contradiction", "Stasis only holds while you move slower than 400 u/s."),
         pairing(RelicPairingId.HEAVY_BLINK, RelicId.BLINK_DRIVE, RelicId.NEUTRON_HEART, RelicPairingKind.DISCORD,

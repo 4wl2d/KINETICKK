@@ -182,7 +182,7 @@ internal fun MutableGameState.arcCharge(enemy: Enemy) {
 /** Contagion, banked fire and the reaction verbs that read deaths. Runs for every death, eligible or not. */
 internal fun MutableGameState.onStatusCarrierDied(enemy: Enemy) {
     if (build.upside(RelicId.PANDEMIC_CODEX) && totalStacks(enemy) > 0) {
-        val share = min(0.8f, content.relic(RelicId.PANDEMIC_CODEX).value(0, relicRank(RelicId.PANDEMIC_CODEX)) / 100f *
+        val share = min(1f, content.relic(RelicId.PANDEMIC_CODEX).value(0, relicRank(RelicId.PANDEMIC_CODEX)) / 100f *
             build.relicUpside(RelicId.PANDEMIC_CODEX))
         var targets = 0
         var lastId = enemy.id

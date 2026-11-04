@@ -367,11 +367,10 @@ private fun MutableGameState.onFieldExpired(index: Int) {
     when (table.kind(index)) {
         CombatFieldKind.FUSION -> if (hasVerb(ReactionId.FUSION)) {
             hurlOccupants(x, y, radius, tunedForce(ReactionId.FUSION, reactionValue(ReactionId.FUSION, ACCRETION_THROW_VALUE)))
-            val latch = latchedVacuumActive()
             for (pickupIndex in pickups.indices) {
                 val pickup = pickups[pickupIndex]
                 if (!pickup.expires || pickup.attracted) continue
-                if (distanceSquared(x, y, pickup.x, pickup.y) <= square(radius + ACCRETION_LATCH_MARGIN)) pickup.attracted = latch
+                if (distanceSquared(x, y, pickup.x, pickup.y) <= square(radius + ACCRETION_LATCH_MARGIN)) pickup.attracted = true
             }
         }
         CombatFieldKind.NULL_WELL -> if (hasVerb(ReactionId.NULL_WELL) &&

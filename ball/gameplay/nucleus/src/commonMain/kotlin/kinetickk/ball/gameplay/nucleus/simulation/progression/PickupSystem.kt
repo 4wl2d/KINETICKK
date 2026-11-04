@@ -14,13 +14,11 @@ import kinetickk.ball.gameplay.nucleus.simulation.variety.*
 
 /**
  * Pickups drift from where they dropped until they enter the magnet radius; there they latch and home on
- * the Core at `max(vacuumSpeed, coreSpeed × factor)` with no damping until collected. Event Horizon's
- * liability turns the latch off: pickups are then only pulled while inside the radius, weaker at its rim.
- * Keys and Relic resonances never expire, and a latched pickup does not age while it homes.
+ * the Core at `max(vacuumSpeed, coreSpeed × factor)` with no damping until collected. Keys and Relic resonances
+ * never expire, and a latched pickup does not age while it homes.
  */
 internal fun MutableGameState.updatePickups(delta: Float) {
     val radius = effectivePickupRadius()
-    val latching = latchedVacuumActive()
     val tuning = content.pickups
     val homingSpeed = max(tuning.vacuumSpeed, speed * tuning.vacuumCoreSpeedFactor)
     val drag = exp(-1.8f * delta)
@@ -31,19 +29,13 @@ internal fun MutableGameState.updatePickups(delta: Float) {
         val dx = coreX - pickup.x
         val dy = coreY - pickup.y
         val distance = max(1f, length(dx, dy))
-        if (latching && !pickup.attracted && distance < radius) pickup.attracted = true
-        val homing = latching && pickup.attracted
+        if (!pickup.attracted && distance < radius) pickup.attracted = true
         // A latched pickup is on its way in and never fades before it arrives.
-        if (pickup.expires && !homing) pickup.life -= delta
-        if (homing) {
+        if (pickup.expires && !pickup.attracted) pickup.life -= delta
+        if (pickup.attracted) {
             pickup.vx = dx / distance * homingSpeed
             pickup.vy = dy / distance * homingSpeed
         } else {
-            if (!latching && distance < radius) {
-                val pull = (radius - distance) * 4.8f
-                pickup.vx += dx / distance * pull * delta
-                pickup.vy += dy / distance * pull * delta
-            }
             pickup.vx *= drag
             pickup.vy *= drag
         }
@@ -71,16 +63,12 @@ internal fun MutableGameState.oldestEvictablePickup(): Int {
     return repair
 }
 
-/** Event Horizon's liability disables the latched vacuum and the level-up vacuum. */
-internal fun MutableGameState.latchedVacuumActive(): Boolean =
-    !build.liability(kinetickk.ball.content.api.RelicId.EVENT_HORIZON)
-
 /**
- * A level-up, and the end of a choice, latch every Data pickup inside the viewport onto the Core
- * (unless Event Horizon's liability holds).
+ * A level-up, and the end of a choice, latch every Data pickup inside the viewport onto the Core (unless Event Horizon's
+ * liability holds).
  */
 internal fun MutableGameState.vacuumOnScreenData() {
-    if (!latchedVacuumActive() || pickups.isEmpty()) return
+    if (pickups.isEmpty() || build.liability(kinetickk.ball.content.api.RelicId.EVENT_HORIZON)) return
     val halfWidth = screenWidth * 0.5f
     val halfHeight = screenHeight * 0.5f
     for (index in pickups.indices) {

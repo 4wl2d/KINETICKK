@@ -4,7 +4,6 @@
 package kinetickk.ball.gameplay.nucleus.simulation.progression
 
 import kinetickk.ball.content.api.ItemEffect
-import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.projection.*
@@ -92,21 +91,6 @@ class PickupVacuumTest {
         chosen.choose(0)
         assertEquals(GamePhase.RUNNING, chosen.phase)
         assertTrue(loose.attracted, "the end of a choice vacuums Data too")
-    }
-
-    @Test
-    fun eventHorizonDisablesTheLatchAndTheLevelUpVacuumButKeepsTheRadius() {
-        val state = buildTestState(RelicId.EVENT_HORIZON)
-        assertEquals(state.pickupRadius, state.effectivePickupRadius())
-        val near = Pickup(PickupType.DATA, 200f, 0f)
-        val far = Pickup(PickupType.DATA, 600f, 0f)
-        state.pickups += listOf(near, far)
-        state.updatePickups(step)
-        assertFalse(near.attracted)
-        assertTrue(near.vx < 0f, "inside the radius it is still pulled")
-        assertTrue(near.vx > -950f * 0.5f, "but far slower than the vacuum")
-        state.grantDataForTesting(state.nextLevelData.toFloat() / state.dataGainLiability() + 1f)
-        assertFalse(far.attracted, "no level-up vacuum")
     }
 
     @Test
