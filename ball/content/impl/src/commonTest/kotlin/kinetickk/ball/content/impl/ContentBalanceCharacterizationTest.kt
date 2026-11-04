@@ -431,9 +431,9 @@ class ContentBalanceCharacterizationTest {
         assertEquals(0.6f, ui.tempo.weaponChangeKeptLevelShare)
         assertEquals(RelicId.entries.toList(), relics.map(RelicDefinition::id))
         // The Relic value pass softened the liabilities that outweighed their rules and raised weak upsides
-        // (ac78cf6e774b74ca -> 4aecfc2879898449; work notes relics.md).
+        // (ac78cf6e774b74ca -> e21591acc91061c9).
         assertEquals(
-            "4aecfc2879898449",
+            "e21591acc91061c9",
             goldenFingerprint {
                 add(relics.size)
                 relics.forEach { relic ->

@@ -233,7 +233,7 @@ internal fun MutableGameState.impactRecoilScale(): Float =
     if (build.liability(RelicId.THUNDER_CHOIR)) 1f + THUNDER_CHOIR_RECOIL else 1f
 
 /**
- * Null Covenant's liability: maximum integrity −10 % while it is bound or lingering. The cut stays 10 % of
+ * Null Covenant's liability: maximum integrity −5 % while it is bound or lingering. The cut stays 5 % of
  * the whole ceiling (the lowered one plus the cut), so later raises pay their share too, and it is returned
  * in full when the liability ends; integrity above the lowered ceiling is lost, and returning the ceiling
  * heals nothing.
