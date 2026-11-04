@@ -66,7 +66,8 @@ class NoPoiPlaythroughTest {
     @Test fun freshProfileAlsoWinsFurtherReferenceNoPoiSeeds() {
         population.filter { it.noPoiWin }.forEach { run ->
             assertTrue(run.seconds in 720f..900f, "seed=${run.seed} activeSeconds=${run.seconds}")
-            assertEquals(canonicalGameplayContent.relicPolicy.acquisitionsPerRun, run.relicClaims, "seed=${run.seed}")
+            // A win may leave the last opportunity unclaimed (no Elite fell after it unlocked); it never passes the budget.
+            assertTrue(run.relicClaims <= canonicalGameplayContent.relicPolicy.acquisitionsPerRun, "seed=${run.seed} claims=${run.relicClaims}")
         }
         val share = population.shareOf { it.noPoiWin }
         report("NOPOI FURTHER population ${population.count { it.noPoiWin }} of ${population.size} (${"%.3f".format(share)})")
