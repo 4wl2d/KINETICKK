@@ -14,7 +14,8 @@ import kotlin.test.assertTrue
  * with probability 0.99 on the 05885fa9 base and 0.58 with the active items. On the Elite-resonance base its ratio is
  * 0.567 (run-bootstrap SE 0.032; 0.600 on the tree before it and 0.695 on the 0.6.0 base), inside the design's band
  * by half a standard error (base ± 2 SE 0.50-0.63; a resampled population lands in the band with probability 0.71).
- * The band is a design target and never weakens.
+ * The band is a design target and never weakens. With the progression model's strong arm (Refit and Honing 10) it
+ * reads 0.610.
  */
 class ApexArchitectDiamondDefenceTest {
     @Test

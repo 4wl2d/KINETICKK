@@ -170,11 +170,11 @@ class EnemyRosterTest {
         assertEquals(mini, byType.getValue(EnemyType.PYRE_HERALD).encounter)
         assertEquals(mini?.copy(shiftSeconds = 2.5f), byType.getValue(EnemyType.THRONE).encounter)
         assertEquals(
-            BossEncounterSpec(3, 0.015f, 0.02f, 0.5f, 4f, enrageAttackRate = 1.35f, enrageAfterSeconds = 120f),
+            BossEncounterSpec(3, 0.0055f, 0.02f, 0.5f, 4f, enrageAttackRate = 1.35f, enrageAfterSeconds = 120f),
             byType.getValue(EnemyType.CARTOGRAPHER).encounter,
         )
         assertEquals(
-            BossEncounterSpec(4, 0.015f, 0.02f, 0.5f, 5f, enrageAttackRate = 1.35f, enrageAfterSeconds = 150f),
+            BossEncounterSpec(4, 0.0055f, 0.02f, 0.5f, 5f, enrageAttackRate = 1.35f, enrageAfterSeconds = 150f),
             byType.getValue(EnemyType.ANTECEDENT).encounter,
         )
         assertEquals(WorldDiscovery.CARTOGRAPHER, byType.getValue(EnemyType.CARTOGRAPHER).revealedBy)

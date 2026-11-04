@@ -130,6 +130,20 @@ internal fun gateUpgrades(shape: CoreShape, refit: Int, weapons: Set<WeaponId>, 
         List(WeaponId.entries.size) { if (WeaponId.entries[it] in weapons) honing else 0 },
     )
 
+/**
+ * The progression model's fully progressed profile (docs/balance/progression.md): every Matrix rank, [shape] with its
+ * Refit and Arc Coil with its Honing at the maximum level; the full and strong sweep arms fly it with the Pentagon.
+ */
+internal fun progressedProfile(
+    tier: Int,
+    shape: CoreShape = CoreShape.PENTAGON,
+    content: GameplayContentSnapshot = canonicalGameplayContent,
+): GameplayProfileSnapshot {
+    val maxLevel = content.upgrades.maxLevel
+    return gateProfile(GateMatrix.FULL, tier, shape, WeaponId.ARC_COIL, content = content,
+        upgrades = gateUpgrades(shape, maxLevel, gateOwnedWeapons(WeaponId.ARC_COIL), maxLevel))
+}
+
 /** The weapons a gate profile owns: the reference armory plus its starting weapon. */
 internal fun gateOwnedWeapons(weapon: WeaponId): Set<WeaponId> = ReferenceArmory.toSet() + weapon
 

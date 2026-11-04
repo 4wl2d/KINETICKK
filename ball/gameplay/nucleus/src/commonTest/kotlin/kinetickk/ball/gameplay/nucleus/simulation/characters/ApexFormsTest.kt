@@ -415,7 +415,7 @@ class ApexFormsTest {
         state.castNow()
         assertTrue(state.onCharacterDashDeparture(), "an off-beat Dash leaves on the beat")
         assertEquals(0, state.characterRuntime.beatStreak, "only a real beat raises the streak")
-        assertEquals(1.3f, state.characterImpactMultiplier(ordinary), 1e-5f)
+        assertEquals(1.45f, state.characterImpactMultiplier(ordinary), 1e-5f, "Crescendo holds the five-stack streak full")
         assertEquals(1f, state.characterImpactMultiplier(boss), "a boss meets the real streak")
 
         repeat(8) { state.hostileBolt(state.coreX + 20f * it - 70f, state.coreY + 60f) }

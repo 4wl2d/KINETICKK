@@ -287,8 +287,8 @@ fun defaultDimensionDefinitions(): ImmutableList<DimensionDefinition> = listOf(
         physics = DimensionPhysics(desyncMinimumScale = 0.25f, desyncMaximumScale = 1.25f, desyncBossFloor = 0.5f),
         reward = DimensionReward(DimensionRewardKind.ARCHIVE_TROVE, cardsOnSuccess = 3, matterOnSuccess = 120f, matterOnFailure = 60f),
         // The Antecedent of the Archive: a full Matrix at tier 3 fells it in about three fights of five once Desync
-        // reached its deadlines (a fresh run in about one of eight).
-        bossIntegrityShare = 0.77f,
+        // reached its deadlines (a fresh run rarely). With the secret bosses' hit cap it takes about 130 capped hits.
+        bossIntegrityShare = 0.68f,
     ),
 ).toImmutableList()
 

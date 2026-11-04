@@ -3,9 +3,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation.enemies
 
 import kinetickk.ball.content.api.BuildTag
-import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.GameplayContentSnapshot
-import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.model.Enemy
@@ -42,9 +40,10 @@ import kotlin.test.assertTrue
  * and it sidesteps hostile bolts as the no-POI bot does; the bot's own skill casts, threat Dash and choices play on.
  * A duel ends when the boss dies (its kill time), the Core dies, or after [DUEL_SECONDS].
  *
- * Arms: the fresh tier-0 profile (Gate A's Orb with the starter weapon) and the strong build at tier 10 (Gate D's
- * Pentagon with Arc Coil, Stormheart Capacitor and three proven Relics, every Matrix rank) meet the four mini-bosses;
- * the strong build at tier 3 meets the two secret bosses. A duel's time is its kill time, or infinite when the boss
+ * Arms: the fresh tier-0 profile (Gate A's Orb with the starter weapon) and the strong build at tier 10 meet the four
+ * mini-bosses; the strong build at tier 3 meets the two secret bosses. The strong build is the progression model's
+ * ([SweepArm.STRONG], P4 of docs/balance/progression.md): every Matrix rank, Refit and Honing 10, the Pentagon with Arc
+ * Coil, Stormheart Capacitor and three proven Relics. A duel's time is its kill time, or infinite when the boss
  * survives it, so a median counts every duel.
  *
  * Design targets: fresh tier 0, each mini-boss's median kill time in [25 s, 90 s] with at most 0.30 of its duels
@@ -92,6 +91,10 @@ class EncounterDuelGateTest {
      * (1.16), Throne 100.63 (2.32), Pyre Herald 100.36 (5.62). The Pyre Herald kills the Core in 0.435 (0.041) of its
      * duels, so 0.055 of the resampled medians are infinite. Window (282 runs): 79.15 (1.64), 75.86 (0.96), 101.06
      * (1.96), 95.03 (3.95), the Pyre Herald's deaths 0.401 (0.029) with no infinite resample.
+     *
+     * The progression model left this arm's Matrix-only build without its tier power, and the Throne's median rose to
+     * 124.10 s. With the model's strong build (Refit and Honing 10) on the gate (150 runs): 34.41 (1.04), 36.09 (1.55),
+     * 60.28 (2.87), 34.45 (0.75), no deaths; window (300 runs): 33.26 (0.65), 35.40 (0.73), 57.90 (1.73), 33.47 (0.85).
      */
     @Test
     fun aStrongTierTenBuildDuelsEachMiniBossWithinTheDesignBand() {
@@ -107,6 +110,12 @@ class EncounterDuelGateTest {
     /**
      * Base (150 runs): Cartographer 71.03 s (SE 0.87), Antecedent 87.32 (1.43); deaths 0 and 0.013 (0.009). Window
      * (300 runs): 72.16 (0.84), 87.80 (0.86); deaths 0 and 0.020 (0.008).
+     *
+     * Once the hit cap became a share of the boss's own integrity a capped tier-3 build needed 71 hits instead of 171:
+     * 39.99 s and 50.20 s on the gate, and 38.14 (0.36) and 43.67 (0.40) on 150 window runs with the model's strong
+     * build. The secret bosses' cap share went from 1.5 % to 0.55 % (window, 150 runs: 0.75 % and 0.65 % gave 58.77 and
+     * 70.82 s, 0.65 % and 0.55 % gave 64.77 and 78.35 s). With 0.55 % on the gate (150 runs): 75.86 (1.08), 81.11
+     * (0.92), no deaths; window (300 runs): 73.90 (0.53), 78.88 (0.72).
      */
     @Test
     fun aStrongTierThreeBuildDuelsEachSecretBossWithinTheDesignBand() {
@@ -252,9 +261,6 @@ class EncounterDuelGateTest {
         val MiniBosses = listOf(EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN, EnemyType.THRONE, EnemyType.PYRE_HERALD)
         val SecretBosses = listOf(EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT)
         val BotWeapons = BotWeaponOrder
-        /** Gate D's strong build: Stormheart Capacitor in key harmony with Arc Coil and three proven Relics. */
-        val StrongRelics =
-            listOf(RelicId.STORMHEART_CAPACITOR, RelicId.PANDEMIC_CODEX, RelicId.THUNDER_CHOIR, RelicId.CINDER_CROWN)
 
         /** The gate's runs: the first of [PopulationSeeds]. */
         const val DUEL_RUNS = 150
@@ -363,14 +369,14 @@ class EncounterDuelGateTest {
          */
         fun approach(arm: Arm, seed: Int): Pair<MutableGameState, NoPoiBot>? {
             val profile = if (arm.strong) {
-                gateProfile(GateMatrix.FULL, arm.tier, CoreShape.PENTAGON, WeaponId.ARC_COIL, content = content)
+                SweepArm.STRONG.profile(arm.tier, content)
             } else {
                 gateProfile(GateMatrix.NONE, arm.tier, content = content)
             }
             val state = MutableGameState(content, seed = seed, bootstrapProgress = profile)
             state.unlockWeaponsForTesting(ReferenceArmory)
             state.startRun()
-            if (arm.strong) StrongRelics.forEach(state::claimRelicForTesting)
+            if (arm.strong) SweepArm.STRONG.relics.forEach(state::claimRelicForTesting)
             val bot = NoPoiBot(archetypeTag = BuildTag.RAM, weaponOrder = BotWeapons)
             while (state.elapsed < ARRIVAL_SECONDS && state.isLive()) {
                 state.invulnerableUntil = Float.MAX_VALUE

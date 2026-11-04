@@ -7,7 +7,6 @@ import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.RelicId
-import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.rebirthTierPower
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
@@ -58,8 +57,7 @@ internal enum class SweepArm(val label: String) {
                 gateProfile(GateMatrix.HALF, tier, CoreShape.ORB, weapon, content = content,
                     upgrades = gateUpgrades(CoreShape.ORB, maxLevel / 2, gateOwnedWeapons(weapon), maxLevel / 2))
             }
-            FULL, STRONG -> gateProfile(GateMatrix.FULL, tier, CoreShape.PENTAGON, WeaponId.ARC_COIL, content = content,
-                upgrades = gateUpgrades(CoreShape.PENTAGON, maxLevel, gateOwnedWeapons(WeaponId.ARC_COIL), maxLevel))
+            FULL, STRONG -> progressedProfile(tier, CoreShape.PENTAGON, content)
         }
     }
 
