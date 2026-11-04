@@ -39,6 +39,9 @@ import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkRolePalette
 import java.io.File
 import kotlin.test.Test
+import kinetickk.ball.gameplay.interaction.canvas.fx.*
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.canvas.world.*
 
 /**
  * Contact sheets of the world FX (hud-fx §7.4). With `KK_SHOTS=1` each sheet is written to

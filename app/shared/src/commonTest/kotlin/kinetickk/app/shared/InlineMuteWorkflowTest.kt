@@ -18,7 +18,6 @@ import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
 import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kinetickk.ball.profile.impl.createProfileComponent
-import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.SessionAcceptance
 import kinetickk.flow.session.api.SessionInteractionPulse
 import kinetickk.flow.session.api.SessionWorkflowFailureCode
@@ -28,7 +27,6 @@ import kinetickk.flow.session.impl.createAppSessionComponent
 import kinetickk.foundation.dispatch.InlineReply
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -236,7 +234,7 @@ private class MuteFixture {
     }
 
     fun mute() = session.accept(SessionInteractionPulse.ToggleMuteRequested)
-    fun shell() = session.query(AppSessionQuery.GetShell)
+    fun shell() = session.shell()
     fun preferences() = profile.query(ProfileQuery.GetPreferences).preferences
 
     fun assertApplied() {
@@ -270,7 +268,6 @@ private class MutePersistence : ProfilePersistenceCapability {
 
 private class MuteSilentAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

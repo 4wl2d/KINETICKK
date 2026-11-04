@@ -16,6 +16,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.input.key.Key
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.flow.session.interaction.home.api.HomeOutput
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.profile.api.*
@@ -31,7 +32,6 @@ import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.Kk
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
@@ -49,7 +49,7 @@ class SessionPresentationLocalizationTest {
         val feature = DefaultHomeFeature(LocalizationProfilePort(), codexTestCatalog(), LocalizationSilentAudio)
         setContent {
             Box(Modifier.requiredSize(1000.dp, 700.dp)) {
-                feature.Content(inputEnabled = true, onOutput = outputs::add)
+                feature.Content(inputEnabled = true, runMode = RunMode.STANDARD, onOutput = outputs::add)
             }
         }
         mainClock.advanceTimeBy(300)
@@ -84,7 +84,7 @@ class SessionPresentationLocalizationTest {
         val feature = DefaultHomeFeature(LocalizationProfilePort(), codexTestCatalog(), LocalizationSilentAudio)
         setContent {
             Box(Modifier.requiredSize(1000.dp, heightValue)) {
-                feature.Content(inputEnabled = true, onOutput = {})
+                feature.Content(inputEnabled = true, runMode = RunMode.STANDARD, onOutput = {})
             }
         }
         mainClock.advanceTimeBy(100)
@@ -110,7 +110,7 @@ class SessionPresentationLocalizationTest {
         val feature = DefaultHomeFeature(LocalizationProfilePort(), codexTestCatalog(), LocalizationSilentAudio)
         setContent {
             Box(Modifier.requiredSize(1000.dp, 700.dp)) {
-                feature.Content(inputEnabled = true, onOutput = outputs::add)
+                feature.Content(inputEnabled = true, runMode = RunMode.STANDARD, onOutput = outputs::add)
             }
         }
         mainClock.advanceTimeBy(300)
@@ -198,7 +198,7 @@ class SessionPresentationLocalizationTest {
         setContent {
             CompositionLocalProvider(LocalAppLanguage provides languageValue) {
                 Box(Modifier.requiredSize(1000.dp, 700.dp)) {
-                    feature.Content(inputEnabled = true) { }
+                    feature.Content(inputEnabled = true, runMode = RunMode.STANDARD) { }
                 }
             }
         }
@@ -230,7 +230,6 @@ private class LocalizationProfilePort : ProfileReadPort {
 
 private object LocalizationSilentAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

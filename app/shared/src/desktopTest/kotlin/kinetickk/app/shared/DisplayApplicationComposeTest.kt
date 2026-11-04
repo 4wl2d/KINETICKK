@@ -26,10 +26,8 @@ import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
 import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kinetickk.ball.profile.impl.createProfileComponent
 import kinetickk.flow.session.api.AppDestination
-import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -42,6 +40,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.v2.runSkikoComposeUiTest
 import androidx.compose.ui.unit.Density
 import kinetickk.ball.gameplay.impl.GameplayCompositionComponent
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
 import kinetickk.ball.profile.api.ProfilePulse
@@ -81,6 +80,7 @@ class DisplayApplicationComposeTest {
                 Box(Modifier.requiredSize(1000.dp, 700.dp).testTag("app")) { owner.Content() }
             }
             fun settle() {
+                awaitAppStartup()
                 mainClock.advanceTimeBy(260)
                 waitForIdle()
             }
@@ -91,7 +91,7 @@ class DisplayApplicationComposeTest {
 
             onRoot().performKeyInput { pressKey(Key.S) }
             settle()
-            assertEquals(AppDestination.Settings, owner.sessionPort.query(AppSessionQuery.GetShell).active)
+            assertEquals(AppDestination.Settings, owner.sessionPort.shell().active)
             onNodeWithTag("kinetickk.settings.group.display").performClick()
             settle()
 
@@ -143,6 +143,7 @@ class DisplayApplicationComposeTest {
                 }
             }
             fun settle() {
+                awaitAppStartup()
                 mainClock.advanceTimeBy(260)
                 waitForIdle()
             }
@@ -150,7 +151,7 @@ class DisplayApplicationComposeTest {
             owner.sessionPort.accept(SessionInteractionPulse.StartRunRequested)
             onRoot().performKeyInput { pressKey(Key.S) }
             settle()
-            val shell = owner.sessionPort.query(AppSessionQuery.GetShell)
+            val shell = owner.sessionPort.shell()
             assertEquals(AppDestination.Gameplay, shell.base)
             assertEquals(AppDestination.Settings, shell.overlay)
             val run = gameplay.activeRun()
@@ -160,7 +161,7 @@ class DisplayApplicationComposeTest {
 
             generation++
             settle()
-            assertEquals(shell, owner.sessionPort.query(AppSessionQuery.GetShell))
+            assertEquals(shell, owner.sessionPort.shell())
             assertSame(run, gameplay.activeRun())
             assertEquals(GameplayRunPhase.PAUSED, run?.query(GameplayQuery.GetRunStatus)?.phase)
             onNodeWithTag("kinetickk.settings.group.display").assertIsSelected()
@@ -190,10 +191,11 @@ class DisplayApplicationComposeTest {
                 }
             }
             fun settle() {
+                awaitAppStartup()
                 mainClock.advanceTimeBy(260)
                 waitForIdle()
             }
-            fun workshop() = owner.sessionPort.query(AppSessionQuery.GetShell).overlay
+            fun workshop() = owner.sessionPort.shell().overlay
             settle()
             onRoot().performKeyInput { pressKey(Key.L) }
             settle()
@@ -258,7 +260,7 @@ class DisplayApplicationComposeTest {
                 },
                 homeFeature = object : HomeFeature {
                     @Composable
-                    override fun Content(inputEnabled: Boolean, onOutput: (HomeOutput) -> Unit) {
+                    override fun Content(inputEnabled: Boolean, runMode: RunMode, onOutput: (HomeOutput) -> Unit) {
                         probe = probe.copy(
                             menuDensity = LocalDensity.current.density,
                             scale = LocalKkInterfaceScale.current,
@@ -271,6 +273,7 @@ class DisplayApplicationComposeTest {
                 setContent {
                     Box(Modifier.requiredSize(width.dp, height.dp)) { owner.Content() }
                 }
+                awaitAppStartup()
                 mainClock.advanceTimeBy(100)
                 waitForIdle()
                 owner.sessionPort.accept(SessionInteractionPulse.StartRunRequested)
@@ -297,7 +300,6 @@ private class DisplayTestPersistence : ProfilePersistenceCapability {
 
 private class DisplayTestAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

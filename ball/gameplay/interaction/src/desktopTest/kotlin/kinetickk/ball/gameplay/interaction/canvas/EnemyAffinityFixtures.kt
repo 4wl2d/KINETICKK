@@ -11,7 +11,8 @@ import kinetickk.ball.gameplay.nucleus.render.EnemyType
  * [kinetickk.ball.gameplay.nucleus.render.EnemyProjection.affinityBits] an enemy of [type] carries in
  * a run, after the nucleus profile table: Drifters are neutral, the Elite's [eliteAspect] is immune,
  * and the Architect resists [architectAspect] (none by default) in [architectPhase], [shifting] or
- * not. The weakness is always the counter of the aspect.
+ * not. The 0.6.0 mini-bosses are immune to their own aspect; the Antecedent's adaptive aspect is unset until its
+ * fight assigns one. The weakness is always the counter of the aspect.
  */
 internal fun runAffinity(
     type: EnemyType,
@@ -35,17 +36,34 @@ internal fun runAffinity(
         EnemyType.SNIPER -> StatusElement.CRYO
         EnemyType.AEGIS, EnemyType.BROODMOTHER -> StatusElement.GRAVITIC
         EnemyType.MINELAYER -> StatusElement.ENTROPY
+        EnemyType.COMET -> StatusElement.CRYO
+        EnemyType.PYLON -> StatusElement.ION
+        EnemyType.SENTRY, EnemyType.IMP, EnemyType.PYRE_HERALD -> StatusElement.THERMAL
+        EnemyType.CRAWLER, EnemyType.BROOD_QUEEN -> StatusElement.ENTROPY
+        EnemyType.SERAPH, EnemyType.CIPHER, EnemyType.THRONE -> StatusElement.VOID
+        EnemyType.CHOIR -> StatusElement.SONIC
+        EnemyType.WARDEN_PRIME -> StatusElement.GRAVITIC
+        EnemyType.HOUND, EnemyType.MIRROR, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT -> null
     }
     val armored = type in setOf(
         EnemyType.CHARGER, EnemyType.WARDEN, EnemyType.SPLITTER, EnemyType.ELITE, EnemyType.ARCHITECT,
         EnemyType.LANCER, EnemyType.AEGIS, EnemyType.BROODMOTHER, EnemyType.HERALD,
+        EnemyType.CHOIR, EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN, EnemyType.THRONE, EnemyType.PYRE_HERALD,
+        EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
+    )
+    val immune = type in setOf(
+        EnemyType.WARDEN, EnemyType.ELITE, EnemyType.HERALD,
+        EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN, EnemyType.THRONE, EnemyType.PYRE_HERALD,
+    )
+    val fragile = type in setOf(
+        EnemyType.INTERCEPTOR, EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY, EnemyType.SERAPH, EnemyType.IMP,
     )
     return EnemyAffinity.encode(
         aspect = aspect?.ordinal ?: EnemyAffinity.NONE,
-        immune = type == EnemyType.WARDEN || type == EnemyType.ELITE || type == EnemyType.HERALD,
+        immune = immune,
         weakness = aspect?.let(::counterOf)?.ordinal ?: EnemyAffinity.NONE,
         armored = armored,
-        fragile = type == EnemyType.INTERCEPTOR,
+        fragile = fragile,
         shifting = type == EnemyType.ARCHITECT && shifting,
         phase = if (type == EnemyType.ARCHITECT) architectPhase else 0,
     )

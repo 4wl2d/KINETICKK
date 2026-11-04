@@ -45,8 +45,8 @@ internal enum class SettingsRedesignText(override val english: String, override 
         "Кратко сокращает большие числа. Полно показывает все цифры.",
     ),
     AboutDamageColorTiers(
-        "Damage numbers change color at this value, at four times it and at twenty times it.",
-        "Числа урона меняют цвет на этом значении, на вчетверо большем и на вдвадцатеро большем.",
+        "Damage numbers change color at this value, at four times it and at twenty times it. Values are Rebirth 0 damage; higher tiers scale them with their numbers.",
+        "Числа урона меняют цвет на этом значении, на вчетверо большем и на вдвадцатеро большем. Значения даны для перерождения 0; на высших уровнях они растут вместе с числами.",
     ),
     Minimap("Minimap", "Миникарта"),
     AboutMinimap(
@@ -121,8 +121,8 @@ internal enum class SettingsRedesignText(override val english: String, override 
     ),
     ShowFps("Show FPS", "Показывать FPS"),
     AboutShowFps(
-        "Shows the frame rate in a corner of the run. Pressing it opens the full performance panel.",
-        "Показывает частоту кадров в углу экрана во время забега. Нажатие открывает подробную панель производительности.",
+        "Shows the frame rate during gameplay, pauses and reward selection.",
+        "Показывает частоту кадров во время игры, паузы и выбора награды.",
     ),
     PauseOnFocusLoss("Pause when unfocused", "Пауза без фокуса"),
     AboutPauseOnFocusLoss(

@@ -6,7 +6,7 @@ package kinetickk.flow.session.impl
 import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.api.GameplayRunPort
 import kinetickk.ball.gameplay.api.RunId
-import kinetickk.ball.gameplay.interaction.GameplayRunHost
+import kinetickk.ball.gameplay.api.GameplayRunHost
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PreferencesProjection
@@ -15,14 +15,10 @@ import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.ball.profile.api.ProfileReadPort
 import kinetickk.flow.session.api.AppSessionPort
-import kinetickk.flow.session.nucleus.gameplayRunExited
-import kinetickk.flow.session.nucleus.gameplayExitRefused
 import kinetickk.ball.profile.api.ProfileSettings
 import kinetickk.ball.profile.api.ProfileRebirth
 import kinetickk.ball.profile.api.ProfileLoadout
 import kinetickk.flow.session.api.AppDestination
-import kinetickk.flow.session.api.AppSessionInstanceId
-import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.AppShellProjection
 import kinetickk.flow.session.api.SessionAcceptance
 import kinetickk.flow.session.api.SessionInteractionPulse
@@ -38,16 +34,6 @@ import kinetickk.flow.session.nucleus.AppSessionOutput
 import kinetickk.flow.session.nucleus.AppSessionState
 import kinetickk.flow.session.nucleus.MAX_SESSION_OUTPUTS_PER_DECISION
 import kinetickk.flow.session.nucleus.PendingWorkflow
-import kinetickk.flow.session.nucleus.profileSettingsChanged
-import kinetickk.flow.session.nucleus.profileSettingsRefused
-import kinetickk.flow.session.nucleus.gameplaySettingsApplied
-import kinetickk.flow.session.nucleus.gameplaySettingsRefused
-import kinetickk.flow.session.nucleus.profileCoreShapeSelected
-import kinetickk.flow.session.nucleus.profileCoreShapeRefused
-import kinetickk.flow.session.nucleus.gameplayRunStarted
-import kinetickk.flow.session.nucleus.gameplayOverlayPaused
-import kinetickk.flow.session.nucleus.gameplayStartRefused
-import kinetickk.flow.session.nucleus.gameplayPauseRefused
 import kinetickk.foundation.dispatch.BoundedCompletionDeque
 import kinetickk.foundation.dispatch.InlineAcceptance
 import kinetickk.foundation.dispatch.call
@@ -67,14 +53,10 @@ internal class DefaultAppSessionComponent private constructor(
     private val acceptance = InlineAcceptance(sessionCompletionDeque<AppSessionNucleusPulse>())
     private var committedState: AppSessionState = initialState
 
-    override val instanceId: AppSessionInstanceId
-        get() = committedState.instanceId
-
     override fun accept(pulse: SessionInteractionPulse): SessionAcceptance =
         dispatchLocal(pulse)
 
-    override fun query(query: AppSessionQuery.GetShell): AppShellProjection =
-        AppSessionNucleus.query(committedState, query)
+    override fun shell(): AppShellProjection = AppSessionNucleus.shell(committedState)
 
     internal fun stateSnapshot(): AppSessionState = committedState
 
@@ -85,7 +67,6 @@ internal class DefaultAppSessionComponent private constructor(
             val context = readContext(before, pulse)
             when (val decision = AppSessionNucleus.decide(before, pulse, context)) {
                 is AppSessionDecision.Rejected -> SessionAcceptance.Rejected(
-                    instanceId = before.instanceId,
                     observedRevision = before.revision,
                     reason = decision.reason,
                 )
@@ -115,7 +96,6 @@ internal class DefaultAppSessionComponent private constructor(
                         execute = { output, _ -> execute(output) },
                     )
                     SessionAcceptance.Accepted(
-                        instanceId = decision.frame.nextState.instanceId,
                         revision = decision.frame.nextState.revision,
                     )
                 }
@@ -127,15 +107,13 @@ internal class DefaultAppSessionComponent private constructor(
         frame: AppSessionAcceptedFrame,
     ) {
         val next = frame.nextState
-        check(next.instanceId == before.instanceId) { "Session instance identity changed" }
         check(before.revision.value < Long.MAX_VALUE)
         check(next.revision.value == before.revision.value + 1L) {
             "Session revision must advance exactly once"
         }
-        val shellProjection = AppSessionNucleus.query(next, AppSessionQuery.GetShell)
+        val shellProjection = AppSessionNucleus.shell(next)
         check(
-            shellProjection.instanceId == next.instanceId &&
-                shellProjection.revision == next.revision &&
+            shellProjection.revision == next.revision &&
                 shellProjection.routeRevision == next.routeRevision,
         ) {
             "Session shell projection must derive from the accepted next State"
@@ -174,6 +152,7 @@ internal class DefaultAppSessionComponent private constructor(
                         else -> error("Session start command has no matching workflow")
                     }
                     check(runId == output.runId && runId == next.activeRunId)
+                    check(output.mode == next.runMode) { "Session start command carries another run mode" }
                     if (ensureOutputs.isEmpty()) boundRun(runId)
                 }
                 is AppSessionOutput.PauseForOverlay -> {
@@ -204,25 +183,25 @@ internal class DefaultAppSessionComponent private constructor(
                 invoke = { reply -> profileRebirth.selectRebirthTier(output.tier, reply) },
                 acceptedInput = { result ->
                     check(result.progress.level == output.tier) { "Profile selected a different Rebirth tier" }
-                    kinetickk.flow.session.nucleus.profileRebirthTierSelected(result)
+                    AppSessionNucleusPulse.Result.ProfileRebirthTierSelected(result)
                 },
-                refusedInput = { kinetickk.flow.session.nucleus.profileRebirthRefused(it) },
+                refusedInput = { AppSessionNucleusPulse.Refusal.ProfileRebirthRefused(it) },
             )
             AppSessionOutput.ToggleMute -> acceptance.call(
                 invoke = profileSettings::toggleMute,
-                acceptedInput = { profileSettingsChanged(it) },
-                refusedInput = { profileSettingsRefused(it) },
+                acceptedInput = { AppSessionNucleusPulse.Result.ProfileSettingsChanged(it) },
+                refusedInput = { AppSessionNucleusPulse.Refusal.ProfileSettingsRefused(it) },
             )
             is AppSessionOutput.SelectCoreShape -> acceptance.call(
                 invoke = { reply -> profileLoadout.selectCoreShape(output.shape, reply) },
                 acceptedInput = { result ->
                     check(result.shape == output.shape) { "Profile selected a different core shape" }
-                    profileCoreShapeSelected(result)
+                    AppSessionNucleusPulse.Result.ProfileCoreShapeSelected(result)
                 },
-                refusedInput = { profileCoreShapeRefused(it) },
+                refusedInput = { AppSessionNucleusPulse.Refusal.ProfileCoreShapeRefused(it) },
             )
             is AppSessionOutput.ApplyPreferences -> executeGameplaySettings(output)
-            is AppSessionOutput.StartRun -> executeStart(output.runId)
+            is AppSessionOutput.StartRun -> executeStart(output)
             is AppSessionOutput.PauseForOverlay -> executePause(output.runId)
             is AppSessionOutput.SynchronizeAudioPreferences ->
                 updateAudioPreferences(output.preferences)
@@ -253,21 +232,22 @@ internal class DefaultAppSessionComponent private constructor(
             invoke = { reply -> target.applyPreferences(output.preferences, reply) },
             acceptedInput = { result ->
                 check(result.runId == output.runId) { "Gameplay settings result came from another run" }
-                gameplaySettingsApplied(result)
+                AppSessionNucleusPulse.Result.GameplaySettingsApplied(result)
             },
-            refusedInput = { gameplaySettingsRefused(output.runId, it) },
+            refusedInput = { AppSessionNucleusPulse.Refusal.GameplaySettingsRefused(output.runId, it) },
         )
     }
 
-    private fun executeStart(runId: RunId) {
+    private fun executeStart(output: AppSessionOutput.StartRun) {
+        val runId = output.runId
         val target = boundRun(runId)
         acceptance.call(
-            invoke = target::startRun,
+            invoke = { reply -> target.startRun(output.mode, reply) },
             acceptedInput = { result ->
                 check(result.runId == runId) { "Gameplay start result came from another run" }
-                gameplayRunStarted(result)
+                AppSessionNucleusPulse.Result.GameplayRunStarted(result)
             },
-            refusedInput = { gameplayStartRefused(runId, it) },
+            refusedInput = { AppSessionNucleusPulse.Refusal.GameplayStartRefused(runId, it) },
         )
     }
 
@@ -277,9 +257,9 @@ internal class DefaultAppSessionComponent private constructor(
             invoke = target::pauseForOverlay,
             acceptedInput = { result ->
                 check(result.runId == runId) { "Gameplay pause result came from another run" }
-                gameplayOverlayPaused(result)
+                AppSessionNucleusPulse.Result.GameplayOverlayPaused(result)
             },
-            refusedInput = { gameplayPauseRefused(runId, it) },
+            refusedInput = { AppSessionNucleusPulse.Refusal.GameplayPauseRefused(runId, it) },
         )
     }
 
@@ -309,9 +289,9 @@ internal class DefaultAppSessionComponent private constructor(
             invoke = run::exitRun,
             acceptedInput = { result ->
                 check(result.runId == runId) { "Gameplay exit result came from another run" }
-                gameplayRunExited(result)
+                AppSessionNucleusPulse.Result.GameplayRunExited(result)
             },
-            refusedInput = { gameplayExitRefused(runId, it) },
+            refusedInput = { AppSessionNucleusPulse.Refusal.GameplayExitRefused(runId, it) },
         )
     }
 
@@ -384,6 +364,7 @@ internal class DefaultAppSessionComponent private constructor(
                 }
                 SessionInteractionPulse.ToggleMuteRequested,
                 is SessionInteractionPulse.SelectCoreShapeRequested,
+                is SessionInteractionPulse.SelectRunModeRequested,
                 -> Unit
             }
             is AppSessionNucleusPulse.Result -> when (state.pendingWorkflow) {

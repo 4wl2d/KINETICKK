@@ -9,7 +9,7 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RuleLineKind
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.upsideText
-import kinetickk.ball.gameplay.interaction.canvas.overlayUpsideMultiplier
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayUpsideMultiplier
 import kinetickk.ball.gameplay.nucleus.render.BuildForecast
 import kinetickk.ball.gameplay.nucleus.render.BuildProjection
 import kinetickk.ball.gameplay.nucleus.render.ForecastKind
@@ -23,9 +23,9 @@ import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.liabilityText
-import kinetickk.ball.gameplay.interaction.canvas.UNKNOWN_PAIRING_NAME
-import kinetickk.ball.gameplay.interaction.canvas.overlayName
-import kinetickk.ball.gameplay.interaction.canvas.overlayRelicLinks
+import kinetickk.ball.gameplay.interaction.canvas.look.UNKNOWN_PAIRING_NAME
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayName
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayRelicLinks
 import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
 import kinetickk.ball.gameplay.nucleus.render.RelicLinkKind
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
@@ -34,11 +34,7 @@ import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
 import kinetickk.ball.gameplay.nucleus.render.RewardPreview
 import kinetickk.ball.gameplay.nucleus.render.RewardStatChange
 import kinetickk.ball.gameplay.nucleus.render.TotemAction
-import kinetickk.ball.content.api.ConversionKind
-import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
-import kinetickk.ball.content.api.ItemRarity
-import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.DamageBasis
 import kinetickk.ball.content.api.EffectAction
 import kinetickk.ball.content.api.EffectClause
@@ -122,7 +118,7 @@ class RewardRedesignPresentationTest {
             previews = listOf(RewardPreview(immutableListOf(RewardStatChange("Dash power", 873f, 1083f, "")))),
         ).rewardCardPresentation(itemChoice(0), 0)
         assertEquals("873", compared.changes.single().before)
-        assertEquals("1083", compared.changes.single().after)
+        assertEquals("1.08K", compared.changes.single().after, "from 1,000 on a value reads in the compact form")
         assertEquals(false, compared.isNewDiscovery)
         val text = listOf(plain, reborn, risk, legendary, compared).flatMap { card ->
             card.changes.flatMap { listOf(it.name, it.before, it.after) } + card.descriptions + card.liabilities +
@@ -184,56 +180,20 @@ class RewardRedesignPresentationTest {
 
     @Test
     fun suppressionStrikesTheLinesABoundRelicVoidsOnlyWhenTheNucleusReportsIt() {
-        val aegis = itemChoice(5)
-        val glass = listOf(EquippedRelic(RelicId.GLASS_COMET, 1))
-        val reported = rewardFixtureModel(choices = listOf(aegis), relics = glass,
+        // Solar Choir's Thermal Break spread is what Absolute Zero (Thermal turns to Cryo) voids.
+        val choir = itemChoice(1)
+        val frozen = listOf(EquippedRelic(RelicId.ABSOLUTE_ZERO, 1))
+        val reported = rewardFixtureModel(choices = listOf(choir), relics = frozen,
             previews = listOf(RewardPreview(forecasts = immutableListOf(BuildForecast(ForecastKind.SUPPRESSED)))))
-            .rewardCardPresentation(aegis, 0)
-        assertTrue(reported.rules.isNotEmpty() && reported.rules.all { it.suppressed }, "Glass Comet voids the shield-break clause")
-        assertEquals(RewardChip(RewardChipKind.SUPPRESSED, "Suppressed", relic = RelicId.GLASS_COMET,
-            rune = rewardFixtureContent.relic(RelicId.GLASS_COMET)), reported.forecast.first(), "The chip carries the voiding relic's rune")
-        val unreported = rewardFixtureModel(choices = listOf(aegis), relics = glass).rewardCardPresentation(aegis, 0)
+            .rewardCardPresentation(choir, 0)
+        assertTrue(reported.rules.isNotEmpty() && reported.rules.all { it.suppressed }, "Absolute Zero voids the Thermal rule")
+        assertEquals(RewardChip(RewardChipKind.SUPPRESSED, "Suppressed", relic = RelicId.ABSOLUTE_ZERO,
+            rune = rewardFixtureContent.relic(RelicId.ABSOLUTE_ZERO)), reported.forecast.first(), "The chip carries the voiding relic's rune")
+        val unreported = rewardFixtureModel(choices = listOf(choir), relics = frozen).rewardCardPresentation(choir, 0)
         assertTrue(unreported.rules.none { it.suppressed })
-        val free = rewardFixtureModel(choices = listOf(aegis),
-            previews = listOf(RewardPreview(forecasts = immutableListOf(BuildForecast(ForecastKind.SUPPRESSED))))).rewardCardPresentation(aegis, 0)
+        val free = rewardFixtureModel(choices = listOf(choir),
+            previews = listOf(RewardPreview(forecasts = immutableListOf(BuildForecast(ForecastKind.SUPPRESSED))))).rewardCardPresentation(choir, 0)
         assertTrue(free.rules.none { it.suppressed }, "Without the voiding relic no line is struck")
-    }
-
-    @Test
-    fun suppressionStrikesThePassiveStatsABoundRelicVoids() {
-        // Hardlight-like shield weave and Nanite-like mesh: what Glass Comet and Verdant Rot void are passive stats.
-        val weave = ItemDefinition(6, "Hardlight Weave", "Light woven tight enough to hold.", ItemRarity.RARE, immutableListOf(BuildTag.BULWARK),
-            stats = immutableListOf(StatDelta(ItemEffect.SHIELD_CAPACITY, 10f), StatDelta(ItemEffect.MASS, 0.1f)),
-            rules = immutableListOf(ItemRule.Convert(ConversionKind.OVERHEAL_TO_SHIELD, 1f)), maxStacks = 2, unlockLevel = 1)
-        val mesh = ItemDefinition(7, "Nanite Mesh", "Tiny menders in the hull.", ItemRarity.UNCOMMON, immutableListOf(BuildTag.BULWARK),
-            stats = immutableListOf(StatDelta(ItemEffect.REGEN, 1.2f)), maxStacks = 3, unlockLevel = 1)
-        val decay = ItemDefinition(8, "Rot Converter", "Mending turned to rot.", ItemRarity.RARE, immutableListOf(BuildTag.BULWARK),
-            rules = immutableListOf(ItemRule.Convert(ConversionKind.REGENERATION_TO_DECAY, 0.5f)), maxStacks = 1, unlockLevel = 1)
-        val content = rewardFixtureContent.copy(items = (rewardFixtureContent.items + weave + mesh + decay).toImmutableList())
-        val suppressed = RewardPreview(forecasts = immutableListOf(BuildForecast(ForecastKind.SUPPRESSED)))
-        fun card(item: ItemDefinition, relic: RelicId, preview: RewardPreview?, stacks: List<Int> = List(content.items.size) { 0 }): RewardCardPresentation {
-            val choice = ChoiceOption(ChoiceType.ITEM, item.name, "", "RARE", itemId = item.id)
-            return rewardFixtureModel(content = content, choices = listOf(choice), relics = listOf(EquippedRelic(relic, 1)),
-                itemStacks = stacks, previews = listOfNotNull(preview)).rewardCardPresentation(choice, 0)
-        }
-        // Without a nucleus preview the card's own stat lines are struck once the nucleus reports the suppression.
-        assertTrue(card(weave, RelicId.GLASS_COMET, null).changes.none { it.suppressed }, "Nothing is struck until the nucleus reports it")
-        val weaveChoice = ChoiceOption(ChoiceType.ITEM, weave.name, "", "RARE", itemId = weave.id)
-        val reported = rewardFixtureModel(content = content, choices = listOf(weaveChoice), relics = listOf(EquippedRelic(RelicId.GLASS_COMET, 1)),
-            build = BuildProjection(suppressedItemIds = immutableListOf(weave.id))).rewardCardPresentation(weaveChoice, 0)
-        assertEquals(listOf(true, false), reported.changes.map { it.suppressed }, "Shield capacity is void under Glass Comet, mass is not")
-        // With a preview, the nucleus stat rows of the voided stats are struck and the chip names the relic.
-        val previewed = card(weave, RelicId.GLASS_COMET, RewardPreview(immutableListOf(RewardStatChange("Shield", 0f, 10f, ""),
-            RewardStatChange("Mass", 1.18f, 1.28f, "")), suppressed.forecasts))
-        assertEquals(listOf(true, false), previewed.changes.map { it.suppressed })
-        assertTrue(previewed.rules.all { it.suppressed }, "The overheal conversion is void too")
-        assertEquals(RelicId.GLASS_COMET, previewed.forecast.first().relic)
-        val rotted = card(mesh, RelicId.VERDANT_ROT, RewardPreview(immutableListOf(RewardStatChange("Regeneration", 0f, 1.2f, "/s")), suppressed.forecasts))
-        assertEquals(listOf(true), rotted.changes.map { it.suppressed }, "Verdant Rot voids regeneration")
-        assertEquals(RelicId.VERDANT_ROT, rotted.forecast.first().relic)
-        val converted = card(mesh, RelicId.VERDANT_ROT, RewardPreview(immutableListOf(RewardStatChange("Regeneration", 0f, 1.2f, "/s")), suppressed.forecasts),
-            stacks = List(content.items.size) { if (it == decay.id) 1 else 0 })
-        assertTrue(converted.changes.none { it.suppressed }, "Regeneration turned into decay is not voided")
     }
 
     @Test
@@ -305,7 +265,7 @@ class RewardRedesignPresentationTest {
 
     @Test
     fun declineIsACalmCardAndHeirloomsAreGold() {
-        val hollow = ChoiceOption(ChoiceType.RELIC, "Leave hollow", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE)
+        val hollow = ChoiceOption(ChoiceType.RELIC, "Salvage resonance", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE)
         val heirloom = ChoiceOption(ChoiceType.RELIC, "Event Horizon", "", "GRAVITIC", relicId = RelicId.EVENT_HORIZON,
             relicAction = RelicChoiceAction.ACQUIRE, heirloom = true)
         val model = rewardFixtureModel(choiceType = ChoiceType.RELIC, choices = listOf(heirloom, hollow), rebirthLevel = 4)
@@ -339,28 +299,26 @@ class RewardRedesignPresentationTest {
     @Test
     fun relicActionsNameTheGameOutcomeForEveryRelicChoiceAction() {
         val policy = RelicPolicy(4, 5)
-        fun label(action: RelicChoiceAction, owned: Int = 0, slotRank: Int? = null, equipped: Int = 2) =
-            rewardRelicAction(action, owned, slotRank, equipped, policy, AppLanguage.English)
+        fun label(action: RelicChoiceAction, owned: Int = 0, openSlots: Int = 2) =
+            rewardRelicAction(action, owned, openSlots, policy, AppLanguage.English)
         assertEquals(RewardAction("Bind", RewardTone.YOU), label(RelicChoiceAction.ACQUIRE))
-        assertEquals(RewardAction("Meld", RewardTone.YOU), label(RelicChoiceAction.ACQUIRE, owned = 2))
+        assertEquals(RewardAction("Rank up", RewardTone.YOU), label(RelicChoiceAction.ACQUIRE, owned = 2))
         assertEquals(RewardAction("Salvage", RewardTone.MUTE), label(RelicChoiceAction.ACQUIRE, owned = 5))
-        assertEquals(RewardAction("Replace", RewardTone.THREAT), label(RelicChoiceAction.ACQUIRE, equipped = 4))
+        assertEquals(RewardAction("Replace", RewardTone.THREAT), label(RelicChoiceAction.ACQUIRE, openSlots = 0))
         assertEquals(RewardAction("Meld", RewardTone.YOU), label(RelicChoiceAction.MELD))
-        assertEquals(RewardAction("Replace", RewardTone.THREAT), label(RelicChoiceAction.REPLACE, slotRank = 3))
-        assertEquals(RewardAction("Meld", RewardTone.YOU), label(RelicChoiceAction.MELD_TARGET, slotRank = 4))
-        assertEquals(RewardAction("Salvage", RewardTone.MUTE), label(RelicChoiceAction.MELD_TARGET, slotRank = 5))
+        assertEquals(RewardAction("Replace", RewardTone.THREAT), label(RelicChoiceAction.REPLACE, openSlots = 0))
         assertEquals(RewardAction("Decline", RewardTone.MUTE), label(RelicChoiceAction.DECLINE))
     }
 
     @Test
-    fun decliningAnOfferNamesWhatTheEmptySlotOrTheHeirloomGivesBackInBothLanguages() {
-        val hollow = ChoiceOption(ChoiceType.RELIC, "Leave hollow", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE)
+    fun decliningAnOfferNamesWhatTheSalvageOrTheHeirloomGivesBackInBothLanguages() {
+        val hollow = ChoiceOption(ChoiceType.RELIC, "Salvage resonance", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE)
         val heirloom = hollow.copy(title = "Leave the heirloom", heirloom = true)
         val model = rewardFixtureModel(choiceType = ChoiceType.RELIC, relics = listOf(vector), choices = listOf(hollow))
         val card = model.rewardCardPresentation(hollow, 0)
-        assertEquals("Leave hollow", card.title)
+        assertEquals("Salvage resonance", card.title)
         assertEquals(RewardAction("Decline", RewardTone.MUTE), card.action)
-        assertEquals(listOf(AppLanguage.English.text(OverlayRedesignText.LeaveHollowEffect, model.content.relicPolicy.salvageMatter)), card.descriptions)
+        assertEquals(listOf(AppLanguage.English.text(OverlayRedesignText.SalvageResonanceEffect, model.content.relicPolicy.salvageMatter)), card.descriptions)
         assertTrue(card.descriptions.single().contains("+8"), "The salvage names its matter")
         assertNull(card.relic)
         val preview = requireNotNull(card.relicPreview)
@@ -453,16 +411,17 @@ class RewardRedesignPresentationTest {
         assertEquals("×0.85", discord.rows.first().after)
         assertEquals(listOf("×1.00", "×0.85"), discord.rows.last().let { listOf(it.before, it.after) })
 
-        val meld = ChoiceOption(ChoiceType.RELIC_BIND, "Meld Perpetual Vector", "", "", relicId = RelicId.PERPETUAL_VECTOR,
-            relicAction = RelicChoiceAction.MELD_TARGET, relicSlot = 0)
-        val melding = rewardFixtureModel(choiceType = ChoiceType.RELIC_BIND, relics = listOf(vector, gyre), choices = listOf(meld))
-        val meldPreview = requireNotNull(melding.rewardCardPresentation(meld, 0).relicPreview)
-        assertEquals(listOf("+", "="), meldPreview.rows.map { it.sign }, "Next rank, kept concord")
-        assertEquals("Rank 3", meldPreview.rows.first().title)
-        // The row shows the values the meld raises, not the upside the panel already shows.
-        assertEquals(listOf("15\u00A0%", "18\u00A0%", null), meldPreview.rows.first().let { listOf(it.before, it.after, it.detail) })
-        assertEquals("Rank 3", meldPreview.panel?.rank)
-        assertEquals(0, melding.rewardPresentation().defaultSelection())
+        // A duplicate's rank-up names the next rank and keeps its concord.
+        val duplicate = ChoiceOption(ChoiceType.RELIC, "Perpetual Vector", "", "KINETIC", relicId = RelicId.PERPETUAL_VECTOR,
+            relicAction = RelicChoiceAction.ACQUIRE)
+        val ranking = rewardFixtureModel(choiceType = ChoiceType.RELIC, relics = listOf(vector, gyre), choices = listOf(duplicate))
+        val rankPreview = requireNotNull(ranking.rewardCardPresentation(duplicate, 0).relicPreview)
+        assertEquals(listOf("+", "="), rankPreview.rows.map { it.sign }, "Next rank, kept concord")
+        assertEquals("Rank 3", rankPreview.rows.first().title)
+        // The row shows the values the rank-up raises, not the upside the panel already shows.
+        assertEquals(listOf("15\u00A0%", "18\u00A0%", null), rankPreview.rows.first().let { listOf(it.before, it.after, it.detail) })
+        assertEquals("Rank 3", rankPreview.panel?.rank)
+        assertEquals(0, ranking.rewardPresentation().defaultSelection())
     }
 
     @Test
@@ -556,14 +515,22 @@ class RewardRedesignPresentationTest {
     }
 
     @Test
-    fun meldingUsesOneTermForTheHeadingAndItsAction() {
-        val english = rewardHeading(ChoiceType.RELIC_BIND, RelicChoiceAction.MELD_TARGET, AppLanguage.English)
-        val action = rewardRelicAction(RelicChoiceAction.MELD_TARGET, 0, 1, 3, RelicPolicy(4, 5), AppLanguage.English)
-        assertEquals(OverlayRedesignText.Meld.english, english)
-        assertEquals(english, action.label)
+    fun theMeldCardUsesOneTermForItsTitleAndItsActionAndNamesItsBonusAndTheSlotItSeals() {
+        val meld = ChoiceOption(ChoiceType.RELIC, "Meld", "", "MELD", relicAction = RelicChoiceAction.MELD)
+        val model = rewardFixtureModel(choiceType = ChoiceType.RELIC, relics = listOf(vector, gyre), choices = listOf(meld))
+        val english = model.rewardCardPresentation(meld, 0)
+        assertEquals(OverlayRedesignText.Meld.english, english.title)
+        assertEquals(english.title, english.action?.label)
+        assertEquals(listOf(AppLanguage.English.text(OverlayRedesignText.MeldEffect, "5", "3")), english.descriptions)
+        // The Meld seals the last open slot, and its preview names the lasting bonus it reaches.
+        val preview = requireNotNull(english.relicPreview)
+        assertTrue(preview.meld)
+        assertEquals(3, preview.targetSlot)
+        assertEquals("Meld ×1: damage +5%, integrity +3%", preview.rows.first().title)
+        assertEquals("+", preview.rows.first().sign)
         // Russian pairs the noun and the verb of the same word (Слияние / Слить).
-        val russian = rewardHeading(ChoiceType.RELIC_BIND, RelicChoiceAction.MELD_TARGET, AppLanguage.Russian)
-        assertEquals(russian.take(3), OverlayRedesignText.Meld.russian.take(3))
+        val russian = model.rewardCardPresentation(meld, 0, AppLanguage.Russian)
+        assertEquals(russian.title.take(3), russian.action?.label?.take(3))
     }
 
     @Test
@@ -581,6 +548,32 @@ class RewardRedesignPresentationTest {
             assertTrue(terser != fuller)
         }
         assertEquals(listOf(RelicPreviewPlan(0, 0, 0)), relicPreviewPlans(0, 0))
+    }
+
+    @Test
+    fun cardIntegrityAndDamageAmountsReadAtTheRunsNumberScale() {
+        // Shock Plate with +20 maximum integrity, a flat burst of 140 and a heal of 10.
+        val content = rewardFixtureContent.copy(items = rewardFixtureContent.items.map { item ->
+            if (item.id != 4) item else item.copy(
+                stats = immutableListOf(StatDelta(ItemEffect.MAX_INTEGRITY, 20f), StatDelta(ItemEffect.CRIT_CHANCE, 0.05f)),
+                clauses = immutableListOf(EffectClause(EffectTrigger.IMPACT, actions = immutableListOf(
+                    EffectAction.Burst(80f, DamageBasis.FLAT, 140f), EffectAction.Heal(10f)), cooldownSeconds = 2f)),
+            )
+        }.toImmutableList())
+        fun card(numberScale: Double, language: AppLanguage = AppLanguage.English) =
+            rewardFixtureModel(content = content, choices = listOf(itemChoice(4)), elapsed = 0f, rebirthLevel = 0, numberScale = numberScale,
+                language = language).rewardCardPresentation(itemChoice(4), 0, language)
+        val base = card(1.0)
+        assertEquals(listOf("+20", "+5%"), base.changes.map { it.after })
+        assertTrue(base.rules.single { it.kind == RuleLineKind.EFFECT }.text.let { "140" in it && "10" in it })
+        // Rebirth 10 (×3,600): integrity and damage in the compact form; the percentage stays as it is.
+        val tierTen = card(3_600.0)
+        assertEquals(listOf("+72K", "+5%"), tierTen.changes.map { it.after })
+        val effect = tierTen.rules.single { it.kind == RuleLineKind.EFFECT }.text
+        assertTrue("504K" in effect && "36K" in effect, effect)
+        val russian = card(3_600.0, AppLanguage.Russian).rules.single { it.kind == RuleLineKind.EFFECT }.text
+        assertTrue("504K" in russian && "36K" in russian, russian)
+        assertTrue(card(2.3, AppLanguage.Russian).changes.first().after == "+46")
     }
 
     @Test

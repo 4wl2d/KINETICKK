@@ -8,6 +8,7 @@ import kinetickk.ball.gameplay.api.GameplayAcceptance
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.api.GameplayRunPhase
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.impl.DefaultGameplayFeature
 import kinetickk.ball.gameplay.interaction.GameplayInteractionPort
 import kinetickk.ball.profile.api.PlayerPreferences
@@ -20,14 +21,12 @@ import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
 import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kinetickk.ball.profile.impl.createProfileComponent
 import kinetickk.flow.session.api.AppDestination
-import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.SessionAcceptance
 import kinetickk.flow.session.api.SessionInteractionPulse
 import kinetickk.flow.session.api.SessionWorkflowFailureCode
 import kinetickk.flow.session.impl.createAppSessionComponent
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -120,6 +119,24 @@ class InlineSessionLifecycleTest {
     }
 
     @Test
+    fun anEasyRunLeavesTheProfileUntouchedAndReturnsHome() {
+        val fixture = LifecycleFixture()
+        fixture.accept(SessionInteractionPulse.SelectRunModeRequested(RunMode.EASY))
+        val before = fixture.profile.query(ProfileQuery.GetHomeProgress)
+        fixture.start()
+        assertTrue(fixture.runView().renderSnapshot().renderModel!!.easyMode)
+        assertTrue(fixture.earnProgress() > 0L)
+
+        fixture.accept(SessionInteractionPulse.ExitRunRequested)
+
+        fixture.assertReady(AppDestination.Home)
+        assertEquals(RunMode.EASY, fixture.shell().runMode, "the mode stays selected for the next start")
+        assertEquals(GameplayRunPhase.EXITED, fixture.runStatus().phase)
+        assertTrue(!fixture.runStatus().progressPending)
+        assertEquals(before, fixture.profile.query(ProfileQuery.GetHomeProgress), "the Profile saw nothing of the run")
+    }
+
+    @Test
     fun busyRealProfileRefusesExitProgressAndSessionKeepsItsFailureVisible() {
         val fixture = LifecycleFixture()
         fixture.start()
@@ -174,7 +191,7 @@ private class LifecycleFixture {
         assertEquals(GameplayRunPhase.RUNNING, runStatus().phase)
     }
 
-    fun shell() = session.query(AppSessionQuery.GetShell)
+    fun shell() = session.shell()
     fun runStatus() = gameplay.activeRun()!!.query(GameplayQuery.GetRunStatus)
     fun runView() = gameplay.activeRun() as GameplayInteractionPort
 
@@ -182,6 +199,7 @@ private class LifecycleFixture {
         repeat(1_200) {
             val progress = runView().renderSnapshot().renderModel!!.runMatter
             if (progress > 0L) return progress
+            if (runView().declineOmenIfOffered()) return@repeat
             assertEquals(GameplayRunPhase.RUNNING, runStatus().phase)
             assertIs<GameplayAcceptance.Accepted>(runView().accept(
                 GameplayInteractionPulse.FrameElapsed.fromValidated(0.1f),
@@ -213,7 +231,6 @@ private class LifecyclePersistence : ProfilePersistenceCapability {
 
 private class LifecycleSilentAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

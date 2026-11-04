@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import kinetickk.gradle.packageLegalDocuments
+import kinetickk.gradle.BuildVariant
+import kinetickk.gradle.gameBuildVariant
+import kinetickk.gradle.RejectReleaseInDebugAction
+import kinetickk.gradle.macOsPackageVersion
 import org.gradle.api.JavaVersion
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -12,12 +16,28 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val gameVariant = gameBuildVariant()
+val currentJavaHome = providers.systemProperty("java.home").get()
+// Some JEP 493 JDK distributions omit jmods. Compose's ProGuard task still requires those library
+// inputs; use the installed LTS toolchain in that case. Without one, configuration still succeeds
+// and only packaging fails, with Compose's missing-jmods error.
+val packagingJavaHome = providers.gradleProperty("kinetickk.packagingJdk").orNull
+    ?: currentJavaHome.takeIf { file("$it/jmods/java.base.jmod").isFile }
+    ?: runCatching {
+        javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(21))
+        }.get().metadata.installationPath.asFile.absolutePath
+    }.getOrDefault(currentJavaHome)
+
 composeCompiler {
     includeSourceInformation.set(false)
     includeTraceMarkers.set(false)
 }
 
 kotlin {
+    sourceSets.named("main") {
+        kotlin.srcDir("src/${gameVariant.name.lowercase()}/kotlin")
+    }
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)
         freeCompilerArgs.add("-Xjdk-release=17")
@@ -35,16 +55,43 @@ dependencies {
 
 compose.desktop {
     application {
+        javaHome = packagingJavaHome
         mainClass = "kinetickk.app.desktop.DesktopMainKt"
         jvmArgs += listOf("--enable-native-access=ALL-UNNAMED")
 
+        buildTypes.release.proguard {
+            // ProGuard 7.10 adds support for the project's Kotlin 2.4 compiler metadata.
+            version.set("7.10.0")
+            isEnabled.set(true)
+            optimize.set(true)
+            obfuscate.set(true)
+            joinOutputJars.set(true)
+            configurationFiles.from(project.file("release.pro"))
+        }
+
         nativeDistributions {
-            packageName = "KINETICKK"
+            packageName = if (gameVariant == BuildVariant.DEBUG) "KINETICKK Debug" else "KINETICKK"
+            macOS.bundleID = if (gameVariant == BuildVariant.DEBUG) "kinetickk.app.desktop.debug" else "kinetickk.app.desktop"
+            // java.desktop covers AWT, Skiko, fonts and audio; Preferences persists the profile.
+            modules("java.desktop", "java.prefs", "jdk.unsupported")
+            if (gameVariant == BuildVariant.DEBUG) modules("java.management", "jdk.management")
             packageVersion = project.version.toString()
+            macOS {
+                // jpackage forbids major zero. This packaging-only mapping keeps 0.x game
+                // versions intact while retaining upgrade order when the game reaches 1.x.
+                packageVersion = macOsPackageVersion(project.version.toString())
+            }
             description = "KINETICKK physics-action roguelite"
             vendor = "Vladislav Tomilov"
             copyright = "Copyright (c) 2026 Vladislav Tomilov. Licensed under GPL-3.0-or-later."
         }
+    }
+}
+
+// A task called Release must never package the diagnostic source set.
+if (gameVariant == BuildVariant.DEBUG) {
+    tasks.matching { "Release" in it.name }.configureEach {
+        doFirst(RejectReleaseInDebugAction())
     }
 }
 

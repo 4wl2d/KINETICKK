@@ -19,8 +19,60 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotSame
+import kotlin.test.assertTrue
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.startCoroutine
 
 class PlatformCapabilitiesWebTest {
+    @OptIn(ExperimentalWasmJsInterop::class)
+    @Test
+    fun preparationDoesNotResumeAudioOrPlayBeforeTheUserGesture() {
+        val probe = installWebAudioPreparationProbe()
+        val capability = createPlatformTonePlaybackCapability()
+        try {
+            var complete = false
+            suspend { capability.prepare(emptyList()) }.startCoroutine(object : Continuation<Unit> {
+                override val context = EmptyCoroutineContext
+                override fun resumeWith(result: Result<Unit>) {
+                    result.getOrThrow()
+                    complete = true
+                }
+            })
+            assertTrue(complete)
+            capability.play(ToneRequest(440f, 0.1f, 0.1f, ToneWave.SINE))
+            assertEquals(1, probe.creations)
+            assertEquals(0, probe.resumes)
+            assertEquals(0, probe.oscillators)
+            capability.unlock()
+            assertEquals(1, probe.resumes)
+            // A real resume() resolves later, so state is still suspended for the first cue.
+            capability.play(ToneRequest(440f, 0.1f, 0.1f, ToneWave.SINE))
+            assertEquals(1, probe.oscillators)
+            // Subsequent automatic frames cannot pile up sounds while resume remains pending.
+            capability.play(ToneRequest(440f, 0.1f, 0.1f, ToneWave.SINE))
+            assertEquals(1, probe.oscillators)
+        } finally {
+            capability.close()
+            restoreWebAudioConstructors(probe)
+        }
+    }
+
+    @OptIn(ExperimentalWasmJsInterop::class)
+    @Test
+    fun tonesShareOneUnityMasterGainPerContext() {
+        val probe = installWebAudioMasterGainProbe()
+        val capability = createPlatformTonePlaybackCapability()
+        try {
+            capability.play(ToneRequest(440f, 0.1f, 0.1f, ToneWave.SINE))
+            capability.play(ToneRequest(660f, 0.1f, 0.2f, ToneWave.SQUARE))
+            assertEquals("contexts=1 gains=3 masters=1 masterGain=1 tonesToMaster=2", describeWebAudioMasterGainProbe(probe))
+        } finally {
+            capability.close()
+            restoreWebAudioConstructors(probe)
+        }
+    }
+
     @Test
     fun everyToneWaveMapsExhaustivelyToItsClosedWebValue() {
         assertEquals(
@@ -132,6 +184,89 @@ class PlatformCapabilitiesWebTest {
         }
     }
 }
+
+@OptIn(ExperimentalWasmJsInterop::class)
+private external interface WebAudioPreparationProbe : JsAny {
+    val creations: Int
+    val resumes: Int
+    val oscillators: Int
+}
+
+@OptIn(ExperimentalWasmJsInterop::class)
+private fun installWebAudioPreparationProbe(): WebAudioPreparationProbe = js(
+    """{
+        const probe = {
+            audioContext: globalThis.AudioContext,
+            webkitAudioContext: globalThis.webkitAudioContext,
+            creations: 0, resumes: 0, oscillators: 0,
+        };
+        globalThis.webkitAudioContext = undefined;
+        globalThis.AudioContext = function() {
+            probe.creations++;
+            return {
+                state: 'suspended',
+                currentTime: 0,
+                destination: {},
+                resume: function() { probe.resumes++; return Promise.resolve(); },
+                createOscillator: function() {
+                    probe.oscillators++;
+                    return { frequency: { setValueAtTime: function() {} }, connect: function() {}, start: function() {}, stop: function() {} };
+                },
+                createGain: function() {
+                    return { gain: { setValueAtTime: function() {}, exponentialRampToValueAtTime: function() {} }, connect: function() {} };
+                },
+                close: function() { return Promise.resolve(); },
+            };
+        };
+        return probe;
+    }""",
+)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+private fun installWebAudioMasterGainProbe(): JsAny = js(
+    """{
+        const probe = {
+            audioContext: globalThis.AudioContext,
+            webkitAudioContext: globalThis.webkitAudioContext,
+            contexts: 0, gains: [], destination: {},
+        };
+        globalThis.webkitAudioContext = undefined;
+        globalThis.AudioContext = function() {
+            probe.contexts++;
+            return {
+                state: 'running',
+                currentTime: 0,
+                destination: probe.destination,
+                resume: function() { return Promise.resolve(); },
+                createOscillator: function() {
+                    return { frequency: { setValueAtTime: function() {} }, connect: function() {}, start: function() {}, stop: function() {} };
+                },
+                createGain: function() {
+                    const node = {
+                        targets: [],
+                        gain: { value: 1, setValueAtTime: function() {}, exponentialRampToValueAtTime: function() {} },
+                        connect: function(target) { node.targets.push(target); },
+                    };
+                    probe.gains.push(node);
+                    return node;
+                },
+                close: function() { return Promise.resolve(); },
+            };
+        };
+        return probe;
+    }""",
+)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+private fun describeWebAudioMasterGainProbe(probe: JsAny): String = js(
+    """{
+        const masters = probe.gains.filter((node) => node.targets.length === 1 && node.targets[0] === probe.destination);
+        const master = masters[0];
+        const tonesToMaster = probe.gains.filter((node) => node.targets.length === 1 && node.targets[0] === master).length;
+        return 'contexts=' + probe.contexts + ' gains=' + probe.gains.length + ' masters=' + masters.length +
+            ' masterGain=' + (master ? master.gain.value : 'none') + ' tonesToMaster=' + tonesToMaster;
+    }""",
+)
 
 private class TestWebProfilePersistenceCapability(
     private val storage: Storage,

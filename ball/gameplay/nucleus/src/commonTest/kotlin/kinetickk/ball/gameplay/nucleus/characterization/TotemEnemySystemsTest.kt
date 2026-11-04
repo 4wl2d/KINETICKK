@@ -19,6 +19,8 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.Test
+import kinetickk.ball.gameplay.nucleus.simulation.director.*
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 
 class TotemEnemySystemsTest {
     @Test
@@ -35,10 +37,11 @@ class TotemEnemySystemsTest {
         engine.rerollChoices()
         assertEquals(rerolls, engine.rerollsRemaining)
 
-        // A fresh profile owns only the starter: the Totem can amplify it, never recalibrate into nothing.
+        // A fresh profile owns only the starter: a Totem chest can amplify it, never recalibrate into nothing.
         val starter = runningEngine(seed = 203, owned = emptyList())
         assertEquals(setOf(WeaponId.FLUX_WAKE), starter.unlockedWeapons)
-        starter.activateTotemForTesting()
+        starter.keys++
+        starter.placeTotemChestForTesting()
         starter.update(GameScenario.FIXED_STEP)
         assertEquals(ChoiceType.TOTEM, starter.choiceType)
         assertEquals(listOf(TotemAction.AMPLIFY_CURRENT), starter.choices.map { it.totemAction })
@@ -73,7 +76,7 @@ class TotemEnemySystemsTest {
     }
 
     @Test
-    fun totemAmplifyAndChangeFormATwoStageChoiceThatPreservesWeaponLevel() {
+    fun totemAmplifyAndChangeFormATwoStageChoiceThatKeepsMostOfTheWeaponLevel() {
         val engine = runningEngine(seed = 201)
         val startingWeapon = engine.weapon
         // The Orb starts its signature Flux Wake one level up.
@@ -82,7 +85,7 @@ class TotemEnemySystemsTest {
         openTotemChoice(engine)
 
         assertEquals(0, engine.keys)
-        assertNull(engine.totem)
+        assertTrue(engine.structures.totemChests.isEmpty(), "its only charge shattered the chest")
         assertEquals(ChoiceType.TOTEM, engine.choiceType)
         assertEquals(
             setOf(TotemAction.AMPLIFY_CURRENT, TotemAction.CHANGE_WEAPON),
@@ -133,12 +136,13 @@ class TotemEnemySystemsTest {
         assertEquals(GamePhase.RUNNING, engine.phase)
         assertEquals(selectedWeapon, engine.weapon)
         assertNotEquals(startingWeapon, engine.weapon)
-        assertEquals(amplified, engine.weaponLevel)
+        // The run's one weapon change keeps the tempo's share of the level.
+        assertEquals(engine.content.tempo.weaponLevelAfterChange(amplified), engine.weaponLevel)
         assertTrue(engine.choices.isEmpty())
     }
 
     @Test
-    fun enemyKillsDoNotAdvanceWeaponLevelWithoutATotem() {
+    fun ordinaryKillsDoNotAdvanceWeaponLevel() {
         val engine = runningEngine(seed = 202)
         engine.equipWeaponForTesting(WeaponId.ENTROPY_FIELD)
         val weaponLevelBeforeKills = engine.weaponLevel
@@ -274,12 +278,14 @@ class TotemEnemySystemsTest {
             EnemyType.SHOOTER to 38f,
             EnemyType.SWARMLING to 75f,
             EnemyType.INTERCEPTOR to 90f,
+            EnemyType.COMET to 120f,
             EnemyType.CHARGER to 150f,
             EnemyType.WEAVER to 150f,
             EnemyType.BOMBER to 200f,
             EnemyType.SPLITTER to 240f,
             EnemyType.WARDEN to 240f,
             EnemyType.LANCER to 240f,
+            EnemyType.PYLON to 270f,
             EnemyType.SNIPER to 330f,
             EnemyType.AEGIS to 390f,
             EnemyType.MINELAYER to 450f,
@@ -295,6 +301,12 @@ class TotemEnemySystemsTest {
         // Rebirth-gated kinds never appear at tier 0, however late; scheduled kinds never take ordinary weight.
         listOf(EnemyType.PHANTOM, EnemyType.BROODMOTHER, EnemyType.REFLECTOR, EnemyType.ELITE, EnemyType.HERALD, EnemyType.ARCHITECT)
             .forEach { type -> assertEquals(0f, engine.weightAt(700f, type), "$type at tier 0") }
+        // Habitat-only kinds take no open-space weight, and owner-spawned mini and secret bosses no ordinary weight.
+        listOf(
+            EnemyType.SENTRY, EnemyType.CRAWLER, EnemyType.SERAPH, EnemyType.CHOIR, EnemyType.IMP, EnemyType.HOUND,
+            EnemyType.CIPHER, EnemyType.MIRROR, EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN, EnemyType.THRONE,
+            EnemyType.PYRE_HERALD, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
+        ).forEach { type -> assertEquals(0f, engine.weightAt(700f, type), "$type in open space") }
     }
 
     @Test
@@ -308,6 +320,7 @@ class TotemEnemySystemsTest {
         val tierZero = picks(seed = 11, tier = 0).toSet()
         assertTrue(EnemyType.PHANTOM !in tierZero && EnemyType.BROODMOTHER !in tierZero && EnemyType.REFLECTOR !in tierZero)
         assertTrue(tierZero.containsAll(listOf(EnemyType.DRIFTER, EnemyType.SWARMLING, EnemyType.SNIPER, EnemyType.MINELAYER)))
+        assertTrue(tierZero.containsAll(listOf(EnemyType.COMET, EnemyType.PYLON)), "the open-space newcomers join tier 0: $tierZero")
         val tierFour = picks(seed = 11, tier = 4).toSet()
         assertTrue(tierFour.containsAll(listOf(EnemyType.PHANTOM, EnemyType.BROODMOTHER, EnemyType.REFLECTOR)))
         assertTrue(EnemyType.HERALD !in tierFour && EnemyType.ELITE !in tierFour)
@@ -319,7 +332,8 @@ class TotemEnemySystemsTest {
     }
 
     private fun openTotemChoice(engine: GameScenario) {
-        engine.activateTotemForTesting()
+        engine.keys++
+        engine.placeTotemChestForTesting()
         engine.update(GameScenario.FIXED_STEP)
         assertEquals(GamePhase.CHOICE, engine.phase)
         assertEquals(ChoiceType.TOTEM, engine.choiceType)

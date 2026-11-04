@@ -2,12 +2,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import com.android.build.api.dsl.ApplicationExtension
+import com.android.build.api.variant.ApplicationAndroidComponentsExtension
+import kinetickk.gradle.BuildVariant
+import kinetickk.gradle.gameBuildVariant
 
 plugins {
     id("kinetickk.base")
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val gameVariant = gameBuildVariant()
 
 composeCompiler {
     includeSourceInformation.set(false)
@@ -22,7 +27,7 @@ extensions.configure<ApplicationExtension> {
         applicationId = "com.vladislavtomilov.kinetickk"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
+        versionCode = 6
         versionName = project.version.toString()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -34,8 +39,14 @@ extensions.configure<ApplicationExtension> {
     buildTypes {
         getByName("debug") {
             applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
         }
         getByName("release") {
+            // Local launch uses the developer key explicitly; distribution stays unsigned
+            // unless a release-signing setup is supplied by the distributor.
+            if (providers.gradleProperty("kinetickk.localSigning").orNull == "true") {
+                signingConfig = signingConfigs.getByName("debug")
+            }
             optimization {
                 // AGP 9.3's unified switch enables R8 code optimization and optimized resource
                 // shrinking together, with the optimized Android defaults included implicitly.
@@ -67,5 +78,16 @@ extensions.configure<ApplicationExtension> {
             "/META-INF/AL2.0",
             "/META-INF/LGPL2.1",
         )
+    }
+}
+
+// KMP libraries have one Android compilation, so the graph must agree on one mode.
+extensions.configure<ApplicationAndroidComponentsExtension> {
+    beforeVariants { variant ->
+        variant.enable = if (gameVariant == BuildVariant.DEBUG) {
+            variant.buildType == "debug"
+        } else {
+            variant.buildType != "debug"
+        }
     }
 }

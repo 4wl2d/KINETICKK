@@ -3,17 +3,24 @@
 
 package kinetickk.ball.gameplay.nucleus.render
 
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.DirectorPersonalityId
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.OmenId
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.SignalKind
+import kinetickk.ball.content.api.SignalOption
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.ImmutableSet
+import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.sqrt
 
 enum class GamePhase { RUNNING, PAUSED, CHOICE, GAME_OVER, VICTORY }
@@ -26,19 +33,24 @@ enum class PickupType { DATA, KEY, REPAIR, RELIC }
 enum class ProjectileKind { BOLT, MINE }
 /**
  * What an offer deals. [ACTIVE_SLOT] asks which active item an incoming active item replaces when every slot holds one:
- * a card per held active plus a card that keeps the loadout and salvages the incoming item.
+ * a card per held active plus a card that keeps the loadout and salvages the incoming item. [OMEN] is the run-start
+ * omen offer (three omens and No omen), [SIGNAL] an event signal's prompt (its options and Ignore) and [BOON] a
+ * dimension reward's Blessing or Pact cards (a Pact offer adds the Refuse card); the Archive's trove deals [ITEM] cards.
  */
-enum class ChoiceType { ITEM, TOTEM, WEAPON, RELIC, RELIC_BIND, ACTIVE_SLOT }
+enum class ChoiceType { ITEM, TOTEM, WEAPON, RELIC, RELIC_BIND, ACTIVE_SLOT, OMEN, SIGNAL, BOON }
 enum class TotemAction { AMPLIFY_CURRENT, CHANGE_WEAPON }
-enum class RelicChoiceAction { ACQUIRE, MELD, REPLACE, MELD_TARGET, DECLINE }
+/** A relic card: bind or rank up, Meld (seal the empty slot for a run bonus), break a slot, or leave the Heirloom / salvage. */
+enum class RelicChoiceAction { ACQUIRE, MELD, REPLACE, DECLINE }
 enum class WeaponNodeType { GRAVITY_MINE }
 /**
  * Weapon-owned world objects ([WeaponEntityProjection]): Gyre discs, sentries, lenses and their wells,
  * rifts, Aegis shards, missiles, toll and pulse rings, tethers and solar beams.
  */
 enum class WeaponEntityKind { DISC, SENTRY, LENS, WELL, RIFT, SHARD, MISSILE, RING, TETHER, BEAM }
-/** World obstacles: an [ASTEROID] hurts at speed, a [BUMPER] throws the Core back, an [UNSTABLE] asteroid explodes. */
-enum class ObstacleKind { ASTEROID, BUMPER, UNSTABLE }
+/** Content owns the obstacle kinds; gameplay keeps this name so render and simulation code read unchanged. */
+typealias ObstacleKind = kinetickk.ball.content.api.ObstacleKind
+/** Structure capsule walls: a [SOLID] wall, a [DOOR_SEALED] door that blocks like a wall, a [DOOR_OPEN] door that lets the Core through. */
+enum class WallKind { SOLID, DOOR_SEALED, DOOR_OPEN }
 
 data class ChoiceOption(
     val type: ChoiceType,
@@ -75,9 +87,27 @@ data class ChoiceOption(
     val incomingItemId: Int? = null,
     /**
      * The [ChoiceType.ACTIVE_SLOT] keep card: the Matter the incoming item is salvaged for, as the salvage grants it
-     * before the run's Matter gain (presentation shows this number; it never recomputes the salvage).
+     * before the run's Matter gain. The Pact offer's Refuse card ([ChoiceType.BOON] without a boon): the Matter refusing
+     * grants, after the run's Matter gain (rounded). Presentation shows this number; it never recomputes the salvage.
      */
     val salvageMatter: Int? = null,
+    /** An [ChoiceType.OMEN] card's omen (null on the No omen card). */
+    val omenId: OmenId? = null,
+    /** A [ChoiceType.SIGNAL] card's signal and option ([SignalOption.IGNORE] declines the prompt). */
+    val signalKind: SignalKind? = null,
+    val signalOption: SignalOption? = null,
+    /** What a [ChoiceType.SIGNAL] option costs and pays (Matter, integrity or rerolls, by option). */
+    val signalCost: Int = 0,
+    val signalPayout: Int = 0,
+    /** A card shown but not takeable (a [ChoiceType.SIGNAL] option the run cannot afford). */
+    val locked: Boolean = false,
+    /** A [ChoiceType.BOON] card's Blessing or Pact id. */
+    val boonId: Int? = null,
+    /**
+     * A [ChoiceType.SIGNAL] item-offer card's rarity floor as it deals at the profile's Rebirth rank: the Black reliquary's
+     * Legendary floor deals Epic while no Legendary item is unlocked. Null on every other card.
+     */
+    val signalRarity: kinetickk.ball.content.api.ItemRarity? = null,
 )
 
 data class CharacterLatticePoint(val x: Float, val y: Float)
@@ -143,20 +173,6 @@ data class CharacterAbilityProjection(
     val secondGhostY: Float = 0f,
 )
 
-data class PointOfInterestProjection(
-    val kind: kinetickk.ball.content.api.PointOfInterestKind,
-    val name: String,
-    val x: Float,
-    val y: Float,
-    val active: Boolean,
-    val remaining: Float,
-    val nextBeacon: Int,
-    val progress: Float,
-    val defenderIds: ImmutableList<Int>,
-    val warningRemaining: Float,
-    val volleyAngle: Float,
-)
-
 data class EnemyProjection(
     val id: Int,
     val type: EnemyType,
@@ -192,6 +208,8 @@ data class EnemyProjection(
     val armored: Boolean = false,
     /** Control and mark state; decode with [EnemyControlBits]. */
     val controlBits: Int = 0,
+    /** Type-specific stored charges (shield arcs, brood pips); 0 for kinds without any. */
+    val charges: Int = 0,
 )
 
 /** Behavior steps published in [EnemyProjection.behavior]; meaning depends on the enemy type. */
@@ -207,6 +225,8 @@ object EnemyBehavior {
     const val PHASED: Int = 4
     /** Bomber about to explode. */
     const val PRIMED: Int = 5
+    /** A mounted turret anchored to its rock or wall. */
+    const val ANCHORED: Int = 6
 }
 
 data class ProjectileProjection(
@@ -249,7 +269,10 @@ data class VolatileBurstProjection(
     val detonatesAt: Float,
 )
 
-/** A static world obstacle; [id] is stable across rebases, [shapeSeed] picks its outline. */
+/**
+ * A static world obstacle; [id] is stable across rebases, [shapeSeed] picks its outline. [fuseAt] is when an armed
+ * mine detonates (0 while unarmed); [repels] marks a gravity knot that pushes instead of pulling.
+ */
 data class ObstacleProjection(
     val id: Long,
     val kind: ObstacleKind,
@@ -257,11 +280,25 @@ data class ObstacleProjection(
     val y: Float,
     val radius: Float,
     val shapeSeed: Int,
+    val fuseAt: Float = 0f,
+    val repels: Boolean = false,
 )
 
 /** A trail sample [age] seconds old that burns for [life] seconds (render fades it out after) at [scale] strength. */
 data class TrailPointProjection(val x: Float, val y: Float, val age: Float, val life: Float = 1.8f, val scale: Float = 1f)
-data class TotemProjection(val x: Float, val y: Float, val pulse: Float)
+/**
+ * A waiting Totem chest (published in realspace only): its structure [id], run-local position, charges left, and the
+ * run times it materialised and from which it opens. Openable (a Key held) and armed (`elapsed >= armedAt`) are
+ * derived by the renderer, so the projection changes only on a materialise, an open or a rebase.
+ */
+data class TotemChestProjection(
+    val id: Long,
+    val x: Float,
+    val y: Float,
+    val charges: Int,
+    val bornAt: Float,
+    val armedAt: Float,
+)
 
 data class WeaponNodeProjection(
     val type: WeaponNodeType,
@@ -303,23 +340,6 @@ data class WeaponEntityProjection(
     val life: Float,
     val maxLife: Float,
     val phase: Int,
-)
-
-/**
- * What links the equipped weapon to the build right now (SPEC 10.2): points in its two tags and the
- * power they add, whether the character is its signature, the bound Relic carrying its key, the element
- * its hits apply or adopt, its scaling multiplier and how many of its three mastery forms are open
- * ([activeMasteryForm] is the latest one's content text).
- */
-data class WeaponSynergyProjection(
-    val tagPoints: Int = 0,
-    val tagBonus: Float = 0f,
-    val signatureActive: Boolean = false,
-    val harmonizingRelic: RelicId? = null,
-    val infusionElement: kinetickk.ball.content.api.StatusElement? = null,
-    val scalingMultiplier: Float = 1f,
-    val masteryForms: Int = 0,
-    val activeMasteryForm: String? = null,
 )
 
 /** Immutable, API-owned projection of a committed GameplayRun frame. */
@@ -402,7 +422,7 @@ class GameplayRenderModel(
     val weaponBeamStartY: Float,
     val weaponBeamEndX: Float,
     val weaponBeamEndY: Float,
-    val totem: TotemProjection?,
+    val totemChests: ImmutableList<TotemChestProjection>,
     val coreShape: CoreShape,
     val enemies: ImmutableList<EnemyProjection>,
     val projectiles: ImmutableList<ProjectileProjection>,
@@ -416,7 +436,8 @@ class GameplayRenderModel(
     internal val itemStacks: ImmutableList<Int>,
     internal val discoveredItemIds: ImmutableSet<Int>,
     internal val relicRanks: ImmutableList<Int>,
-    val pointsOfInterest: ImmutableList<PointOfInterestProjection> = kinetickk.foundation.collections.immutableListOf(),
+    /** Window sites (offered or active), then the secret sigil if any. */
+    val sites: ImmutableList<SiteProjection> = immutableListOf(),
     val directedChoice: Boolean = false,
     val characterAbility: CharacterAbilityProjection = CharacterAbilityProjection(),
     val effectiveWeaponPower: Float = weaponPower,
@@ -460,6 +481,8 @@ class GameplayRenderModel(
     val weaponSynergy: WeaponSynergyProjection = WeaponSynergyProjection(),
     /** Rebirth rank (one above the highest clear) the run started with; the Victory screen names what it earns. */
     val rebirthRank: Int = rebirthLevel,
+    /** Display scale of absolute numbers (damage, integrity, shield): shown values are power units × this. */
+    val numberScale: Double = 1.0,
     /** Volatile Remains bursts waiting to detonate (Rebirth R4). */
     val volatileBursts: ImmutableList<VolatileBurstProjection> = kinetickk.foundation.collections.immutableListOf(),
     /** The run's level cap; at it [level] equals it and Data charges the Apex instead. */
@@ -472,6 +495,38 @@ class GameplayRenderModel(
     val combatFields: ImmutableList<CombatFieldProjection> = kinetickk.foundation.collections.immutableListOf(),
     /** Lingering reaction and skill states on the Core. */
     val coreState: CoreStateProjection = CoreStateProjection.NEUTRAL,
+    /** How long the heading has held near-straight, 0..1 (straight-line fatigue). */
+    val coreStraightness: Float = 0f,
+    /** The run was started in Easy mode (fixed for the whole run). */
+    val easyMode: Boolean = false,
+    /** Core Freeze 0..1 (0: off, measure-only or thawed; 1: frozen solid); [coreStasisMotion] says where it heads. */
+    val coreStasis: Float = 0f,
+    val coreStasisMotion: CoreStasisMotion = CoreStasisMotion.CLEAR,
+    /** Hash-placed caches and signals around the Core (never offered by a window). */
+    val ambientSites: ImmutableList<SiteProjection> = immutableListOf(),
+    /** The one HUD trial panel's facts: the active site, dungeon or dimension objective, or null. */
+    val trial: TrialProjection? = null,
+    /** Run secret flags (bit = flag ordinal) that presentation reads. */
+    val secretFlags: Int = 0,
+    /** The Golden Drifter's enemy id while it flies, or -1. */
+    val goldenDrifterId: Int = -1,
+    /** Structures, their walls and signals around the Core, and the dungeon in progress. */
+    val structures: StructureRenderProjection = StructureRenderProjection.EMPTY,
+    /** The world layer the Core is in and its visit. */
+    val dimension: DimensionProjection = DimensionProjection.REALSPACE,
+    /** Blessings and Pacts taken this run, in order. */
+    val runBoons: ImmutableList<Int> = immutableListOf(),
+    /** The omen chosen at the run start, or null. */
+    val runOmen: OmenId? = null,
+    /** The director personality rolled for this run, or null. */
+    val directorPersonality: DirectorPersonalityId? = null,
+    /** The run's featured build tag and element (run resonance), or null. */
+    val keynoteTag: BuildTag? = null,
+    val keynoteElement: StatusElement? = null,
+    /** The ambient world event in progress (telegraph included), or null. */
+    val worldEvent: WorldEventProjection? = null,
+    /** Live event signals in the world. */
+    val eventSignals: ImmutableList<EventSignalProjection> = immutableListOf(),
 ) {
     val speed: Float get() = vectorLength(velocityX, velocityY)
     val runProgress: Float get() = content.tempo.progress(elapsed)
@@ -510,6 +565,8 @@ class GameplayRenderModel(
         get() = phase == GamePhase.CHOICE && !directedChoice && rerollsRemaining > 0 && when (choiceType) {
             ChoiceType.ITEM, ChoiceType.WEAPON, ChoiceType.RELIC -> true
             ChoiceType.TOTEM, ChoiceType.RELIC_BIND, ChoiceType.ACTIVE_SLOT -> false
+            // Omens and dimension boons are never rerolled; a signal prompt deals fixed options.
+            ChoiceType.OMEN, ChoiceType.SIGNAL, ChoiceType.BOON -> false
         }
     val itemStacksSnapshot: ImmutableList<Int> get() = itemStacks
 

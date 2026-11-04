@@ -1,0 +1,163 @@
+{
+  "$schema": "../performance/android_gameplay_flow.schema.json",
+  "schemaVersion": 1,
+  "name": "kinetickk-debug-record-copy-functional-easy-v1",
+  "measurementStartStep": 9,
+  "steps": [
+    {
+      "action": "wait",
+      "selector": {
+        "resourceId": "kinetickk.home"
+      },
+      "timeoutMillis": 20000
+    },
+    {
+      "action": "tap",
+      "selector": {
+        "anyOf": [
+          {
+            "resourceId": "kinetickk.debug.toggle"
+          },
+          {
+            "text": "DEBUG · F3"
+          }
+        ]
+      }
+    },
+    {
+      "action": "tap",
+      "selector": {
+        "anyOf": [
+          {
+            "resourceId": "kinetickk.debug.startStop"
+          },
+          {
+            "text": "Начать запись"
+          }
+        ]
+      }
+    },
+    {
+      "action": "tap",
+      "selector": {
+        "anyOf": [
+          {
+            "resourceId": "kinetickk.debug.hide"
+          },
+          {
+            "text": "Скрыть"
+          }
+        ]
+      }
+    },
+    {
+      "action": "tap",
+      "selector": {
+        "resourceId": "kinetickk.home.run-mode"
+      }
+    },
+    {
+      "action": "tap",
+      "selector": {
+        "resourceId": "kinetickk.home.start"
+      }
+    },
+    {
+      "action": "wait",
+      "selector": {
+        "resourceId": "kinetickk.gameplay"
+      },
+      "timeoutMillis": 20000
+    },
+    {
+      "action": "tap",
+      "selector": {
+        "resourceId": "kinetickk.gameplay.choice.4"
+      }
+    },
+    {
+      "action": "wait",
+      "selector": {
+        "resourceId": "kinetickk.gameplay.dash"
+      },
+      "timeoutMillis": 20000
+    },
+    {
+      "action": "tap",
+      "selector": {
+        "resourceId": "kinetickk.gameplay.dash"
+      },
+      "repeat": 3,
+      "intervalMillis": 450
+    },
+    {
+      "action": "longPress",
+      "selector": {
+        "resourceId": "kinetickk.gameplay.brake"
+      },
+      "reusePreviousHierarchy": true,
+      "durationMillis": 650
+    },
+    {
+      "action": "tap",
+      "selector": {
+        "resourceId": "kinetickk.gameplay.pause"
+      },
+      "reusePreviousHierarchy": true
+    },
+    {
+      "action": "wait",
+      "selector": {
+        "resourceId": "kinetickk.gameplay.resume"
+      },
+      "timeoutMillis": 10000
+    },
+    {
+      "action": "tap",
+      "selector": {
+        "resourceId": "kinetickk.gameplay.resume"
+      },
+      "reusePreviousHierarchy": true
+    },
+    {
+      "action": "wait",
+      "selector": {
+        "resourceId": "kinetickk.gameplay"
+      },
+      "timeoutMillis": 10000
+    },
+    {
+      "action": "tap",
+      "selector": {
+        "anyOf": [
+          {
+            "resourceId": "kinetickk.debug.toggle"
+          },
+          {
+            "text": "● REC · DEBUG"
+          }
+        ]
+      }
+    },
+    {
+      "action": "tap",
+      "selector": {
+        "anyOf": [
+          {
+            "resourceId": "kinetickk.debug.copy"
+          },
+          {
+            "text": "Стоп + копия"
+          }
+        ]
+      }
+    },
+    {
+      "action": "wait",
+      "selector": {
+        "text": "Скопировано в буфер обмена."
+      },
+      "timeoutMillis": 10000
+    }
+  ]
+}

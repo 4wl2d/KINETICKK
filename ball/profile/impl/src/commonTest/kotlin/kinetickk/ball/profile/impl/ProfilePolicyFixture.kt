@@ -29,7 +29,6 @@ import kinetickk.ball.profile.api.ProfileSnapshot
 import kinetickk.ball.profile.api.ProfileSnapshotReadResult
 import kinetickk.ball.profile.api.ProfileWriteResult
 import kinetickk.ball.profile.api.RebirthProgress
-import kinetickk.ball.profile.resource.ProfileResource
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.assertEquals
 

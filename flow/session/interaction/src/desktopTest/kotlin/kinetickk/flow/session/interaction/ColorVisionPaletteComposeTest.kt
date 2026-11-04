@@ -16,6 +16,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.gameplay.interaction.GameplayPresentation
 import kinetickk.ball.profile.api.*
@@ -73,7 +74,7 @@ private fun PaletteShell(session: AppSessionPort, profile: PaletteProfilePort) {
             profileReadPort = profile,
             settingsFeature = remember(profile) { DefaultSettingsFeature(profile, PaletteSilentAudio) },
             homeFeature = object : HomeFeature {
-                @Composable override fun Content(inputEnabled: Boolean, onOutput: (HomeOutput) -> Unit) {
+                @Composable override fun Content(inputEnabled: Boolean, runMode: RunMode, onOutput: (HomeOutput) -> Unit) {
                     BasicText(LocalKkRolePalette.current.probeText(), Modifier.testTag("palette-probe"))
                 }
             },
@@ -122,7 +123,6 @@ private class PaletteProfilePort(colorVision: ColorVision) : ProfilePort {
 
 private object PaletteSilentAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

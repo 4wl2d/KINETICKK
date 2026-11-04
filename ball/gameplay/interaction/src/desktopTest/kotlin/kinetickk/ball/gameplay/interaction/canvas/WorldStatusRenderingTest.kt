@@ -16,6 +16,9 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.gameplay.interaction.canvas.fx.*
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.canvas.world.*
 import kinetickk.ball.gameplay.interaction.fx.ElementBurstProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.BuildProjection

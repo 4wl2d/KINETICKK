@@ -3,11 +3,14 @@
 
 package kinetickk.ball.gameplay.interaction.fx
 
-import kinetickk.ball.gameplay.nucleus.model.formatDamageNumber
+import kinetickk.ball.content.api.StructureTemplateId
+import kinetickk.ball.gameplay.nucleus.protocol.DungeonMomentKind
 import kinetickk.ball.profile.api.DamageNumberFormat
+import kinetickk.ball.profile.api.formatDamageNumber
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.COMPACT_NUMBER_THRESHOLD
 
 data class ParticleProjection(
     val x: Float,
@@ -47,36 +50,27 @@ data class DamageNumberProjection(
     val amount: Long,
     val critical: Boolean,
     val life: Float,
-    val compactAmount: String = formatDamageNumber(amount, DamageNumberFormat.COMPACT),
-    val fullAmount: String = formatDamageNumber(amount, DamageNumberFormat.FULL),
-    val russianCompactAmount: String = compactAmount.russianDamageNumber(),
+    val compactAmount: String = formatDamageNumber(amount, DamageNumberFormat.COMPACT, AppLanguage.English),
+    val fullAmount: String = damageNumberText(amount, DamageNumberFormat.FULL, AppLanguage.English, compactAmount),
+    val russianCompactAmount: String = damageNumberText(amount, DamageNumberFormat.COMPACT, AppLanguage.Russian, compactAmount),
+    val russianFullAmount: String = damageNumberText(amount, DamageNumberFormat.FULL, AppLanguage.Russian, compactAmount),
     val driftX: Float = 0f,
     val driftY: Float = -1f,
     /** 0 for Kinetic damage, otherwise 1 + the status element ordinal (the hue of the number). */
     val tone: Int = 0,
 ) {
     fun formattedAmount(format: DamageNumberFormat, language: AppLanguage = AppLanguage.English): String = when (format) {
-        DamageNumberFormat.COMPACT -> when (language) {
-            AppLanguage.English -> compactAmount
-            AppLanguage.Russian -> russianCompactAmount
-        }
-        DamageNumberFormat.FULL -> fullAmount
+        DamageNumberFormat.COMPACT -> if (language == AppLanguage.Russian) russianCompactAmount else compactAmount
+        DamageNumberFormat.FULL -> if (language == AppLanguage.Russian) russianFullAmount else fullAmount
     }
 }
 
-/** Translate the already rounded number; general UI formatting truncates and has different bounds. */
-internal fun String.russianDamageNumber(): String {
-    val suffix = when {
-        endsWith("Qa") -> "Qa" to " квадрлн"
-        endsWith("Qi") -> "Qi" to " квинтлн"
-        endsWith("K") -> "K" to " тыс."
-        endsWith("M") -> "M" to " млн"
-        endsWith("B") -> "B" to " млрд"
-        endsWith("T") -> "T" to " трлн"
-        else -> return this
-    }
-    return removeSuffix(suffix.first).replace('.', ',') + suffix.second
-}
+/**
+ * [amount] as a damage number in [format] and [language], formatted once when the number appears. Below the compact
+ * threshold every form is the plain integer, so [plain] (that integer, already built) is reused instead of a new string.
+ */
+internal fun damageNumberText(amount: Long, format: DamageNumberFormat, language: AppLanguage, plain: String): String =
+    if (amount > -COMPACT_NUMBER_THRESHOLD && amount < COMPACT_NUMBER_THRESHOLD) plain else formatDamageNumber(amount, format, language)
 
 data class WeaponArcProjection(
     val fromX: Float,
@@ -91,16 +85,17 @@ data class WeaponArcProjection(
 )
 
 /**
- * How a build toast ranks in the feed. Discoveries (reactions, pairings) and warnings (a relic
- * suppressing an item) outrank the first Break notes of a run, which outrank acquisitions and the
- * tiers they reach; a lower toast never evicts a higher one and is dropped while the feed is full
- * of higher ones.
+ * How a build toast ranks in the feed. A Legendary item's arrival outranks everything and stays
+ * longest; discoveries (reactions, pairings) and warnings (a relic suppressing an item) outrank the
+ * first Break notes of a run, which outrank acquisitions and the tiers they reach; a lower toast
+ * never evicts a higher one and is dropped while the feed is full of higher ones.
  */
 enum class BuildNoticeKind(val priority: Int, val lifeSeconds: Float, val merges: Boolean) {
     CHANGE(0, 6f, false),
     BREAK(1, 3.5f, true),
     DISCOVERY(2, 6f, true),
     WARNING(2, 6f, true),
+    LEGENDARY(3, 8f, false),
 }
 
 /**
@@ -171,6 +166,39 @@ data class ApexBurstProjection(
 /** The once-per-profile name stamp of a reaction met for the first time, at its world point. */
 data class ReactionStampProjection(val x: Float, val y: Float, val reaction: Int, val life: Float, val maxLife: Float)
 
+/**
+ * A spent structure shattering at its run-local centre ([x], [y]) in quarter turn [rotation]: [life] of [maxLife]
+ * seconds left; [seed] picks its shards' drift, slide and spin.
+ */
+data class StructureDisintegrationProjection(
+    val template: StructureTemplateId,
+    val rotation: Int,
+    val x: Float,
+    val y: Float,
+    val life: Float,
+    val maxLife: Float,
+    val seed: Int,
+)
+
+/**
+ * A dungeon room's moment ([kind]) in [template]'s identity: the room as a run-local rect centred at ([x], [y]) with half
+ * extents [halfWidth] × [halfHeight], its focus ([focusX], [focusY]) (the guardian, else the room's centre), [life] of
+ * [maxLife] seconds left; [seed] picks its sparks.
+ */
+data class DungeonMomentProjection(
+    val kind: DungeonMomentKind,
+    val template: StructureTemplateId,
+    val x: Float,
+    val y: Float,
+    val halfWidth: Float,
+    val halfHeight: Float,
+    val focusX: Float,
+    val focusY: Float,
+    val life: Float,
+    val maxLife: Float,
+    val seed: Int,
+)
+
 /** Immutable Interaction-owned visual snapshot attached after the stamped Game read. */
 data class VisualFxProjection(
     val particles: ImmutableList<ParticleProjection>,
@@ -186,6 +214,12 @@ data class VisualFxProjection(
     /** Reactions (bits by reaction ordinal) seen in this run, and those first met in this run. */
     val runReactionMask: Int = 0,
     val runDiscoveryMask: Int = 0,
+    /** The Core's recent path for the ribbon behind it (newest first). */
+    val coreRibbon: CoreRibbonProjection = CoreRibbonProjection.EMPTY,
+    /** Spent structures shattering, oldest first. */
+    val disintegrations: ImmutableList<StructureDisintegrationProjection> = immutableListOf(),
+    /** Dungeon moments playing (seals, waves, guardians, clears), oldest first. */
+    val dungeonMoments: ImmutableList<DungeonMomentProjection> = immutableListOf(),
 ) {
     companion object {
         val EMPTY = VisualFxProjection(

@@ -1,0 +1,224 @@
+// SPDX-FileCopyrightText: 2026 Vladislav Tomilov
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package kinetickk.ball.gameplay.nucleus.projection
+
+import kinetickk.ball.gameplay.nucleus.model.DungeonState
+import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
+import kinetickk.ball.gameplay.nucleus.model.RoomFight
+import kinetickk.ball.gameplay.nucleus.model.profile
+import kinetickk.ball.gameplay.nucleus.model.StructureSignal
+import kinetickk.ball.gameplay.nucleus.model.Wall
+import kinetickk.ball.gameplay.nucleus.render.DungeonBreachProjection
+import kinetickk.ball.gameplay.nucleus.render.DungeonHazardProjection
+import kinetickk.ball.gameplay.nucleus.render.DungeonProjection
+import kinetickk.ball.gameplay.nucleus.render.StructureProjection
+import kinetickk.ball.gameplay.nucleus.render.StructureRenderProjection
+import kinetickk.ball.gameplay.nucleus.render.StructureSignalProjection
+import kinetickk.ball.gameplay.nucleus.render.WallProjection
+import kinetickk.ball.gameplay.nucleus.simulation.*
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
+import kinetickk.ball.gameplay.nucleus.simulation.structures.*
+import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.mapToImmutableList
+
+/**
+ * Structures, walls, signals and the dungeon as presentation draws them: the window's structures with their room
+ * progress (cleared rooms and the sealed room from the dungeon of the same structure), every wall with its kind, the entrances of unspent structures within signal range, and the dungeon in progress. A run with
+ * none of them publishes the shared [StructureRenderProjection.EMPTY]. The same window, dungeon and spent list as the
+ * [identitySource] keep [previous] whole when the dungeon reads the same; otherwise each list whose content matches
+ * (raw float bits) keeps its previous instance. A pure read: nothing here writes state.
+ */
+internal fun MutableGameState.structureRenderProjection(
+    previous: StructureRenderProjection?,
+    identitySource: MutableGameState?,
+): StructureRenderProjection {
+    val field = structureField
+    val current = dungeon
+    if (field.structures.isEmpty() && field.signals.isEmpty() && current == null) return StructureRenderProjection.EMPTY
+    val dungeonProjection = current?.let { dungeonProjection(it, previous?.dungeon) }
+    if (previous != null && identitySource != null && field === identitySource.structureField &&
+        current === identitySource.dungeon && spentStructureIds === identitySource.spentStructureIds &&
+        dungeonProjection === previous.dungeon
+    ) {
+        return previous
+    }
+    val structures = structureProjections(field.structures, current, previous?.structures)
+    val walls = wallProjections(field.walls, previous?.walls)
+    val signals = signalProjections(field.signals, previous?.signals)
+    if (previous != null && structures === previous.structures && walls === previous.walls && signals === previous.signals &&
+        dungeonProjection === previous.dungeon
+    ) {
+        return previous
+    }
+    return StructureRenderProjection(structures, walls, signals, dungeonProjection)
+}
+
+/**
+ * The dungeon's structure, its sealed room and whether a panel shows (not for secret templates), and the sealed room's
+ * fight: its seal, waves, live members, living guardian, the incoming wave's breach points and the hazards; the
+ * panel's room counts come from the trial projection. Equal facts keep [previous] (its lists compared by content).
+ */
+private fun MutableGameState.dungeonProjection(current: DungeonState, previous: DungeonProjection?): DungeonProjection {
+    val panel = !content.structures.template(current.template).secret
+    val fight = current.fight
+    val tag = if (current.engagedRoom >= 0) roomEncounterTag(current.structureId, current.engagedRoom) else 0L
+    val live = liveEncounterMembers(tag)
+    val guardian = fight?.guardianId?.takeIf { id -> enemyById(id)?.alive == true } ?: -1
+    if (previous != null && previous.structureId == current.structureId && previous.engagedRoom == current.engagedRoom &&
+        previous.panel == panel && previous.chestCharges == current.chestCharges && previous.liveGarrison == live &&
+        previous.guardianId == guardian && previous.sealedAt.sameBitsAs(fight?.sealedAt ?: -1f) &&
+        previous.waves == (fight?.waves ?: 0) && previous.wavesLanded == (fight?.landed ?: 0) &&
+        previous.incomingAt.sameBitsAs(fight?.incomingAt ?: -1f) && breachesMatch(previous.breaches, fight) &&
+        hazardsMatch(previous.hazards, fight)
+    ) {
+        return previous
+    }
+    return DungeonProjection(
+        structureId = current.structureId,
+        engagedRoom = current.engagedRoom,
+        panel = panel,
+        chestCharges = current.chestCharges,
+        sealedAt = fight?.sealedAt ?: -1f,
+        waves = fight?.waves ?: 0,
+        wavesLanded = fight?.landed ?: 0,
+        liveGarrison = live,
+        guardianId = guardian,
+        incomingAt = fight?.incomingAt ?: -1f,
+        breaches = if (previous != null && breachesMatch(previous.breaches, fight)) previous.breaches else breaches(fight),
+        hazards = if (previous != null && hazardsMatch(previous.hazards, fight)) previous.hazards else hazards(fight),
+    )
+}
+
+private fun breaches(fight: RoomFight?): ImmutableList<DungeonBreachProjection> {
+    if (fight == null || fight.incoming.isEmpty()) return immutableListOf()
+    val points = fight.incomingPoints
+    return fight.incoming.indices.mapToImmutableList { member ->
+        DungeonBreachProjection(points[member * 2], points[member * 2 + 1], fight.incoming[member].profile.radius, member == fight.incomingGuardian)
+    }
+}
+
+private fun breachesMatch(projected: ImmutableList<DungeonBreachProjection>, fight: RoomFight?): Boolean {
+    val incoming = fight?.incoming ?: return projected.isEmpty()
+    if (projected.size != incoming.size) return false
+    val points = fight.incomingPoints
+    for (member in projected.indices) {
+        val breach = projected[member]
+        if (!breach.x.sameBitsAs(points[member * 2]) || !breach.y.sameBitsAs(points[member * 2 + 1]) ||
+            breach.guardian != (member == fight.incomingGuardian)
+        ) {
+            return false
+        }
+    }
+    return true
+}
+
+private fun hazards(fight: RoomFight?): ImmutableList<DungeonHazardProjection> {
+    if (fight == null || fight.hazards.isEmpty()) return immutableListOf()
+    return fight.hazards.mapToImmutableList { hazard ->
+        DungeonHazardProjection(hazard.kind, hazard.ax, hazard.ay, hazard.bx, hazard.by, hazard.radius, hazard.armedAt, hazard.strikesAt)
+    }
+}
+
+private fun hazardsMatch(projected: ImmutableList<DungeonHazardProjection>, fight: RoomFight?): Boolean {
+    val hazards = fight?.hazards ?: return projected.isEmpty()
+    if (projected.size != hazards.size) return false
+    for (index in projected.indices) {
+        val one = projected[index]
+        val hazard = hazards[index]
+        if (one.kind != hazard.kind || !one.ax.sameBitsAs(hazard.ax) || !one.ay.sameBitsAs(hazard.ay) ||
+            !one.bx.sameBitsAs(hazard.bx) || !one.by.sameBitsAs(hazard.by) || !one.strikesAt.sameBitsAs(hazard.strikesAt)
+        ) {
+            return false
+        }
+    }
+    return true
+}
+
+private fun MutableGameState.structureProjections(
+    placed: List<PlacedStructure>,
+    current: DungeonState?,
+    reusable: ImmutableList<StructureProjection>?,
+): ImmutableList<StructureProjection> =
+    placed.reuseProjectionIfContentEqual(reusable) { structure, projected ->
+        projected.matches(structure, clearedRooms(structure, current), engagedRoom(structure, current))
+    } ?: placed.mapToImmutableList { structure ->
+        StructureProjection(
+            id = structure.id,
+            template = structure.template,
+            rotation = structure.rotation,
+            x = structure.x,
+            y = structure.y,
+            halfWidth = structure.halfWidth,
+            halfHeight = structure.halfHeight,
+            wallStart = structure.wallStart,
+            wallEnd = structure.wallEnd,
+            clearedRooms = clearedRooms(structure, current),
+            engagedRoom = engagedRoom(structure, current),
+            chestCharges = structure.chestCharges,
+        )
+    }
+
+/** The dungeon's cleared rooms for its own structure, none otherwise (a spent structure has left the window). */
+private fun clearedRooms(structure: PlacedStructure, current: DungeonState?): Int =
+    if (current != null && current.structureId == structure.id) current.clearedRooms else 0
+
+private fun engagedRoom(structure: PlacedStructure, current: DungeonState?): Int =
+    if (current != null && current.structureId == structure.id) current.engagedRoom else -1
+
+private fun StructureProjection.matches(structure: PlacedStructure, clearedRooms: Int, engagedRoom: Int): Boolean =
+    id == structure.id &&
+        template == structure.template &&
+        rotation == structure.rotation &&
+        x.sameBitsAs(structure.x) &&
+        y.sameBitsAs(structure.y) &&
+        halfWidth.sameBitsAs(structure.halfWidth) &&
+        halfHeight.sameBitsAs(structure.halfHeight) &&
+        wallStart == structure.wallStart &&
+        wallEnd == structure.wallEnd &&
+        this.clearedRooms == clearedRooms &&
+        this.engagedRoom == engagedRoom &&
+        chestCharges == structure.chestCharges
+
+private fun wallProjections(walls: List<Wall>, reusable: ImmutableList<WallProjection>?): ImmutableList<WallProjection> =
+    walls.reuseProjectionIfContentEqual(reusable) { wall, projected -> projected.matches(wall) }
+        ?: walls.mapToImmutableList { wall ->
+            WallProjection(wall.id, wall.kind, wall.ax, wall.ay, wall.bx, wall.by, wall.halfThickness, wall.door)
+        }
+
+private fun WallProjection.matches(wall: Wall): Boolean =
+    id == wall.id &&
+        kind == wall.kind &&
+        ax.sameBitsAs(wall.ax) &&
+        ay.sameBitsAs(wall.ay) &&
+        bx.sameBitsAs(wall.bx) &&
+        by.sameBitsAs(wall.by) &&
+        halfThickness.sameBitsAs(wall.halfThickness) &&
+        door == wall.door
+
+/**
+ * The entrances of the window's signals whose structure is not spent: the window keeps its signals until it is rebuilt,
+ * so a structure cleared or abandoned since then drops out here.
+ */
+private fun MutableGameState.signalProjections(
+    signals: List<StructureSignal>,
+    reusable: ImmutableList<StructureSignalProjection>?,
+): ImmutableList<StructureSignalProjection> {
+    var kept = 0
+    var same = reusable != null
+    for (index in signals.indices) {
+        val signal = signals[index]
+        if (isSpent(signal.id)) continue
+        if (same && (kept >= reusable!!.size || !reusable[kept].matches(signal))) same = false
+        kept++
+    }
+    if (same && kept == reusable!!.size) return reusable
+    if (kept == signals.size) return signals.mapToImmutableList { it.projected() }
+    return signals.filter { !isSpent(it.id) }.mapToImmutableList { it.projected() }
+}
+
+private fun StructureSignal.projected(): StructureSignalProjection = StructureSignalProjection(id, template, entranceX, entranceY)
+
+private fun StructureSignalProjection.matches(signal: StructureSignal): Boolean =
+    id == signal.id && template == signal.template && x.sameBitsAs(signal.entranceX) && y.sameBitsAs(signal.entranceY)

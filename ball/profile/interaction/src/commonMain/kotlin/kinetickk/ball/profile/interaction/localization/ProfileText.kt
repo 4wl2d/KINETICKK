@@ -53,7 +53,7 @@ internal enum class ProfileText : TextResource {
     IncomingDamage,
     CycleCompensation,
     ThreatAdvance,
-    PlayerPower,
+    NumberScale,
     CoreIntegrity,
     KineticMatter,
     BonusRerolls,

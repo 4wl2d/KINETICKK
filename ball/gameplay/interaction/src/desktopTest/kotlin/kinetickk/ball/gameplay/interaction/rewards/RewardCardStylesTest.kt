@@ -40,9 +40,9 @@ import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.impl.createContentCatalog
-import kinetickk.ball.gameplay.interaction.canvas.activeItemEmptyPipColor
-import kinetickk.ball.gameplay.interaction.canvas.elementFill
-import kinetickk.ball.gameplay.interaction.canvas.skillGlyph
+import kinetickk.ball.gameplay.interaction.canvas.look.activeItemEmptyPipColor
+import kinetickk.ball.gameplay.interaction.canvas.look.elementFill
+import kinetickk.ball.gameplay.interaction.canvas.look.skillGlyph
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
@@ -70,6 +70,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.rewards.art.*
 
 /** The shipped catalog (content implementation), for checks over every real card. */
 internal val shippedRewardContent: GameplayContentSnapshot by lazy { createContentCatalog().gameplayContent() }
@@ -153,9 +155,8 @@ class RewardCardStylesTest {
             card(ChoiceType.TOTEM, ChoiceOption(ChoiceType.TOTEM, "Amplify", "", "AMPLIFY", weaponId = content.weapons.first().id,
                 totemAction = TotemAction.AMPLIFY_CURRENT)),
             card(ChoiceType.TOTEM, ChoiceOption(ChoiceType.TOTEM, "Change weapon", "", "RECALIBRATE", totemAction = TotemAction.CHANGE_WEAPON)),
-            card(ChoiceType.RELIC, ChoiceOption(ChoiceType.RELIC, "Leave hollow", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE)),
-            card(ChoiceType.RELIC_BIND, ChoiceOption(ChoiceType.RELIC_BIND, "Meld", "", "MELD", relicId = RelicId.GLASS_COMET,
-                relicAction = RelicChoiceAction.MELD)),
+            card(ChoiceType.RELIC, ChoiceOption(ChoiceType.RELIC, "Salvage resonance", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE)),
+            card(ChoiceType.RELIC, ChoiceOption(ChoiceType.RELIC, "Meld", "", "MELD", relicAction = RelicChoiceAction.MELD)),
         )
         val focus = RewardFocus.entries.map { focus ->
             val type = when (focus) {
@@ -251,7 +252,7 @@ class RewardCardStylesTest {
      * a diamond, a ring) look alike that faint; every other glyph is its own.
      */
     private fun glyphOutline(icon: KkIcon): String = when (icon) {
-        KkIcon.SYSTEM_INTEGRITY, KkIcon.SYSTEM_SHIELD, KkIcon.SYSTEM_MATTER, KkIcon.SYSTEM_ELITE -> "hexagon"
+        KkIcon.SYSTEM_INTEGRITY, KkIcon.SYSTEM_SHIELD, KkIcon.SYSTEM_MATTER, KkIcon.SYSTEM_ELITE, KkIcon.FORMS_HEXAGON -> "hexagon"
         KkIcon.FORMS_DIAMOND, KkIcon.SYSTEM_DATA, KkIcon.SYSTEM_DISMANTLED, KkIcon.SYSTEM_ANOMALY, KkIcon.WEAPONS_PHASE_LATTICE -> "diamond"
         KkIcon.FORMS_CIRCLE, KkIcon.FORMS_RING, KkIcon.WEAPONS_GRAVITY_MINES, KkIcon.WEAPONS_ENTROPY_FIELD, KkIcon.SYSTEM_CYCLE_CLOCK -> "ring"
         else -> icon.name
@@ -359,8 +360,9 @@ class RewardCardStylesTest {
         val template = content.items.first { it.rarity == ItemRarity.EPIC }
         ItemRarity.entries.forEach { rarity ->
             BuildTag.entries.map { listOf(it) }.plus(listOf(emptyList())).forEach { tags ->
-                val unknown = template.copy(name = "Unlisted ${rarity.name} ${tags.firstOrNull()}", rarity = rarity,
-                    tags = tags.toImmutableList())
+                // An id and a name past the catalog: the art tables know neither.
+                val unknown = template.copy(id = content.items.size, name = "Unlisted ${rarity.name} ${tags.firstOrNull()}",
+                    rarity = rarity, tags = tags.toImmutableList())
                 val art = rewardCardArt(unknown)
                 if (rarity >= ItemRarity.EPIC) assertEquals(rarity == ItemRarity.LEGENDARY, assertNotNull(art).animated)
                 else assertNull(art)

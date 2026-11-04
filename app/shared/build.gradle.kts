@@ -2,9 +2,26 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import kinetickk.gradle.isolatedProjectsProfileEnabled
+import kinetickk.gradle.BuildVariant
+import kinetickk.gradle.gameBuildVariant
+import kinetickk.gradle.WriteDebugBuildIdentityTask
+import kinetickk.gradle.gitOutput
+import kinetickk.gradle.sourceIdentityFiles
 
 plugins {
     id("kinetickk.compose-library")
+}
+
+if (gameBuildVariant() == BuildVariant.DEBUG) {
+    val debugBuildIdentity = tasks.register<WriteDebugBuildIdentityTask>("writeDebugBuildIdentity") {
+        gameVersion.set(project.version.toString())
+        gitRevision.set(gitOutput("rev-parse", "HEAD"))
+        gitDirty.set(gitOutput("status", "--porcelain=v1", "--untracked-files=normal").map { it.isNotBlank() })
+        repositoryDirectory.set(rootDir)
+        buildSources.from(sourceIdentityFiles())
+        outputDirectory.set(layout.buildDirectory.dir("generated/debug-build-identity"))
+    }
+    kotlin.sourceSets.named("commonMain") { kotlin.srcDir(debugBuildIdentity) }
 }
 
 kotlin {
@@ -21,6 +38,8 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            api(projects.foundation.common)
+            implementation(libs.compose.foundation)
             implementation(projects.foundation.design)
             implementation(libs.compose.runtime)
             implementation(projects.resource.audio.api)

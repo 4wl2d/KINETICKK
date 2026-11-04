@@ -3,7 +3,11 @@
 
 package kinetickk.ball.gameplay.nucleus.characterization
 
+import kinetickk.ball.gameplay.nucleus.projection.*
 import kinetickk.ball.gameplay.nucleus.simulation.*
+import kinetickk.ball.gameplay.nucleus.simulation.characters.*
+import kinetickk.ball.gameplay.nucleus.simulation.combat.*
+import kinetickk.ball.gameplay.nucleus.simulation.flight.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -11,7 +15,7 @@ import kotlin.test.assertTrue
 class PolarityEdgeTest {
     @Test
     fun defaultCursorSupportsSustainedAccelerationWithoutSpendingPolarity() {
-        val engine = runningEngine()
+        val engine = runningEngine().apply { velocityX = 0f }
         val initialSpeed = engine.speed
         repeat(1_200) {
             engine.updateCore(STEP)
@@ -146,8 +150,8 @@ class PolarityEdgeTest {
     @Test
     fun resizingPreservesRelativeEdgeStrainAndReductionDoesNotMutateTheSource() {
         val source = runningEngine().apply { updatePointer(screenWidth * 0.95f, screenHeight * 0.5f) }
-        val first = source.copyForReduction()
-        val second = source.copyForReduction()
+        val first = source.deepCopy()
+        val second = source.deepCopy()
         second.resize(720f, 1_280f)
         repeat(120) {
             first.updatePolarityStability(STEP)

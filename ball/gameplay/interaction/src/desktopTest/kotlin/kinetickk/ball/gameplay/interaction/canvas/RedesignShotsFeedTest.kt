@@ -25,7 +25,7 @@ import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicAspect
@@ -50,7 +50,7 @@ import kinetickk.ball.gameplay.nucleus.GameplayState
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
@@ -70,6 +70,8 @@ import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.sin
 import kotlin.test.Test
+import kinetickk.ball.gameplay.interaction.*
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
 
 /**
  * Local visual QA harness for the in-run feed (SPEC §12). With `KK_SHOTS=1` every state draws at every size, in both
@@ -120,9 +122,9 @@ class RedesignShotsFeedTest {
         }
     }
 
-    private class Scene(val model: GameplayRenderModel, val fx: VisualFxProjection, val memory: HudPresentationMemory, val time: Float, val focused: Boolean)
+    internal class Scene(val model: GameplayRenderModel, val fx: VisualFxProjection, val memory: HudPresentationMemory, val time: Float, val focused: Boolean)
 
-    private enum class Shot { FEED, FEED_ANOMALY, FEED_LEVEL, FEED_REPLACE, FEED_FADE, FEED_TRIAL, FEED_SYNERGY4_TRIAL, FEED_SYNERGY4_WIDE, FEED_SYNERGY4_BOSS, FEED_SYNERGY4_ARCHITECT }
+    internal enum class Shot { FEED, FEED_ANOMALY, FEED_LEVEL, FEED_REPLACE, FEED_FADE, FEED_TRIAL, FEED_SYNERGY4_TRIAL, FEED_SYNERGY4_WIDE, FEED_SYNERGY4_BOSS, FEED_SYNERGY4_ARCHITECT }
 
     private data class Values(
         val core: Pair<Float, Float>, val sing: Pair<Float, Float>, val speed: Float, val heat: Float, val polarity: Float,
@@ -134,7 +136,7 @@ class RedesignShotsFeedTest {
     @Suppress("UNUSED_PARAMETER")
     private fun values(shot: Shot): Values = Values(720f to 405f, 985f to 250f, 412f, 28f, 0.86f, 58f, 142f, 40f, 12, 0.62f, 462f, 1, 14)
 
-    private fun scene(shot: Shot, base: GameplayRenderModel, width: Int, height: Int): Scene {
+    internal fun scene(shot: Shot, base: GameplayRenderModel, width: Int, height: Int): Scene {
         val v = values(shot)
         val sx = width / 1440f
         val sy = height / 810f
@@ -154,7 +156,7 @@ class RedesignShotsFeedTest {
         }
         val trial = shot == Shot.FEED_TRIAL || shot == Shot.FEED_SYNERGY4_TRIAL
         val points = if (trial) listOf(
-            PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", coreX, coreY, true, 14.2f, 0, 0.65f,
+            SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", coreX, coreY, true, 14.2f, -1, 0.65f,
                 immutableListOf(), 0f, 0f),
         ) else emptyList()
         val model = base.with(
@@ -173,7 +175,8 @@ class RedesignShotsFeedTest {
             "equippedRelics" to listOf(EquippedRelic(RelicId.entries[0], 2), EquippedRelic(RelicId.entries[7], 1),
                 EquippedRelic(RelicId.entries[1], 1)).toImmutableList(),
             "enemies" to enemies.toImmutableList(),
-            "pointsOfInterest" to points.toImmutableList(),
+            "sites" to points.toImmutableList(),
+            "trial" to points.firstOrNull { it.active }?.let { siteTrial(it) },
             "message" to when (shot) {
                 Shot.FEED, Shot.FEED_FADE -> "ELITE SIGNAL"
                 Shot.FEED_ANOMALY -> "TWO ANOMALIES DETECTED // CHOOSE A COURSE"
@@ -232,7 +235,7 @@ class RedesignShotsFeedTest {
         return constructor.newInstance(*args) as GameplayRenderModel
     }
 
-    private fun baseModel(width: Int, height: Int): GameplayRenderModel {
+    internal fun baseModel(width: Int, height: Int): GameplayRenderModel {
         val content = shotContent()
         val profile = PlayerProfile(preferences = PlayerPreferences(language = AppLanguage.English))
         val initial = GameplayState.initial(RunId(1), content)
@@ -252,7 +255,7 @@ class RedesignShotsFeedTest {
         return requireNotNull(GameplayNucleus.renderSnapshot(resized).renderModel)
     }
 
-    private val typography: InterfaceTypography by lazy {
+    internal val typography: InterfaceTypography by lazy {
         val directory = File(root, "foundation/design/src/commonMain/composeResources/font")
         fun font(name: String, weight: FontWeight, style: FontStyle = FontStyle.Normal) = Font(File(directory, "$name.ttf"), weight, style)
         val cond = FontFamily(

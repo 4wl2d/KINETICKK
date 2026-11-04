@@ -413,12 +413,12 @@ class BuildRulesTextTest {
             keys = immutableListOf(RelicKey.DECAY),
             attunedTags = immutableListOf(),
             upside = "Every Entropy stack within 320 u heals you {0} per second, up to 3.5.",
-            liability = "Enemies carrying a status move 20 % faster.",
+            liability = "Enemies carrying a status move 10 % faster.",
             values = immutableListOf(RelicValue(0.25f, 0.05f)),
         )
         assertEquals("Every Entropy stack within 320 u heals you 0.25 per second, up to 3.5.", relic.upsideText(AppLanguage.English, 1))
         assertEquals("Every Entropy stack within 320 u heals you 0.35 per second, up to 3.5.", relic.upsideText(AppLanguage.English, 3))
-        assertEquals("Враги под действием стихии двигаются на 20 % быстрее.", relic.liabilityText(AppLanguage.Russian))
+        assertEquals("Враги под действием стихии двигаются на 10 % быстрее.", relic.liabilityText(AppLanguage.Russian))
 
         val wide = relic.copy(upside = "Blink up to {0} u, then {3}.", values = immutableListOf(RelicValue(1_200f, 100f)))
         assertEquals("Blink up to 1,400 u, then {3}.", wide.upsideText(AppLanguage.English, 3))
@@ -426,6 +426,13 @@ class BuildRulesTextTest {
 
         val falling = relic.copy(upside = "Cooling {0} %.", values = immutableListOf(RelicValue(-10f, -5f)))
         assertEquals("Cooling −20 %.", falling.upsideText(AppLanguage.English, 3))
+
+        // An integrity value reads at a run's number scale (compact from 1,000); every other value keeps its digits.
+        val healing = relic.copy(upside = "Heal {0} per second within {1} u.",
+            values = immutableListOf(RelicValue(0.25f, 0.05f, powerUnits = true), RelicValue(1_200f)))
+        assertEquals("Heal 0.25 per second within 1,200 u.", healing.upsideText(AppLanguage.English, 1))
+        assertEquals("Heal 900 per second within 1,200 u.", healing.upsideText(AppLanguage.English, 1, numberScale = 3_600.0))
+        assertEquals("Heal 1,26K per second within 1\u00A0200 u.", healing.upsideText(AppLanguage.Russian, 3, numberScale = 3_600.0))
     }
 
     @Test
@@ -599,6 +606,50 @@ class BuildRulesTextTest {
             "Даёт +20 % к скорости перезарядки активных эффектов на 4 с",
             russian(on(EffectTrigger.SKILL_CAST, EffectAction.Buff(BuffStat.SKILL_RECHARGE, 0.2f, 4f)))[1],
         )
+    }
+
+    @Test
+    fun theObstacleAndSteeringVocabularyReadsInBothLanguages() {
+        ObstacleKind.entries.forEach { kind ->
+            assertTrue(kind.ruleName.english.isNotBlank() && kind.ruleName.russian.isNotBlank(), "$kind")
+            assertFalse(kind.ruleName.russian.any { it in 'A'..'Z' || it in 'a'..'z' }, "$kind Russian has Latin letters")
+        }
+        assertEquals(ObstacleKind.entries.size, ObstacleKind.entries.map { it.ruleName }.toSet().size)
+
+        fun head(language: AppLanguage) = item(
+            clauses = immutableListOf(
+                EffectClause(
+                    EffectTrigger.BOOST, immutableListOf(EffectCondition.ObstacleIs(ObstacleKind.GRAVITY_WELL)),
+                    immutableListOf(EffectAction.GainData(5f)),
+                ),
+            ),
+        ).ruleLines(language).first().text
+        assertEquals("On boost (gravity knot)", head(AppLanguage.English))
+        assertEquals("При разгоне (гравиузел)", head(AppLanguage.Russian))
+
+        val tuned = item(
+            stats = immutableListOf(StatDelta(ItemEffect.GRIP, 0.2f), StatDelta(ItemEffect.SLING, 0.3f)),
+            rules = immutableListOf(
+                ItemRule.ObstacleTuning(ObstacleAspect.LETHAL_SPEED, 150f),
+                ItemRule.ObstacleTuning(ObstacleAspect.RESTITUTION, 0.1f),
+                ItemRule.WhileModifier(EffectCondition.NearObstacle(180f), BuffStat.DAMAGE, 0.12f),
+            ),
+        )
+        val english = tuned.ruleLines(AppLanguage.English).plain().map { it.text }
+        // The Matrix lethal-speed nodes share the same ceiling, so the item line names the cap like their texts do.
+        assertEquals(
+            listOf("+20 % grip", "+30 % sling", "Collisions turn lethal 150 u/s later, up to a cap", "Obstacle bounces keep 10 % more speed"),
+            english.take(4),
+        )
+        assertTrue(english[4].contains("within 180 of an obstacle"), english[4])
+        val russian = tuned.ruleLines(AppLanguage.Russian).plain().map { it.text }
+        assertEquals(
+            listOf("+20 % к сцеплению", "+30 % к раскрутке", "Столкновения становятся смертельными на 150 ед/с позже, но не выше предела"),
+            russian.take(3),
+        )
+        assertTrue(russian[4].contains("не дальше 180 от препятствия"), russian[4])
+        val damage = item(rules = immutableListOf(ItemRule.ObstacleTuning(ObstacleAspect.COLLISION_DAMAGE, 0.25f)))
+        assertEquals(listOf("−25 % damage from obstacles"), damage.ruleLines(AppLanguage.English).plain().map { it.text })
     }
 
     private fun item(

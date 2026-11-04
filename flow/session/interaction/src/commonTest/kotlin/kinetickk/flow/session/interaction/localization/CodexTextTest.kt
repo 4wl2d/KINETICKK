@@ -23,6 +23,17 @@ class CodexTextTest {
     }
 
     @Test
+    fun sessionTextNamesTheCodexAsTheHomeMenuDoes() {
+        // Home's menu calls the screen CODEX / СПРАВОЧНИК: Russian text on the session screens never says «кодекс».
+        assertEquals("Справочник", SessionText.CODEX.russian)
+        val resources: List<TextResource> = CodexText.entries + SessionText.entries + SessionRedesignText.entries
+        resources.forEach { resource ->
+            assertFalse(resource.russian.contains("кодекс", ignoreCase = true), "$resource: ${resource.russian}")
+        }
+        assertTrue("справочника" in SessionRedesignText.BABY_MODE_INFO.russian, SessionRedesignText.BABY_MODE_INFO.russian)
+    }
+
+    @Test
     fun noSessionTextCallsAnActiveItemASkill() {
         // The glossary: actives are "active" / "активный" everywhere a player reads them; code keeps the word skill.
         val skill = Regex("skill|навык", RegexOption.IGNORE_CASE)

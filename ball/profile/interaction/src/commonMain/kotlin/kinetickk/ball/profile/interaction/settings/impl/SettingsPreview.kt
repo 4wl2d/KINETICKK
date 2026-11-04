@@ -25,6 +25,7 @@ import kinetickk.ball.profile.api.WindowMode
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.ball.profile.api.formatDamageNumber
 import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.localization.SettingsRedesignText
 import kinetickk.foundation.common.localization.AppLanguage
@@ -325,7 +326,7 @@ private class PreviewScope(
             val rise = KkEase.Out.transform(p) * 10f
             val pop = if (p < 0.12f) 1f + 0.12f * (1f - p / 0.12f) else 1f
             val size = 24f * preferences.damageNumberSize.scale * sample.tierScale
-            val label = settingsDamageSample(sample.amount, preferences.damageNumberFormat, language)
+            val label = formatDamageNumber(sample.amount, preferences.damageNumberFormat, language)
             val color = settingsDamageColor(sample.amount, threshold.toInt(), palette)
             val style = measurers.typography.condStyle(size, tabular = true, lineHeightEm = 1f)
             val layout = measureKkText(text, label, style)
@@ -537,7 +538,7 @@ private class PreviewScope(
 
 /** Text size sample: two game terms with sample values (a stat readout, not an explanation). */
 internal fun settingsTextSizeSample(language: AppLanguage): List<Pair<String, String>> = listOf(
-    language.text(ProfileText.PlayerPower) to "140",
+    language.text(ProfileText.KineticMatter) to "2450",
     language.text(ProfileText.CoreIntegrity) to "100",
 )
 

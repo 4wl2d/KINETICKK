@@ -39,6 +39,10 @@ enum class ItemEffect(
     DAMAGE_REDUCTION("Damage reduction", ModifierUnit.PERCENT),
     COMBO_WINDOW("Combo window", ModifierUnit.SECONDS),
     OVERDRIVE_GAIN("Overdrive gain", ModifierUnit.PERCENT),
+    /** The tether's turning authority: the flight law's grip gain scales with it. */
+    GRIP("Grip", ModifierUnit.PERCENT),
+    /** How much of a curve winds into forward speed: the flight law's sling share scales with it. */
+    SLING("Sling", ModifierUnit.PERCENT),
 }
 
 enum class ItemRarity(

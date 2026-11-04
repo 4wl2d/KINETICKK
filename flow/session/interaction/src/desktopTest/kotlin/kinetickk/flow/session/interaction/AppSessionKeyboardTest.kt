@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.defaultCoreShapeDefinitions
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.gameplay.interaction.GameplayPresentation
 import kinetickk.ball.profile.interaction.workshop.api.WorkshopFeature
@@ -86,7 +87,6 @@ import kinetickk.flow.session.interaction.profile.api.ProfileUnavailableFeature
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -185,6 +185,49 @@ class AppSessionKeyboardTest {
         runOnIdle {
             assertEquals(AppDestination.Workshop, port.overlay)
             assertEquals(null, workshop.requests.last())
+        }
+    }
+
+    @Test
+    fun eOverHomeAsksSessionToToggleBabyMode() = runComposeUiTest {
+        val port = KeyboardSessionPort().apply { overlay = null }
+        setContent {
+            Box(Modifier.size(1000.dp, 700.dp)) { KeyboardShell(port, NoCodex) }
+        }
+        waitForIdle()
+        // Over the bare Home, E asks Session for the mode other than the one its shell shows.
+        onRoot().performKeyInput { pressKey(Key.E) }
+        runOnIdle {
+            assertEquals(listOf<SessionInteractionPulse>(SessionInteractionPulse.SelectRunModeRequested(RunMode.EASY)), port.pulses)
+            assertEquals(RunMode.EASY, port.runMode)
+        }
+        onRoot().performKeyInput { pressKey(Key.E) }
+        runOnIdle {
+            assertEquals(SessionInteractionPulse.SelectRunModeRequested(RunMode.STANDARD), port.pulses.last())
+            assertEquals(RunMode.STANDARD, port.runMode)
+        }
+        // Session decides: a refusal (here, with an overlay open) leaves the mode alone.
+        onRoot().performKeyInput { pressKey(Key.W) }
+        onRoot().performKeyInput { pressKey(Key.E) }
+        runOnIdle {
+            assertEquals(SessionInteractionPulse.SelectRunModeRequested(RunMode.EASY), port.pulses.last())
+            assertEquals(RunMode.STANDARD, port.runMode)
+        }
+    }
+
+    @Test
+    fun eStaysFreeInARun() = runComposeUiTest {
+        val port = KeyboardSessionPort().apply { overlay = null; base = AppDestination.Gameplay }
+        val gameplay = KeyboardGameplay()
+        setContent {
+            Box(Modifier.size(1000.dp, 700.dp)) { KeyboardShell(port, NoCodex, gameplay = gameplay) }
+        }
+        waitForIdle()
+        onRoot().performKeyInput { pressKey(Key.E) }
+        runOnIdle {
+            assertTrue(port.pulses.isEmpty(), "E over a run: ${port.pulses}")
+            assertTrue(Key.E in gameplay.seen, "E reaches the run")
+            assertEquals(RunMode.STANDARD, port.runMode)
         }
     }
 
@@ -416,12 +459,12 @@ private class KeyboardHangarProfilePort : ProfilePort {
  * selection runs [onSelect] inline as the participant command.
  */
 internal class KeyboardSessionPort : AppSessionPort {
-    override val instanceId = LOCAL_APP_SESSION_INSTANCE_ID
     val pulses = mutableListOf<SessionInteractionPulse>()
     var overlay: AppDestination? = AppDestination.Codex
     var base: AppDestination = AppDestination.Home
     var refuseWorkshop = false
     var onSelect: (CoreShape) -> Unit = {}
+    var runMode = RunMode.STANDARD
 
     override fun accept(pulse: SessionInteractionPulse): SessionAcceptance {
         pulses += pulse
@@ -441,12 +484,15 @@ internal class KeyboardSessionPort : AppSessionPort {
                 onSelect(pulse.shape)
                 true
             }
+            // Like the Session Nucleus, the run mode changes only over the bare Home.
+            is SessionInteractionPulse.SelectRunModeRequested ->
+                base == AppDestination.Home && overlay == null && run { runMode = pulse.mode; true }
             else -> true
         }
         return if (accepted) {
-            SessionAcceptance.Accepted(instanceId, SessionRevision(pulses.size.toLong()))
+            SessionAcceptance.Accepted(SessionRevision(pulses.size.toLong()))
         } else {
-            SessionAcceptance.Rejected(instanceId, SessionRevision(pulses.size.toLong()), SessionRejection.ShortcutUnavailable)
+            SessionAcceptance.Rejected(SessionRevision(pulses.size.toLong()), SessionRejection.ShortcutUnavailable)
         }
     }
 
@@ -463,9 +509,10 @@ internal class KeyboardSessionPort : AppSessionPort {
         open(destination)
     }
 
-    override fun query(query: AppSessionQuery.GetShell) = AppShellProjection(
-        instanceId, SessionRevision.ZERO, SessionRevision.ZERO, base, overlay,
+    override fun shell() = AppShellProjection(
+        SessionRevision.ZERO, SessionRevision.ZERO, base, overlay,
         if (base == AppDestination.Gameplay) kinetickk.ball.gameplay.api.RunId(1L) else null, false, null, SessionLifecycle.READY, false, null,
+        runMode = runMode,
     )
 }
 
@@ -485,7 +532,7 @@ internal fun KeyboardShell(
         audioExecutor = remember { SessionAudioExecutor(KeyboardSilentAudio) },
         gameplayPresentation = gameplay,
         homeFeature = object : HomeFeature {
-            @Composable override fun Content(inputEnabled: Boolean, onOutput: (HomeOutput) -> Unit) = Unit
+            @Composable override fun Content(inputEnabled: Boolean, runMode: RunMode, onOutput: (HomeOutput) -> Unit) = Unit
         },
         settingsFeature = object : SettingsFeature {
             @Composable override fun Content(routeToken: Long, onOutput: (SettingsOutput) -> Unit) = Unit
@@ -505,7 +552,6 @@ internal fun KeyboardShell(
 
 private object KeyboardSilentAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

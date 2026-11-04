@@ -168,6 +168,26 @@ fun DrawScope.drawKkCardFrame(bounds: Rect, time: Float, style: KkCardStyle, bur
     }
 }
 
+/**
+ * The band's leading label [text] in [color] on a band [bandWidth] px wide: up to 0.6 of the band beside a trailing label
+ * ([hasEnd]), else up to where that label would end (a narrow card moves it into the body). A label still too wide
+ * shrinks to fit (to 9 px) before it is cut. Painted layouts: the same label in another colour on the next card keeps
+ * its own paragraph.
+ */
+internal fun DrawScope.kkCardBandStartLabel(
+    measurer: CanvasTextMeasurer,
+    text: String,
+    color: Color,
+    bandWidth: Float,
+    hasEnd: Boolean,
+): TextLayoutResult {
+    val room = if (hasEnd) bandWidth * 0.6f else bandWidth - d(14f) - d(22f)
+    val natural = measureKkTextPainted(measurer, text, measurer.typography.labelStyle(12f), color, uppercase = true)
+    if (natural.size.width <= room) return natural
+    val fitted = (12f * room / natural.size.width).coerceAtLeast(9f)
+    return measureKkTextPainted(measurer, text, measurer.typography.labelStyle(fitted), color, uppercase = true, maxWidth = room)
+}
+
 private fun DrawScope.drawCardBand(
     measurer: CanvasTextMeasurer,
     bounds: Rect,
@@ -183,8 +203,7 @@ private fun DrawScope.drawCardBand(
     val prismatic = style.material == KkCardMaterial.PRISMATIC
     if (start != null) {
         val color = if (prismatic) Kk.Bone else style.startLabelColor()
-        // Painted layouts: a band label in another colour on the next card keeps its own paragraph.
-        val layout = measureKkTextPainted(measurer, start, measurer.typography.labelStyle(12f), color, uppercase = true, maxWidth = band.width * 0.6f)
+        val layout = kkCardBandStartLabel(measurer, start, color, band.width, end != null)
         val x = band.left + d(14f)
         if (prismatic) {
             // The word carries the spectrum, sliding with the edge: plain glyphs tinted in a layer, so

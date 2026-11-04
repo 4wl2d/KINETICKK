@@ -41,7 +41,7 @@ internal class CodexReducer(private val items: ImmutableList<ItemDefinition>) {
 
     fun renderModel(projection: CollectionProjection, runStacks: CodexRunStacks): CodexRenderModel = with(projection.collection) {
         CodexRenderModel(discoveredItemIds, runStacks, items, newItemIds, discoveredRelicIds, newRelicIds,
-            discoveredReactionIds, discoveredPairingIds)
+            discoveredReactionIds, discoveredPairingIds, discoveredWorldEntries)
     }
 }
 

@@ -15,4 +15,19 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    // DesktopTestShardsTest reads every desktop test source of the repository and ci.yml; it reruns when one changes.
+    inputs.files(
+        fileTree(rootDir.parentFile) {
+            include(
+                "**/src/commonTest/kotlin/**/*.kt", "**/src/desktopTest/kotlin/**/*.kt",
+                "**/src/commonReleaseTest/kotlin/**/*.kt", "**/src/desktopReleaseTest/kotlin/**/*.kt",
+            )
+            exclude(".claude/**", "**/build/**", "**/build-debug/**", "**/.gradle/**", "build-logic/**")
+        },
+    )
+        .withPropertyName("desktopTestSources")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(rootDir.parentFile.resolve(".github/workflows/ci.yml"))
+        .withPropertyName("ciWorkflow")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }

@@ -19,15 +19,15 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.gameplay.api.GameplayAcceptance
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.interaction.canvas.HudBlock
-import kinetickk.ball.gameplay.interaction.canvas.HudLayoutProbe
+import kinetickk.ball.gameplay.interaction.canvas.hud.HudBlock
+import kinetickk.ball.gameplay.interaction.canvas.hud.HudLayoutProbe
 import kinetickk.ball.gameplay.interaction.canvas.hudTestSnapshot
 import kinetickk.ball.gameplay.interaction.canvas.with
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.input.GameplayInput
-import kinetickk.ball.gameplay.interaction.input.hudScale
+import kinetickk.ball.gameplay.interaction.layout.hudScale
 import kinetickk.ball.gameplay.interaction.input.resolveGameplayPress
 import kinetickk.ball.gameplay.interaction.input.runningControlTargetAt
 import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
@@ -76,7 +76,11 @@ class GameplayInterfaceScaleTest {
                     Box(Modifier.requiredSize(WIDTH.dp, HEIGHT.dp)) { GameplayContent(run, inputEnabled = true) {} }
                 }
             }
-            repeat(2) { mainClock.advanceTimeByFrame() }
+            val deadline = mainClock.currentTime + 1000L
+            while (run.pulses.none { it is GameplayInteractionPulse.FrameElapsed } && mainClock.currentTime < deadline) {
+                mainClock.advanceTimeByFrame()
+            }
+            assertTrue(run.pulses.any { it is GameplayInteractionPulse.FrameElapsed }, "The gameplay host must finish preparation before layout assertions")
             waitForIdle()
             val pause = onNodeWithTag("kinetickk.gameplay.pause").fetchSemanticsNode().boundsInRoot
             val dash = onNodeWithTag("kinetickk.gameplay.dash").fetchSemanticsNode().boundsInRoot

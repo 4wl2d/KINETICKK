@@ -78,3 +78,19 @@ tasks.register<JavaExec>("performanceBenchmark") {
         if (value != null) systemProperty(systemName, value)
     }
 }
+
+// The many-run balance sweep of docs/balance/progression.md: a tool, never part of check or CI.
+tasks.register<JavaExec>("balanceSweep") {
+    group = "balance"
+    description = "Plays the gate bot over Rebirth tiers and profiles (or whole campaigns) and prints a table per cell."
+    dependsOn(desktopBenchmarkCompilation.compileTaskProvider)
+    mainClass.set("kinetickk.ball.gameplay.nucleus.simulation.BalanceSweepKt")
+    classpath(
+        desktopBenchmarkCompilation.output.allOutputs,
+        desktopBenchmarkCompilation.runtimeDependencyFiles,
+    )
+    jvmArgs("-Xmx8g", "-XX:+UseG1GC", "-Dfile.encoding=UTF-8")
+    listOf("mode", "tiers", "arms", "cells", "window", "threads", "knobs", "out", "campaigns").forEach { name ->
+        providers.gradleProperty("sweep.$name").orNull?.let { systemProperty("kinetickk.sweep.$name", it) }
+    }
+}

@@ -22,4 +22,10 @@ enum class GameplayAudioCue {
     VICTORY,
     SKILL,
     APEX,
+    /** A spent structure leaves the world and shatters. */
+    STRUCTURE_COLLAPSE,
+    /** A Legendary item joins the build. */
+    LEGENDARY_ACQUIRED,
+    /** Core Freeze froze the Core solid (the run ends, or Easy mode's ice shatters). */
+    CORE_FROZEN,
 }

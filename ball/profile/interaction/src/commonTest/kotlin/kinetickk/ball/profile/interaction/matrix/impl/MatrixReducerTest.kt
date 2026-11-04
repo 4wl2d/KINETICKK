@@ -10,8 +10,9 @@ import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.interaction.TestMatrixNodes
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
-import kinetickk.ball.profile.interaction.matrix.api.MatrixNodeStatus
-import kinetickk.ball.profile.interaction.matrix.api.MatrixOutput
+import kinetickk.ball.profile.interaction.workshop.matrix.*
+import kinetickk.ball.profile.interaction.workshop.matrix.MatrixNodeStatus
+import kinetickk.ball.profile.interaction.workshop.matrix.MatrixOutput
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -29,7 +30,7 @@ class MatrixReducerTest {
     @Test
     fun snapshotMapsEveryOrderedNodeWithItsStatusAndExactNextCost() {
         val model = model(
-            matter = 500L,
+            matter = 2_000L,
             rebirthRank = 0,
             MatrixNodeId.IMPACT_DRIVER to 1,
             MatrixNodeId.REINFORCED_HULL to 3,
@@ -40,22 +41,22 @@ class MatrixReducerTest {
         assertEquals(32, model.nodeCount)
         val impact = model.node(MatrixNodeId.IMPACT_DRIVER)!!
         assertEquals(1, impact.rank)
-        assertEquals(400L, impact.nextCost)
+        assertEquals(1_500L, impact.nextCost)
         assertEquals(MatrixNodeStatus.AVAILABLE, impact.status)
         assertEquals(MatrixNodeStatus.MAXED, model.node(MatrixNodeId.REINFORCED_HULL)!!.status)
         assertEquals(0L, model.node(MatrixNodeId.REINFORCED_HULL)!!.nextCost)
         // Affordable price at exactly the balance, one Matter short below it.
         assertEquals(MatrixNodeStatus.AVAILABLE, model.node(MatrixNodeId.WEAPON_CALIBRATION)!!.status)
-        assertEquals(MatrixNodeStatus.SHORT_OF_MATTER, model(matter = 199L).node(MatrixNodeId.WEAPON_CALIBRATION)!!.status)
-        assertEquals(MatrixNodeStatus.AVAILABLE, model(matter = 200L).node(MatrixNodeId.WEAPON_CALIBRATION)!!.status)
+        assertEquals(MatrixNodeStatus.SHORT_OF_MATTER, model(matter = 499L).node(MatrixNodeId.WEAPON_CALIBRATION)!!.status)
+        assertEquals(MatrixNodeStatus.AVAILABLE, model(matter = 500L).node(MatrixNodeId.WEAPON_CALIBRATION)!!.status)
         // Critical Lattice has its prerequisite; Armed Start does not.
         assertEquals(MatrixNodeStatus.SHORT_OF_MATTER, model.node(MatrixNodeId.CRITICAL_LATTICE)!!.status)
         assertEquals(MatrixNodeStatus.PREREQUISITE_MISSING, model.node(MatrixNodeId.ARMED_START)!!.status)
         // The Rebirth gate shows before a missing prerequisite.
         assertEquals(MatrixNodeStatus.REBIRTH_LOCKED, model.node(MatrixNodeId.GLASS_ENGINE)!!.status)
         assertEquals(MatrixNodeStatus.PREREQUISITE_MISSING, model(rebirthRank = 3).node(MatrixNodeId.GLASS_ENGINE)!!.status)
-        // Refund is the price of every owned rank: 150 + 120 + 350 + 800.
-        assertEquals(1_420L, model.refund)
+        // Refund is the price of every owned rank: 400 + 300 + 1,200 + 5,000.
+        assertEquals(6_900L, model.refund)
     }
 
     @Test
@@ -142,10 +143,10 @@ class MatrixReducerTest {
         val english = kinetickk.foundation.common.localization.AppLanguage.English
         assertEquals("Reborn 3", matrixTileStatus(model.node(MatrixNodeId.GLASS_ENGINE)!!, english))
         assertEquals("Locked", matrixTileStatus(model.node(MatrixNodeId.ARMED_START)!!, english))
-        assertEquals("150 Matter", matrixTileStatus(model.node(MatrixNodeId.IMPACT_DRIVER)!!, english))
+        assertEquals("400 Matter", matrixTileStatus(model.node(MatrixNodeId.IMPACT_DRIVER)!!, english))
         assertEquals("Requires Critical Lattice or Armed Start.",
             matrixStatusDetail(model.node(MatrixNodeId.CATALYST_CORE)!!, model, english))
         assertEquals("Reach Rebirth rank 3 to open this node.", matrixStatusDetail(model.node(MatrixNodeId.GLASS_ENGINE)!!, model, english))
-        assertEquals("Need 100 more matter", matrixStatusDetail(model.node(MatrixNodeId.WEAPON_CALIBRATION)!!, model, english))
+        assertEquals("Need 400 more matter", matrixStatusDetail(model.node(MatrixNodeId.WEAPON_CALIBRATION)!!, model, english))
     }
 }

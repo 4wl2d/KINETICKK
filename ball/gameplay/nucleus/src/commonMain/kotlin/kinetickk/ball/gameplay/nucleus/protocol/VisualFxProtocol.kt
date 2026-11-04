@@ -7,6 +7,7 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
@@ -70,6 +71,9 @@ object FxColorCode {
     fun quake(element: StatusElement): Int = QUAKE_BASE + element.ordinal
 }
 
+/** What a [VisualFxCue.DungeonMoment] marks. */
+enum class DungeonMomentKind { SEALED, WAVE, GUARDIAN, ROOM_CLEARED, STRUCTURE_CLEARED }
+
 /**
  * Closed, bounded visual notifications emitted by the authoritative reducer.
  *
@@ -77,8 +81,11 @@ object FxColorCode {
  * into gameplay reductions and carry no behavior-authoritative random result.
  */
 sealed interface VisualFxCue {
-    /** A grouped acquisition result, produced only by an accepted build transition. */
-    data class BuildChanged(val title: String, val details: ImmutableList<String>) : VisualFxCue
+    /**
+     * A grouped acquisition result, produced only by an accepted build transition; [legendary] marks a Legendary item's
+     * first acquisition, which the feed announces as one.
+     */
+    data class BuildChanged(val title: String, val details: ImmutableList<String>, val legendary: Boolean = false) : VisualFxCue
 
     data object ClearAll : VisualFxCue
     data object ClearWeaponArcs : VisualFxCue
@@ -125,7 +132,10 @@ sealed interface VisualFxCue {
         val colorIndex: Int,
     ) : VisualFxCue
 
-    /** [tone] is 0 for Kinetic damage, otherwise 1 + the status element ordinal. */
+    /**
+     * A hit's damage number: [amount] is the displayed damage (power units × the Rebirth number scale). [tone] is 0 for
+     * Kinetic damage, otherwise 1 + the status element ordinal.
+     */
     data class DamageNumberAdded(
         val x: Float,
         val y: Float,
@@ -142,7 +152,8 @@ sealed interface VisualFxCue {
     ) : VisualFxCue
 
     /**
-     * An elemental reaction at a world point; [firstDiscovery] marks the profile's first occurrence.
+     * An elemental reaction at a world point; [firstDiscovery] marks the profile's first occurrence (never in a Baby mode
+     * run, which records no discovery).
      * [direction] is a heading in radians for directional looks (NaN when unused); [flags] holds
      * [ReactionCueFlags] bits.
      */
@@ -187,6 +198,34 @@ sealed interface VisualFxCue {
         val shape: CoreShape,
         val x: Float,
         val y: Float,
+    ) : VisualFxCue
+
+    /**
+     * A spent structure left the world at its run-local centre ([x], [y]) in quarter turn [rotation]; presentation
+     * shatters its walls over a moment. Never read back.
+     */
+    data class StructureDisintegrated(
+        val template: StructureTemplateId,
+        val rotation: Int,
+        val x: Float,
+        val y: Float,
+    ) : VisualFxCue
+
+    /**
+     * A dungeon room's moment in [template]'s identity: the seal (its doors slam shut), a wave landing, the guardian's
+     * entrance at ([focusX], [focusY]), a room cleared and the whole structure cleared. The room is the run-local
+     * axis-aligned rect centred at ([x], [y]) with half extents [halfWidth] × [halfHeight]; the focus is the room's
+     * centre for every kind but the guardian's. Presentation only; never read back.
+     */
+    data class DungeonMoment(
+        val kind: DungeonMomentKind,
+        val template: StructureTemplateId,
+        val x: Float,
+        val y: Float,
+        val halfWidth: Float,
+        val halfHeight: Float,
+        val focusX: Float = x,
+        val focusY: Float = y,
     ) : VisualFxCue
 
     /** Particles, damage text and Break and reaction flashes rebase; shockwaves stay in place. */
@@ -287,6 +326,8 @@ internal class BoundedVisualFxCueAccumulator private constructor(
         is VisualFxCue.WeaponArcAdded,
         is VisualFxCue.SkillCast,
         is VisualFxCue.ApexActivated,
+        is VisualFxCue.StructureDisintegrated,
+        is VisualFxCue.DungeonMoment,
         -> false
     }
 

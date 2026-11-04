@@ -4,8 +4,18 @@
 import kinetickk.gradle.ARCHITECTURE_EDGE_ELEMENTS_CONFIGURATION_NAME
 import kinetickk.gradle.ARCHITECTURE_EDGE_EXPORT_TASK_NAME
 import kinetickk.gradle.ExportArchitectureEdgesTask
+import kinetickk.gradle.gameBuildVariant
 import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.api.plugins.BasePluginExtension
+import org.gradle.api.tasks.bundling.AbstractArchiveTask
+
+// Debug and Release never overwrite each other's compiled libraries or application artifacts.
+layout.buildDirectory.set(layout.projectDirectory.dir(gameBuildVariant().directory))
+
+tasks.withType<AbstractArchiveTask>().configureEach {
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
+}
 
 // Leaf names such as `api` and `impl` repeat across module families. Giving every
 // family its own Maven group prevents Kotlin MPP metadata from conflating those projects.
@@ -16,7 +26,7 @@ group = path
     .filter(String::isNotBlank)
     .joinToString(separator = ".", prefix = "kinetickk.")
     .removeSuffix(".")
-version = "0.5.0"
+version = "0.6.0"
 
 val sourceProjectPathValue = path
 val exportArchitectureEdgesTask = tasks.register<ExportArchitectureEdgesTask>(

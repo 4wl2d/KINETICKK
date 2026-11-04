@@ -689,7 +689,7 @@ class DefaultProfileComponentTest {
     }
 
     @Test
-    fun trustedResourceCompletionIsValidatedBeforeFactConstruction() {
+    fun trustedResourceCompletionIsValidatedBeforeItCommits() {
         val resource = RecordingProfileResource().apply {
             writeBehavior = { snapshot ->
                 ProfileWriteResult.Written(ProfileRevision(snapshot.revision.value + 1L))

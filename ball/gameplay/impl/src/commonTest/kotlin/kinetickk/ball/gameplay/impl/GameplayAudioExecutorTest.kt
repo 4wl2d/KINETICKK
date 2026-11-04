@@ -7,42 +7,30 @@ import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
-import kinetickk.resource.audio.api.ToneWave
+import kinetickk.resource.audio.api.SoundId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class GameplayAudioExecutorTest {
     @Test
-    fun mapsGameplayOwnedCuesToMechanicalRequestsInSemanticPriorityOrder() {
+    fun mapsGameplayOwnedCuesToSoundIdsInIngressOrderWithoutTickingMusic() {
         val service = RecordingAudioService()
         val executor = ResourceGameplayAudioExecutor(service)
 
-        executor.advance(0.125f, GameplayAudioCue.entries.toImmutableList())
+        executor.play(GameplayAudioCue.entries.toImmutableList())
 
+        assertEquals(GameplayAudioCue.entries.map { SoundId.valueOf(it.name) }, service.lastSounds)
+        assertEquals(listOf("play"), service.calls)
+    }
+
+    @Test
+    fun ticksMusicByTheGivenFrameTimeOnly() {
+        val service = RecordingAudioService()
+
+        ResourceGameplayAudioExecutor(service).tick(0.125f)
+
+        assertEquals(listOf("tick"), service.calls)
         assertEquals(0.125f, service.lastDeltaSeconds)
-        assertEquals(
-            listOf(
-                ToneRequest(64f, 0.34f, 0.24f, ToneWave.SAW),
-                ToneRequest(784f, 0.32f, 0.2f, ToneWave.TRIANGLE),
-                ToneRequest(118f, 0.22f, 0.2f, ToneWave.SAW),
-                ToneRequest(76f, 0.13f, 0.22f, ToneWave.SQUARE),
-                ToneRequest(988f, 0.3f, 0.22f, ToneWave.SAW),
-                ToneRequest(185f, 0.11f, 0.23f, ToneWave.SAW),
-                ToneRequest(820f, 0.2f, 0.2f, ToneWave.SAW),
-                ToneRequest(132f, 0.12f, 0.18f, ToneWave.SAW),
-                ToneRequest(92f, 0.07f, 0.2f, ToneWave.SQUARE),
-                ToneRequest(480f, 0.09f, 0.16f, ToneWave.TRIANGLE),
-                ToneRequest(560f, 0.16f, 0.18f, ToneWave.TRIANGLE),
-                ToneRequest(445f, 0.09f, 0.13f, ToneWave.SINE),
-                ToneRequest(640f, 0.18f, 0.2f, ToneWave.TRIANGLE),
-                ToneRequest(420f, 0.055f, 0.1f, ToneWave.TRIANGLE),
-                ToneRequest(710f, 0.055f, 0.13f, ToneWave.SINE),
-                ToneRequest(520f, 0.035f, 0.11f, ToneWave.SINE),
-                ToneRequest(330f, 0.06f, 0.13f, ToneWave.TRIANGLE),
-            ),
-            service.lastRequests,
-        )
     }
 
     @Test
@@ -53,18 +41,72 @@ class GameplayAudioExecutorTest {
 
         assertEquals(1, service.unlockCount)
     }
+
+    @Test
+    fun emptyAndSingleCueFramesStillAdvanceAudioAndLeaveRetainedRequestsUnchanged() {
+        val service = RecordingAudioService()
+        val executor = ResourceGameplayAudioExecutor(service)
+        fun frame(delta: Float, cues: List<GameplayAudioCue>) {
+            executor.play(cues.toImmutableList())
+            executor.tick(delta)
+        }
+        frame(0.01f, listOf(GameplayAudioCue.DASH))
+        val retained = service.lastSounds
+
+        frame(0.02f, emptyList())
+        assertEquals(0.02f, service.lastDeltaSeconds)
+        assertEquals(listOf("play", "tick", "tick"), service.calls, "An empty frame plays nothing and still ticks")
+
+        frame(0.03f, listOf(GameplayAudioCue.HURT))
+        assertEquals(0.03f, service.lastDeltaSeconds)
+        assertEquals(listOf(SoundId.HURT), service.lastSounds)
+        assertEquals(listOf(SoundId.DASH), retained)
+    }
+
+    @Test
+    fun equalPriorityCuesKeepIngressOrderAndDuplicatesForTheResourceBoundary() {
+        val service = RecordingAudioService()
+        ResourceGameplayAudioExecutor(service).play(
+            listOf(
+                GameplayAudioCue.PICKUP,
+                GameplayAudioCue.SKILL,
+                GameplayAudioCue.IMPACT,
+                GameplayAudioCue.WEAPON_HEAVY,
+                GameplayAudioCue.SKILL,
+                GameplayAudioCue.WEAPON_LIGHT,
+            ).toImmutableList(),
+        )
+
+        assertEquals(
+            listOf(
+                SoundId.PICKUP,
+                SoundId.SKILL,
+                SoundId.IMPACT,
+                SoundId.WEAPON_HEAVY,
+                SoundId.SKILL,
+                SoundId.WEAPON_LIGHT,
+            ),
+            service.lastSounds,
+        )
+    }
 }
 
 private class RecordingAudioService : AudioService {
     var lastDeltaSeconds = 0f
-    var lastRequests = emptyList<ToneRequest>()
+    var lastSounds = emptyList<SoundId>()
+    val calls = mutableListOf<String>()
     var unlockCount = 0
 
     override fun updatePreferences(preferences: AudioPreferences) = Unit
 
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) {
+    override fun play(sounds: List<SoundId>) {
+        calls += "play"
+        lastSounds = sounds
+    }
+
+    override fun tick(realDeltaSeconds: Float) {
+        calls += "tick"
         lastDeltaSeconds = realDeltaSeconds
-        lastRequests = requests
     }
 
     override fun ensureUnlocked() {

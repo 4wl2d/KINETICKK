@@ -149,7 +149,7 @@ class SkillApexUpgradeContentTest {
                 ReactionId.SUPERCONDUCT to listOf(0.25f, 2.5f, 12f),
                 ReactionId.GLACIER_CRUSH to listOf(25f, 300f),
                 ReactionId.EMBRITTLE to listOf(500f),
-                ReactionId.MAGNETIZE to listOf(3f, 260f, 220f, 4f),
+                ReactionId.MAGNETIZE to listOf(3f, 260f, 220f, 5f),
                 ReactionId.FEEDBACK to listOf(0.35f, 1f),
                 ReactionId.ROT_WELL to listOf(2f, 20f, 0.5f, 3f),
                 ReactionId.THUNDERCLAP to listOf(260f, 0.6f, 1.6f),
@@ -186,6 +186,24 @@ class SkillApexUpgradeContentTest {
     }
 
     @Test
+    fun everyUpgradeLevelMultipliesThePowerOfTheOneBefore() {
+        val policy = UpgradePolicy()
+        // Honing ×1.085 and Refit ×1.07 per level: the tenth level is worth as much as the first, relative to its base.
+        (1..policy.maxLevel).forEach { level ->
+            assertEquals(policy.weaponPower(level - 1) * 1.085f, policy.weaponPower(level), 1e-5f)
+            assertEquals(policy.characterPower(level - 1) * 1.07f, policy.characterPower(level), 1e-5f)
+        }
+        assertEquals(1f, policy.weaponPower(0))
+        assertEquals(2.261f, policy.weaponPower(10), 0.001f)
+        assertEquals(1.967f, policy.characterPower(10), 0.001f)
+        assertEquals(1.5f, policy.characterIntegrity(10), 1e-6f)
+        // Levels outside the track read as its ends.
+        assertEquals(policy.weaponPower(10), policy.weaponPower(15))
+        assertEquals(1f, policy.characterPower(-2))
+        assertEquals(1.5f, policy.characterIntegrity(12), 1e-6f)
+    }
+
+    @Test
     fun upgradePolicyBoundsAndDoublingPricesSaturate() {
         val policy = UpgradePolicy()
         assertEquals(10, policy.maxLevel)
@@ -193,8 +211,9 @@ class SkillApexUpgradeContentTest {
         UpgradePolicy(maxLevel = 1)
         assertFailsWith<IllegalArgumentException> { UpgradePolicy(maxLevel = ContentBounds.MAX_UPGRADE_LEVEL + 1) }
         assertFailsWith<IllegalArgumentException> { UpgradePolicy(maxLevel = 0) }
-        assertFailsWith<IllegalArgumentException> { UpgradePolicy(weaponPowerPerLevel = -0.01f) }
-        assertFailsWith<IllegalArgumentException> { UpgradePolicy(characterPowerPerLevel = Float.NaN) }
+        assertFailsWith<IllegalArgumentException> { UpgradePolicy(weaponPowerGrowth = 0.99f) }
+        assertFailsWith<IllegalArgumentException> { UpgradePolicy(characterPowerGrowth = Float.NaN) }
+        assertFailsWith<IllegalArgumentException> { UpgradePolicy(characterIntegrityPerLevel = -0.01f) }
 
         assertEquals(listOf(50L, 100L, 200L, 400L, 800L, 1_600L, 3_200L, 6_400L, 12_800L, 25_600L), (0..9).map { policy.nextCost(50, it) })
         assertEquals(51_150L, (0..9).sumOf { policy.nextCost(50, it) })

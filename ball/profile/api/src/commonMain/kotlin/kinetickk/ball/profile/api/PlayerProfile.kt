@@ -16,7 +16,10 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.formatCompactNumber
+import kinetickk.foundation.common.localization.formatGroupedNumber
 
 /** Persistent ordinal order; append-only changes require an explicit save-format decision. */
 enum class ParticleDensity { LOW, NORMAL, HIGH }
@@ -31,6 +34,12 @@ enum class DamageNumberSize(val scale: Float) {
 
 /** Persistent ordinal order; append-only changes require an explicit save-format decision. */
 enum class DamageNumberFormat { COMPACT, FULL }
+
+/** [amount] as a damage number in [format]: three significant digits ("1.23K") or every digit grouped ("1,234"). */
+fun formatDamageNumber(amount: Long, format: DamageNumberFormat, language: AppLanguage): String = when (format) {
+    DamageNumberFormat.COMPACT -> formatCompactNumber(amount, language)
+    DamageNumberFormat.FULL -> formatGroupedNumber(amount, language)
+}
 
 /**
  * Role-color remapping for color vision (you, threat, heat, shield, polarity). Persisted by stable
@@ -180,6 +189,8 @@ data class PlayerCollection(
      * [MAX_RECENT_ITEM_IDS]; offers down-weight recently taken items.
      */
     val recentItemIds: ImmutableList<Int> = immutableListOf(),
+    /** World places and secrets found in any run; the Codex World category reveals only these. */
+    val discoveredWorldEntries: ImmutableSet<WorldDiscovery> = immutableSetOf(),
 ) {
     constructor(
         discoveredItemIds: Set<Int>,
@@ -190,11 +201,12 @@ data class PlayerCollection(
         discoveredPairingIds: Set<RelicPairingId> = emptySet(),
         heirloomRelicIds: List<RelicId> = emptyList(),
         recentItemIds: List<Int> = emptyList(),
+        discoveredWorldEntries: Set<WorldDiscovery> = emptySet(),
     ) : this(
         discoveredItemIds.toImmutableSet(), newItemIds.toImmutableSet(),
         discoveredRelicIds.toImmutableSet(), newRelicIds.toImmutableSet(),
         discoveredReactionIds.toImmutableSet(), discoveredPairingIds.toImmutableSet(),
-        heirloomRelicIds.toImmutableList(), recentItemIds.toImmutableList(),
+        heirloomRelicIds.toImmutableList(), recentItemIds.toImmutableList(), discoveredWorldEntries.toImmutableSet(),
     )
 }
 

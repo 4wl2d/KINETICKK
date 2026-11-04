@@ -14,16 +14,19 @@ import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRule
+import kinetickk.ball.content.api.ObstacleAspect
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponFamily
 import kinetickk.ball.content.api.WeaponId
-import kinetickk.ball.gameplay.interaction.canvas.elementFill
-import kinetickk.ball.gameplay.interaction.canvas.overlayColor
-import kinetickk.ball.gameplay.interaction.canvas.overlayIcon
-import kinetickk.ball.gameplay.interaction.canvas.skillGlyph
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.canvas.look.elementFill
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayColor
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.skillGlyph
+import kinetickk.ball.gameplay.interaction.rewards.art.*
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
 import kinetickk.ball.gameplay.nucleus.render.TotemAction
@@ -34,68 +37,12 @@ import kinetickk.foundation.design.KkCardStyle
 import kinetickk.foundation.design.KkFillKind
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkRolePalette
-import kinetickk.foundation.design.kkLuminance
-import kinetickk.foundation.design.kkMix
-import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.sqrt
-
-/**
- * The look of one reward card under one palette, in two channels that never mix: the rarity
- * channel is the [style]'s material alone (the frame: border, band, echo, glow, effects), the type
- * channel is the face (the [hue] and pattern by element, the preset's volt for Kinetic; the ornament
- * by primary tag, the watermark and seed, the bespoke [art] of an epic or legendary item).
- */
-internal class RewardCardLook(
-    val style: KkCardStyle,
-    val art: RewardCardArt?,
-    /** The type hue: the element's (the preset's volt for Kinetic, `you` for weapons) under the colour-vision preset. */
-    val hue: Color,
-    /** The second element hue, or [hue] when the card has one. */
-    val secondHue: Color,
-) {
-    /** Whether anything is drawn behind the text, so the text rows need the soft face plates. */
-    val needsPlates: Boolean get() = art != null || style.drawsBehindText
-
-    /**
-     * The icon plate's tint when the type hue tells little apart by colour ([neutralHue]: a pale or
-     * greyish hue, as Protan and Deutan show Ion and Cryo, near the steel and chrome greys), else
-     * unspecified. The type then carries a cue that is not hue: the plate tinted in the hue (a dark
-     * patch, [plateCueTint]), its pattern stronger ([plateCuePattern]) and the body pattern at its
-     * strongest.
-     */
-    val plateTint: Color = if (neutralHue(hue)) plateCueTint(hue) else Color.Unspecified
-
-    /** Whether the card carries the plate cue ([plateTint]). */
-    val plateCue: Boolean get() = plateTint.isSpecified
-}
 
 /** The pattern's strength inside the icon plate: faint, or stronger on a [RewardCardLook.plateCue] plate. */
 internal fun plateCuePattern(cue: Boolean): Float = if (cue) PLATE_CUE_PATTERN else PLATE_PATTERN
 
 private const val PLATE_PATTERN = 0.28f
 private const val PLATE_CUE_PATTERN = 0.6f
-
-/**
- * [hue] over the plate's ink, as strong as it goes (up to [PLATE_TINT_MAX]) while the plate stays a
- * dark patch (luminance up to [PLATE_TINT_LUMINANCE]): a slate Ion tints it by about 30 %, a pale Cryo
- * by less, and the plate always stands apart from the mid and light greys of the metal frames.
- */
-internal fun plateCueTint(hue: Color): Color {
-    var tint = Kk.Ink3
-    var step = 1
-    while (step * PLATE_TINT_STEP <= PLATE_TINT_MAX) {
-        val next = kkMix(Kk.Ink3, hue, step * PLATE_TINT_STEP)
-        if (kkLuminance(next) > PLATE_TINT_LUMINANCE) break
-        tint = next
-        step++
-    }
-    return tint
-}
-
-private const val PLATE_TINT_STEP = 0.02f
-private const val PLATE_TINT_MAX = 0.3f
-private const val PLATE_TINT_LUMINANCE = 0.05f
 
 /**
  * What makes a card visibly its own, for the uniqueness check over the shipped catalog: material,
@@ -236,8 +183,8 @@ internal fun buildRewardCardLook(presentation: RewardCardPresentation, roles: Kk
             RewardCardLook(style, null, hue, hue)
         }
         choice.relicAction == RelicChoiceAction.MELD -> {
-            // A meld joins two forms and has no element: Kinetic in a steel frame, a perforated link edge,
-            // two forms joined as its watermark.
+            // A Meld seals an empty slot and has no element: Kinetic in a steel frame, a perforated edge,
+            // the joined forms of the sealed slot as its watermark.
             val hue = roles.kinetic
             val style = KkCardStyle(
                 material = KkCardMaterial.STEEL,
@@ -252,6 +199,7 @@ internal fun buildRewardCardLook(presentation: RewardCardPresentation, roles: Kk
             )
             RewardCardLook(style, null, hue, hue)
         }
+        presentation.boonKind != null -> rewardBoonCardLook(presentation, roles)
         else -> {
             // Any other card: the material of its rank in its own hue, nothing behind the text.
             val hue = presentation.accentColor(roles)
@@ -301,21 +249,6 @@ internal fun patternBoost(hue: Color, roles: KkRolePalette): Float {
     return 1f
 }
 
-/** Whether [hue] is pale or greyish: little chroma, or close to bone or mute (it tells little apart by colour). */
-internal fun neutralHue(hue: Color): Boolean {
-    val chroma = max(hue.red, max(hue.green, hue.blue)) - min(hue.red, min(hue.green, hue.blue))
-    return chroma < LOW_CHROMA || rgbDistance(hue, Kk.Bone) < GREYISH || rgbDistance(hue, Kk.Mute) < GREYISH
-}
-
-private fun rgbDistance(a: Color, b: Color): Float {
-    val dr = a.red - b.red
-    val dg = a.green - b.green
-    val db = a.blue - b.blue
-    return sqrt(dr * dr + dg * dg + db * db)
-}
-
-private const val GREYISH = 0.25f
-private const val LOW_CHROMA = 0.28f
 /** A neutral hue's pattern at twice the usual boosted strength (the style caps it at KK_PATTERN_MAX_ALPHA). */
 private const val PATTERN_BOOST = 4f
 private const val NEAR_TONE = 0.4f
@@ -354,7 +287,8 @@ private fun EffectClause.watermarkIcon(): KkIcon = when (val action = actions.fi
     is EffectAction.Pull -> if (trigger == EffectTrigger.TURN) KkIcon.WEAPONS_FLUX_WAKE else KkIcon.SYSTEM_POLARITY
     is EffectAction.Vent -> KkIcon.SYSTEM_HEAT
     is EffectAction.Overdrive -> KkIcon.SYSTEM_OVERDRIVE
-    is EffectAction.GainData -> KkIcon.SYSTEM_DATA
+    // Data broken out of an obstacle is the crystal's prism; any other Data is the archive's mark.
+    is EffectAction.GainData -> if (trigger == EffectTrigger.SHATTER) KkIcon.WEAPONS_PRISM_RELAY else KkIcon.SYSTEM_DATA
     is EffectAction.RefreshWeapon -> KkIcon.WEAPONS_QUASAR_CANNON
     is EffectAction.Shield -> KkIcon.SYSTEM_SHIELD
     is EffectAction.Heal -> KkIcon.SYSTEM_INTEGRITY
@@ -368,10 +302,13 @@ private fun EffectClause.watermarkIcon(): KkIcon = when (val action = actions.fi
     is EffectAction.Burst -> when (trigger) {
         EffectTrigger.DASH -> KkIcon.WEAPONS_NULL_LANCE
         EffectTrigger.OVERDRIVE -> KkIcon.WEAPONS_SINGULARITY_SPEAR
+        // A blast set off by a broken obstacle blooms out of the wreck (the broken hexagon reads as the shield's outline).
+        EffectTrigger.SHATTER -> KkIcon.WEAPONS_SCATTER_BLOOM
         else -> trigger.watermarkIcon()
     }
-    // Shards are a prism's splinters; a slam's are the wreckage it breaks off.
-    is EffectAction.Shards -> if (trigger == EffectTrigger.SLAM) trigger.watermarkIcon() else KkIcon.WEAPONS_PRISM_RELAY
+    // Shards are a prism's splinters; a slam's or a broken obstacle's are the wreckage it breaks off.
+    is EffectAction.Shards ->
+        if (trigger == EffectTrigger.SLAM || trigger == EffectTrigger.SHATTER) trigger.watermarkIcon() else KkIcon.WEAPONS_PRISM_RELAY
     is EffectAction.Strike -> when (trigger) {
         EffectTrigger.WEAPON_HIT -> KkIcon.WEAPONS_MORNINGSTAR
         // A follow-up on a critical hit is a lance into the opened seam.
@@ -434,6 +371,9 @@ private fun EffectTrigger.watermarkIcon(): KkIcon = when (this) {
     EffectTrigger.FIELD_ENTER -> KkIcon.WEAPONS_GRAVITY_MINES
     EffectTrigger.SHOT_ERASED -> KkIcon.WEAPONS_AEGIS_SHARDS
     EffectTrigger.MARK_CONSUMED -> KkIcon.WEAPONS_NULL_LANCE
+    EffectTrigger.SHATTER -> KkIcon.FORMS_HEXAGON
+    EffectTrigger.BOOST -> KkIcon.WEAPONS_GYRE_DISC
+    EffectTrigger.GRAZE -> KkIcon.FORMS_CRESCENT
 }
 
 private fun ItemEffect.watermarkIcon(): KkIcon = when (this) {
@@ -458,6 +398,10 @@ private fun ItemEffect.watermarkIcon(): KkIcon = when (this) {
     ItemEffect.SHIELD_CAPACITY, ItemEffect.DAMAGE_REDUCTION -> KkIcon.SYSTEM_SHIELD
     ItemEffect.COMBO_WINDOW -> KkIcon.SYSTEM_CYCLE_CLOCK
     ItemEffect.OVERDRIVE_GAIN -> KkIcon.SYSTEM_OVERDRIVE
+    // The tether's turning authority.
+    ItemEffect.GRIP -> KkIcon.SYSTEM_POLARITY
+    // Curves wind speed up.
+    ItemEffect.SLING -> KkIcon.FORMS_SPIRAL
 }
 
 private fun ItemRule.watermarkIcon(): KkIcon? = when (this) {
@@ -470,6 +414,7 @@ private fun ItemRule.watermarkIcon(): KkIcon? = when (this) {
         EffectCondition.ApexActive -> KkIcon.SYSTEM_ELITE
         is EffectCondition.SkillsCharging -> KkIcon.SYSTEM_CYCLE_CLOCK
         is EffectCondition.WeaponFamilyIs -> condition.family.watermarkIcon()
+        is EffectCondition.NearObstacle -> KkIcon.FORMS_SQUARE
         else -> KkIcon.SYSTEM_ANOMALY
     }
     is ItemRule.ElementPotency -> KkIcon.FORMS_TESSERACT
@@ -492,6 +437,14 @@ private fun ItemRule.watermarkIcon(): KkIcon? = when (this) {
     is ItemRule.CatalysisRate -> KkIcon.WEAPONS_ARC_COIL
     is ItemRule.ApexCooldown -> KkIcon.SYSTEM_ELITE
     is ItemRule.CoreLinkRadius -> KkIcon.SYSTEM_POLARITY
+    is ItemRule.ObstacleTuning -> when (aspect) {
+        ObstacleAspect.RESTITUTION -> KkIcon.FORMS_DIPOLE
+        ObstacleAspect.COLLISION_DAMAGE -> KkIcon.SYSTEM_SHIELD
+        // A roll cage round the Core: integrity's hexagon would repeat the shield's on the same face.
+        ObstacleAspect.LETHAL_SPEED -> KkIcon.WEAPONS_SENTRY_GRID
+        ObstacleAspect.BOOST_POWER -> KkIcon.WEAPONS_GYRE_DISC
+        ObstacleAspect.WELL_PULL -> KkIcon.FORMS_SPIRAL
+    }
 }
 
 /** A weapon family's mark (a family-gated "while" rule names the family by its emblem weapon or form). */
@@ -579,4 +532,12 @@ private object RewardCardLooks {
         next = (next + 1) % CAPACITY
         return look
     }
+}
+
+/** Resolves a reward tone to its color; [fixed] is used for [RewardTone.FIXED]. */
+internal fun RewardTone.color(roles: KkRolePalette, fixed: Color): Color = when (this) {
+    RewardTone.FIXED -> fixed
+    RewardTone.YOU -> roles.you
+    RewardTone.THREAT -> roles.threat
+    RewardTone.MUTE -> Kk.Mute
 }

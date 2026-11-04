@@ -60,7 +60,8 @@ data class ApexDefinition(
  * - PRISM Monolith: facet regrowth s, full-facet impact multiplier, refraction damage
  * - SHARD Vivisect: puncture interval s, mark spread radius, free Dash gap s
  * - RING Corona: locked halo radius, band burn per second, burst interval s, burst damage
- * - DIAMOND Mirror Stance: returned shot damage, locked Edge
+ * - DIAMOND Mirror Stance: returned shot damage, locked Edge. Its bolt budget is the hits it parries: one, since with
+ *   more a braking Diamond took under half the damage a fight without the Apex deals in the same seconds.
  * - TESSERACT Hypercube: cage half-side, inside speed factor, pulse damage, pulse damage per node
  * - STAR Hypernova: Stellar Mass on cast, nova cooldown s, Mass per kill, Mass at the end
  * - SPIRAL Twin Echo: second ghost delay s, strike impact scale, absorb interval s, strike speed
@@ -83,7 +84,7 @@ fun defaultApexDefinition(shape: CoreShape): ApexDefinition = when (shape) {
     CoreShape.SHARD -> apex(
         "Vivisect",
         "For 8 s Dashes cost no heat, punctures come faster and every puncture marks the next enemy.",
-        8f, 0, 8, 0.12f, 260f, 0.35f,
+        8f, 0, 7, 0.12f, 260f, 0.35f,
     )
     CoreShape.RING -> apex(
         "Corona",
@@ -92,8 +93,8 @@ fun defaultApexDefinition(shape: CoreShape): ApexDefinition = when (shape) {
     )
     CoreShape.DIAMOND -> apex(
         "Mirror Stance",
-        "For 6 s, while you brake, the next four hits are parried and returned at full Edge.",
-        6f, 4, 6, 65f, 5f,
+        "For 6 s, while you brake, the next hit is parried and returned at full Edge.",
+        6f, 1, 6, 65f, 5f,
     )
     CoreShape.TESSERACT -> apex(
         "Hypercube",
@@ -128,7 +129,7 @@ fun defaultApexDefinition(shape: CoreShape): ApexDefinition = when (shape) {
     CoreShape.HEXAGON -> apex(
         "Swarm Queen",
         "Fills the hive; for 10 s drones dart three times as often, intercept shots and pull Data to you.",
-        10f, 32, 12, 0.35f, 18f, 600f, 12f,
+        10f, 32, 11, 0.35f, 18f, 600f, 12f,
     )
 }
 

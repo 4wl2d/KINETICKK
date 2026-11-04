@@ -15,6 +15,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.nucleus.projection.*
+import kinetickk.ball.gameplay.nucleus.simulation.combat.*
+import kinetickk.ball.gameplay.nucleus.simulation.director.*
+import kinetickk.ball.gameplay.nucleus.simulation.weapons.*
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 
 class RunTempoTest {
     @Test

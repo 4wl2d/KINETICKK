@@ -14,11 +14,12 @@ import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
 import kinetickk.ball.gameplay.api.GameplayRunPort
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.api.GameplaySettingsApplied
 import kinetickk.ball.gameplay.api.GameplayRefusal
 import kinetickk.ball.gameplay.api.GameplayRunStarted
 import kinetickk.ball.gameplay.api.GameplayOverlayPaused
-import kinetickk.ball.gameplay.interaction.GameplayRunHost
+import kinetickk.ball.gameplay.api.GameplayRunHost
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerPreferences
@@ -191,6 +192,8 @@ internal class FakeProfileCapabilities(
 
 internal class FakeSessionGameplayHost : GameplayRunHost {
     val createdRunIds = mutableListOf<RunId>()
+    /** Every mode a start command carried, across every run this host created, in call order. */
+    val startModes = mutableListOf<RunMode>()
     var onCreateRun: (RunId) -> Unit = {}
     var configureRun: (FakeGameplayRunPort) -> Unit = {}
     private var active: FakeGameplayRunPort? = null
@@ -200,7 +203,7 @@ internal class FakeSessionGameplayHost : GameplayRunHost {
     ): GameplayRunPort {
         createdRunIds += runId
         onCreateRun(runId)
-        return FakeGameplayRunPort(runId).also { run ->
+        return FakeGameplayRunPort(runId, startModes).also { run ->
             configureRun(run)
             active = run
         }
@@ -213,6 +216,7 @@ internal class FakeSessionGameplayHost : GameplayRunHost {
 
 internal class FakeGameplayRunPort(
     runId: RunId,
+    private val startModes: MutableList<RunMode> = mutableListOf(),
 ) : GameplayRunPort {
     override val instanceId = GameplayInstanceId(runId)
 
@@ -231,8 +235,9 @@ internal class FakeGameplayRunPort(
     var onStartObserved: (() -> Unit)? = null
     var onPauseObserved: (() -> Unit)? = null
 
-    override fun startRun(reply: InlineReply<GameplayRunStarted, GameplayRefusal>) {
+    override fun startRun(mode: RunMode, reply: InlineReply<GameplayRunStarted, GameplayRefusal>) {
         reply.checkAvailable()
+        startModes += mode
         startReplies += reply
         onStartObserved?.invoke()
         startHandler?.invoke(reply) ?: completeStart(reply)

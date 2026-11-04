@@ -48,11 +48,9 @@ import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
 import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kinetickk.ball.profile.impl.createProfileComponent
 import kinetickk.flow.session.api.AppDestination
-import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.foundation.common.input.BindableKey
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -95,11 +93,12 @@ class GameplayKeyPrecedenceComposeTest {
             )
             try {
                 setContent { Box(Modifier.requiredSize(1_000.dp, 700.dp).testTag(APP_TAG)) { owner.Content() } }
+                awaitAppStartup()
                 fun settle() {
                     mainClock.advanceTimeBy(260)
                     waitForIdle()
                 }
-                fun shell() = owner.sessionPort.query(AppSessionQuery.GetShell)
+                fun shell() = owner.sessionPort.shell()
                 fun phase() = gameplay.activeRun()?.query(GameplayQuery.GetRunStatus)?.phase
                 fun press(key: Key): List<GameplayInteractionPulse> {
                     gameplay.pulses.clear()
@@ -119,6 +118,7 @@ class GameplayKeyPrecedenceComposeTest {
                 onNodeWithTag("kinetickk.home.start").performSemanticsAction(SemanticsActions.RequestFocus)
                 press(Key.Enter)
                 assertEquals(AppDestination.Gameplay, shell().active)
+                (gameplay.activeRun() as GameplayInteractionPort).declineOmenIfOffered()
                 assertEquals(GameplayRunPhase.RUNNING, phase())
                 // Play the real run to its first active item (Z holds its effect, C's slot is still empty).
                 val run = gameplay.activeRun() as GameplayInteractionPort
@@ -263,6 +263,7 @@ private class RunPilot(private val run: GameplayInteractionPort) {
             val model = model()
             when (model.phase) {
                 GamePhase.CHOICE -> {
+                    if (run.declineOmenIfOffered()) continue
                     val choices = model.choices
                     val index = (0 until minOf(choices.size, 4)).firstOrNull {
                         choices[it].type == ChoiceType.ITEM && choices[it].skillId != null && !choices[it].replacesActive
@@ -321,7 +322,6 @@ private class MemoryPersistence : ProfilePersistenceCapability {
 
 private class QuietAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

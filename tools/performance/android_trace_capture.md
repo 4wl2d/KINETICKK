@@ -24,7 +24,7 @@ python3 tools/performance/android_trace_capture.py \
   --apk app/android/build/outputs/apk/benchmark/app-android-benchmark.apk \
   --serial NVYXIJQGTOMVNZZH \
   --output build/performance/android-trace/realme-diagnostic \
-  --label feature/pokeball-full-refactor
+  --label feature/worlds-0.6.0
 ```
 
 `--serial` is mandatory and singular. This prevents a diagnostic request from

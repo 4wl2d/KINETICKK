@@ -35,8 +35,7 @@ import kinetickk.ball.profile.interaction.rebirth.api.RebirthUnlock
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
-import kinetickk.resource.audio.api.ToneWave
+import kinetickk.resource.audio.api.SoundId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -202,10 +201,8 @@ class RebirthReducerTest {
 
         feature.playAcceptedFeedback()
 
-        assertEquals(
-            listOf(ToneRequest(490f, 0.1f, 0.16f, ToneWave.SINE)),
-            audio.requests,
-        )
+        assertEquals(listOf(SoundId.UI_CONFIRM), audio.sounds)
+        assertEquals(0, audio.tickCalls)
     }
 }
 
@@ -244,13 +241,17 @@ private object UnusedProfilePort : ProfilePort {
 }
 
 private class RecordingRebirthAudioService : AudioService {
-    var requests = emptyList<ToneRequest>()
+    var sounds = emptyList<SoundId>()
+    var tickCalls = 0
 
     override fun updatePreferences(preferences: AudioPreferences) = Unit
 
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) {
-        assertEquals(0f, realDeltaSeconds)
-        this.requests = requests
+    override fun play(sounds: List<SoundId>) {
+        this.sounds = sounds
+    }
+
+    override fun tick(realDeltaSeconds: Float) {
+        tickCalls++
     }
 
     override fun ensureUnlocked() = Unit

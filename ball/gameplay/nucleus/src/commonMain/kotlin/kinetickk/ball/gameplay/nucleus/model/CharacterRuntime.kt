@@ -9,30 +9,27 @@ internal enum class Polarity { ATTRACT, REPEL }
 /**
  * Owned character state; all ability charge derives from accepted physical movement and combat.
  *
- * A reduction fork copies the scalars (a few dozen fields) and forks the bounded buffers, allocated
- * once per run and shared with the committed state until the candidate first writes them. The echo
- * ghost's path is paged: a fixed step writes one sample and copies at most that sample's small page
- * (plus, once per reduction, the page table), never the whole ring. The lattice nodes, the drones and
- * the void scars are small arrays copied at most once per reduction; later steps write them in place.
+ * A fork copies the scalars (a few dozen fields) and the bounded buffers, which are allocated once per
+ * run. The production tick writes every buffer in place; a fixed step writes one echo-ghost sample.
  */
 internal class CharacterRuntime private constructor(
     /**
      * Ring buffer of Core positions, one [GHOST_STRIDE] record (x, y, teleport flag) per fixed step;
      * the ghost replays it [GHOST_DELAY_STEPS] behind.
      */
-    val ghostPath: CopyOnWritePagedFloatArray,
+    val ghostPath: RunPagedFloatArray,
     /** Up to [MAX_LATTICE_NODES] (x, y) pairs; [latticeCount] are live. */
-    val latticeNodes: CopyOnWriteFloatArray,
+    val latticeNodes: RunFloatArray,
     /** Up to [MAX_DRONES] records of [DRONE_STRIDE] floats; [droneCount] are live. */
-    val drones: CopyOnWriteFloatArray,
+    val drones: RunFloatArray,
     /** Up to [MAX_SCARS] records of [SCAR_STRIDE] floats; [scarCount] are live, oldest first. */
-    val scars: CopyOnWriteFloatArray,
+    val scars: RunFloatArray,
 ) {
     constructor() : this(
-        ghostPath = CopyOnWritePagedFloatArray(GHOST_SAMPLES * GHOST_STRIDE, GHOST_PAGE_SAMPLES * GHOST_STRIDE),
-        latticeNodes = CopyOnWriteFloatArray(FloatArray(MAX_LATTICE_NODES * 2)),
-        drones = CopyOnWriteFloatArray(FloatArray(MAX_DRONES * DRONE_STRIDE)),
-        scars = CopyOnWriteFloatArray(FloatArray(MAX_SCARS * SCAR_STRIDE)),
+        ghostPath = RunPagedFloatArray(GHOST_SAMPLES * GHOST_STRIDE, GHOST_PAGE_SAMPLES * GHOST_STRIDE),
+        latticeNodes = RunFloatArray(FloatArray(MAX_LATTICE_NODES * 2)),
+        drones = RunFloatArray(FloatArray(MAX_DRONES * DRONE_STRIDE)),
+        scars = RunFloatArray(FloatArray(MAX_SCARS * SCAR_STRIDE)),
     )
 
     /** Mechanic readiness 0..1 for the HUD (Orbit charge, parry readiness, lattice fill and so on). */
@@ -115,12 +112,12 @@ internal class CharacterRuntime private constructor(
     var abilityDamage: Double = 0.0
     var damagePrevented: Double = 0.0
 
-    /** An isolated candidate: scalars copied, buffers shared until the first changed write. */
+    /** An isolated candidate: scalars and buffers copied. */
     fun fork(): CharacterRuntime = CharacterRuntime(
-        ghostPath = ghostPath.fork(),
-        latticeNodes = latticeNodes.fork(),
-        drones = drones.fork(),
-        scars = scars.fork(),
+        ghostPath = ghostPath.copy(),
+        latticeNodes = latticeNodes.copy(),
+        drones = drones.copy(),
+        scars = scars.copy(),
     ).also { copy ->
         copy.charge = charge
         copy.previousSpeed = previousSpeed
@@ -254,7 +251,7 @@ internal class CharacterRuntime private constructor(
         const val GHOST_Y: Int = 1
         const val GHOST_TELEPORT: Int = 2
         const val GHOST_STRIDE: Int = 3
-        /** Samples per copy-on-write page of the ghost ring: a step copies at most 24 floats. */
+        /** Samples per page of the ghost ring. */
         const val GHOST_PAGE_SAMPLES: Int = 8
 
         /** Drone record: position, previous position, remaining life, next dart time, dart time left, dart target. */

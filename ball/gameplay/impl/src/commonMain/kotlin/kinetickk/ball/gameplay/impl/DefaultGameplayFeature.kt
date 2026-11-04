@@ -22,6 +22,7 @@ import kinetickk.ball.profile.api.ProfileReadPort
 import kinetickk.ball.profile.api.ProfileProgress
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.diagnostics.CrashDiagnostics
+import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
 import kinetickk.resource.audio.api.AudioService
 
 class DefaultGameplayFeature(
@@ -44,8 +45,10 @@ class DefaultGameplayFeature(
     ): GameplayRunPort {
         ensureReplacementAllowed(runId)
         val seed = seedSource(runId)
-        diagnostics.context("gameplay.start") { "runId=$runId seed=$seed" }
-        diagnostics.event("gameplay.start", "runId=$runId seed=$seed")
+        if (DIAGNOSTICS_ENABLED && diagnostics.enabled) {
+            diagnostics.context("gameplay.start") { "runId=$runId seed=$seed" }
+            diagnostics.event("gameplay.start", "runId=$runId seed=$seed")
+        }
         return GameComponent.create(
             runId = runId,
             content = gameplayContent,
@@ -53,6 +56,7 @@ class DefaultGameplayFeature(
             audioExecutor = audioExecutor,
             profileProgress = profileProgress,
             seed = seed,
+            diagnostics = diagnostics,
         ).also { componentValue = it }
     }
 

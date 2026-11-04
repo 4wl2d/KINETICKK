@@ -4,6 +4,10 @@
 import kinetickk.gradle.packageLegalDocuments
 import kinetickk.gradle.configureSkikoWasmRuntime
 import kinetickk.gradle.isolatedProjectsProfileEnabled
+import kinetickk.gradle.BuildVariant
+import kinetickk.gradle.gameBuildVariant
+import kinetickk.gradle.configureVariantSources
+import kinetickk.gradle.RejectReleaseInDebugAction
 import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.api.tasks.Delete
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
@@ -18,6 +22,9 @@ plugins {
     id("org.jetbrains.kotlin.multiplatform")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val gameVariant = gameBuildVariant()
+configureVariantSources()
 
 composeCompiler {
     includeSourceInformation.set(false)
@@ -47,6 +54,11 @@ kotlin {
                 }
             }
             val executableBinaries = binaries.executable()
+            executableBinaries.single { it.mode == KotlinJsBinaryMode.DEVELOPMENT }.linkTask.configure {
+                // KGP 2.4's incremental linker retains cache-history-dependent sections. A full
+                // development link makes Debug artifacts reproducible; library compilation stays incremental.
+                incrementalWasm = false
+            }
             val productionExecutable = executableBinaries
                 .single { it.mode == KotlinJsBinaryMode.PRODUCTION }
             productionExecutable.linkTask.configure {
@@ -103,6 +115,11 @@ if (!isolatedProjectsProfile) {
         // Production source maps are not consumed by the application, but account for
         // roughly 0.85 MiB of the packaged distribution. Keep development maps intact.
         sourceMaps = false
+    }
+    if (gameVariant == BuildVariant.DEBUG) {
+        tasks.matching { "Production" in it.name || it.name == "wasmJsBrowserDistribution" }.configureEach {
+            doFirst(RejectReleaseInDebugAction())
+        }
     }
 }
 

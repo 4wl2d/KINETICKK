@@ -21,6 +21,7 @@ import javax.imageio.ImageIO
 import kotlin.math.hypot
 import kotlin.test.Test
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.canvas.look.*
 
 class TesseractRenderingTest {
     @Test

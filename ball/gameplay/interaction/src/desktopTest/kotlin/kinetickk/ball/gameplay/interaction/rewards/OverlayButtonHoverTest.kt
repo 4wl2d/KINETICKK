@@ -23,6 +23,7 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runSkikoComposeUiTest
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.gameplay.interaction.overlay.*
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkButtonVariant
 import kotlin.test.Test

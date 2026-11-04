@@ -3,14 +3,10 @@
 
 import kinetickk.gradle.ARCHITECTURE_EDGE_ELEMENTS_CONFIGURATION_NAME
 import kinetickk.gradle.ARCHITECTURE_EDGE_REPORTS_CONFIGURATION_NAME
+import kinetickk.gradle.SourceStructureTask
+import kinetickk.gradle.UpdateSourceStructureBaselineTask
 import kinetickk.gradle.VerifyArchitectureTask
-import kinetickk.gradle.pokeball.GeneratePokeballResolvedManifestTask
-import kinetickk.gradle.pokeball.VerifyPokeballArchitectureTask
-import kinetickk.gradle.pokeball.VerifyPokeballConformanceTask
-import kinetickk.gradle.pokeball.VerifyPokeballManifestDriftTask
-import kinetickk.gradle.pokeball.VerifyPokeballSnapshotTask
-import kinetickk.gradle.pokeball.runtimeBehaviorEvidence
-import org.gradle.api.tasks.Copy
+import kinetickk.gradle.VerifySourceStructureTask
 
 val leafProjects = rootProject.subprojects.filter { it.childProjects.isEmpty() }
 val leafProjectPathValues = leafProjects.map { it.path }.toSet()
@@ -34,123 +30,69 @@ dependencies {
     }
 }
 
-val verifyArchitectureTask = tasks.register<VerifyArchitectureTask>("verifyArchitecture") {
+val repositoryRoot = layout.projectDirectory
+
+// Module paths map directly to directories in settings.gradle.kts. Trees are built from path strings
+// with the root project's services, without invoking another Project during configuration, and are
+// rooted at <leaf>/src so they never walk .claude/, build/ or node_modules/.
+fun leafSourceTree(leafPath: String, production: Boolean) =
+    rootProject.fileTree(repositoryRoot.dir(leafPath.removePrefix(":").replace(':', '/') + "/src")) {
+        if (production) {
+            // Every production root, including variant roots such as commonDebug; test source set names end in Test.
+            include("*/kotlin/**/*.kt")
+            exclude("*Test/**")
+        } else {
+            include("*Test/kotlin/**/*.kt")
+        }
+    }
+
+fun SourceStructureTask.useRepositorySources() {
+    repositoryDirectory.set(repositoryRoot)
+    leafProjectPaths.set(leafProjectPathValues)
+    leafProjectPathValues.sorted().forEach { leaf ->
+        mainSourceFiles.from(leafSourceTree(leaf, production = true))
+        testSourceFiles.from(leafSourceTree(leaf, production = false))
+    }
+    architectureDocument.set(repositoryRoot.file("docs/project/ARCHITECTURE.md"))
+    baselineFile.set(repositoryRoot.file("build-logic/source-structure-baseline.tsv"))
+}
+
+val verifySourceStructure = tasks.register<VerifySourceStructureTask>("verifySourceStructure") {
     group = "verification"
-    description = "Verifies the declared Pokeball role graph without resolving classpaths."
+    description = "Verifies file, function and package size ratchets, import boundaries and package cycles."
+    useRepositorySources()
+    reportFile.set(layout.buildDirectory.file("reports/source-structure/report.txt"))
+    doNotTrackState("Scans about 1,000 Kotlin files in under a second; always re-verifies so moved files never reuse a stale result")
+}
+
+tasks.register<UpdateSourceStructureBaselineTask>("updateSourceStructureBaseline") {
+    group = "verification"
+    description = "Lowers source-structure ceilings and deletes stale rows; " +
+        "-Pkinetickk.sourceStructure.resetBaseline=true rewrites them."
+    useRepositorySources()
+    resetBaseline.set(
+        providers.gradleProperty("kinetickk.sourceStructure.resetBaseline").map(String::toBooleanStrict).orElse(false),
+    )
+    doNotTrackState("Rewrites the checked-in baseline")
+}
+
+val verifyModuleGraph = tasks.register<VerifyArchitectureTask>("verifyModuleGraph") {
+    group = "verification"
+    description = "Verifies module boundaries, forbidden nucleus and API imports and ambient nucleus randomness " +
+        "without resolving classpaths."
     leafProjectPaths.set(leafProjectPathValues)
     architectureEdgeReportFiles.from(architectureEdgeReports)
     rootSourceFiles.from(rootProject.fileTree("src"))
+    leafProjectPathValues.filter { it.endsWith(":nucleus") }.forEach { nucleusPath ->
+        nucleusSourceFiles.from(leafSourceTree(nucleusPath, production = true))
+    }
+    leafProjectPathValues.filter { it.endsWith(":api") }.forEach { apiPath ->
+        contractSourceFiles.from(leafSourceTree(apiPath, production = true))
+    }
 }
 
-val generatedManifestFile = rootProject.layout.buildDirectory.file(
-    "generated/pokeball/resolved-manifest.json",
-)
-val checkedManifestFile = rootProject.layout.projectDirectory.file(
-    "docs/architecture/pokeball/resolved-manifest.json",
-)
-val architectureRecords = rootProject.fileTree("docs/architecture/pokeball") {
-    include("README.md", "applicability.md", "assembly.md", "authority-map.md", "baseline.md", "policy.md")
-}
-val architectureSources = rootProject.fileTree(rootProject.projectDir) {
-    include("app/**/src/*Main/**/*.kt")
-    include("app/**/src/*Test/**/*.kt")
-    include("app/**/src/main/**/*.kt")
-    include("app/**/src/test/**/*.kt")
-    include("ball/**/src/*Main/**/*.kt")
-    include("ball/**/src/*Test/**/*.kt")
-    include("ball/**/src/main/**/*.kt")
-    include("ball/**/src/test/**/*.kt")
-    include("flow/**/src/*Main/**/*.kt")
-    include("flow/**/src/*Test/**/*.kt")
-    include("flow/**/src/main/**/*.kt")
-    include("flow/**/src/test/**/*.kt")
-    include("foundation/**/src/*Main/**/*.kt")
-    include("foundation/**/src/*Test/**/*.kt")
-    include("foundation/**/src/main/**/*.kt")
-    include("foundation/**/src/test/**/*.kt")
-    include("resource/**/src/*Main/**/*.kt")
-    include("resource/**/src/*Test/**/*.kt")
-    include("resource/**/src/main/**/*.kt")
-    include("resource/**/src/test/**/*.kt")
-    exclude("**/build/**", "**/.gradle/**")
-}
-
-val generatePokeballManifestTask = tasks.register<GeneratePokeballResolvedManifestTask>(
-    "generatePokeballResolvedManifest",
-) {
+tasks.register("verifyArchitecture") {
     group = "verification"
-    description = "Generates the non-authoritative Pokeball architecture projection."
-    leafProjectPaths.set(leafProjectPathValues)
-    architectureEdgeReportFiles.from(architectureEdgeReports)
-    productionSourceFiles.from(architectureSources)
-    repositoryRoot.set(rootProject.layout.projectDirectory)
-    outputFile.set(generatedManifestFile)
-}
-
-val updatePokeballManifestTask = tasks.register<Copy>("updatePokeballResolvedManifest") {
-    group = "build setup"
-    description = "Updates the checked generated Pokeball projection after explicit review."
-    dependsOn(generatePokeballManifestTask)
-    from(generatedManifestFile)
-    into(rootProject.layout.projectDirectory.dir("docs/architecture/pokeball"))
-}
-
-val verifyPokeballManifestTask = tasks.register<VerifyPokeballManifestDriftTask>(
-    "verifyPokeballManifestDrift",
-) {
-    group = "verification"
-    description = "Fails when the checked non-authoritative Pokeball projection has drifted."
-    dependsOn(generatePokeballManifestTask)
-    generatedManifest.set(generatedManifestFile)
-    checkedManifest.set(checkedManifestFile)
-    mustRunAfter(updatePokeballManifestTask)
-}
-
-val snapshotPath = providers.gradleProperty("pokeballSnapshotDir")
-    .orElse(providers.environmentVariable("POKEBALL_SNAPSHOT_DIR"))
-    .orElse(rootProject.layout.projectDirectory.dir("../Pokeball").asFile.absolutePath)
-val repositoryDirectory = rootProject.layout.projectDirectory.asFile
-val configuredSnapshotPath = java.io.File(snapshotPath.get())
-val configuredSnapshotDirectory = if (configuredSnapshotPath.isAbsolute) {
-    configuredSnapshotPath
-} else {
-    repositoryDirectory.resolve(configuredSnapshotPath)
-}
-val verifyPokeballSnapshotTask = tasks.register<VerifyPokeballSnapshotTask>("verifyPokeballSnapshot") {
-    group = "verification"
-    description = "Verifies the exact external Pokeball Core and Agent Pack snapshot/digests."
-    snapshotDirectory.set(configuredSnapshotDirectory)
-    baselineRecord.set(rootProject.layout.projectDirectory.file("docs/architecture/pokeball/baseline.md"))
-    reportFile.set(rootProject.layout.buildDirectory.file("reports/pokeball/snapshot-integrity.json"))
-    mustRunAfter(updatePokeballManifestTask)
-}
-
-val verifyPokeballArchitectureTask = tasks.register<VerifyPokeballArchitectureTask>(
-    "verifyPokeballArchitecture",
-) {
-    group = "verification"
-    description = "Enforces KINETICKK Pokeball ownership, role, route, DAG, and bound invariants."
-    dependsOn(
-        verifyArchitectureTask,
-        verifyPokeballSnapshotTask,
-        verifyPokeballManifestTask,
-        gradle.includedBuild("build-logic").task(":test"),
-    )
-    leafProjectPaths.set(leafProjectPathValues)
-    architectureEdgeReportFiles.from(architectureEdgeReports)
-    productionSourceFiles.from(architectureSources)
-    architectureRecordFiles.from(architectureRecords)
-    dependsOn(runtimeBehaviorEvidence.map { it.taskPath }.distinct())
-    behaviorTestReports.from(runtimeBehaviorEvidence.map { rootProject.file(it.reportPath) })
-    repositoryRoot.set(rootProject.layout.projectDirectory)
-    reportFile.set(rootProject.layout.buildDirectory.file("reports/pokeball/architecture.json"))
-    mustRunAfter(updatePokeballManifestTask)
-}
-
-tasks.register<VerifyPokeballConformanceTask>("verifyPokeballConformance") {
-    group = "verification"
-    description = "Verifies conformance prerequisites or a strict docs-only freeze attestation."
-    dependsOn(verifyPokeballArchitectureTask)
-    repositoryRoot.set(rootProject.layout.projectDirectory)
-    reportFile.set(rootProject.layout.buildDirectory.file("reports/pokeball/conformance.json"))
+    description = "Verifies module boundaries, forbidden imports and the source structure ratchets."
+    dependsOn(verifyModuleGraph, verifySourceStructure)
 }

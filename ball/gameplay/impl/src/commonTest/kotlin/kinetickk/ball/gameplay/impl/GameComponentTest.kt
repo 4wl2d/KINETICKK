@@ -3,6 +3,10 @@
 
 package kinetickk.ball.gameplay.impl
 
+import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
+import kinetickk.foundation.diagnostics.CrashDiagnostics
+import kinetickk.foundation.diagnostics.DiagnosticPhase
+import kinetickk.foundation.diagnostics.PerformanceDiagnostics
 import kinetickk.foundation.dispatch.InlineReply
 import kinetickk.ball.profile.api.ProfileReadPort
 import kinetickk.ball.profile.api.ProfileProgress
@@ -20,6 +24,7 @@ import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.api.GameplayRevision
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.api.GameplayRefusal
 import kinetickk.ball.gameplay.api.GameplaySettingsApplied
 import kinetickk.ball.gameplay.api.GameplayRunStarted
@@ -51,7 +56,6 @@ import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -64,6 +68,44 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class GameComponentTest {
+    @Test
+    fun performanceRecordingPreservesTheDeterministicSimulationAndReleaseNeverSamples() {
+        for (collect in listOf(false, true)) {
+            val phases = mutableListOf<DiagnosticPhase>()
+            val diagnostics = object : PerformanceDiagnostics {
+                override val capturesPerformance = collect
+                override fun frame(frameTimeNanos: Long, budgetNanos: Long) = Unit
+                override fun phase(phase: DiagnosticPhase, durationNanos: Long) {
+                    assertTrue(durationNanos >= 0L)
+                    phases += phase
+                }
+                override fun workload(enemies: Int, projectiles: Int, pickups: Int, effects: Int) = Unit
+                override fun context(key: String, describe: () -> String) = Unit
+                override fun event(category: String, message: String, highFrequency: Boolean) = Unit
+            }
+            val plain = component()
+            val recorded = component(diagnostics = diagnostics)
+            plain.start()
+            recorded.start()
+            assertEquals(plain.declineOmenIfOffered(), recorded.declineOmenIfOffered())
+            repeat(90) {
+                val frame = GameplayInteractionPulse.FrameElapsed.fromValidated(1f / 60f)
+                assertEquals(plain.accept(frame), recorded.accept(frame))
+            }
+            assertEquals(
+                requireNotNull(plain.renderSnapshot().renderModel).exactRenderWitness(),
+                requireNotNull(recorded.renderSnapshot().renderModel).exactRenderWitness(),
+            )
+            if (DIAGNOSTICS_ENABLED && collect) {
+                assertTrue(DiagnosticPhase.Simulation in phases)
+                assertTrue(DiagnosticPhase.Projection in phases)
+                assertTrue(DiagnosticPhase.Audio in phases)
+            } else {
+                assertTrue(phases.isEmpty(), "Disabled/Release diagnostics must never sample")
+            }
+        }
+    }
+
     @Test
     fun createdComponentCapturesContentWithoutPublishingSimulation() {
         val component = component()
@@ -214,9 +256,9 @@ class GameComponentTest {
         profile.calls.clear()
         profile.results.clear()
         profile.replies.clear()
-        audio.frames.clear()
+        audio.calls.clear()
         events.clear()
-        audio.throwOnAdvance = true
+        audio.throwOnAudio = true
         val beforeRevision = component.stateSnapshot().revision
 
         assertFailsWith<AudioResourceFault> {
@@ -244,7 +286,7 @@ class GameComponentTest {
         profile.calls.clear()
         profile.results.clear()
         profile.replies.clear()
-        audio.frames.clear()
+        audio.calls.clear()
         events.clear()
         profile.mode = ProfileMode.DeliverThenThrow
         val beforeRevision = component.stateSnapshot().revision
@@ -257,7 +299,7 @@ class GameComponentTest {
         assertEquals(1, profile.results.size)
         assertFailsWith<IllegalStateException> { profile.replies.single().checkAvailable() }
         assertEquals(listOf("profile", "audio"), events)
-        assertEquals(1, audio.frames.size)
+        assertEquals(1, audio.calls.size)
         assertFalse(component.query(GameplayQuery.GetRunStatus).progressPending)
         assertEquals(beforeRevision.value + 2L, component.stateSnapshot().revision.value)
         assertEquals(component.stateSnapshot().revision, component.renderSnapshot().revision)
@@ -269,7 +311,7 @@ class GameComponentTest {
         val component = component(profile)
         val caller = GameplayCommandTestCaller<GameplayRunStarted>()
         caller.call { reply ->
-            component.startRun(reply)
+            component.startRun(RunMode.STANDARD, reply)
             assertEquals(GameplayRunPhase.RUNNING, component.query(GameplayQuery.GetRunStatus).phase)
             assertSame(SyntheticGameplayContent, component.renderSnapshot().renderModel!!.content)
             assertTrue(caller.applied.isEmpty())
@@ -282,12 +324,57 @@ class GameComponentTest {
     }
 
     @Test
-    fun wrongTargetAndUnavailableBootstrapRefuseBeforePublication() {
-        val closed = GameplayCommandTestCaller<GameplayRunStarted>()
-        closed.call(component()::startRun)
+    fun theStartCommandCarriesItsRunModeIntoTheRunForGood() {
+        val standard = component().apply { start(RunMode.STANDARD) }
+        val profile = TestProfilePort()
+        val easy = component(profile).apply { start(RunMode.EASY) }
+
+        assertFalse(checkNotNull(standard.renderSnapshot().renderModel).easyMode)
+        assertTrue(checkNotNull(easy.renderSnapshot().renderModel).easyMode)
+        assertEquals(GameplayRunPhase.RUNNING, easy.query(GameplayQuery.GetRunStatus).phase)
+        assertEquals(1, profile.bootstrapReadCount)
+        // The mode belongs to the start, not to a frame: the running run keeps it.
+        repeat(5) {
+            assertIs<GameplayAcceptance.Accepted>(easy.accept(GameplayInteractionPulse.FrameElapsed.fromValidated(0.1f)))
+        }
+        assertTrue(checkNotNull(easy.renderSnapshot().renderModel).easyMode)
+        assertFalse(checkNotNull(standard.renderSnapshot().renderModel).easyMode)
+    }
+
+    @Test
+    fun anEasyRunNeverCallsTheProfileProgressCommand() {
+        val standardProfile = TestProfilePort()
+        val standard = component(standardProfile)
+        standard.start(RunMode.STANDARD)
+        standard.advanceUntilMatter()
+        assertEquals(GameplayExitProgressResult.Applied, standard.exit().progress)
+        assertEquals(1, standardProfile.calls.size)
+
         val profile = TestProfilePort()
         val component = component(profile)
-        assertFailsWith<IllegalStateException> { component.startRun(checkNotNull(closed.lastReply)) }
+        component.start(RunMode.EASY)
+        component.advanceUntilMatter()
+        assertTrue(profile.calls.isEmpty(), "a Baby mode run publishes nothing while it runs")
+        val result = component.exit()
+
+        assertEquals(GameplayExitProgressResult.NoProgress, result.progress)
+        assertTrue(profile.calls.isEmpty())
+        assertTrue(profile.replies.isEmpty())
+        assertEquals(GameplayRunPhase.EXITED, component.query(GameplayQuery.GetRunStatus).phase)
+        assertFalse(component.query(GameplayQuery.GetRunStatus).progressPending)
+        val render = checkNotNull(component.renderSnapshot().renderModel)
+        assertTrue(render.easyMode)
+        assertTrue(render.runMatter > 0L, "the run still shows the Matter it earned")
+    }
+
+    @Test
+    fun wrongTargetAndUnavailableBootstrapRefuseBeforePublication() {
+        val closed = GameplayCommandTestCaller<GameplayRunStarted>()
+        val closedComponent = component()
+        closed.call { reply -> closedComponent.startRun(RunMode.STANDARD, reply) }
+        val profile = TestProfilePort()
+        val component = component(profile)
+        assertFailsWith<IllegalStateException> { component.startRun(RunMode.STANDARD, checkNotNull(closed.lastReply)) }
         assertEquals(GameplayRevision.ZERO, component.stateSnapshot().revision)
         assertEquals(0, profile.bootstrapReadCount)
         profile.bootstrapResult = ProfileRunBootstrapResult.Unavailable(
@@ -296,7 +383,7 @@ class GameComponentTest {
             )),
         )
         val caller = GameplayCommandTestCaller<GameplayRunStarted>()
-        caller.call(component::startRun)
+        caller.call { reply -> component.startRun(RunMode.STANDARD, reply) }
         val decision = assertIs<GameplayRefusal.DecisionRejected>(caller.refused.single())
         assertEquals(kinetickk.ball.gameplay.api.GameplayRejection.ProfileBootstrapUnavailable, decision.reason)
         assertEquals(GameplayRevision.ZERO, component.stateSnapshot().revision)
@@ -313,7 +400,7 @@ class GameComponentTest {
         val component = component(profile)
 
         val caller = GameplayCommandTestCaller<GameplayRunStarted>()
-        caller.call(component::startRun)
+        caller.call { reply -> component.startRun(RunMode.STANDARD, reply) }
         val decision = assertIs<GameplayRefusal.DecisionRejected>(caller.refused.single())
         assertIs<kinetickk.ball.gameplay.api.GameplayRejection.InvalidStartConfiguration>(
             decision.reason,
@@ -569,7 +656,11 @@ class GameComponentTest {
         run1.start()
         val run1Enemies = run1.renderSnapshot().renderModel!!.enemies
         assertEquals(listOf(RunId(0), RunId(1)), asked)
-        assertTrue(recorded.any { it.contains("seed=40000") } && recorded.any { it.contains("seed=47919") }, "$recorded")
+        if (DIAGNOSTICS_ENABLED) {
+            assertTrue(recorded.any { it.contains("seed=40000") } && recorded.any { it.contains("seed=47919") }, "$recorded")
+        } else {
+            assertTrue(recorded.isEmpty(), "Release must not format or record diagnostic events")
+        }
         // A different seed reshapes the opening.
         assertNotEquals(run0Enemies.map { it.x to it.y }, run1Enemies.map { it.x to it.y })
     }
@@ -661,19 +752,53 @@ class GameComponentTest {
             audio = frameAudio,
         )
         val frameStart = frameComponent.start()
-        frameAudio.throwOnAdvance = true
+        // The first fixed step opens the omen offer; the run takes No omen (revisions 2 and 3) before the faulting frame.
+        assertIs<GameplayAcceptance.Accepted>(frameComponent.accept(GameplayInteractionPulse.FrameElapsed.fromValidated(1f / 60f)))
+        assertTrue(frameComponent.declineOmenIfOffered())
+        frameAudio.calls.clear()
+        frameAudio.throwOnAudio = true
 
         assertFailsWith<AudioResourceFault> {
             frameComponent.accept(GameplayInteractionPulse.FrameElapsed.fromValidated(0.1f))
         }
         val advanced = frameComponent.query(GameplayQuery.GetRunStatus)
-        assertEquals(GameplayRevision(2), advanced.revision)
+        assertEquals(GameplayRevision(4), advanced.revision)
         assertEquals(GameplayRunPhase.RUNNING, advanced.phase)
-        assertEquals(1, frameAudio.frames.size)
+        assertEquals(1, frameAudio.calls.size)
         assertEquals(GameplayRevision(1), frameStart.revision)
         assertEquals(advanced.revision, frameComponent.stateSnapshot().revision)
         assertEquals(advanced.revision, frameComponent.renderSnapshot().revision)
         assertSame(frameComponent.renderSnapshot(), frameComponent.renderSnapshot())
+    }
+
+    @Test
+    fun musicTicksOncePerAcceptedFrameAfterItsCuesAndNeverForInputsOrCommands() {
+        val audio = RecordingGameplayAudioExecutor()
+        val component = component(audio = audio)
+        component.start()
+        assertTrue(audio.calls.none { it.startsWith("tick:") }, "Starting advanced music: ${audio.calls}")
+
+        assertIs<GameplayAcceptance.Accepted>(component.accept(GameplayInteractionPulse.FrameElapsed.fromValidated(0.02f)))
+        assertEquals(listOf("tick:0.02"), audio.calls.filter { it.startsWith("tick:") })
+        assertEquals("tick:0.02", audio.calls.last(), "A frame's cues play before its music tick")
+        component.declineOmenIfOffered()
+
+        audio.calls.clear()
+        component.accept(GameplayInteractionPulse.PointerMoved.fromValidated(900f, 300f))
+        component.accept(GameplayInteractionPulse.DashRequested)
+        component.accept(GameplayInteractionPulse.SkillRequested.fromValidated(0))
+        component.accept(GameplayInteractionPulse.UserGestureObserved)
+        component.accept(GameplayInteractionPulse.PauseToggled)
+        assertTrue(audio.calls.none { it.startsWith("tick:") }, "Inputs advanced music: ${audio.calls}")
+
+        // A paused run still advances music by every accepted frame, once.
+        assertEquals(GameplayRunPhase.PAUSED, component.query(GameplayQuery.GetRunStatus).phase)
+        assertIs<GameplayAcceptance.Accepted>(component.accept(GameplayInteractionPulse.FrameElapsed.fromValidated(0.03f)))
+        assertEquals(listOf("tick:0.03"), audio.calls.filter { it.startsWith("tick:") })
+
+        audio.calls.clear()
+        component.exit()
+        assertTrue(audio.calls.none { it.startsWith("tick:") }, "Exiting advanced music: ${audio.calls}")
     }
 
     @Test
@@ -719,6 +844,7 @@ private fun component(
     profile: TestProfilePort = TestProfilePort(),
     audio: GameplayAudioExecutor = RecordingGameplayAudioExecutor(),
     content: kinetickk.ball.content.api.GameplayContentSnapshot = SyntheticGameplayContent,
+    diagnostics: CrashDiagnostics = CrashDiagnostics.None,
 ): GameComponent {
     val component = GameComponent.create(
         runId = RunId(31),
@@ -727,6 +853,7 @@ private fun component(
         audioExecutor = audio,
         profileProgress = profile,
         seed = DEFAULT_GAMEPLAY_SEED,
+        diagnostics = diagnostics,
     )
     return component
 }
@@ -734,13 +861,16 @@ private fun component(
 private fun GameComponent.exit(): GameplayRunExited =
     GameplayCommandTestCaller<GameplayRunExited>().also { it.call(this::exitRun) }.applied.single()
 
-private fun GameComponent.start(): GameplayRunStarted =
-    GameplayCommandTestCaller<GameplayRunStarted>().also { it.call(this::startRun) }.applied.single()
+private fun GameComponent.start(mode: RunMode = RunMode.STANDARD): GameplayRunStarted =
+    GameplayCommandTestCaller<GameplayRunStarted>().also { caller ->
+        caller.call { reply -> startRun(mode, reply) }
+    }.applied.single()
 
 private fun GameComponent.advanceUntilMatter() {
     repeat(1_200) { frameIndex ->
         val render = checkNotNull(renderSnapshot().renderModel)
         if (render.runMatter > 0L) return
+        if (declineOmenIfOffered()) return@repeat
         check(query(GameplayQuery.GetRunStatus).phase == GameplayRunPhase.RUNNING) {
             "Run stopped before earning progress at frame $frameIndex"
         }
@@ -764,6 +894,7 @@ private fun GameComponent.advanceUntilItemChoice() {
         ) {
             return
         }
+        if (declineOmenIfOffered()) return@repeat
         check(query(GameplayQuery.GetRunStatus).phase == GameplayRunPhase.RUNNING) {
             "Run stopped before its first item choice at frame $frameIndex: ${render.phase} / ${render.choiceType} / ${render.message} hp=${render.hp} kills=${render.kills} level=${render.level}"
         }
@@ -982,7 +1113,7 @@ private fun GameplayRenderModel.exactRenderWitness(): List<Any?> = listOf(
     weaponBeamStartY.toRawBits(),
     weaponBeamEndX.toRawBits(),
     weaponBeamEndY.toRawBits(),
-    totem,
+    totemChests.toList(),
     coreShape,
     enemies.toList(),
     projectiles.toList(),
@@ -1016,17 +1147,24 @@ private fun gameplayFeature(profile: TestProfilePort): DefaultGameplayFeature =
     )
 
 private class RecordingGameplayAudioExecutor(
-    var throwOnAdvance: Boolean = false,
+    var throwOnAudio: Boolean = false,
     var throwOnUnlock: Boolean = false,
     private val eventSink: (String) -> Unit = {},
 ) : GameplayAudioExecutor {
-    val frames = mutableListOf<Pair<Float, List<GameplayAudioCue>>>()
+    /** Every audio call in order: `play:<cues>` or `tick:<delta>`. */
+    val calls = mutableListOf<String>()
     var unlockCount = 0
 
-    override fun advance(realDeltaSeconds: Float, cues: ImmutableList<GameplayAudioCue>) {
-        frames += realDeltaSeconds to cues.toList()
+    override fun play(cues: ImmutableList<GameplayAudioCue>) {
+        calls += "play:${cues.joinToString(",")}"
         eventSink("audio")
-        if (throwOnAdvance) throw AudioResourceFault()
+        if (throwOnAudio) throw AudioResourceFault()
+    }
+
+    override fun tick(realDeltaSeconds: Float) {
+        calls += "tick:$realDeltaSeconds"
+        eventSink("audio")
+        if (throwOnAudio) throw AudioResourceFault()
     }
 
     override fun ensureUnlocked() {
@@ -1040,7 +1178,6 @@ private class ProfileInvocationFault : RuntimeException()
 
 private object NoOpAudioService : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

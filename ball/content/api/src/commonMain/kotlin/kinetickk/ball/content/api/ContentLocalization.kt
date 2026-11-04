@@ -18,23 +18,33 @@ internal fun String.contentInRussian(): String? =
  * Every English-keyed source, in merge order. Kept as pair lists so a test can prove that no English
  * key maps to two different Russian values (a later entry would otherwise overwrite silently).
  */
-internal val RussianContentSources: List<List<Pair<String, String>>> = listOf(
-    ContentPhrasesInRussian,
-    WeaponPhrasesInRussian,
-    BuildPhrasesInRussian,
-    RelicPhrasesInRussian,
-    ItemPhrasesInRussian,
-    SkillPhrasesInRussian,
-    ApexPhrasesInRussian,
-)
-
-private val RussianContent: Map<String, String> = buildMap {
-    RussianContentSources.forEach { source -> source.forEach { (english, russian) -> put(english, russian) } }
-    // Canvas headings are sometimes uppercased before reaching presentation mapping.
-    toMap().forEach { (english, russian) -> put(english.uppercase(), russian.uppercase()) }
+internal val RussianContentSources: List<List<Pair<String, String>>> by lazy {
+    listOf(
+        ContentPhrasesInRussian,
+        WeaponPhrasesInRussian,
+        BuildPhrasesInRussian,
+        RelicPhrasesInRussian,
+        ItemPhrasesInRussian,
+        SkillPhrasesInRussian,
+        ApexPhrasesInRussian,
+        SitePhrasesInRussian,
+        TerrainPhrasesInRussian,
+        RunVarietyPhrasesInRussian,
+        StructurePhrasesInRussian,
+        DimensionPhrasesInRussian,
+    )
 }
 
-private val ModifierValue = Regex("^([+−-])([0-9]+(?:\\.[0-9]+)?)(%|/s|s)?$")
+// English is an identity mapping. Do not load every Russian phrase table on its first call.
+private val RussianContent: Map<String, String> by lazy {
+    buildMap {
+        RussianContentSources.forEach { source -> source.forEach { (english, russian) -> put(english, russian) } }
+        // Canvas headings are sometimes uppercased before reaching presentation mapping.
+        toMap().forEach { (english, russian) -> put(english.uppercase(), russian.uppercase()) }
+    }
+}
+
+private val ModifierValue by lazy { Regex("^([+−-])([0-9]+(?:\\.[0-9]+)?)(%|/s|s)?$") }
 
 /** Translates the compact `+4.5% Impact damage` form; unknown labels fall back to English (null). */
 internal fun String.itemModifierInRussian(): String? {

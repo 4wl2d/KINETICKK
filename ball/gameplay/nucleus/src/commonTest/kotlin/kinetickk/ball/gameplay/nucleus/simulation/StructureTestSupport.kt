@@ -1,0 +1,285 @@
+// SPDX-FileCopyrightText: 2026 Vladislav Tomilov
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package kinetickk.ball.gameplay.nucleus.simulation
+
+import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.DungeonHazardKind
+import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.content.api.StructurePolicy
+import kinetickk.ball.content.api.StructureTemplate
+import kinetickk.ball.content.api.StructureTemplateId
+import kinetickk.ball.content.api.WorldLayer
+import kinetickk.ball.content.api.roomAt
+import kinetickk.ball.content.api.rotateQuarterX
+import kinetickk.ball.content.api.rotateQuarterY
+import kinetickk.ball.gameplay.nucleus.model.DungeonHazard
+import kinetickk.ball.gameplay.nucleus.model.ObstacleField
+import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
+import kinetickk.ball.gameplay.nucleus.model.RoomFight
+import kinetickk.ball.gameplay.nucleus.model.StructureField
+import kinetickk.ball.gameplay.nucleus.model.Wall
+import kinetickk.ball.gameplay.nucleus.model.length
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.render.WallKind
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
+import kinetickk.ball.gameplay.nucleus.simulation.structures.*
+import kinetickk.ball.gameplay.nucleus.simulation.world.*
+import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kinetickk.foundation.collections.toImmutableList
+import kotlin.math.abs
+
+/** Canonical content with structures turned on and every shipped placement number. */
+internal val structuresEnabledContent: GameplayContentSnapshot =
+    canonicalGameplayContent.copy(structures = canonicalGameplayContent.structures.copy(enabled = true))
+
+/** Canonical content in a world without structures; walls may then be placed by hand ([placeWallsForTesting]). */
+internal val structuresDisabledContent: GameplayContentSnapshot =
+    canonicalGameplayContent.copy(structures = canonicalGameplayContent.structures.copy(enabled = false))
+
+/**
+ * Canonical content in which every cell away from the origin holds one of [templates] by weight: structures on, no
+ * distance gate, full chance. Each template's own minimum distance is cleared so the policy accepts any of them.
+ */
+internal fun denseStructureContent(
+    templates: List<StructureTemplate> = canonicalGameplayContent.structures.templates,
+    configure: (StructurePolicy) -> StructurePolicy = { it },
+): GameplayContentSnapshot {
+    val shipped = canonicalGameplayContent.structures
+    val policy = shipped.copy(
+        enabled = true,
+        minimumDistance = 0f,
+        fullChanceDistance = 1f,
+        maximumChance = 1f,
+        templatesPerRun = StructureTemplateId.entries.size,
+        secretTemplateChance = 1f,
+        templates = templates.map { if (it.minimumDistance == 0f) it else it.copy(minimumDistance = 0f) }.toImmutableList(),
+    )
+    return canonicalGameplayContent.copy(structures = configure(policy))
+}
+
+/** [denseStructureContent] where only [template] carries weight, so every cell away from the origin holds it. */
+internal fun forcedStructureContent(template: StructureTemplateId): GameplayContentSnapshot =
+    denseStructureContent(canonicalGameplayContent.structures.templates.map { if (it.id == template) it else it.copy(weight = 0f) })
+
+/** The structure the run's hash places in the absolute cell; fails when the cell is empty. */
+internal fun MutableGameState.structureAtForTesting(cellX: Int, cellY: Int): StructurePlacement =
+    requireNotNull(structurePlacement(cellX, cellY)) { "No structure in cell $cellX, $cellY" }
+
+/**
+ * Moves the run's origin to the absolute point with the Core resting at its run-local (0, 0), drops both windows and
+ * regenerates them there, as if the Core had flown in.
+ */
+internal fun MutableGameState.teleportCoreForTesting(absoluteX: Double, absoluteY: Double) {
+    worldOriginX = absoluteX
+    worldOriginY = absoluteY
+    coreX = 0f
+    coreY = 0f
+    previousCoreX = 0f
+    previousCoreY = 0f
+    obstacleField = ObstacleField.EMPTY
+    structureField = StructureField.EMPTY
+    refreshObstacleWindow()
+}
+
+/**
+ * A started run of [seed] with a Vault in the absolute cell (12, −9) and the Core resting where an offer laid over the
+ * vault's +y side is ejected to (as a window places it), flying into the vault at 600 u/s: a course laid from there
+ * along the flight runs into the vault, whose final room opens only once both galleries are cleared.
+ */
+internal fun vaultSideRunForTesting(seed: Int): MutableGameState {
+    val run = buildTestState(content = forcedStructureContent(StructureTemplateId.VAULT), seed = seed)
+    val placement = run.structureAtForTesting(12, -9)
+    run.teleportCoreForTesting(placement.absoluteX, placement.absoluteY)
+    val vault = run.structureField.structures[run.structureField.indexOf(placement.id)]
+    val (startX, startY) = run.clearPointOfInterestSite(vault.x, vault.y + vault.halfHeight - 200f)
+    run.coreX = startX
+    run.coreY = startY
+    run.previousCoreX = startX
+    run.previousCoreY = startY
+    val distance = length(vault.x - startX, vault.y - startY)
+    run.setVelocityForTesting((vault.x - startX) / distance * 600f, (vault.y - startY) / distance * 600f)
+    return run
+}
+
+/** True when ([x], [y]) lies outside every structure footprint of the window inflated by [inflate]. */
+internal fun MutableGameState.outsideFootprintsForTesting(x: Float, y: Float, inflate: Float): Boolean =
+    structureField.structures.all { s -> abs(x - s.x) >= s.halfWidth + inflate || abs(y - s.y) >= s.halfHeight + inflate }
+
+/** A wall for [placeWallsForTesting] (run-local); its id comes from the structure it is placed in. */
+internal fun testWall(
+    ax: Float,
+    ay: Float,
+    bx: Float,
+    by: Float,
+    halfThickness: Float = 24f,
+    kind: WallKind = WallKind.SOLID,
+): Wall = Wall(id = 0L, kind = kind, ax = ax, ay = ay, bx = bx, by = by, halfThickness = halfThickness, door = if (kind == WallKind.SOLID) -1 else 0)
+
+/**
+ * Replaces the structure window with one structure per list of walls, each framed by the bounds of its walls' centre
+ * lines, with ids from realspace cells (40 + i, 40) and wall ids `structureId or index`. Only for content with
+ * structures disabled, whose refresh never replaces the window; returns the placed structures.
+ */
+internal fun MutableGameState.placeWallsForTesting(vararg structures: List<Wall>): List<PlacedStructure> {
+    require(!content.structures.enabled) { "Test walls replace the window only while structures are disabled" }
+    val placed = ArrayList<PlacedStructure>()
+    val walls = ArrayList<Wall>()
+    structures.forEachIndexed { structureIndex, list ->
+        val id = structureId(WorldLayer.BASE, 40 + structureIndex, 40)
+        val minX = list.minOf { minOf(it.ax, it.bx) }
+        val maxX = list.maxOf { maxOf(it.ax, it.bx) }
+        val minY = list.minOf { minOf(it.ay, it.by) }
+        val maxY = list.maxOf { maxOf(it.ay, it.by) }
+        val start = walls.size
+        list.forEachIndexed { index, wall -> walls += wall.copy(id = id or index.toLong()) }
+        placed += PlacedStructure(
+            id = id,
+            template = StructureTemplateId.DERELICT_STATION,
+            rotation = 0,
+            x = (minX + maxX) / 2f,
+            y = (minY + maxY) / 2f,
+            halfWidth = (maxX - minX) / 2f,
+            halfHeight = (maxY - minY) / 2f,
+            wallStart = start,
+            wallEnd = walls.size,
+        )
+    }
+    structureField = StructureField.of(obstacleField.centerChunkX, obstacleField.centerChunkY, worldLayer.ordinal, false, placed, walls, emptyList())
+    return placed
+}
+
+/** Sweeps the Core from ([fromX], [fromY]) to ([toX], [toY]) at velocity ([vx], [vy]) through the obstacle pass. */
+internal fun MutableGameState.sweepCoreForTesting(fromX: Float, fromY: Float, toX: Float, toY: Float, vx: Float, vy: Float) {
+    previousCoreX = fromX
+    previousCoreY = fromY
+    coreX = toX
+    coreY = toY
+    setVelocityForTesting(vx, vy)
+    updateObstacles()
+}
+
+/** Distance from ([x], [y]) to the surface of [wall] (negative inside it). */
+internal fun wallGapForTesting(x: Float, y: Float, wall: Wall): Float {
+    val along = segmentNearest(x, y, wall.ax, wall.ay, wall.bx, wall.by)
+    val dx = x - (wall.ax + (wall.bx - wall.ax) * along)
+    val dy = y - (wall.ay + (wall.by - wall.ay) * along)
+    return kotlin.math.sqrt(dx * dx + dy * dy) - wall.halfThickness
+}
+
+/**
+ * Kills every live enemy the dungeon's sealed room owns, as if the Core had destroyed them (kills, rewards and clauses
+ * run); with [laterWaves] the room's waves still to come count as fought too, so the next dungeon step clears the room.
+ */
+internal fun MutableGameState.killGarrisonForTesting(laterWaves: Boolean = true) {
+    val held = requireNotNull(dungeon) { "No dungeon" }
+    require(held.engagedRoom >= 0) { "No sealed room" }
+    val tag = roomEncounterTag(held.structureId, held.engagedRoom)
+    enemies.filter { it.ownerTag == tag && it.alive }.forEach { enemy ->
+        onEnemyKilled(enemy)
+        enemies.remove(enemy)
+    }
+    val fight = held.fight ?: return
+    if (!laterWaves) return
+    dungeon = held.copy(
+        fight = fight.copy(landed = fight.waves, incomingAt = -1f, incoming = emptyList(), incomingPoints = emptyList(), incomingGuardian = -1),
+    )
+}
+
+/**
+ * Fights the sealed room up to its last wave (a final room's guardian wave): each time kills the landed wave as the Core
+ * would, lets the next one's telegraph run out (the run clock jumps to its landing) and lands it.
+ */
+internal fun MutableGameState.fightToLastWaveForTesting() {
+    repeat(ContentBounds.MAX_DUNGEON_WAVES) {
+        val fight = dungeon?.fight ?: return
+        if (fight.landed >= fight.waves) return
+        killGarrisonForTesting(laterWaves = false)
+        updateStructures(MutableGameState.FIXED_STEP)
+        elapsed = dungeon?.fight?.incomingAt?.takeIf { it >= 0f } ?: return
+        updateStructures(MutableGameState.FIXED_STEP)
+    }
+}
+
+/** True while the sealed room's next wave is on its way and lands, or was due, at most [within] seconds from now. */
+internal fun MutableGameState.roomWaveDueForTesting(within: Float): Boolean {
+    val incomingAt = dungeon?.fight?.incomingAt ?: return false
+    return incomingAt >= 0f && abs(incomingAt - elapsed) <= within
+}
+
+/** A run with every far cell holding [template]; the Core rests at the centre of the one in cell (12, −9). */
+internal class DungeonFixture(
+    template: StructureTemplateId,
+    seed: Int = 44,
+    rebirth: Int = 0,
+    configure: (StructurePolicy) -> StructurePolicy = { it },
+) {
+    val content = forcedStructureContent(template).let { it.copy(structures = configure(it.structures)) }
+    val run = buildTestState(content = content, seed = seed, rebirth = rebirth)
+    val placement = run.structureAtForTesting(12, -9)
+    val template: StructureTemplate = run.content.structures.template(template)
+
+    init {
+        run.teleportCoreForTesting(placement.absoluteX, placement.absoluteY)
+        run.enemies.clear()
+        run.pickups.clear()
+    }
+
+    val structure: PlacedStructure get() = requireNotNull(structureOrNull) { "The window no longer holds the structure" }
+
+    /** The windowed structure, or null once it left the window (a spent structure disintegrates). */
+    val structureOrNull: PlacedStructure? get() = run.structureField.structures.firstOrNull { it.id == placement.id }
+
+    /** Run-local centre of the placement, valid whether or not the window holds it. */
+    private val centreX: Float get() = (placement.absoluteX - run.worldOriginX).toFloat()
+    private val centreY: Float get() = (placement.absoluteY - run.worldOriginY).toFloat()
+
+    /** Run-local point of the template-space point. */
+    fun world(localX: Float, localY: Float): Pair<Float, Float> =
+        centreX + rotateQuarterX(localX, localY, placement.rotation) to centreY + rotateQuarterY(localX, localY, placement.rotation)
+
+    fun roomCentre(room: Int): Pair<Float, Float> {
+        val spec = template.rooms[room]
+        return world((spec.minX + spec.maxX) / 2f, (spec.minY + spec.maxY) / 2f)
+    }
+
+    fun moveCore(point: Pair<Float, Float>) {
+        run.coreX = point.first
+        run.coreY = point.second
+        run.previousCoreX = point.first
+        run.previousCoreY = point.second
+    }
+
+    /** Puts the Core in [room] and runs the dungeon step until it holds the structure and acted on the room. */
+    fun enterRoom(room: Int) {
+        moveCore(roomCentre(room))
+        run.updateStructures(MutableGameState.FIXED_STEP)
+        run.updateStructures(MutableGameState.FIXED_STEP)
+    }
+
+    fun doors(): List<WallKind> {
+        val s = structure
+        return run.structureField.walls.subList(s.wallStart, s.wallEnd).filter { it.door >= 0 }.sortedBy { it.door }.map { it.kind }
+    }
+
+    fun tag(room: Int): Long = roomEncounterTag(placement.id, room)
+
+    fun garrison(room: Int) = run.enemies.filter { it.ownerTag == tag(room) && it.alive }
+
+    /** The room holding the run-local point, or −1. */
+    fun roomOf(x: Float, y: Float): Int = template.roomAt(x - centreX, y - centreY, placement.rotation)
+
+    fun clear(room: Int) {
+        enterRoom(room)
+        check(run.dungeon?.engagedRoom == room) { "room $room did not seal" }
+        run.killGarrisonForTesting()
+        run.updateStructures(MutableGameState.FIXED_STEP)
+    }
+}
+
+/** A sealed room's fight with every field off its default: a wave on its way, a guardian and a struck hazard cycle. */
+internal val WitnessRoomFight: RoomFight = RoomFight(
+    sealedAt = 4f, waves = 2, landedAt = 6f, landedMembers = 5, incomingAt = 7.2f, incoming = listOf(EnemyType.CRAWLER),
+    incomingPoints = listOf(2_050f, 1_480f), incomingGuardian = 0, guardianId = 21, hazardCycles = 1, hazardsStruck = true,
+    hazards = listOf(DungeonHazard(DungeonHazardKind.VENT, 1_990f, 1_510f, 1_990f, 1_510f, 120f, 7f, 8.3f)),
+)

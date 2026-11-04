@@ -6,6 +6,8 @@ package kinetickk.ball.gameplay.nucleus.characterization
 import kinetickk.ball.content.api.*
 import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.profile.api.DamageNumberFormat
+import kinetickk.ball.profile.api.formatDamageNumber
+import kinetickk.foundation.common.localization.AppLanguage
 
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
@@ -18,6 +20,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.Test
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 
 class GameScenarioTest {
     @Test
@@ -112,8 +115,8 @@ class GameScenarioTest {
             .single()
         assertEquals(appliedDamage.roundToLong(), number.amount)
         assertFalse(number.critical)
-        assertEquals("14.4K", formatDamageNumber(number.amount, DamageNumberFormat.COMPACT))
-        assertEquals(number.amount.toString(), formatDamageNumber(number.amount, DamageNumberFormat.FULL))
+        assertEquals("14.4K", formatDamageNumber(number.amount, DamageNumberFormat.COMPACT, AppLanguage.English))
+        assertEquals("14,401", formatDamageNumber(number.amount, DamageNumberFormat.FULL, AppLanguage.English))
 
         val disabledEngine = gameScenario(seed = 23, initialMatter = 0)
         disabledEngine.resize(1280f, 720f)
@@ -127,6 +130,24 @@ class GameScenarioTest {
                 .filterIsInstance<VisualFxCue.DamageNumberAdded>()
                 .isEmpty(),
         )
+    }
+
+    @Test
+    fun damageNumbersShowTheTiersDisplayScaleWhileTheFloorReadsPowerUnits() {
+        val tier = canonicalGameplayContent.rebirth.maximumLevel
+        val engine = gameScenario(seed = 22, initialMatter = 0, initialRebirthLevel = tier)
+        val scale = canonicalGameplayContent.rebirth.profile(tier).numberScale
+        assertEquals(3_600.0, scale)
+        val target = engine.addEnemyForTesting(x = 20f, y = 30f, hp = 100_000f)
+
+        val applied = engine.damageEnemyForTesting(target, 120f)
+        val number = engine.takeVisualFxCues().filterIsInstance<VisualFxCue.DamageNumberAdded>().single()
+        assertEquals((applied * scale).roundToLong(), number.amount)
+        assertEquals("432K", formatDamageNumber(number.amount, DamageNumberFormat.COMPACT, AppLanguage.English))
+
+        // Four power units stay under the floor although they would read 14,400.
+        engine.damageEnemyForTesting(target, 4f)
+        assertTrue(engine.takeVisualFxCues().filterIsInstance<VisualFxCue.DamageNumberAdded>().isEmpty())
     }
 
     @Test

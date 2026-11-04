@@ -6,23 +6,10 @@ package kinetickk.foundation.design
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.intl.LocaleList
 import kinetickk.foundation.common.localization.AppLanguage
-import kinetickk.foundation.design.generated.resources.Res
-import kinetickk.foundation.design.generated.resources.kk_body_bold
-import kinetickk.foundation.design.generated.resources.kk_body_medium
-import kinetickk.foundation.design.generated.resources.kk_body_regular
-import kinetickk.foundation.design.generated.resources.kk_cond_black
-import kinetickk.foundation.design.generated.resources.kk_cond_black_italic
-import kinetickk.foundation.design.generated.resources.kk_cond_extrabold
-import kinetickk.foundation.design.generated.resources.kk_mono_bold
-import kinetickk.foundation.design.generated.resources.kk_mono_medium
-import kinetickk.foundation.design.generated.resources.kk_wide_black
-import kinetickk.foundation.design.generated.resources.kk_wide_bold
 import org.jetbrains.compose.resources.Font
 
 /**
@@ -55,37 +42,20 @@ data class InterfaceTypography(
     internal val styleMemo: KkStyleMemo = KkStyleMemo()
 }
 
-/** Loads the bundled redesign fonts once per composition. */
+/** The app supplies ready font families; standalone previews can still load their own fonts. */
+val LocalInterfaceTypography = staticCompositionLocalOf<InterfaceTypography?> { null }
+
+/** Reuses the startup fonts, retaining language-specific shaping without reloading font data. */
 @Composable
 fun rememberInterfaceTypography(): InterfaceTypography {
-    val wideBlack = Font(Res.font.kk_wide_black, FontWeight.Black)
-    val wideBold = Font(Res.font.kk_wide_bold, FontWeight.Bold)
-    val condBlackItalic = Font(Res.font.kk_cond_black_italic, FontWeight.Black, FontStyle.Italic)
-    val condBlack = Font(Res.font.kk_cond_black, FontWeight.Black)
-    val condExtraBold = Font(Res.font.kk_cond_extrabold, FontWeight.ExtraBold)
-    val bodyRegular = Font(Res.font.kk_body_regular, FontWeight.Normal)
-    val bodyMedium = Font(Res.font.kk_body_medium, FontWeight.Medium)
-    val bodyBold = Font(Res.font.kk_body_bold, FontWeight.Bold)
-    val monoMedium = Font(Res.font.kk_mono_medium, FontWeight.Medium)
-    val monoBold = Font(Res.font.kk_mono_bold, FontWeight.Bold)
-    // Legacy headings request Bold/Normal upright: map them onto the new condensed heading faces.
-    val displayBold = Font(Res.font.kk_cond_black_italic, FontWeight.Bold)
-    val displayNormal = Font(Res.font.kk_cond_extrabold, FontWeight.Normal)
     val language = LocalAppLanguage.current
-    return remember(
-        wideBlack, wideBold, condBlackItalic, condBlack, condExtraBold, bodyRegular, bodyMedium,
-        bodyBold, monoMedium, monoBold, displayBold, displayNormal, language,
-    ) {
-        val cond = FontFamily(condBlackItalic, condBlack, condExtraBold)
-        InterfaceTypography(
-            body = FontFamily(bodyRegular, bodyMedium, bodyBold),
-            display = FontFamily(displayBold, displayNormal),
-            wide = FontFamily(wideBlack, wideBold),
-            cond = cond,
-            label = cond,
-            mono = FontFamily(monoMedium, monoBold),
-            localeList = language.localeList(),
-        )
+    val prepared = LocalInterfaceTypography.current
+    if (prepared != null) {
+        return remember(prepared, language) { prepared.copy(localeList = language.localeList()) }
+    }
+    val fonts = InterfaceFontResources.all.map { Font(it.resource, it.weight, it.style) }
+    return remember(fonts, language) {
+        interfaceTypography(fonts).copy(localeList = language.localeList())
     }
 }
 

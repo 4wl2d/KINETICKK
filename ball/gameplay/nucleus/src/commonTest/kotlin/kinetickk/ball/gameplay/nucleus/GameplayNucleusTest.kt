@@ -8,7 +8,9 @@ import kinetickk.ball.profile.api.ProfileRefusal
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
+import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayConfigurationRejection
 import kinetickk.ball.gameplay.api.GameplayExitProgressResult
@@ -19,13 +21,15 @@ import kinetickk.ball.gameplay.api.GameplayRejection
 import kinetickk.ball.gameplay.api.GameplayRevision
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.api.GameplayRunStarted
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
-import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
+import kinetickk.ball.gameplay.nucleus.simulation.deepCopy
+import kinetickk.ball.gameplay.nucleus.simulation.sites.discoverWorld
 import kinetickk.ball.gameplay.nucleus.simulation.emitSound
 import kinetickk.ball.gameplay.nucleus.simulation.emitVisualFx
 import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
@@ -43,6 +47,13 @@ import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
+import kinetickk.ball.gameplay.nucleus.simulation.weaponUpgradeLevels
+import kinetickk.ball.gameplay.nucleus.simulation.pendingArchitectDefeatedWith
+import kinetickk.ball.gameplay.nucleus.simulation.pendingBankedMatter
+import kinetickk.ball.gameplay.nucleus.simulation.pendingClearedRebirthLevel
+import kinetickk.ball.gameplay.nucleus.simulation.pendingVictoryRelics
+import kinetickk.ball.gameplay.nucleus.simulation.runMatter
+import kinetickk.ball.gameplay.nucleus.simulation.characterUpgradeLevel
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -155,6 +166,18 @@ class GameplayNucleusTest {
         }
 
         assertEquals(renderFacts(first), renderFacts(second))
+    }
+
+    /** The host reports a session workflow that takes the player's input: the run holds Core Freeze until it comes back. */
+    @Test
+    fun inputAvailabilityHoldsCoreFreezeUntilInputComesBack() {
+        val started = start(initial(31)).nextState
+        val held = interaction(started, GameplayInteractionPulse.InputAvailabilityChanged(available = false)).nextState
+        assertTrue(held.engine!!.model.coreStasis.inputHeld)
+        val repeated = interaction(held, GameplayInteractionPulse.InputAvailabilityChanged(available = false)).nextState
+        assertTrue(repeated.engine!!.model.coreStasis.inputHeld, "a repeat keeps it")
+        val back = interaction(held, GameplayInteractionPulse.InputAvailabilityChanged(available = true)).nextState
+        assertFalse(back.engine!!.model.coreStasis.inputHeld)
     }
 
     @Test
@@ -403,7 +426,7 @@ class GameplayNucleusTest {
     @Test
     fun atMostOneProfileCommandCanBePending() {
         val state = start(initial(24)).nextState
-        val firstCandidate = state.engine!!.model.copyForReduction().apply { pendingBankedMatter = 3 }
+        val firstCandidate = state.engine!!.model.deepCopy().apply { pendingBankedMatter = 3 }
         val first = interaction(
             state.copy(engine = EngineState(firstCandidate)),
             GameplayInteractionPulse.FrameElapsed.fromValidated(0f),
@@ -417,7 +440,7 @@ class GameplayNucleusTest {
         assertTrue(stateOnlyFrame.outputs.isEmpty())
         assertTrue(stateOnlyFrame.nextState.progressPending)
 
-        val secondCandidate = first.engine!!.model.copyForReduction().apply { pendingBankedMatter = 4 }
+        val secondCandidate = first.engine!!.model.deepCopy().apply { pendingBankedMatter = 4 }
         assertIntentRejection(
             first.copy(engine = EngineState(secondCandidate)),
             GameplayInteractionPulse.FrameElapsed.fromValidated(0f),
@@ -428,7 +451,7 @@ class GameplayNucleusTest {
     @Test
     fun outputsKeepFxProfileAudioOrderAndBound() {
         val state = start(initial(25)).nextState
-        val candidate = state.engine!!.model.copyForReduction().apply {
+        val candidate = state.engine!!.model.deepCopy().apply {
             pendingBankedMatter = 9
             emitVisualFx(VisualFxCue.ShockwaveAdded(1f, 2f, 0.3f, 40f, 2))
             emitSound(GameplayAudioCue.DASH)
@@ -445,21 +468,19 @@ class GameplayNucleusTest {
     }
 
     @Test
-    fun audioCueAccumulatorRetainsFirstThirtyTwoAndDropsThirtyThird() {
+    fun audioCueAccumulatorKeepsEachCueOnceInEmissionOrderAndDropsNone() {
         val state = MutableGameState(canonicalGameplayContent, seed = 1)
-        repeat(MutableGameState.MAX_GAMEPLAY_SOUND_CUES + 1) { index ->
-            state.emitSound(
-                if (index == MutableGameState.MAX_GAMEPLAY_SOUND_CUES) {
-                    GameplayAudioCue.VICTORY
-                } else {
-                    GameplayAudioCue.DASH
-                },
-            )
-        }
+        val emitted = GameplayAudioCue.entries.reversed()
+        repeat(3) { emitted.forEach(state::emitSound) }
 
         val cues = state.takeSoundCues()
-        assertEquals(MutableGameState.MAX_GAMEPLAY_SOUND_CUES, cues.size)
-        assertTrue(cues.all { it == GameplayAudioCue.DASH })
+        assertEquals(emitted, cues)
+        assertTrue(GameplayAudioCue.entries.size <= MutableGameState.MAX_GAMEPLAY_SOUND_CUES)
+
+        // A new reduction plays a cue again.
+        state.emitSound(GameplayAudioCue.DASH)
+        state.emitSound(GameplayAudioCue.DASH)
+        assertEquals(listOf(GameplayAudioCue.DASH), state.takeSoundCues())
     }
 
     @Test
@@ -582,15 +603,53 @@ class GameplayNucleusTest {
         }
     }
 
+    @Test
+    fun easyRunPublishesNoProfileProgressThroughVictoryAndExit() {
+        fun victoryFacts(state: GameplayState): GameplayState = state.copy(
+            engine = EngineState(state.engine!!.model.deepCopy().apply {
+                pendingClearedRebirthLevel = 0
+                pendingArchitectDefeatedWith = CoreShape.ORB
+                pendingVictoryRelics = listOf(RelicId.GYRE_ENGINE)
+                pendingBankedMatter = 12
+                pendingDiscoveredItemIds += 0
+                discoverWorld(WorldDiscovery.GATE_RACE)
+                runMatter = 30
+            }),
+        )
+
+        // The same facts in a STANDARD run are one Profile command.
+        val standard = interaction(
+            victoryFacts(start(initial(28)).nextState),
+            GameplayInteractionPulse.FrameElapsed.fromValidated(0f),
+        )
+        assertEquals(1, standard.outputs.count { it is GameplayOutput.SendProfileCommand })
+        assertTrue(standard.nextState.progressPending)
+
+        val started = start(initial(29), mode = RunMode.EASY).nextState
+        assertTrue(GameplayNucleus.renderSnapshot(started).renderModel!!.easyMode)
+        val frame = interaction(victoryFacts(started), GameplayInteractionPulse.FrameElapsed.fromValidated(0f))
+        assertTrue(frame.outputs.none { it is GameplayOutput.SendProfileCommand })
+        assertFalse(frame.nextState.progressPending)
+
+        val exited = exit(frame.nextState)
+        assertTrue(exited.outputs.none { it is GameplayOutput.SendProfileCommand })
+        assertEquals(
+            GameplayExitProgressResult.NoProgress,
+            exited.outputs.filterIsInstance<GameplayOutput.RunExited>().single().result.progress,
+        )
+        assertFalse(exited.nextState.progressPending)
+        assertEquals(GameplayRunPhase.EXITED, exited.nextState.phase)
+    }
+
     private fun initial(runId: Long): GameplayState =
         GameplayState.initial(RunId(runId), canonicalGameplayContent)
 
-    private fun start(state: GameplayState, seed: Int = 731_991): GameplayAcceptedFrame {
+    private fun start(state: GameplayState, seed: Int = 731_991, mode: RunMode = RunMode.STANDARD): GameplayAcceptedFrame {
         return accepted(
             GameplayNucleus.decide(
                 state,
                 GameplayNucleusPulse.StartRun,
-                GameplayContext(start = GameplayStartContext.Ready(validStartInputs(seed))),
+                GameplayContext(start = GameplayStartContext.Ready(validStartInputs(seed).copy(mode = mode))),
             ),
         )
     }
@@ -616,7 +675,7 @@ class GameplayNucleusTest {
 
     private fun startedWithProgress(runId: Long, bankedMatter: Long): GameplayState {
         val state = start(initial(runId)).nextState
-        val candidate = state.engine!!.model.copyForReduction().apply { runMatter = bankedMatter }
+        val candidate = state.engine!!.model.deepCopy().apply { runMatter = bankedMatter }
         return state.copy(engine = EngineState(candidate))
     }
 }

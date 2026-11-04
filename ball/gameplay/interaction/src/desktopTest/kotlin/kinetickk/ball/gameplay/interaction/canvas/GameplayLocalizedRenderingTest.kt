@@ -40,8 +40,8 @@ import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
-import kinetickk.ball.gameplay.interaction.terminal.TerminalContent
-import kinetickk.ball.gameplay.interaction.terminal.drawCoreDeath
+import kinetickk.ball.gameplay.interaction.overlay.TerminalContent
+import kinetickk.ball.gameplay.interaction.canvas.world.drawCoreDeath
 import kinetickk.ball.gameplay.interaction.GameplayContent
 import kinetickk.ball.gameplay.interaction.GameplayInteractionPort
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
@@ -58,7 +58,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.input.key.Key
 import kotlin.test.assertTrue
 import kotlin.test.assertEquals
-import kinetickk.ball.gameplay.interaction.terminal.terminalPresentation
+import kinetickk.ball.gameplay.interaction.overlay.terminalPresentation
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.rewards.RewardContent
 import kinetickk.ball.gameplay.interaction.rewards.RewardPresentation
@@ -84,12 +84,17 @@ import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.Kk
+import kinetickk.foundation.design.localeList
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
 import org.junit.Rule
 import org.junit.Test
 import kotlin.test.assertIs
+import kinetickk.ball.gameplay.interaction.*
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
+import kinetickk.ball.gameplay.interaction.overlay.*
+import kinetickk.ball.gameplay.interaction.layout.*
 
 @OptIn(ExperimentalTestApi::class)
 class GameplayLocalizedRenderingTest {
@@ -221,6 +226,10 @@ class GameplayLocalizedRenderingTest {
         }
         repeat(100) {
             val current = requireNotNull(port.renderSnapshot().renderModel)
+            // The production start offers the omen after the first fixed step; the run takes No omen.
+            if (current.phase == GamePhase.CHOICE && current.choiceType == ChoiceType.OMEN) {
+                port.accept(GameplayInteractionPulse.ChoiceSelected.fromValidated(current.choices.indexOfFirst { it.omenId == null }))
+            }
             if (current.phase == GamePhase.RUNNING) {
                 port.accept(GameplayInteractionPulse.PointerMoved.fromValidated(
                     current.screenWidth * 0.5f + current.coreX - current.cameraX,
@@ -292,6 +301,48 @@ class GameplayLocalizedRenderingTest {
         assertTrue(visiblePixels() > 0)
         compose.runOnIdle { time.value = 1.2f }
         assertEquals(0, visiblePixels())
+    }
+
+    /**
+     * Every structure's dungeon panel in Russian (the default; «Заброшенная станция» is the longest name) and English
+     * fits at the desktop, landscape-phone and portrait-phone sizes and every text size: label, name and reward row
+     * are never cut and stay inside the panel, the name ends before the (!), the counted rooms never meet the reward
+     * row, and no clock is drawn.
+     */
+    @Test
+    fun everyDungeonPanelFitsItsNameAndRewardsInRussianAndEnglish() {
+        for (language in listOf(AppLanguage.Russian, AppLanguage.English)) for ((width, height) in listOf(1_440 to 810, 844 to 390, 390 to 844)) {
+            val base = hudTestModel(width.toFloat(), height.toFloat())
+            for (textScale in listOf(1f, 1.25f, 1.75f)) base.content.structures.templates.filter { !it.secret }.forEach { template ->
+                // The longest reward row: the template's rewards plus a three-charge Totem chest when it can roll one.
+                val chest = if (template.totemChestChance > 0f) 3 else 0
+                val model = base.withDungeon(StructureFixture(template, base.coreX, base.coreY, clearedRooms = 1 shl template.entranceRoom, chestCharges = chest))
+                val measurer = CanvasTextMeasurer(androidx.compose.ui.text.TextMeasurer(androidx.compose.ui.text.font.createFontFamilyResolver(),
+                    Density(1f), androidx.compose.ui.unit.LayoutDirection.Ltr), textScale, language,
+                    HudTestFonts.typography.copy(localeList = language.localeList()))
+                HudDrawCache.forgetLayouts()
+                androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(Density(1f), androidx.compose.ui.unit.LayoutDirection.Ltr,
+                    androidx.compose.ui.graphics.Canvas(androidx.compose.ui.graphics.ImageBitmap(width, height)),
+                    androidx.compose.ui.geometry.Size(width.toFloat(), height.toFloat())) { drawHud(model, measurer, 1f) }
+                val where = "$language $width x $height x$textScale ${template.name}"
+                listOf(HudText.TRIAL_LABEL, HudText.TRIAL_NAME, HudText.TRIAL_REWARD).forEach { slot ->
+                    val line = kotlin.test.assertNotNull(HudDrawCache.peekLayout(slot), "$where: $slot")
+                    kotlin.test.assertFalse(line.isCut(), "$where: $slot is cut")
+                }
+                val layout = HudTrialPanelLayout().update(width.toFloat(), height.toFloat(), 1f, textScale)
+                val innerLeft = layout.left + layout.padding - 0.5f
+                val innerRight = layout.right - layout.padding + 0.5f
+                fun rect(block: HudBlock) = kotlin.test.assertNotNull(HudLayoutProbe.rect(block), "$where: $block")
+                listOf(HudBlock.TRIAL_LABEL, HudBlock.TRIAL_NAME, HudBlock.TRIAL_REWARD, HudBlock.TRIAL_PROGRESS).forEach { block ->
+                    val line = rect(block)
+                    assertTrue(line.left >= innerLeft && line.right <= innerRight && line.top >= layout.top && line.bottom <= layout.bottom,
+                        "$where: $block $line outside the panel")
+                }
+                assertTrue(rect(HudBlock.TRIAL_NAME).right <= layout.infoLeft, "$where: the name runs under the (!)")
+                kotlin.test.assertFalse(rect(HudBlock.TRIAL_PROGRESS).overlaps(rect(HudBlock.TRIAL_REWARD)), "$where: rooms meet the reward")
+                kotlin.test.assertNull(HudLayoutProbe.rect(HudBlock.TRIAL_CLOCK), "$where: a dungeon has no clock")
+            }
+        }
     }
 
     private fun capture(name: String) {

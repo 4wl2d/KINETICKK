@@ -32,6 +32,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.*
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.overlay.*
 
 class GameplayPresentationPolicyTest {
     @Test
@@ -117,7 +120,7 @@ class GameplayPresentationPolicyTest {
         assertEquals("×1.64", english.stats.first().value)
         assertTrue(english.stats.first().highlight)
         assertEquals("8%", english.stats.single { it.label == "Critical chance" }.value)
-        assertEquals(listOf("07:42", "612", "2", "+486", "×31", "184.3K"), english.run.map { it.value })
+        assertEquals(listOf("07:42", "612", "2", "+486", "×31", "184K"), english.run.map { it.value })
         val russian = overview(AppLanguage.Russian)
         assertEquals("Ур. 7", russian.weaponLevelText)
         assertEquals("×1,64", russian.stats.first().value)
@@ -163,12 +166,12 @@ class GameplayPresentationPolicyTest {
     }
 
     @Test
-    fun overlayNumbersGroupAndCompactPerLanguage() {
-        assertEquals("1,412", overlayGrouped(1_412L, AppLanguage.English))
-        assertEquals("1\u202F412", overlayGrouped(1_412L, AppLanguage.Russian))
-        assertEquals("999", overlayGrouped(999L, AppLanguage.English))
-        assertEquals("31,260", overlayCompact(31_260L, AppLanguage.English))
-        assertEquals("612K", overlayCompact(612_000L, AppLanguage.English))
+    fun overlayNumbersScaleAbsoluteAmountsAndFormatPerLanguage() {
+        val tierZero = rewardFixtureModel()
+        assertEquals("170", tierZero.overlayAmount(170.0, AppLanguage.English))
+        val tierTen = rewardFixtureModel(numberScale = 3_600.0)
+        assertEquals("612K", tierTen.overlayAmount(170.0, AppLanguage.English))
+        assertEquals("1,23M", tierTen.overlayAmount(341.4, AppLanguage.Russian))
         assertEquals("×1.2", overlayMultiplier(1.2f, AppLanguage.English))
         assertEquals("×1", overlayMultiplier(1f, AppLanguage.English))
         assertEquals("23,2", overlayDecimal(23.2f, AppLanguage.Russian))

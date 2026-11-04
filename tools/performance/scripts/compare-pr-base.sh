@@ -12,8 +12,8 @@ ATTESTED_SOURCE_PATHS=(
     "build-logic/src/main/kotlin/kinetickk/gradle/BenchmarkProvenance.kt"
     "ball/gameplay/nucleus/build.gradle.kts"
     "ball/gameplay/nucleus/src/desktopTest/kotlin/kinetickk/ball/gameplay/nucleus/performance/GameplayPerformanceBenchmark.kt"
-    "ball/profile/resource/build.gradle.kts"
-    "ball/profile/resource/src/desktopTest/kotlin/kinetickk/ball/profile/resource/performance/ProfilePerformanceBenchmark.kt"
+    "ball/profile/impl/build.gradle.kts"
+    "ball/profile/impl/src/desktopTest/kotlin/kinetickk/ball/profile/impl/storage/performance/ProfilePerformanceBenchmark.kt"
 )
 
 usage() {
@@ -226,7 +226,7 @@ prime_benchmark_runtime() {
         scenario="harness_control"
         extra_properties+=("-PbenchmarkSeed=$seed")
     else
-        task=":ball:profile:resource:profilePerformanceBenchmark"
+        task=":ball:profile:impl:profilePerformanceBenchmark"
         scenario="profile_encode_default"
     fi
     printf 'Priming the complete %s %s runtime classpath online...\n' "$side" "$suite"
@@ -281,7 +281,7 @@ run_benchmark() {
         task=":ball:gameplay:nucleus:performanceBenchmark"
         extra_properties+=("-PbenchmarkSeed=$seed")
     else
-        task=":ball:profile:resource:profilePerformanceBenchmark"
+        task=":ball:profile:impl:profilePerformanceBenchmark"
     fi
     local sequence_label
     local fork_label

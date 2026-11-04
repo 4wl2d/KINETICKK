@@ -295,6 +295,38 @@ class HomeMenuClearanceTest {
     }
 }
 
+class HomeRunModeGeometryTest {
+    @Test
+    fun runModeToggleIsTouchableInEveryLayoutAndClearOfEveryTarget() {
+        val viewports = TargetDeviceProfiles.flatMap { device ->
+            listOf(Triple(device.widthPx, device.heightPx, device.density), Triple(device.heightPx, device.widthPx, device.density))
+        } + RegularViewports
+        val modes = HashSet<HomeLayoutMode>()
+        for ((width, height, density) in viewports) for (quitAvailable in listOf(false, true)) {
+            val layout = homeLayoutGeometry(width, height, density, quitAvailable)
+            modes += layout.mode
+            val toggle = layout.runModeToggle
+            val touch = toggle.touch
+            val where = "${layout.mode} ${width}x$height@$density quit=$quitAvailable"
+            assertTrue(touch.width / density >= 44f - 0.01f && touch.height / density >= 44f - 0.01f, "toggle touch ${touch.size} at $where")
+            assertTrue(touch.left >= 0f && touch.top >= 0f && touch.right <= width && touch.bottom <= height, "toggle touch $touch leaves $where")
+            assertTrue(touch.left <= toggle.bounds.left && touch.top <= toggle.bounds.top && touch.right >= toggle.bounds.right &&
+                touch.bottom >= toggle.bounds.bottom, "the drawn toggle ${toggle.bounds} pokes out of its touch $touch at $where")
+            layout.actions.forEach { action ->
+                assertFalse(touch.overlaps(action.bounds), "toggle touch $touch covers ${action.target} ${action.bounds} at $where")
+            }
+            layout.infos.forEach { info -> assertFalse(touch.overlaps(info.touch), "toggle touch covers the ${info.target} (!) at $where") }
+            layout.quit?.let { quit -> assertFalse(touch.overlaps(quit.touch), "toggle touch covers Quit at $where") }
+            // A chip-high plate on the chips' row, and the text chips end 8 dp short of it.
+            assertEquals(layout.scene.chipHeight, toggle.bounds.height, 0.01f, where)
+            assertEquals(layout.scene.chipsTop, toggle.bounds.top, 0.01f, where)
+            assertTrue(layout.scene.chipsRight <= toggle.bounds.left - 8f * density + 0.01f,
+                "chips end at ${layout.scene.chipsRight}, toggle starts at ${toggle.bounds.left} at $where")
+        }
+        assertEquals(HomeLayoutMode.entries.toSet(), modes, "every layout was checked")
+    }
+}
+
 private val RegularViewports = listOf(
     Triple(900f, 560f, 1f),
     Triple(1_000f, 700f, 1f),

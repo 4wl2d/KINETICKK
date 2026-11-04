@@ -12,11 +12,14 @@ import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.content.api.RelicId
-import kinetickk.ball.gameplay.nucleus.model.Totem
+import kinetickk.ball.gameplay.nucleus.model.TotemChest
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
 import kinetickk.ball.gameplay.nucleus.model.WeaponHitCadence
 import kinetickk.ball.content.api.WeaponId
 import kotlin.math.max
+import kinetickk.ball.gameplay.nucleus.simulation.combat.*
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 
 internal fun MutableGameState.setVelocityForTesting(x: Float, y: Float) {
     velocityX = x
@@ -61,9 +64,20 @@ internal fun MutableGameState.finalPhaseArchitectForTesting(
     }
 }
 
-internal fun MutableGameState.activateTotemForTesting(x: Float = coreX, y: Float = coreY) {
-    keys++
-    totem = Totem(x, y)
+/**
+ * Puts a Totem chest with [charges] at ([x], [y]) (by default on the Core), armed now or after the materialise delay,
+ * as the only waiting chest besides those already there; its id is a free structure id.
+ */
+internal fun MutableGameState.placeTotemChestForTesting(
+    x: Float = coreX,
+    y: Float = coreY,
+    charges: Int = 1,
+    armed: Boolean = true,
+    id: Long = (900L + structures.totemChests.size) shl 8,
+): TotemChest {
+    val chest = TotemChest(id, x, y, charges, bornAt = elapsed, armedAt = if (armed) elapsed else elapsed + 0.6f)
+    structures.totemChests = structures.totemChests + chest
+    return chest
 }
 
 internal fun MutableGameState.equipWeaponForTesting(id: WeaponId) = equipRunWeapon(id)
@@ -77,6 +91,15 @@ internal fun MutableGameState.unlockWeaponsForTesting(ids: Iterable<WeaponId>) {
 internal fun MutableGameState.acquireItemForTesting(id: Int) = acquireItem(id)
 
 internal fun MutableGameState.acquireRelicForTesting(id: RelicId) = acquireRelic(id)
+
+/**
+ * Binds [id] as a run gets it through a Relic offer: the offer claims one of the run's Relic opportunities, then its
+ * card binds or ranks the Relic. Gate setups bind their starting Relics with it, so they spend the Relic budget.
+ */
+internal fun MutableGameState.claimRelicForTesting(id: RelicId) {
+    relicRun.relicClaims++
+    acquireRelic(id)
+}
 
 internal fun MutableGameState.openRelicChoiceForTesting() {
     pendingRelicChoices++

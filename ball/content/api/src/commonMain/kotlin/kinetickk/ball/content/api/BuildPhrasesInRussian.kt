@@ -147,8 +147,9 @@ internal val BuildPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Blast Jump" to "Взрывной прыжок",
     "Dash on the clap" to "Рывок на хлопок",
     "Rocket Clap" to "Реактивный хлопок",
-    "No Dash needed: a clap within 220 launches the Core away at 560; no free Dash." to
-        "Рывок не нужен: хлопок ближе 220 сам отбрасывает Ядро со скоростью 560; без бесплатного рывка.",
+    "No Dash needed: a clap within 220 launches the Core away at 560, never against its travel; no free Dash." to
+        "Рывок не нужен: хлопок ближе 220 сам отбрасывает Ядро со скоростью 560, но никогда против его хода; " +
+            "без бесплатного рывка.",
     "Shatterpoint" to "Точка раскола",
     "The frozen ring of sound splits into ice shards; near you they circle the Core, striking enemies and " +
         "breaking hostile shots." to
@@ -341,4 +342,7 @@ internal val BuildPhrasesInRussian: List<Pair<String, String>> = listOf(
     "On entering a field" to "При входе в поле",
     "On erasing a shot" to "При стирании снаряда",
     "On cashing a mark" to "При срабатывании метки",
+    "On breaking an obstacle" to "При разрушении препятствия",
+    "On boost" to "При разгоне",
+    "On graze" to "При пролёте впритирку",
 )

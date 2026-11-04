@@ -21,6 +21,8 @@ import java.lang.management.ManagementFactory
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.rewards.art.*
 
 /**
  * The Resonance Fork scene loops without a seam (a frame one loop later is the same frame, and no

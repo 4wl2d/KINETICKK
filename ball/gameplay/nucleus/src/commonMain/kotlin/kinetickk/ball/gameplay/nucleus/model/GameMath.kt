@@ -3,10 +3,8 @@
 
 package kinetickk.ball.gameplay.nucleus.model
 
-import kotlin.math.abs
 import kotlin.math.ln
 import kotlin.math.PI
-import kotlin.math.roundToLong
 import kotlin.math.sqrt
 
 const val TAU: Float = (PI * 2.0).toFloat()
@@ -50,6 +48,14 @@ fun segmentCircleIntersects(
 ): Boolean {
     if (radius < 0f) return false
     val radiusDouble = radius.toDouble()
+    // Most swept pairs are far apart. Reject disjoint bounds before the projection/division,
+    // retaining Double bounds so tangencies at large Float coordinates cannot be rounded away.
+    val left = cx.toDouble() - radiusDouble
+    val right = cx.toDouble() + radiusDouble
+    if (ax < left && bx < left || ax > right && bx > right) return false
+    val top = cy.toDouble() - radiusDouble
+    val bottom = cy.toDouble() + radiusDouble
+    if (ay < top && by < top || ay > bottom && by > bottom) return false
     return pointToSegmentDistanceSquaredDouble(cx, cy, ax, ay, bx, by) <= radiusDouble * radiusDouble
 }
 
@@ -96,29 +102,4 @@ fun softVelocity(value: Float, knee: Float = 720f, scale: Float = 480f): Float {
 
     val excess = value.toDouble() - knee.toDouble()
     return (knee.toDouble() + scale.toDouble() * ln(1.0 + excess / scale.toDouble())).toFloat()
-}
-
-private val NUMBER_SUFFIXES = arrayOf("", "K", "M", "B", "T", "Qa", "Qi")
-
-fun abbreviateNumber(value: Long): String {
-    if (value in -999L..999L) return value.toString()
-
-    var scaled = value.toDouble()
-    var suffixIndex = 0
-    while (abs(scaled) >= 1_000.0 && suffixIndex < NUMBER_SUFFIXES.lastIndex) {
-        scaled /= 1_000.0
-        suffixIndex++
-    }
-
-    var roundedTenths = (scaled * 10.0).roundToLong()
-    if (abs(roundedTenths) >= 10_000L && suffixIndex < NUMBER_SUFFIXES.lastIndex) {
-        scaled /= 1_000.0
-        suffixIndex++
-        roundedTenths = (scaled * 10.0).roundToLong()
-    }
-
-    val whole = roundedTenths / 10L
-    val fraction = abs(roundedTenths % 10L)
-    val number = if (fraction == 0L) whole.toString() else "$whole.$fraction"
-    return number + NUMBER_SUFFIXES[suffixIndex]
 }

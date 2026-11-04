@@ -19,6 +19,7 @@ import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
 import kinetickk.ball.gameplay.api.GameplayRunPort
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.gameplay.impl.GameplayCompositionComponent
 import kinetickk.ball.profile.api.CollectionProjection
@@ -54,7 +55,6 @@ import kinetickk.flow.session.api.SessionInteractionPulse
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -272,7 +272,10 @@ private class RecordingGameplayRun(
         reply: InlineReply<GameplaySettingsApplied, GameplayRefusal>,
     ): Unit = error("unused")
 
-    override fun startRun(reply: InlineReply<GameplayRunStarted, GameplayRefusal>) {
+    override fun startRun(
+        mode: RunMode,
+        reply: InlineReply<GameplayRunStarted, GameplayRefusal>,
+    ) {
         reply.checkAvailable()
         recordCommand(instanceId.runId)
         revision = GameplayRevision(revision.value + 1L)
@@ -308,7 +311,6 @@ private class RecordingAudioService : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) {
         preferenceUpdates += preferences
     }
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
 
     override fun close() {

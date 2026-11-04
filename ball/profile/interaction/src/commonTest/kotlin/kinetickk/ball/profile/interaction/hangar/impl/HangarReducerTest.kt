@@ -23,7 +23,7 @@ import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.interaction.ProfileLayoutMode
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
-import kinetickk.ball.profile.interaction.hangar.api.HangarOutput
+import kinetickk.ball.profile.interaction.workshop.hangar.HangarOutput
 import kinetickk.ball.profile.interaction.profileFrame
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegment
@@ -32,6 +32,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kinetickk.ball.profile.interaction.workshop.hangar.*
 
 internal fun hangarProjection(
     unlocked: Set<CoreShape> = setOf(CoreShape.ORB, CoreShape.PRISM),
@@ -64,7 +65,9 @@ class HangarReducerTest {
         assertEquals(1f, prism.integrityBar)
         // Its extra drag makes it the clumsiest; the Spiral's low drag handles best.
         assertEquals(HANGAR_BAR_FLOOR, prism.handlingBar)
-        assertEquals(HANGAR_BAR_FLOOR, model.shape(CoreShape.ORB)!!.massBar, "neutral mass is the roster's lightest")
+        assertEquals(HANGAR_BAR_FLOOR, model.shape(CoreShape.SHARD)!!.massBar, "the light Shard is the roster's lightest")
+        val orbMass = model.shape(CoreShape.ORB)!!.massBar
+        assertTrue(orbMass > HANGAR_BAR_FLOOR && orbMass < prism.massBar, "neutral mass sits between the Shard's and the Prism's")
         assertEquals(1f, model.shape(CoreShape.SPIRAL)!!.handlingBar)
         assertEquals(1f, model.shape(CoreShape.SHARD)!!.heatBar)
         assertTrue(model.shapes.all { it.massBar in 0f..1f && it.integrityBar in 0f..1f && it.handlingBar in 0f..1f && it.heatBar in 0f..1f })

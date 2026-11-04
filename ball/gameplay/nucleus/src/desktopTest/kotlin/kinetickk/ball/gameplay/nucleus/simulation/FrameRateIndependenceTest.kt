@@ -16,8 +16,8 @@ import kotlin.test.assertTrue
 
 /**
  * The fixed step makes the simulation a function of executed steps and the inputs between them,
- * never of the presentation rate. Inputs change only at k/6 s, a frame boundary at 30, 60, 144
- * and 240 Hz, so each must land after exactly 20·k steps; states with equal step counts must then
+ * never of the presentation rate. Inputs change only at k/6 s, a frame boundary at every tested
+ * rate through 960 Hz, so each must land after exactly 20·k steps; states with equal step counts must then
  * be identical at every rate.
  */
 class FrameRateIndependenceTest {
@@ -123,7 +123,7 @@ class FrameRateIndependenceTest {
     }
 
     private companion object {
-        val FRAME_RATES = listOf(30, 60, 144, 240)
+        val FRAME_RATES = listOf(30, 60, 144, 240, 360, 480, 720, 960)
         const val SECONDS = 8
         const val INPUT_CHANGES_PER_SECOND = 6
         const val STEPS_PER_INPUT_CHANGE = 20

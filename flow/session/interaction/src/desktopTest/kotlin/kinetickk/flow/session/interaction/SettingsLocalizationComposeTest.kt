@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.gameplay.interaction.GameplayPresentation
 import kinetickk.ball.profile.api.*
@@ -104,7 +105,7 @@ private fun LocalizationShell(
             onLanguageChanged = onLanguageChanged,
             settingsFeature = remember(profile) { DefaultSettingsFeature(profile, LanguageSilentAudio) },
             homeFeature = object : HomeFeature {
-                @Composable override fun Content(inputEnabled: Boolean, onOutput: (HomeOutput) -> Unit) {
+                @Composable override fun Content(inputEnabled: Boolean, runMode: RunMode, onOutput: (HomeOutput) -> Unit) {
                     BasicText(LocalAppLanguage.current.code, Modifier.testTag("language-probe"))
                 }
             },
@@ -152,7 +153,6 @@ private class LanguageProfilePort(language: AppLanguage) : ProfilePort {
 
 private object LanguageSilentAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

@@ -34,10 +34,8 @@ import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
 import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kinetickk.ball.profile.impl.createProfileComponent
 import kinetickk.flow.session.api.AppDestination
-import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -73,11 +71,12 @@ class ReactionEffectsPreferenceComposeTest {
                 gameplayComponent = gameplay)
             try {
                 setContent { Box(Modifier.requiredSize(1_000.dp, 700.dp).testTag("reaction-effects-app")) { owner.Content() } }
+                awaitAppStartup()
                 fun settle() {
                     mainClock.advanceTimeBy(260)
                     waitForIdle()
                 }
-                fun shell() = owner.sessionPort.query(AppSessionQuery.GetShell)
+                fun shell() = owner.sessionPort.shell()
                 fun key(key: Key) {
                     onRoot().performKeyInput { pressKey(key) }
                     settle()
@@ -110,6 +109,9 @@ class ReactionEffectsPreferenceComposeTest {
                 key(Key.Enter)
                 assertEquals(AppDestination.Gameplay, shell().active)
                 assertEquals(ReactionEffectsLevel.MINIMAL, runLevel())
+                // The run takes No omen; the frames that follow show the running run before P.
+                (gameplay.activeRun() as GameplayInteractionPort).declineOmenIfOffered()
+                settle()
 
                 // A change from the paused run reaches it when Settings closes; the default is written as no field.
                 key(Key.P)
@@ -143,7 +145,6 @@ private class SavedPayload : ProfilePersistenceCapability {
 
 private class MutedAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

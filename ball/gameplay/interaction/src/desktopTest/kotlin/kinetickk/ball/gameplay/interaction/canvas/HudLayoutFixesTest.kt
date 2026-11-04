@@ -16,7 +16,10 @@ import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.text.platform.Font
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.SiteFamily
+import kinetickk.ball.content.api.WorldLayer
+import kinetickk.ball.content.api.SiteNotice
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.content.api.EquippedRelic
@@ -29,7 +32,9 @@ import kinetickk.ball.gameplay.interaction.layout.runningBuildButtonBounds
 import kinetickk.ball.gameplay.interaction.layout.runningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
+import kinetickk.ball.gameplay.nucleus.render.TrialClock
+import kinetickk.ball.gameplay.nucleus.render.TrialValue
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
@@ -45,6 +50,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
+import kinetickk.ball.gameplay.interaction.canvas.look.*
+import kinetickk.ball.gameplay.interaction.layout.*
 
 /** Layout findings of the review round, drawn with the real fonts in both languages. */
 class HudLayoutFixesTest {
@@ -77,15 +85,16 @@ class HudLayoutFixesTest {
     }
 
     /**
-     * An elite or the Architect carrying three elements, Brittle, Embrittled and a primed stack: its
-     * status rail stays inside the boss block's reserve (under the bar, or on the name's row on
-     * portrait phones) and on screen, so the feed and world labels that dock under it never meet it.
+     * An elite, the Architect, a secret boss (wide block) or a mini-boss (narrow block) carrying three
+     * elements, Brittle, Embrittled and a primed stack: its status rail stays inside the boss block's
+     * reserve (under the bar, or on the name's row on portrait phones) and on screen, so the feed and
+     * world labels that dock under it never meet it.
      */
     @Test
     fun bossStatusRailStaysInsideTheBossReserve() {
         val bits = 7 or (3 shl 8) or (2 shl 12) or EnemyStatusBits.BRITTLE or EnemyStatusBits.EMBRITTLED or EnemyStatusBits.PRIMED
         for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
-            for (textScale in textScales) for (boss in listOf(EnemyType.ELITE, EnemyType.ARCHITECT)) {
+            for (textScale in textScales) for (boss in listOf(EnemyType.ELITE, EnemyType.ARCHITECT, EnemyType.ANTECEDENT, EnemyType.THRONE)) {
                 val model = hudTestModel(w.toFloat(), h.toFloat()).with(
                     "enemies" to listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false, statusBits = bits,
                         affinityBits = bossAffinity(boss)))
@@ -95,7 +104,7 @@ class HudLayoutFixesTest {
                 val where = "$language $w x $h x$textScale $boss"
                 val block = assertNotNull(HudLayoutProbe.rect(HudBlock.BOSS), where)
                 val frame = HudFrame().update(w.toFloat(), h.toFloat(), 1f)
-                val reserve = HudTopGeometry.bossBottom(frame, boss == EnemyType.ARCHITECT, textScale)
+                val reserve = HudTopGeometry.bossBottom(frame, wideBossBlock(model.content.enemy(boss).rank), textScale)
                 assertTrue(block.bottom <= reserve + 0.5f, "$where: the boss block $block reaches past its reserve $reserve")
                 assertTrue(block.left >= 0f && block.right <= w, "$where: $block off screen")
             }
@@ -109,7 +118,7 @@ class HudLayoutFixesTest {
      */
     @Test
     fun hudBlocksStayApartAndUncutAtEveryTextSize() {
-        val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+        val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, -1, 0.4f,
             immutableListOf(), 0f, 0f)
         val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(
             BuildNotificationProjection("Neon Ram", immutableListOf("Impact damage +0.05", "Weapon power +0.04"), 5f),
@@ -132,7 +141,8 @@ class HudLayoutFixesTest {
                     "enemies" to listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false,
                         affinityBits = bossAffinity(boss)))
                         .toImmutableList(),
-                    "pointsOfInterest" to (if (trial) listOf(orbit) else emptyList()).toImmutableList(),
+                    "sites" to (if (trial) listOf(orbit) else emptyList()).toImmutableList(),
+                    "trial" to (if (trial) siteTrial(orbit) else null),
                 )
                 HudDrawCache.forgetLayouts()
                 draw(w, h, language, textScale) { measurer ->
@@ -169,13 +179,14 @@ class HudLayoutFixesTest {
     }
 
     /**
-     * Show FPS on desktop and landscape phones: the counter (value and label) fits inside its slot's
+     * Show FPS on desktop and phones: the counter (value and label) fits inside its slot's
      * visual and never meets the clock, the badge, the chips (which step left of it on desktop), the
      * chain or a boss block, at every text size in both languages; the full panel stays closed.
      */
     @Test
     fun theFpsCounterStaysInItsSlotClearOfTheHeader() {
-        val windows = listOf(1_440 to 810, 1_280 to 720, 1_000 to 700, 844 to 390, 740 to 360, 640 to 360, 568 to 320)
+        val windows = listOf(1_440 to 810, 1_280 to 720, 1_000 to 700, 844 to 390, 740 to 360, 640 to 360, 568 to 320,
+            360 to 720, 320 to 640)
         for (language in AppLanguage.entries) for ((w, h) in windows) for (textScale in textScales)
         for (boss in listOf(EnemyType.ELITE, EnemyType.ARCHITECT)) {
             val width = w.toFloat()
@@ -188,11 +199,12 @@ class HudLayoutFixesTest {
                     affinityBits = bossAffinity(boss)))
                     .toImmutableList(),
             )
-            val controls = kinetickk.ball.gameplay.interaction.input.RunningControlPressLog().apply { fps = 144 }
+            val controls = kinetickk.ball.gameplay.interaction.canvas.hud.RunningControlPressLog().apply { fps = 144 }
             HudDrawCache.forgetLayouts()
             draw(w, h, language, textScale) { measurer -> drawHud(model, measurer, 1f, controls = controls) }
             val where = "$language $w x $h x$textScale $boss"
-            val slot = runningControlBounds(width, height, 1f, kinetickk.ball.gameplay.interaction.layout.RunningControlMask.of(model))
+            val slot = if (h > w) kinetickk.ball.gameplay.interaction.layout.compactFpsReadoutBounds(width, 1f, overlay = false)
+            else runningControlBounds(width, height, 1f, kinetickk.ball.gameplay.interaction.layout.RunningControlMask.of(model))
                 .single { it.target == RunningControlTarget.PERFORMANCE }.bounds
             val counter = assertNotNull(HudLayoutProbe.rect(HudBlock.FPS), "$where: no counter")
             assertTrue(slot.contains(counter.topLeft) && slot.contains(counter.bottomRight), "$where: counter $counter outside its slot $slot")
@@ -201,6 +213,9 @@ class HudLayoutFixesTest {
                 assertFalse(other.overlaps(slot), "$where: $block $other meets the counter's slot $slot")
             }
             val build = runningBuildButtonBounds(width, height, 1f)
+            assertFalse(slot.overlaps(build), "$where: counter $slot meets Build $build")
+            val pause = runningControlBounds(width, height, 1f).single { it.target == RunningControlTarget.PAUSE }.bounds
+            assertFalse(slot.overlaps(pause), "$where: counter $slot meets Pause $pause")
             listOf(HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN).forEach { block ->
                 val other = HudLayoutProbe.rect(block) ?: return@forEach
                 assertFalse(other.overlaps(build), "$where: $block $other meets Build $build")
@@ -216,7 +231,7 @@ class HudLayoutFixesTest {
      */
     @Test
     fun skillRowAndKeyCapsStayClearOfTheHudAtEveryTextSize() {
-        val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+        val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, -1, 0.4f,
             immutableListOf(), 0f, 0f)
         val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(
             BuildNotificationProjection("Neon Ram", immutableListOf("Impact damage +0.05", "Weapon power +0.04"), 5f),
@@ -233,7 +248,8 @@ class HudLayoutFixesTest {
                 "message" to "ELITE SIGNAL", "messageTime" to 1.5f,
                 "equippedRelics" to listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, 1), EquippedRelic(RelicId.GYRE_ENGINE, 1))
                     .toImmutableList(),
-                "pointsOfInterest" to (if (trial) listOf(orbit) else emptyList()).toImmutableList(),
+                "sites" to (if (trial) listOf(orbit) else emptyList()).toImmutableList(),
+                "trial" to (if (trial) siteTrial(orbit) else null),
             )
             HudDrawCache.forgetLayouts()
             draw(w, h, language, textScale) { measurer ->
@@ -307,31 +323,49 @@ class HudLayoutFixesTest {
         }
     }
 
-    /** The trial panel's label, name and reward are never cut, for every trial, language and text size. */
+    /**
+     * The trial panel's label, name and reward are never cut, for every family's trial (anomalies, race, challenges,
+     * bounty, sigil), language and text size; a trial without a clock or a value draws neither.
+     */
     @Test
     fun trialPanelLinesAreNeverCutForAnyTrial() {
         for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
-            for (textScale in textScales) for (kind in PointOfInterestKind.entries) {
-                val point = PointOfInterestProjection(kind, kind.name, 0f, 0f, true, 12f, 1, 0.4f, immutableListOf(1, 2, 3), 0f, 0f)
-                val model = hudTestModel(w.toFloat(), h.toFloat()).with("pointsOfInterest" to listOf(point).toImmutableList())
+            for (textScale in textScales) for (point in trialSites()) {
+                val kind = point.kind
+                val trial = siteTrial(point)
+                val model = hudTestModel(w.toFloat(), h.toFloat()).withSites(point)
                 HudDrawCache.forgetLayouts()
                 draw(w, h, language, textScale) { measurer -> drawHud(model, measurer, 1f) }
                 val where = "$language $w x $h x$textScale $kind"
                 val layout = HudTrialPanelLayout().update(w.toFloat(), h.toFloat(), 1f, textScale)
-                listOf(HudText.TRIAL_LABEL, HudText.TRIAL_NAME, HudText.TRIAL_REWARD, HudText.TRIAL_CLOCK).forEach { slot ->
+                // The countdown is one cached line; a race's tenths are drawn digit by digit.
+                val slots = listOf(HudText.TRIAL_LABEL, HudText.TRIAL_NAME, HudText.TRIAL_REWARD) +
+                    if (trial.clock == TrialClock.COUNTDOWN) listOf(HudText.TRIAL_CLOCK) else emptyList()
+                slots.forEach { slot ->
                     val line = assertNotNull(HudDrawCache.peekLayout(slot), "$where: $slot")
                     assertFalse(line.isCut(), "$where: $slot is cut")
+                    if (slot == HudText.TRIAL_REWARD && kind.family == SiteFamily.CHALLENGE) {
+                        val bonus = if (language == AppLanguage.Russian) "+ 15 МАТЕРИЯ" else "+ 15 MATTER"
+                        assertTrue(line.layoutInput.text.text.endsWith(bonus), "$where: the reward hides its Matter bonus")
+                    }
                 }
+                if (trial.clock != TrialClock.COUNTDOWN) assertNull(HudDrawCache.peekLayout(HudText.TRIAL_CLOCK), "$where: a countdown line")
                 val innerLeft = layout.left + layout.padding - 0.5f
                 val innerRight = layout.right - layout.padding + 0.5f
-                listOf(HudBlock.TRIAL_LABEL, HudBlock.TRIAL_CLOCK, HudBlock.TRIAL_NAME, HudBlock.TRIAL_PROGRESS, HudBlock.TRIAL_REWARD).forEach { block ->
+                val clock = trial.clock != TrialClock.NONE
+                val value = trial.value != TrialValue.NONE
+                val blocks = listOf(HudBlock.TRIAL_LABEL, HudBlock.TRIAL_NAME, HudBlock.TRIAL_REWARD) +
+                    (if (clock) listOf(HudBlock.TRIAL_CLOCK) else emptyList()) + (if (value) listOf(HudBlock.TRIAL_PROGRESS) else emptyList())
+                blocks.forEach { block ->
                     val line = assertNotNull(HudLayoutProbe.rect(block), "$where: $block")
                     assertTrue(line.left >= innerLeft && line.right <= innerRight && line.top >= layout.top && line.bottom <= layout.bottom,
                         "$where: $block $line outside the panel")
                 }
+                if (!clock) assertNull(HudLayoutProbe.rect(HudBlock.TRIAL_CLOCK), "$where: a clock without one")
+                if (!value) assertNull(HudLayoutProbe.rect(HudBlock.TRIAL_PROGRESS), "$where: a value without one")
                 fun rect(block: HudBlock) = assertNotNull(HudLayoutProbe.rect(block))
-                assertFalse(rect(HudBlock.TRIAL_LABEL).overlaps(rect(HudBlock.TRIAL_CLOCK)), "$where: label meets the clock")
-                assertFalse(rect(HudBlock.TRIAL_PROGRESS).overlaps(rect(HudBlock.TRIAL_REWARD)), "$where: progress meets the reward")
+                if (clock) assertFalse(rect(HudBlock.TRIAL_LABEL).overlaps(rect(HudBlock.TRIAL_CLOCK)), "$where: label meets the clock")
+                if (value) assertFalse(rect(HudBlock.TRIAL_PROGRESS).overlaps(rect(HudBlock.TRIAL_REWARD)), "$where: progress meets the reward")
                 assertTrue(rect(HudBlock.TRIAL_NAME).right <= layout.infoLeft, "$where: name runs under the (!)")
             }
         }
@@ -403,18 +437,22 @@ class HudLayoutFixesTest {
     fun instructionTailsStayOutOfTheFeedWhileEventTailsRemain() {
         assertEquals("TWO ANOMALIES DETECTED" to null, feedMessageParts("TWO ANOMALIES DETECTED // CHOOSE A COURSE", AppLanguage.English))
         assertEquals("ОБНАРУЖЕНЫ ДВЕ АНОМАЛИИ" to null, feedMessageParts("TWO ANOMALIES DETECTED // CHOOSE A COURSE", AppLanguage.Russian))
+        assertEquals("TWO SITES DETECTED" to null, feedMessageParts("TWO SITES DETECTED // CHOOSE A COURSE", AppLanguage.English))
+        assertEquals("ОБНАРУЖЕНЫ ДВЕ ЛОКАЦИИ" to null, feedMessageParts("TWO SITES DETECTED // CHOOSE A COURSE", AppLanguage.Russian))
         assertEquals("CATALOG COMPLETE" to "MATTER SALVAGED", feedMessageParts("CATALOG COMPLETE // MATTER SALVAGED", AppLanguage.English))
+        assertEquals("QUIET SIGNAL" to "THE ARCHITECT WAS NOT THE FIRST", feedMessageParts(SiteNotice.QUIET_SIGNAL.english, AppLanguage.English))
+        assertEquals("ТИХИЙ СИГНАЛ" to "АРХИТЕКТОР БЫЛ НЕ ПЕРВЫМ", feedMessageParts(SiteNotice.QUIET_SIGNAL.english, AppLanguage.Russian))
         assertEquals("ELITE SIGNAL" to null, feedMessageParts("ELITE SIGNAL", AppLanguage.English))
     }
 
     @Test
     fun trialRulesOpenBelowThePanelWithoutCoveringIt() {
-        val orbit = PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 1f / 3f,
+        val orbit = SiteProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, -1, 1f / 3f,
             immutableListOf(1, 2, 3), 0f, 0f)
         for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
-            for (textScale in textScales) for (kind in PointOfInterestKind.entries) {
-                val trial = orbit.copy(kind = kind)
-                val model = hudTestModel(w.toFloat(), h.toFloat()).with("pointsOfInterest" to listOf(trial).toImmutableList())
+            for (textScale in textScales) for (trial in trialSites()) {
+                val kind = trial.kind
+                val model = hudTestModel(w.toFloat(), h.toFloat()).withSites(trial)
                 draw(w, h, language, textScale) { measurer ->
                     drawHud(model, measurer, 1f, trialInfoOpen = true)
                     drawTrialTooltip(model, measurer, open = true)
@@ -434,7 +472,7 @@ class HudLayoutFixesTest {
             }
         }
         // Closed: nothing drawn.
-        val model = hudTestModel().with("pointsOfInterest" to listOf(orbit).toImmutableList())
+        val model = hudTestModel().withSites(orbit)
         draw(1_440, 810, AppLanguage.English) { measurer -> drawHud(model, measurer, 1f); drawTrialTooltip(model, measurer, open = false) }
         assertNull(HudLayoutProbe.rect(HudBlock.TRIAL_TOOLTIP))
     }
@@ -450,9 +488,9 @@ class HudLayoutFixesTest {
     fun trialRulesKeepTheCoreClearOnPhones() {
         val phones = listOf(844 to 390, 780 to 360, 667 to 375, 640 to 360, 390 to 844, 360 to 780, 375 to 667, 360 to 640)
         for (language in AppLanguage.entries) phones.forEach { (w, h) ->
-            for (textScale in textScales) for (kind in PointOfInterestKind.entries) {
-                val trial = PointOfInterestProjection(kind, kind.name, 0f, 0f, true, 12f, 0, 0.4f, immutableListOf(1, 2, 3), 0f, 0f)
-                val model = hudTestModel(w.toFloat(), h.toFloat()).with("pointsOfInterest" to listOf(trial).toImmutableList())
+            for (textScale in textScales) for (trial in trialSites()) {
+                val kind = trial.kind
+                val model = hudTestModel(w.toFloat(), h.toFloat()).withSites(trial)
                 draw(w, h, language, textScale) { measurer ->
                     drawHud(model, measurer, 1f, trialInfoOpen = true)
                     drawTrialTooltip(model, measurer, open = true)
@@ -502,9 +540,9 @@ class HudLayoutFixesTest {
     fun trialClockReadsLikeTheWorldTimers() {
         for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
             for ((remaining, expected) in listOf(14.2f to "0:15", 75.3f to "1:16", 0.4f to "0:01")) {
-                val point = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, remaining, 0, 0.4f,
+                val point = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, remaining, -1, 0.4f,
                     immutableListOf(), 0f, 0f)
-                val model = hudTestModel(w.toFloat(), h.toFloat()).with("pointsOfInterest" to listOf(point).toImmutableList())
+                val model = hudTestModel(w.toFloat(), h.toFloat()).withSites(point)
                 HudDrawCache.forgetLayouts()
                 draw(w, h, language, 1.25f) { measurer -> drawHud(model, measurer, 1f) }
                 val clock = assertNotNull(HudDrawCache.peekLayout(HudText.TRIAL_CLOCK)).layoutInput.text.text
@@ -531,6 +569,86 @@ class HudLayoutFixesTest {
         // The orbit progress is drawn as digits + the template's tail, so the value must come first.
         listOf(kinetickk.ball.gameplay.interaction.localization.HudRedesignText.TrialSeconds).forEach {
             assertTrue(it.english.startsWith("{0}") && it.russian.startsWith("{0}"))
+        }
+    }
+
+    /**
+     * Baby mode's pacifier plate leads the Rebirth slot: alone at tier 0, and before the tier plate and its ten sigils at
+     * tier 10. In every layout, language and text size, with a boss, a running trial and a feed message on screen, the
+     * slot stays on screen and clear of the clock, the badge, the chips, the chain, the boss block, the trial panel and
+     * the feed.
+     */
+    @Test
+    fun babyModePlateStaysClearOfTheHeaderAtTierZeroAndTen() {
+        val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, -1, 0.4f,
+            immutableListOf(), 0f, 0f)
+        for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
+            for (textScale in textScales) for (tier in listOf(0, 10)) for (boss in listOf(EnemyType.ELITE, EnemyType.ARCHITECT)) {
+                val model = hudTestModel(w.toFloat(), h.toFloat()).with(
+                    "easyMode" to true, "rebirthLevel" to tier,
+                    "keys" to 12, "runMatter" to 9_876_543L, "combo" to 128, "comboTime" to 1f, "comboWindow" to 2.8f, *levelOverrides(41),
+                    "message" to "ELITE SIGNAL", "messageTime" to 1.5f,
+                    "enemies" to listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false,
+                        affinityBits = bossAffinity(boss))).toImmutableList(),
+                    "sites" to listOf(orbit).toImmutableList(), "trial" to siteTrial(orbit),
+                )
+                HudDrawCache.forgetLayouts()
+                draw(w, h, language, textScale) { measurer -> drawHud(model, measurer, 1f) }
+                val where = "$language $w x $h x$textScale tier $tier $boss"
+                val strip = assertNotNull(HudLayoutProbe.rect(HudBlock.REBIRTH), "$where: no Baby mode plate")
+                assertTrue(strip.left >= 0f && strip.top >= 0f && strip.right <= w && strip.bottom <= h, "$where: plate $strip off screen")
+                listOf(HudBlock.CLOCK, HudBlock.BADGE, HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN, HudBlock.BOSS,
+                    HudBlock.TRIAL_PANEL, HudBlock.FEED).forEach { block ->
+                    val other = HudLayoutProbe.rect(block) ?: return@forEach
+                    assertFalse(strip.overlaps(other), "$where: the Rebirth slot $strip meets $block $other")
+                }
+                // The pacifier is a square plate as tall as the slot; at tier 10 the tier plate follows it on the same row.
+                if (tier == 0) {
+                    assertEquals(strip.height, strip.width, 0.5f, "$where: the pacifier plate alone")
+                } else {
+                    assertTrue(strip.width >= strip.height * 2f, "$where: the tier plate follows the pacifier ($strip)")
+                }
+            }
+        }
+    }
+
+    /**
+     * A dimension visit: in every layout, language and text size the plate's timer and every line of the objective's
+     * panel stay whole (never cut), the panel's lines stay inside it with no clock row, a counted objective's value clear
+     * of its reward, and the plate clear of the panel.
+     */
+    @Test
+    fun aDimensionVisitsPlateAndObjectivePanelStayWholeAtEveryTextSize() {
+        for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
+            for (textScale in textScales) for (layer in listOf(WorldLayer.ZENITH, WorldLayer.NADIR, WorldLayer.ARCHIVE)) {
+                val base = hudTestModel(w.toFloat(), h.toFloat()).with("keys" to 12, "runMatter" to 9_876_543L, *levelOverrides(41))
+                val model = base.inVisit(dimensionVisit(layer, base.coreX, base.coreY, progress = 3))
+                HudDrawCache.forgetLayouts()
+                draw(w, h, language, textScale) { measurer -> drawHud(model, measurer, 1f) }
+                val where = "$language $w x $h x$textScale $layer"
+                val layout = HudTrialPanelLayout().update(w.toFloat(), h.toFloat(), 1f, textScale)
+                listOf(HudText.DIMENSION_TIMER, HudText.TRIAL_LABEL, HudText.TRIAL_NAME, HudText.TRIAL_REWARD).forEach { slot ->
+                    assertFalse(assertNotNull(HudDrawCache.peekLayout(slot), "$where: $slot").isCut(), "$where: $slot is cut")
+                }
+                assertNull(HudDrawCache.peekLayout(HudText.TRIAL_CLOCK), "$where: the plate carries the clock")
+                val counted = layer != WorldLayer.ARCHIVE
+                val blocks = listOf(HudBlock.TRIAL_LABEL, HudBlock.TRIAL_NAME, HudBlock.TRIAL_REWARD) +
+                    if (counted) listOf(HudBlock.TRIAL_PROGRESS) else emptyList()
+                blocks.forEach { block ->
+                    val line = assertNotNull(HudLayoutProbe.rect(block), "$where: $block")
+                    assertTrue(line.left >= layout.left + layout.padding - 0.5f && line.right <= layout.right - layout.padding + 0.5f &&
+                        line.top >= layout.top && line.bottom <= layout.bottom, "$where: $block $line outside the panel")
+                }
+                assertNull(HudLayoutProbe.rect(HudBlock.TRIAL_CLOCK), "$where: no clock row")
+                if (counted) {
+                    assertFalse(assertNotNull(HudLayoutProbe.rect(HudBlock.TRIAL_PROGRESS)).overlaps(assertNotNull(HudLayoutProbe.rect(HudBlock.TRIAL_REWARD))),
+                        "$where: the count meets the reward")
+                } else {
+                    assertNull(HudLayoutProbe.rect(HudBlock.TRIAL_PROGRESS), "$where: a boss objective shows no count")
+                }
+                val plate = assertNotNull(HudLayoutProbe.rect(HudBlock.REBIRTH), "$where: no plate")
+                assertFalse(plate.overlaps(assertNotNull(HudLayoutProbe.rect(HudBlock.TRIAL_PANEL))), "$where: the plate meets the panel")
+            }
         }
     }
 

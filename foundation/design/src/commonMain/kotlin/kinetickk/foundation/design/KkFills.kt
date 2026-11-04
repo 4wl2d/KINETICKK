@@ -210,6 +210,48 @@ fun DrawScope.drawKkHalftone(path: Path, color: Color, large: Boolean = false) {
 }
 
 /**
+ * Halftone with the same closest-side radial fade as [drawKkRadialFade], in one shader pass.
+ * The repeating tile and radial mask retain continuous canvas coordinates under translation,
+ * rotation and scaling. No intermediate full-size bitmap or offscreen layer is needed.
+ */
+fun DrawScope.drawKkRadialHalftone(
+    rect: Rect,
+    color: Color,
+    large: Boolean = false,
+    innerStop: Float = 0.2f,
+) {
+    if (rect.width <= 0f || rect.height <= 0f || color.alpha <= 0f) return
+    val kind = if (large) KkFillKind.HALFTONE_LARGE else KkFillKind.HALFTONE
+    val pattern = kkFillBrush(kind, color)
+    drawRect(KkRadialHalftoneCache.brush(pattern, rect, innerStop), rect.topLeft, rect.size)
+}
+
+/** Draw-thread confined; retains only a few brushes and the existing small repeating tiles. */
+private object KkRadialHalftoneCache {
+    private class Entry(val pattern: Brush, val rect: Rect, val innerStop: Float, val brush: Brush)
+    private val entries = arrayOfNulls<Entry>(8)
+    private var next = 0
+
+    fun brush(pattern: Brush, rect: Rect, innerStop: Float): Brush {
+        val stop = innerStop.coerceIn(0f, 0.99f)
+        for (entry in entries) {
+            if (entry != null && entry.pattern === pattern && entry.rect == rect && entry.innerStop == stop) return entry.brush
+        }
+        val mask = Brush.radialGradient(
+            0f to Color.Black,
+            stop to Color.Black,
+            1f to Color.Transparent,
+            center = rect.center,
+            radius = min(rect.width, rect.height) * 0.5f,
+        )
+        val created = Brush.composite(pattern, mask, BlendMode.DstIn)
+        entries[next] = Entry(pattern, rect, stop, created)
+        next = (next + 1) % entries.size
+        return created
+    }
+}
+
+/**
  * Background grid lines every [spacingDp] (default 40) inside [rect], aligned to [origin].
  * Allocation-free.
  */

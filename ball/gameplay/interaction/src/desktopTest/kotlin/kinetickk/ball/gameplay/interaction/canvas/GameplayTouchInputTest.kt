@@ -65,7 +65,7 @@ class GameplayTouchInputTest {
     private fun start() {
         val snapshot = hudTestSnapshot()
         val model = requireNotNull(snapshot.renderModel).with(*levelOverrides(), "skillBar" to FULL_SKILL_BAR)
-        running = snapshot.withTouchModel(model)
+        running = snapshot.withModel(model)
         current = running
         val port = object : GameplayInteractionPort {
             override val instanceId get() = running.instanceId
@@ -87,13 +87,18 @@ class GameplayTouchInputTest {
                 Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST)) { GameplayContent(port, true) {} }
             }
         }
-        compose.mainClock.advanceTimeByFrame()
+        val deadline = compose.mainClock.currentTime + 1000L
+        while (pulses.none { it is GameplayInteractionPulse.FrameElapsed } && compose.mainClock.currentTime < deadline) {
+            compose.mainClock.advanceTimeByFrame()
+        }
+        assertTrue(pulses.any { it is GameplayInteractionPulse.FrameElapsed }, "The gameplay host must finish preparation before touch assertions")
+        compose.waitForIdle()
     }
 
     /** The run moves to [phase] (RUNNING is the started run); the host reads it on the next frame. */
     private fun enter(phase: GamePhase) {
         val model = requireNotNull(running.renderModel)
-        current = running.withTouchModel(model.with("phase" to phase))
+        current = running.withModel(model.with("phase" to phase))
         compose.mainClock.advanceTimeByFrame()
         compose.mainClock.advanceTimeByFrame()
     }
@@ -215,7 +220,7 @@ class GameplayTouchInputTest {
             .flatMap { node -> node.config[SemanticsProperties.Text].map { it.text } }
         // A new snapshot each time: the port accepts pulses only then, and the host reads the run after an accepted one.
         fun show(model: kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel?) {
-            current = running.withTouchModel(model ?: requireNotNull(running.renderModel))
+            current = running.withModel(model ?: requireNotNull(running.renderModel))
             compose.mainClock.advanceTimeByFrame()
             compose.mainClock.advanceTimeByFrame()
         }
@@ -264,11 +269,3 @@ class GameplayTouchInputTest {
 }
 
 private const val HOST = "touch-host"
-
-private fun GameplayRenderSnapshot.withTouchModel(model: kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel): GameplayRenderSnapshot {
-    val constructor = GameplayRenderSnapshot::class.java.declaredConstructors.first { it.parameterCount == 4 }
-    constructor.isAccessible = true
-    val identity = GameplayRenderSnapshot::class.java.declaredFields.first { it.name == "projectionSourceIdentity" }
-        .also { it.isAccessible = true }.get(this)
-    return constructor.newInstance(instanceId, revision, model, identity) as GameplayRenderSnapshot
-}

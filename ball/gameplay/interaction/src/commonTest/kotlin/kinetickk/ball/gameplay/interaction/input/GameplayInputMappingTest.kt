@@ -8,6 +8,7 @@ import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
 import kinetickk.ball.gameplay.interaction.layout.runningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -93,7 +94,7 @@ class GameplayInputMappingTest {
                 RunningControlTarget.BRAKE -> assertIs<GameplayInteractionPulse.BrakeChanged>(
                     assertIs<GameplayInput.Action>(input).action,
                 )
-                RunningControlTarget.PERFORMANCE -> assertSame(GameplayInput.TogglePerformance, input)
+                RunningControlTarget.PERFORMANCE -> if (DIAGNOSTICS_ENABLED) assertSame(GameplayInput.TogglePerformance, input) else assertNull(input)
                 RunningControlTarget.PAUSE -> assertSame(
                     GameplayInteractionPulse.PauseToggled,
                     assertIs<GameplayInput.Action>(input).action,
@@ -101,6 +102,24 @@ class GameplayInputMappingTest {
                 RunningControlTarget.SKILL_1, RunningControlTarget.SKILL_2, RunningControlTarget.SKILL_3,
                 RunningControlTarget.APEX,
                 -> assertNull(input, "${control.target} is not placed without its mask")
+            }
+        }
+    }
+
+    @Test
+    fun theVisibleFpsCounterOpensDiagnosticsOnlyInDebug() {
+        for ((width, height) in listOf(1440f to 810f, 844f to 390f)) {
+            val running = hitTestState(GamePhase.RUNNING, screenWidth = width, screenHeight = height, controlMask = RunningControlMask.FPS)
+            val bounds = runningControlBounds(width, height, 1f, RunningControlMask.FPS)
+                .single { it.target == RunningControlTarget.PERFORMANCE }.bounds
+            val input = running.resolveGameplayPress(bounds.center.x, bounds.center.y)
+            if (DIAGNOSTICS_ENABLED) {
+                assertSame(GameplayInput.TogglePerformance, input)
+                assertTrue(running.isHudControlPosition(bounds.center.x, bounds.center.y))
+            } else {
+                assertNull(input, "The Release FPS readout cannot dispatch a diagnostic action")
+                assertFalse(running.isHudControlPosition(bounds.center.x, bounds.center.y))
+                assertNull(runningControlInput(RunningControlTarget.PERFORMANCE, 0))
             }
         }
     }

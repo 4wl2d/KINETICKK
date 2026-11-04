@@ -26,7 +26,6 @@ import kinetickk.ball.profile.impl.createProfileComponent
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import org.jetbrains.skia.Image
 import java.io.File
 import kotlin.test.Test
@@ -63,6 +62,7 @@ class RedesignBeforeAfterShotsTest {
                         Box(Modifier.requiredSize(width.dp, height.dp).testTag("ba")) { owner.Content() }
                     }
                 }
+                awaitAppStartup()
                 fun shot(name: String, advance: Long = 900) {
                     mainClock.advanceTimeBy(advance)
                     waitForIdle()
@@ -104,7 +104,6 @@ private class BaPersistence : ProfilePersistenceCapability {
 
 private class BaSilentAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

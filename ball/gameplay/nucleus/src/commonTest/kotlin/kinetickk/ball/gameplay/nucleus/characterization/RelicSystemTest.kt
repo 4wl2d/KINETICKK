@@ -11,9 +11,10 @@ import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.simulation.*
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.Test
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 
 class RelicSystemTest {
     @Test
@@ -49,61 +50,7 @@ class RelicSystemTest {
         assertEquals(1, engine.equippedRelics.count { it.id == duplicate })
     }
 
-    /** Generic Meld stops at rank 2; rank 3 needs the relic itself offered again. */
-    @Test
-    fun meldRaisesToRankTwoSalvagesBeyondItAndDuplicatesReachRankThree() {
-        val engine = runningEngine(seed = 202)
-        val relic = RelicId.PERPETUAL_VECTOR
-        val meldCeiling = 2
-        engine.acquireRelicForTesting(relic)
-
-        engine.meldRelic(slot = 0)
-
-        assertEquals(meldCeiling, engine.relicRank(relic))
-        assertFalse(engine.canMeld(relic))
-        val exactRankState = engine.equippedRelics
-        val matterBeforeOverflow = engine.runMatter
-
-        engine.meldRelic(slot = 0)
-
-        assertEquals(exactRankState, engine.equippedRelics)
-        assertEquals(meldCeiling, engine.relicRank(relic))
-        assertEquals(matterBeforeOverflow + 8L, engine.runMatter)
-
-        // The relic itself offered again still reaches the policy rank, never beyond it.
-        engine.acquireRelicForTesting(relic)
-        assertEquals(engine.content.relicPolicy.maxRank, engine.relicRank(relic))
-        engine.acquireRelicForTesting(relic)
-        assertEquals(engine.content.relicPolicy.maxRank, engine.relicRank(relic))
-    }
-
-    @Test
-    fun fullMatrixMeldRequiresAnExplicitTargetAndOnlyRanksThatSlot() {
-        val engine = fullRelicEngine(seed = 202)
-        val before = engine.equippedRelics
-
-        engine.openRelicChoiceForTesting()
-        val meldIndex = engine.choices.indexOfFirst { it.relicAction == RelicChoiceAction.MELD }
-        assertTrue(meldIndex >= 0, "A full matrix did not offer explicit melding: ${engine.choices}")
-        engine.choose(meldIndex)
-
-        assertEquals(ChoiceType.RELIC_BIND, engine.choiceType)
-        assertEquals(
-            (0 until engine.content.relicPolicy.maxSlots).toList(),
-            engine.choices.mapNotNull(ChoiceOption::relicSlot),
-        )
-        assertTrue(engine.choices.all { it.relicAction == RelicChoiceAction.MELD_TARGET })
-
-        val targetSlot = 2
-        engine.choose(engine.choices.indexOfFirst { it.relicSlot == targetSlot })
-
-        val expected = before.toMutableList().apply {
-            this[targetSlot] = this[targetSlot].copy(rank = this[targetSlot].rank + 1)
-        }
-        assertEquals(expected, engine.equippedRelics)
-        assertEquals(GamePhase.RUNNING, engine.phase)
-    }
-
+    /** The defensive path of content with more Relic opportunities than slots: a full matrix still never forces a replacement. */
     @Test
     fun fullMatrixReplacementRequiresAnExplicitTargetAndOnlyReplacesThatSlot() {
         val engine = fullRelicEngine(seed = 203)
@@ -154,6 +101,8 @@ class RelicSystemTest {
         val engine = runningEngine(seed = 205)
         engine.enemies.clear()
         engine.pickups.clear()
+        // The Relic budget's first Elite-drop opportunity unlocks here.
+        engine.elapsed = engine.content.relicPolicy.firstUnlockSeconds
 
         engine.killEnemyForTesting(EnemyType.ELITE)
 

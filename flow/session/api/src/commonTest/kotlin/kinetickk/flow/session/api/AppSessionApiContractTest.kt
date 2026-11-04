@@ -5,6 +5,7 @@ package kinetickk.flow.session.api
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.foundation.collections.immutableListOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -16,10 +17,6 @@ import kotlin.test.assertTrue
 class AppSessionApiContractTest {
     @Test
     fun singletonIdentityAndRouteTokenKeepIdentitySeparateFromRevision() {
-        assertEquals(
-            "kinetickk.local/AppSession/local-session",
-            LOCAL_APP_SESSION_INSTANCE_ID.canonicalValue,
-        )
         assertEquals(SessionRevision.ZERO, SessionRevision(0L))
         assertEquals(SessionRouteToken(9L), SessionRouteToken.from(SessionRevision(9L)))
         assertFailsWith<IllegalArgumentException> { SessionRevision(-1L) }
@@ -41,7 +38,6 @@ class AppSessionApiContractTest {
         assertEquals(4, destinations.count(AppDestination::isOverlayDestination))
 
         val projection = AppShellProjection(
-            instanceId = LOCAL_APP_SESSION_INSTANCE_ID,
             revision = SessionRevision(12L),
             routeRevision = SessionRevision(9L),
             base = AppDestination.Gameplay,
@@ -70,6 +66,15 @@ class AppSessionApiContractTest {
         assertFailsWith<IllegalArgumentException> { projection.copy(base = AppDestination.Workshop) }
         assertFailsWith<IllegalArgumentException> { projection.copy(overlay = AppDestination.Home) }
         assertFailsWith<IllegalArgumentException> { projection.copy(activeRunId = null) }
+    }
+
+    @Test
+    fun theShellOffersTheStandardRunModeUnlessSessionSaysOtherwise() {
+        val home = homeProjection()
+
+        assertEquals(RunMode.STANDARD, home.runMode)
+        assertEquals(RunMode.EASY, home.copy(runMode = RunMode.EASY).runMode)
+        assertEquals(home, home.copy(runMode = RunMode.STANDARD))
     }
 
     @Test
@@ -102,10 +107,12 @@ class AppSessionApiContractTest {
             SessionInteractionPulse.ToggleMuteRequested,
             SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM),
             SessionInteractionPulse.RebirthRequested(1),
+            SessionInteractionPulse.SelectRunModeRequested(RunMode.EASY),
         )
 
-        assertEquals(9, interactions.size)
+        assertEquals(10, interactions.size)
         assertIs<SessionInteractionPulse.SelectCoreShapeRequested>(interactions[7])
+        assertEquals(RunMode.EASY, assertIs<SessionInteractionPulse.SelectRunModeRequested>(interactions[9]).mode)
         assertEquals(
             setOf(
                 SessionWorkflowFailureCode.PROFILE_COMMAND_REFUSED,
@@ -118,7 +125,6 @@ class AppSessionApiContractTest {
 }
 
 private fun homeProjection(): AppShellProjection = AppShellProjection(
-    instanceId = LOCAL_APP_SESSION_INSTANCE_ID,
     revision = SessionRevision.ZERO,
     routeRevision = SessionRevision.ZERO,
     base = AppDestination.Home,

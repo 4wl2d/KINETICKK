@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.RebirthProfile
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.profile.api.CharacterAchievementProgress
 import kinetickk.foundation.collections.ImmutableSet
 import kinetickk.foundation.collections.ImmutableList
@@ -66,12 +67,17 @@ sealed interface HomeOutput {
 
     /** Close the game; only a Home whose host can close it offers this. */
     data object Quit : HomeOutput
+
+    /** Choose the next runs' mode (Baby mode toggle). */
+    data class SelectRunMode(val mode: RunMode) : HomeOutput
 }
 
 interface HomeFeature {
+    /** [runMode] is the mode Session holds for the next start: Home shows it on its Baby mode toggle. */
     @Composable
     fun Content(
         inputEnabled: Boolean,
+        runMode: RunMode,
         onOutput: (HomeOutput) -> Unit,
     )
 }

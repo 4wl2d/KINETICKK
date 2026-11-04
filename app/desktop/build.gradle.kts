@@ -4,6 +4,10 @@
 import kinetickk.gradle.WriteDesktopBuildInfoTask
 import kinetickk.gradle.IsolateDesktopRuntimeAction
 import kinetickk.gradle.DeleteSuccessfulDesktopRuntimeAction
+import kinetickk.gradle.BuildVariant
+import kinetickk.gradle.gameBuildVariant
+import kinetickk.gradle.gitOutput
+import kinetickk.gradle.sourceIdentityFiles
 
 plugins {
     id("kinetickk.compose-desktop-application")
@@ -13,35 +17,30 @@ dependencies {
     implementation(projects.app.shared)
 }
 
-val buildInfo = tasks.register<WriteDesktopBuildInfoTask>("writeDesktopBuildInfo") {
-    mustRunAfter(":updatePokeballResolvedManifest")
-    gameVersion.set(project.version.toString())
-    kotlinVersion.set(libs.versions.kotlin)
-    composeVersion.set(libs.versions.compose)
-    gitRevision.set(providers.exec {
-        workingDir(rootDir)
-        commandLine("git", "rev-parse", "HEAD")
-        isIgnoreExitValue = true
-    }.standardOutput.asText)
-    gitStatus.set(providers.exec {
-        workingDir(rootDir)
-        commandLine("git", "status", "--porcelain=v1", "--untracked-files=normal")
-        isIgnoreExitValue = true
-    }.standardOutput.asText)
-    repositoryDirectory.set(rootDir)
-    buildSources.from(fileTree(rootDir) {
-        include("**/src/**/*.kt", "**/*.gradle.kts", "gradle/libs.versions.toml", "gradle.properties")
-        exclude("**/build/**", "**/.gradle/**")
-    })
-    outputDirectory.set(layout.buildDirectory.dir("generated/crash-build-info"))
+if (gameBuildVariant() == BuildVariant.DEBUG) {
+    val buildInfo = tasks.register<WriteDesktopBuildInfoTask>("writeDesktopBuildInfo") {
+        gameVersion.set(project.version.toString())
+        kotlinVersion.set(libs.versions.kotlin)
+        composeVersion.set(libs.versions.compose)
+        gitRevision.set(gitOutput("rev-parse", "HEAD"))
+        gitStatus.set(gitOutput("status", "--porcelain=v1", "--untracked-files=normal"))
+        sourceDateEpoch.set(providers.environmentVariable("SOURCE_DATE_EPOCH")
+            .orElse(gitOutput("show", "-s", "--format=%ct", "HEAD")).map { it.trim().toLongOrNull() ?: 0L })
+        repositoryDirectory.set(rootDir)
+        buildSources.from(sourceIdentityFiles())
+        outputDirectory.set(layout.buildDirectory.dir("generated/crash-build-info"))
+    }
+
+    sourceSets.main { resources.srcDir(buildInfo) }
+
+    tasks.withType<JavaExec>().matching { it.name == "run" }.configureEach {
+        providers.gradleProperty("crashDir").orNull?.let { systemProperty("kinetickk.crashDir", it) }
+        doFirst(IsolateDesktopRuntimeAction(objects.fileCollection()))
+        doLast(DeleteSuccessfulDesktopRuntimeAction())
+    }
 }
 
-sourceSets.main { resources.srcDir(buildInfo) }
-
-tasks.withType<JavaExec>().matching { it.name == "run" }.configureEach {
-    providers.gradleProperty("crashDir").orNull?.let { systemProperty("kinetickk.crashDir", it) }
-    // ./gradlew :app:desktop:run -Pkinetickk.uncapped=true turns V-Sync off (see DesktopFramePacing).
+// ./gradlew :app:desktop:run -Pkinetickk.uncapped=true turns V-Sync off (see DesktopFramePacing).
+tasks.withType<JavaExec>().matching { it.name == "run" || it.name == "runRelease" }.configureEach {
     providers.gradleProperty("kinetickk.uncapped").orNull?.let { systemProperty("kinetickk.uncapped", it) }
-    doFirst(IsolateDesktopRuntimeAction(objects.fileCollection()))
-    doLast(DeleteSuccessfulDesktopRuntimeAction())
 }

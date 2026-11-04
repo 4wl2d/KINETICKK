@@ -4,6 +4,7 @@
 package kinetickk.resource.audio.impl
 
 import kinetickk.resource.audio.api.AudioPreferences
+import kinetickk.resource.audio.api.SoundId
 import kinetickk.resource.audio.api.ToneRequest
 import kinetickk.resource.audio.api.ToneRequestLimits
 import kinetickk.resource.audio.api.ToneWave
@@ -11,34 +12,183 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.startCoroutine
 
 class DefaultAudioServiceTest {
     @Test
-    fun resourcePreservesOwnerOrderAndDeduplicatesMechanicalRequests() {
-        val selected = selectToneRequests(
-            listOf(HURT_REQUEST, DASH_REQUEST, HURT_REQUEST, PICKUP_REQUEST),
-            limit = 3,
+    fun preparationIncludesEffectsAndMusicWithoutPlayingOrUnlocking() {
+        val player = RecordingTonePlayer()
+        val service = DefaultAudioService(player)
+        val extra = ToneRequest(300f, 0.05f, 0.1f, ToneWave.SINE)
+        var completed = false
+        suspend { service.prepare() }.startCoroutine(
+            object : Continuation<Unit> {
+                override val context = EmptyCoroutineContext
+                override fun resumeWith(result: Result<Unit>) {
+                    result.getOrThrow()
+                    completed = true
+                }
+            },
         )
-
-        assertEquals(listOf(HURT_REQUEST, DASH_REQUEST, PICKUP_REQUEST), selected)
+        assertTrue(completed)
+        assertTrue(player.prepared.containsAll(SoundId.entries.map(ToneCatalog::request)))
+        assertTrue(player.prepared.any { it.frequencyHz == 110f && it.wave == ToneWave.TRIANGLE })
+        assertEquals(SoundId.entries.size + 6, player.prepared.size)
+        suspend { service.prepare(listOf(extra)) }.startCoroutine(
+            object : Continuation<Unit> {
+                override val context = EmptyCoroutineContext
+                override fun resumeWith(result: Result<Unit>) = result.getOrThrow()
+            },
+        )
+        assertTrue(player.prepared.containsAll(SoundId.entries.map(ToneCatalog::request) + extra))
+        assertTrue(player.tones.isEmpty())
+        assertEquals(0, player.unlockCalls)
+        service.tick(0.016f)
+        assertEquals(110f, player.tones.single().frequencyHz)
     }
 
     @Test
-    fun servicePreservesRequestOrderAndMusicSequence() {
+    fun catalogKeepsEveryShippedToneAndItsPriorityOrder() {
+        assertEquals(
+            listOf(
+                ToneRequest(64f, 0.34f, 0.24f, ToneWave.SAW),
+                ToneRequest(784f, 0.32f, 0.2f, ToneWave.TRIANGLE),
+                ToneRequest(1_320f, 0.26f, 0.18f, ToneWave.TRIANGLE),
+                ToneRequest(118f, 0.22f, 0.2f, ToneWave.SAW),
+                ToneRequest(76f, 0.13f, 0.22f, ToneWave.SQUARE),
+                ToneRequest(988f, 0.3f, 0.22f, ToneWave.SAW),
+                ToneRequest(1_047f, 0.42f, 0.22f, ToneWave.TRIANGLE),
+                ToneRequest(185f, 0.11f, 0.23f, ToneWave.SAW),
+                ToneRequest(820f, 0.2f, 0.2f, ToneWave.SAW),
+                ToneRequest(58f, 0.40f, 0.22f, ToneWave.SAW),
+                ToneRequest(132f, 0.12f, 0.18f, ToneWave.SAW),
+                ToneRequest(92f, 0.07f, 0.2f, ToneWave.SQUARE),
+                ToneRequest(480f, 0.09f, 0.16f, ToneWave.TRIANGLE),
+                ToneRequest(560f, 0.16f, 0.18f, ToneWave.TRIANGLE),
+                ToneRequest(445f, 0.09f, 0.13f, ToneWave.SINE),
+                ToneRequest(640f, 0.18f, 0.2f, ToneWave.TRIANGLE),
+                ToneRequest(420f, 0.055f, 0.1f, ToneWave.TRIANGLE),
+                ToneRequest(710f, 0.055f, 0.13f, ToneWave.SINE),
+                ToneRequest(520f, 0.035f, 0.11f, ToneWave.SINE),
+                ToneRequest(490f, 0.1f, 0.16f, ToneWave.SINE),
+                ToneRequest(260f, 0.06f, 0.12f, ToneWave.SINE),
+                ToneRequest(330f, 0.06f, 0.13f, ToneWave.TRIANGLE),
+            ),
+            SoundId.entries.sortedByDescending(ToneCatalog::priority).map(ToneCatalog::request),
+        )
+        assertEquals(SoundId.entries.size, ToneCatalog.effectTones.distinct().size)
+    }
+
+    @Test
+    fun equalPrioritySoundsKeepIngressOrderBeforeDistinctSelection() {
+        val player = RecordingTonePlayer()
+        val service = DefaultAudioService(player)
+        service.updatePreferences(AudioPreferences(musicEnabled = false))
+
+        service.play(
+            listOf(
+                SoundId.PICKUP,
+                SoundId.SKILL,
+                SoundId.IMPACT,
+                SoundId.WEAPON_HEAVY,
+                SoundId.SKILL,
+                SoundId.WEAPON_LIGHT,
+            ),
+        )
+
+        assertEquals(listOf(480f, 92f, 132f), player.tones.map { it.frequencyHz })
+    }
+
+    @Test
+    fun resourcePreservesOwnerOrderAndDeduplicatesMechanicalRequests() {
+        val selected = selectDistinct(
+            listOf(SoundId.HURT, SoundId.DASH, SoundId.HURT, SoundId.PICKUP),
+            limit = 3,
+        )
+
+        assertEquals(listOf(SoundId.HURT, SoundId.DASH, SoundId.PICKUP), selected)
+    }
+
+    @Test
+    fun selectionLimitsApplyToDistinctRequestsAndPreserveTheInput() {
+        val sounds = listOf(SoundId.HURT, SoundId.HURT, SoundId.DASH, SoundId.DASH, SoundId.PICKUP, SoundId.UI_CLICK)
+        assertEquals(emptyList(), selectDistinct(sounds, -1))
+        assertEquals(emptyList(), selectDistinct(sounds, 0))
+        assertEquals(emptyList(), selectDistinct(emptyList<SoundId>(), 3))
+        assertEquals(listOf(SoundId.HURT), selectDistinct(sounds, 1))
+        assertEquals(listOf(SoundId.HURT, SoundId.DASH), selectDistinct(sounds, 2))
+        assertEquals(listOf(SoundId.HURT, SoundId.DASH, SoundId.PICKUP), selectDistinct(sounds, 3))
+        assertEquals(listOf(SoundId.HURT, SoundId.DASH, SoundId.PICKUP, SoundId.UI_CLICK), selectDistinct(sounds, 10))
+        assertEquals(listOf(SoundId.HURT), selectDistinct(listOf(SoundId.HURT), 3))
+        assertEquals(6, sounds.size)
+    }
+
+    @Test
+    fun oversizedEffectsAreRejectedWhileMusicContinuesAdvancing() {
+        val player = RecordingTonePlayer()
+        val service = DefaultAudioService(player)
+        service.play(List(33) { SoundId.HURT })
+        service.tick(0.1f)
+        repeat(4) { service.tick(0.1f) }
+
+        assertEquals(listOf(110f, 146.83f), player.tones.map { it.frequencyHz })
+    }
+
+    @Test
+    fun serviceRanksEffectsByPriorityAndThenPlaysTheMusicSequence() {
         val player = RecordingTonePlayer()
         val service = DefaultAudioService(player)
         service.updatePreferences(AudioPreferences(masterVolume = 1f))
 
-        service.advance(
-            realDeltaSeconds = 0.016f,
-            requests = listOf(HURT_REQUEST, DASH_REQUEST, PICKUP_REQUEST, UI_CLICK_REQUEST),
-        )
+        service.play(listOf(SoundId.PICKUP, SoundId.UI_CLICK, SoundId.HURT, SoundId.DASH))
+        service.tick(realDeltaSeconds = 0.016f)
 
         assertEquals(listOf(76f, 185f, 710f, 110f), player.tones.map { it.frequencyHz })
         assertEquals(ToneWave.TRIANGLE, player.tones.last().wave)
 
-        repeat(4) { service.advance(realDeltaSeconds = 0.1f, requests = emptyList()) }
+        repeat(4) { service.tick(realDeltaSeconds = 0.1f) }
         assertEquals(146.83f, player.tones.last().frequencyHz)
+    }
+
+    @Test
+    fun uiPlayNeverAdvancesMusic() {
+        val player = RecordingTonePlayer()
+        val service = DefaultAudioService(player)
+
+        // Fresh music clock: a menu click must not start the sequencer.
+        service.play(listOf(SoundId.UI_CLICK))
+        assertEquals(listOf(520f), player.tones.map { it.frequencyHz })
+
+        // Music toggled off and on resets the clock; the next click stays a click.
+        service.updatePreferences(AudioPreferences(musicEnabled = false))
+        service.tick(0.016f)
+        service.updatePreferences(AudioPreferences(musicEnabled = true))
+        player.tones.clear()
+        service.play(listOf(SoundId.UI_CONFIRM))
+        assertEquals(listOf(490f), player.tones.map { it.frequencyHz })
+
+        // The first display frame still starts the music on its first note.
+        service.tick(0.016f)
+        assertEquals(listOf(490f, 110f), player.tones.map { it.frequencyHz })
+    }
+
+    @Test
+    fun zeroOrInvalidTickDeltaPlaysNoMusicNote() {
+        val player = RecordingTonePlayer()
+        val service = DefaultAudioService(player)
+
+        service.tick(0f)
+        service.tick(-0.016f)
+        service.tick(Float.NaN)
+        assertTrue(player.tones.isEmpty())
+
+        service.tick(0.016f)
+        assertEquals(listOf(110f), player.tones.map { it.frequencyHz })
+        // The clock is still running: a zero delta neither advances nor replays it.
+        repeat(3) { service.tick(0f) }
+        assertEquals(listOf(110f), player.tones.map { it.frequencyHz })
     }
 
     @Test
@@ -66,7 +216,7 @@ class DefaultAudioServiceTest {
         val playService = DefaultAudioService(playPlayer)
         playService.updatePreferences(AudioPreferences(musicEnabled = false))
         assertFailsWith<ToneCapabilityFault> {
-            playService.advance(0.016f, listOf(HURT_REQUEST))
+            playService.play(listOf(SoundId.HURT))
         }
         assertEquals(1, playPlayer.playCalls)
 
@@ -97,21 +247,11 @@ class DefaultAudioServiceTest {
         val service = DefaultAudioService(player)
         service.updatePreferences(AudioPreferences(musicEnabled = false))
 
-        service.advance(
-            realDeltaSeconds = 0.016f,
-            requests = List(32) { index ->
-                ToneRequest(440f + index, 0.1f, 0.1f, ToneWave.SINE)
-            },
-        )
+        service.play(List(32) { index -> SoundId.entries[index % SoundId.entries.size] })
         assertEquals(3, player.tones.size)
 
         player.tones.clear()
-        service.advance(
-            realDeltaSeconds = 0.016f,
-            requests = List(33) { index ->
-                ToneRequest(440f + index, 0.1f, 0.1f, ToneWave.SINE)
-            },
-        )
+        service.play(List(33) { index -> SoundId.entries[index % SoundId.entries.size] })
         assertTrue(player.tones.isEmpty())
     }
 
@@ -120,14 +260,15 @@ class DefaultAudioServiceTest {
         val player = RecordingTonePlayer()
         val service = DefaultAudioService(player)
         service.updatePreferences(AudioPreferences(musicEnabled = false))
-        val exact = listOf(HURT_REQUEST, DASH_REQUEST, PICKUP_REQUEST)
+        val exact = listOf(SoundId.HURT, SoundId.DASH, SoundId.PICKUP)
+        val exactTones = listOf(HURT_REQUEST, DASH_REQUEST, PICKUP_REQUEST)
 
-        service.advance(realDeltaSeconds = 0.016f, requests = exact)
-        assertEquals(exact.map(ToneRequest::frequencyHz), player.tones.map(ToneRequest::frequencyHz))
+        service.play(exact)
+        assertEquals(exactTones.map(ToneRequest::frequencyHz), player.tones.map(ToneRequest::frequencyHz))
 
         player.tones.clear()
-        service.advance(realDeltaSeconds = 0.016f, requests = exact + UI_CLICK_REQUEST)
-        assertEquals(exact.map(ToneRequest::frequencyHz), player.tones.map(ToneRequest::frequencyHz))
+        service.play(exact + SoundId.UI_CLICK)
+        assertEquals(exactTones.map(ToneRequest::frequencyHz), player.tones.map(ToneRequest::frequencyHz))
     }
 
     @Test
@@ -196,16 +337,19 @@ class DefaultAudioServiceTest {
         val service = DefaultAudioService(player)
 
         service.updatePreferences(AudioPreferences(musicEnabled = false, masterVolume = 0.25f))
-        service.advance(0.016f, listOf(HURT_REQUEST))
+        service.play(listOf(SoundId.HURT))
+        service.tick(0.016f)
         assertEquals(HURT_REQUEST.copy(gain = 0.055f), player.tones.single())
         player.tones.clear()
 
         service.updatePreferences(AudioPreferences(musicEnabled = false, masterVolume = Float.NaN))
-        service.advance(0.016f, listOf(HURT_REQUEST))
+        service.play(listOf(SoundId.HURT))
+        service.tick(0.016f)
         assertTrue(player.tones.isEmpty())
 
         service.updatePreferences(AudioPreferences(soundEnabled = false, musicEnabled = true, masterVolume = 1f))
-        service.advance(0.016f, listOf(HURT_REQUEST))
+        service.play(listOf(SoundId.HURT))
+        service.tick(0.016f)
         assertEquals(listOf(110f), player.tones.map { it.frequencyHz })
     }
 
@@ -218,7 +362,8 @@ class DefaultAudioServiceTest {
         service.close()
         service.close()
         service.ensureUnlocked()
-        service.advance(0.016f, listOf(HURT_REQUEST))
+        service.play(listOf(SoundId.HURT))
+        service.tick(0.016f)
 
         assertEquals(1, player.closeCalls)
         assertEquals(0, player.unlockCalls)
@@ -226,15 +371,19 @@ class DefaultAudioServiceTest {
     }
 }
 
-private val UI_CLICK_REQUEST = ToneRequest(520f, 0.035f, 0.11f, ToneWave.SINE)
 private val DASH_REQUEST = ToneRequest(185f, 0.11f, 0.23f, ToneWave.SAW)
 private val PICKUP_REQUEST = ToneRequest(710f, 0.055f, 0.13f, ToneWave.SINE)
 private val HURT_REQUEST = ToneRequest(76f, 0.13f, 0.22f, ToneWave.SQUARE)
 
 private class RecordingTonePlayer : TonePlaybackCapability {
+    var prepared = emptyList<ToneRequest>()
     val tones = mutableListOf<ToneRequest>()
     var unlockCalls = 0
     var closeCalls = 0
+
+    override suspend fun prepare(requests: List<ToneRequest>) {
+        prepared = requests
+    }
 
     override fun unlock() {
         unlockCalls++

@@ -54,10 +54,19 @@ data class AudioPreferences(
     val masterVolume: Float = 0.65f,
 )
 
-/** Application-scoped lifecycle and bounded mechanical tone sink. */
+/** Application-scoped lifecycle, bounded effect playback and the music clock. */
 interface AudioService {
+    /** Prepares the whole catalog (effects and music) plus [requests]; never plays or unlocks. */
+    suspend fun prepare(requests: List<ToneRequest> = emptyList()) = Unit
+
     fun updatePreferences(preferences: AudioPreferences)
-    fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>)
+
+    /** Effects only: more than 32 ids drop all (as today); stable priority sort; the first 3 distinct play. Never moves music. */
+    fun play(sounds: List<SoundId>) = Unit
+
+    /** Music only: advances the sequencer by one display frame; delta <= 0 plays nothing; resets while music is off. */
+    fun tick(realDeltaSeconds: Float) = Unit
+
     fun ensureUnlocked()
     fun close()
 }

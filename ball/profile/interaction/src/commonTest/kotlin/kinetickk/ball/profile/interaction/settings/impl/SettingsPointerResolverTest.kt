@@ -8,6 +8,7 @@ import kinetickk.ball.profile.api.WindowSizePreset
 import kinetickk.ball.profile.interaction.settings.api.SettingsDisplaySupport
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
+import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -362,13 +363,13 @@ class SettingsPointerResolverTest {
         val one = layout(805.9f, 390f, 1f, SettingsGroup.CONTROLS)
         assertTrue(one.rowsRight - one.rowsLeft < 600f)
         assertTrue(!twoColumns(one))
-        // Desktop: Dash..Pause on the left, Choice 1..Performance on the right, Reset keys across both, one page.
+        // Desktop keeps Dash..Pause on the left. Debug adds Performance after Restart on the right.
         val desktop = layout(1440f, 810f, 1f, SettingsGroup.CONTROLS)
         assertEquals(0, desktop.maxPage)
         val left = desktop.rows.filter { it.bounds.left == desktop.rowsLeft && it.bounds.right < desktop.rowsRight }.map { it.row }
         val right = desktop.rows.filter { it.bounds.right == desktop.rowsRight && it.bounds.left > desktop.rowsLeft }.map { it.row }
         assertEquals(SettingsGroup.CONTROLS.rows.subList(0, 7), left)
-        assertEquals(SettingsGroup.CONTROLS.rows.subList(7, 14), right)
+        assertEquals(SettingsGroup.CONTROLS.rows.subList(7, if (DIAGNOSTICS_ENABLED) 14 else 13), right)
         val reset = assertNotNull(desktop.row(SettingsRow.RESET_BINDINGS))
         assertEquals(Rect(desktop.rowsLeft, 172f + 7 * 56f, desktop.rowsRight, 172f + 7 * 56f + 62f), reset.bounds)
         assertEquals(52f, desktop.row(SettingsRow.BIND_DASH)!!.bounds.height)
@@ -396,8 +397,16 @@ class SettingsPointerResolverTest {
         assertEquals(32f, phone.key!!.height)
         // A long action name takes room from the cell, down to 70 % of it.
         val large = layout(1000f, 700f, 1f, SettingsGroup.CONTROLS, language = AppLanguage.Russian, scale = 1.4f)
-        val performance = assertNotNull(assertNotNull(large.row(SettingsRow.BIND_PERFORMANCE)).key)
-        assertTrue(performance.width in 132f * 0.7f..131.9f, "${performance.width}")
+        // The long Russian Active label exists in both build variants, and its cell shrinks in both.
+        val skill = assertNotNull(assertNotNull(large.row(SettingsRow.BIND_SKILL_1)).key)
+        assertTrue(skill.width in (132f * 0.7f - 0.01f)..131.9f, "${skill.width}")
+        assertTrue(skill.width <= assertNotNull(large.row(SettingsRow.BIND_DASH)!!.key).width)
+        if (DIAGNOSTICS_ENABLED) {
+            val performance = assertNotNull(assertNotNull(large.row(SettingsRow.BIND_PERFORMANCE)).key)
+            assertTrue(performance.width in (132f * 0.7f - 0.01f)..131.9f, "${performance.width}")
+        } else {
+            assertNull(large.row(SettingsRow.BIND_PERFORMANCE))
+        }
         assertEquals(132f, assertNotNull(large.row(SettingsRow.BIND_DASH)!!.key).width)
         val reset = assertNotNull(layout(1440f, 810f, 1f, SettingsGroup.CONTROLS).row(SettingsRow.RESET_BINDINGS))
         assertTrue(reset.hasInfo)

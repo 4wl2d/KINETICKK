@@ -6,6 +6,7 @@ package kinetickk.app.shared
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.NonRestartableComposable
 import androidx.compose.runtime.remember
@@ -15,6 +16,7 @@ import kinetickk.ball.content.api.ContentCatalog
 import kinetickk.ball.content.impl.createContentCatalog
 import kinetickk.ball.gameplay.impl.DefaultGameplayFeature
 import kinetickk.ball.gameplay.impl.GameplayCompositionComponent
+import kinetickk.ball.gameplay.interaction.prepareGameplayVisualResources
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfilePort
 import kinetickk.ball.profile.api.ProfileQuery
@@ -51,7 +53,7 @@ fun KinetickkApp(
     onLanguageChanged: (String) -> Unit = {},
     displayHost: PlatformDisplayHost = LocalPlatformDisplayHost.current,
 ) {
-    val diagnostics = LocalCrashDiagnostics.current
+    val diagnostics = rememberDebugDiagnostics(LocalCrashDiagnostics.current)
     val ownerValue = remember { AppCompositionOwner(diagnostics = diagnostics, displayHost = displayHost) }
     DisposableEffect(ownerValue) {
         onDispose(ownerValue::close)
@@ -166,27 +168,44 @@ internal class AppCompositionOwner(
 
     // Lives with the features, above a desktop window that may be opened again.
     private val shellMemory = AppShellMemory()
+    private val startupResources = AppStartupResources()
+
+    private suspend fun prepareAudio() {
+        audioService.prepare()
+    }
 
     @Composable
     @NonRestartableComposable
     fun Content(onLanguageChanged: (String) -> Unit = {}, onQuit: () -> Unit = {}) {
-        AppSessionContent(
-            profileReadPort = profilePort,
-            onLanguageChanged = { language -> onLanguageChanged(language.code) },
-            sessionPort = appSessionComponent,
-            audioExecutor = sessionAudioExecutor,
-            gameplayPresentation = gameplayComponent,
-            homeFeature = homeFeature,
-            settingsFeature = settingsFeature,
-            workshopFeature = workshopFeature,
-            rebirthFeature = rebirthFeature,
-            codexFeature = codexFeature,
-            profileUnavailableFeature = profileUnavailableFeature,
-            onPreferencesChanged = applyDisplayPreferences,
-            touchPrimary = touchPrimary,
-            shellMemory = shellMemory,
-            onQuit = onQuit,
-        )
+        CompositionLocalProvider(LocalCrashDiagnostics provides diagnostics) {
+            AppStartupContent(
+                resources = startupResources,
+                language = preferences().language,
+                diagnostics = diagnostics,
+                prepareAudio = ::prepareAudio,
+                prepareGraphics = ::prepareGameplayVisualResources,
+            ) {
+                DebugToolsHost(diagnostics, displayHost) {
+                    AppSessionContent(
+                        profileReadPort = profilePort,
+                        onLanguageChanged = { language -> onLanguageChanged(language.code) },
+                        sessionPort = appSessionComponent,
+                        audioExecutor = sessionAudioExecutor,
+                        gameplayPresentation = gameplayComponent,
+                        homeFeature = homeFeature,
+                        settingsFeature = settingsFeature,
+                        workshopFeature = workshopFeature,
+                        rebirthFeature = rebirthFeature,
+                        codexFeature = codexFeature,
+                        profileUnavailableFeature = profileUnavailableFeature,
+                        onPreferencesChanged = applyDisplayPreferences,
+                        touchPrimary = touchPrimary,
+                        shellMemory = shellMemory,
+                        onQuit = onQuit,
+                    )
+                }
+            }
+        }
     }
 
     fun close() {

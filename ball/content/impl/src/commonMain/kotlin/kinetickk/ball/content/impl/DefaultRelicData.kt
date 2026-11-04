@@ -67,17 +67,17 @@ internal fun defaultRelics(): ImmutableList<RelicDefinition> = listOf(
         listOf(RelicKey.FRAGILE, RelicKey.CRITICAL), listOf(BuildTag.PRECISION, BuildTag.RAM),
         "All your damage +{0} %. Impact kills above 900 u/s grant a quarter second of invulnerability, " +
             "at most once every 1.5 seconds.",
-        "You take double damage, and shields and damage reduction no longer protect you.",
+        "You take 50 % more damage.",
         RelicValue(100f, 25f),
     ),
     relic(
         RelicId.EXECUTIONERS_PRISM, "Executioner's Prism", RelicAspect.KINETIC,
         listOf(RelicKey.CRITICAL), listOf(BuildTag.PRECISION),
         "Critical hits are no longer random. Every 1 % critical chance, up to 50 %, becomes {0} % critical " +
-            "damage. Hits that can crit always crit against enemies below 35 % integrity, Frozen or Brittle enemies and " +
+            "damage. Hits that can crit always crit against enemies below half their integrity, Frozen or Brittle enemies and " +
             "enemies whose status is three quarters of the way to its Break.",
-        "Hits that do not crit deal 20 % less.",
-        RelicValue(3f, 0.5f),
+        "Hits that do not crit deal 10 % less.",
+        RelicValue(4f, 0.5f),
     ),
     relic(
         RelicId.ECHO_CHAMBER, "Echo Chamber", RelicAspect.KINETIC,
@@ -99,14 +99,14 @@ internal fun defaultRelics(): ImmutableList<RelicDefinition> = listOf(
         listOf(RelicKey.HEAT, RelicKey.SPREAD), listOf(BuildTag.OVERCLOCK, BuildTag.CHAIN),
         "Thermal stacks no longer burn over time. They bank {0} % of their damage and Ignite at 5 stacks, " +
             "releasing the bank and spreading 2 Thermal.",
-        "Thermal fades twice as fast, and Ignites near you burn 4 % of your integrity.",
-        RelicValue(160f, 30f),
+        "Ignites near you burn 3 % of your integrity.",
+        RelicValue(220f, 40f),
     ),
     relic(
         RelicId.OVERDRIVE_CASCADE, "Overdrive Cascade", RelicAspect.THERMAL,
         listOf(RelicKey.HEAT), listOf(BuildTag.OVERCLOCK, BuildTag.ARSENAL),
         "Overdrive gain +{0} %. Each kill during Overdrive extends it, up to 2.5 extra seconds.",
-        "Outside Overdrive all your damage −30 %.",
+        "Outside Overdrive all your damage −15 %.",
         RelicValue(60f, 20f),
     ),
     relic(
@@ -122,7 +122,7 @@ internal fun defaultRelics(): ImmutableList<RelicDefinition> = listOf(
         listOf(RelicKey.STILLNESS, RelicKey.COLD), listOf(BuildTag.ANCHOR, BuildTag.ARSENAL),
         "While braking, enemies near you are slowed by {0} % and hostile bullets near you are caught, up to " +
             "24. Release Brake to fire them as your own. Stasis holds for 3 seconds and refills when you let go.",
-        "Weapon activation −30 % while you are not braking.",
+        "Weapon activation −15 % while you are not braking.",
         RelicValue(45f, 10f),
     ),
     relic(
@@ -130,15 +130,15 @@ internal fun defaultRelics(): ImmutableList<RelicDefinition> = listOf(
         listOf(RelicKey.CHARGE, RelicKey.MOTION), listOf(BuildTag.DRIVE, BuildTag.RAM),
         "Above 700 u/s the Core charges in 4 seconds. The next impact discharges into five enemies for " +
             "{0} % impact damage and 3 Ion each.",
-        "Taking a hit while half charged or more discharges into you for 10 % of your integrity.",
+        "Taking a hit while half charged or more discharges into you for 5 % of your integrity.",
         RelicValue(200f, 40f),
     ),
     relic(
         RelicId.AEGIS_INVERSION, "Aegis Inversion", RelicAspect.ION,
         listOf(RelicKey.CHARGE, RelicKey.LIFE), listOf(BuildTag.BULWARK),
-        "All healing becomes shield, and shield capacity grows by 60 % of your maximum integrity. A breaking " +
+        "All healing becomes shield, and shield capacity grows by 40 % of your maximum integrity. A breaking " +
             "shield releases a nova worth {0} % of the damage it absorbed.",
-        "Integrity can never be restored, and shields no longer recharge on their own.",
+        "Integrity can never be restored, and shields recharge on their own at half speed.",
         RelicValue(150f, 50f),
     ),
     relic(
@@ -151,25 +151,27 @@ internal fun defaultRelics(): ImmutableList<RelicDefinition> = listOf(
     relic(
         RelicId.EVENT_HORIZON, "Event Horizon", RelicAspect.GRAVITIC,
         listOf(RelicKey.GRAVITY), listOf(BuildTag.ANCHOR, BuildTag.RAM),
-        "Enemies within 280 u are dragged toward you. Impacts against enemies carrying Gravitic deal {0} % more, and " +
-            "your Collapses implode toward you.",
-        "Contact damage taken ×1.5. Data no longer latches onto you, and level-ups no longer pull it in.",
-        RelicValue(40f, 20f),
+        "While you brake, enemies between 120 and 280\u00A0u away are dragged toward you. Your impacts deal {0} % more, " +
+            "twice that against enemies carrying Gravitic, and your Collapses implode toward you.",
+        "Level-ups no longer pull Data in.",
+        RelicValue(30f, 15f),
     ),
     relic(
         RelicId.VERDANT_ROT, "Verdant Rot", RelicAspect.ENTROPY,
         listOf(RelicKey.DECAY, RelicKey.LIFE), listOf(BuildTag.BULWARK),
-        "Impacts apply 2 Entropy. Every Entropy stack within 320 u heals you {0} per second, up to 3.5.",
-        "All other healing is disabled, and every Entropy stack close to you makes you take 1.5 % more damage.",
-        RelicValue(0.25f, 0.05f),
+        "Impacts apply 2 Entropy. Every Entropy stack within 320 u heals you {0} per second, up to {1}.",
+        "All other healing is halved.",
+        RelicValue(0.4f, 0.05f, powerUnits = true),
+        // The heal cap in integrity per second (the simulation reads it).
+        RelicValue(5f, powerUnits = true),
     ),
     relic(
         RelicId.PANDEMIC_CODEX, "Pandemic Codex", RelicAspect.ENTROPY,
         listOf(RelicKey.DECAY, RelicKey.SPREAD), listOf(BuildTag.CHAIN),
         "Statuses are contagious: when an enemy dies, {0} % of each of its statuses jumps to its two nearest " +
             "neighbors.",
-        "Enemies carrying a status move 20 % faster.",
-        RelicValue(60f, 10f),
+        "Enemies carrying a status move 10 % faster.",
+        RelicValue(80f, 10f),
     ),
     relic(
         RelicId.AGONY_SCEPTER, "Agony Scepter", RelicAspect.SOVEREIGN,
@@ -193,24 +195,24 @@ internal fun defaultRelics(): ImmutableList<RelicDefinition> = listOf(
         listOf(RelicKey.LIFE, RelicKey.VOID), listOf(BuildTag.BULWARK, BuildTag.FORTUNE),
         "Once per run, lethal damage instead restores your integrity, releases a nova for {0} damage and " +
             "grants two seconds of invulnerability. Then the seal is spent but keeps its slot.",
-        "Data gain −25 % while the seal is bound. The singularity still kills, and a spent seal locks its " +
+        "Data gain −15 % while the seal is bound. The singularity still kills, and a spent seal locks its " +
             "slot for two minutes.",
-        RelicValue(120f, 60f),
+        RelicValue(120f, 60f, powerUnits = true),
         minimumRebirth = 5,
     ),
     relic(
         RelicId.THUNDER_CHOIR, "Thunder Choir", RelicAspect.SONIC,
         listOf(RelicKey.ECHO, RelicKey.SHIELD), listOf(BuildTag.RAM, BuildTag.ANCHOR),
-        "Shatter also chains to the {0} nearest Resonant enemies within 260 for {1} % of its damage; your knockback +20 %.",
+        "Shatter also chains to the {0} nearest Resonant enemies within 260 for {1} % of its damage; your knockback +40 %.",
         "You take +15 % knockback from hits.",
-        RelicValue(2f, 1f), RelicValue(60f, 20f),
+        RelicValue(3f, 1f), RelicValue(100f, 20f),
     ),
     relic(
         RelicId.NULL_COVENANT, "Null Covenant", RelicAspect.VOID,
         listOf(RelicKey.VOID, RelicKey.SHIELD), listOf(BuildTag.PRECISION, BuildTag.CHAIN),
         "Unmake fires immediately and remembers {0} % more; Hollow stacks never decay on Elites.",
-        "Maximum integrity −10 %.",
-        RelicValue(40f, 20f),
+        "Maximum integrity −5 %.",
+        RelicValue(80f, 20f),
     ),
 ).toImmutableList().also(::validateRelics)
 

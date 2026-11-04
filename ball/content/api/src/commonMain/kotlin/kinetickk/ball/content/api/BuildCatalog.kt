@@ -144,7 +144,7 @@ private val DefaultBuildCatalog = BuildCatalog(
             "The target turns magnetic: it yanks nearby enemies together and keeps pulling them and your shots for " +
                 "three seconds.",
             power = 4f, radius = 200f, residue = StatusElement.GRAVITIC, residueStacks = 1,
-            values = immutableListOf(3f, 260f, 220f, 4f),
+            values = immutableListOf(3f, 260f, 220f, 5f),
             verb = "Attractor", cue = "Shots home in", keystone = "Repulsor",
             keystoneDescription = "No yank, no attractor; the target is hurled away from the Core at 900 × knockback and each enemy it slams takes 1 Charge."),
         ReactionDefinition(ReactionId.FEEDBACK, "Feedback",
@@ -164,7 +164,8 @@ private val DefaultBuildCatalog = BuildCatalog(
             "Heat and sound hurl enemies away; Dash right on the clap to ride the blast for free.",
             power = 6f, radius = 150f, values = immutableListOf(260f, 0.6f, 1.6f),
             verb = "Blast Jump", cue = "Dash on the clap", keystone = "Rocket Clap",
-            keystoneDescription = "No Dash needed: a clap within 220 launches the Core away at 560; no free Dash."),
+            keystoneDescription = "No Dash needed: a clap within 220 launches the Core away at 560, never against " +
+                "its travel; no free Dash."),
         ReactionDefinition(ReactionId.SHATTERPOINT, "Shatterpoint",
             "The frozen ring of sound splits into ice shards; near you they circle the Core, striking enemies and " +
                 "breaking hostile shots.",
@@ -308,7 +309,7 @@ private val DefaultBuildCatalog = BuildCatalog(
         pairing(RelicPairingId.EXTINGUISHED, RelicId.CINDER_CROWN, RelicId.ABSOLUTE_ZERO, RelicPairingKind.DISCORD,
             "Extinguished", "The crown banks Cryo instead, and every Freeze releases the bank at 60 %."),
         pairing(RelicPairingId.SHATTERED_AEGIS, RelicId.GLASS_COMET, RelicId.AEGIS_INVERSION, RelicPairingKind.DISCORD,
-            "Shattered Aegis", "Glass ignores shields: inverted healing becomes 1 % damage per 3 points instead, lost when hit."),
+            "Shattered Aegis", "Inverted healing becomes 1 % damage per 3 points instead of shield, lost when hit."),
         pairing(RelicPairingId.CONTRADICTION, RelicId.PERPETUAL_VECTOR, RelicId.STASIS_ANCHOR, RelicPairingKind.DISCORD,
             "Contradiction", "Stasis only holds while you move slower than 400 u/s."),
         pairing(RelicPairingId.HEAVY_BLINK, RelicId.BLINK_DRIVE, RelicId.NEUTRON_HEART, RelicPairingKind.DISCORD,

@@ -31,12 +31,12 @@ class KkFramePacerTest {
     }
 
     @Test
-    fun aCapSpacesFramesAtLeastItsIntervalApart() {
+    fun aCapKeepsItsAverageIntervalWithoutAccumulatingEarlyWakes() {
         ImmediateFrames.frames = 0
-        // 100 Hz: 10 ms per frame, woken at most 1.5 ms early; the first frame does not wait.
+        // 100 Hz: ten intervals total 100 ms, with one bounded early wake; the first frame does not wait.
         val elapsed = framesOver(100, 11)
         assertEquals(11, ImmediateFrames.frames)
-        assertTrue(elapsed >= 10 * 8, "11 frames at 100 Hz took $elapsed ms")
+        assertTrue(elapsed >= 98, "11 frames at 100 Hz took $elapsed ms")
     }
 
     @Test

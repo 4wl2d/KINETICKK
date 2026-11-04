@@ -77,19 +77,22 @@ internal object ApexCell {
     const val BOSS_BASE_READY_AT = 9
     const val CAST_COUNT = 10
     const val AUX = 11
-    const val STRIDE = 12
+    /** Perihelion: the arc and distance of the base rules' Orbit charge, which only a boss-reaching release resets. */
+    const val BASE_ARC = 12
+    const val BASE_DISTANCE = 13
+    const val STRIDE = 14
 }
 
 /**
  * Timing and per-cast state of the three skill slots and the Apex, then the run's skill damage per active effect: one
- * fixed copy-on-write float block ([ContentBounds.SKILL_SLOTS] × [SkillCell.STRIDE] + [ApexCell.STRIDE] +
- * [ContentBounds.MAX_SKILLS]). A full reduction forks it (the block is shared until the candidate first writes it), a
- * scalar-input reduction shares it, a new run replaces it. A step allocates nothing.
+ * fixed float block ([ContentBounds.SKILL_SLOTS] × [SkillCell.STRIDE] + [ApexCell.STRIDE] +
+ * [ContentBounds.MAX_SKILLS]). A deep copy forks it (the block is copied eagerly), a new run
+ * replaces it. A step allocates nothing.
  */
 internal class SkillRuntime private constructor(
-    private val cells: CopyOnWriteFloatArray,
+    private val cells: RunFloatArray,
 ) {
-    constructor() : this(CopyOnWriteFloatArray(initialCells()))
+    constructor() : this(RunFloatArray(initialCells()))
 
     /** Skill damage dealt this run (each instance up to the integrity it removed). */
     var skillDamage: Double = 0.0
@@ -133,14 +136,12 @@ internal class SkillRuntime private constructor(
         }
     }
 
-    /** An isolated candidate: metrics copied, cells shared until the first changed write. */
-    fun fork(): SkillRuntime = SkillRuntime(cells.fork()).also { copy ->
+    /** An isolated candidate: metrics and cells copied. */
+    fun fork(): SkillRuntime = SkillRuntime(cells.copy()).also { copy ->
         copy.skillDamage = skillDamage
         copy.apexBossDamage = apexBossDamage
         copy.skillCausedDamage = skillCausedDamage
     }
-
-    fun sharesStorageWith(other: SkillRuntime): Boolean = cells.sharesStorageWith(other.cells)
 
     /** Every retained fact in a stable order (state witnesses and diagnostics). */
     override fun toString(): String =

@@ -102,8 +102,8 @@ internal val ApexPhrasesInRussian: List<Pair<String, String>> = listOf(
     "For 10 s the halo holds its widest ring, burns three times hotter and burns away shots that cross it." to
         "10 с ореол держит самое широкое кольцо, жжёт втрое сильнее и сжигает пересекающие его снаряды.",
     "Mirror Stance" to "Зеркальная стойка",
-    "For 6 s, while you brake, the next four hits are parried and returned at full Edge." to
-        "6 с, пока вы тормозите, следующие четыре удара парируются и возвращаются с полной остротой.",
+    "For 6 s, while you brake, the next hit is parried and returned at full Edge." to
+        "6 с, пока вы тормозите, следующий удар парируется и возвращается с полной остротой.",
     "Hypercube" to "Гиперкуб",
     "Folds your lattice into a cage for 8 s: shots crossing it vanish, enemies inside slow and its edges pulse." to
         "На 8 с сворачивает решётку в клетку: пересекающие её снаряды исчезают, враги внутри замедляются, а грани пульсируют.",

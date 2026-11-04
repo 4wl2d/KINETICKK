@@ -32,7 +32,7 @@ import kinetickk.foundation.design.KkIcon
 import kinetickk.ball.gameplay.interaction.rewards.assertTextFitsWithoutBreakingWords
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import kinetickk.ball.gameplay.interaction.rewards.assertNoForbiddenGlyphs
-import kinetickk.ball.gameplay.interaction.rewards.OverlayButtonProbe
+import kinetickk.ball.gameplay.interaction.overlay.OverlayButtonProbe
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureModel
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import org.junit.Rule
@@ -43,6 +43,7 @@ import javax.imageio.ImageIO
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.overlay.*
 
 @OptIn(ExperimentalTestApi::class)
 class TerminalContentTest {
@@ -313,6 +314,23 @@ class TerminalContentTest {
         compose.runOnIdle { assertTrue(actions.isEmpty()); enabled.value = true }
         compose.onNodeWithTag("kinetickk.gameplay.rebirth").performClick()
         compose.runOnIdle { assertEquals(listOf<GameplayInput>(GameplayInput.OpenRebirth), actions) }
+    }
+
+    @Test
+    fun aBabyModeVictoryLeadsWithReenterBecauseItsClearCountedNothing() {
+        val actions = mutableListOf<GameplayInput>()
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides AppLanguage.English) {
+                Box(Modifier.requiredSize(1000.dp, 720.dp)) {
+                    TerminalContent(report().copy(victory = true, easy = true), 1f, false, 3f, true, actions::add)
+                }
+            }
+        }
+        compose.onNodeWithTag("kinetickk.gameplay.rebirth").assertDoesNotExist()
+        compose.onNodeWithTag("kinetickk.gameplay.restart").assertIsDisplayed()
+        compose.onNodeWithText(AppLanguage.English.text(GameplayText.RebirthNext), ignoreCase = true, useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("kinetickk.gameplay.restart").performClick()
+        compose.runOnIdle { assertEquals(listOf<GameplayInput>(GameplayInput.RestartRun), actions) }
     }
 
     private fun assertPanelOrder(statisticsOnLeft: Boolean) {

@@ -154,10 +154,10 @@ class ProfileDisplayPreferencesTest {
     /** Completes the frame's write so the next decision starts from a settled State. */
     private fun settled(frame: ProfileAcceptedFrame): ProfileState {
         val persist = assertIs<ProfileOutput.PersistSnapshot>(frame.outputs.single())
-        return assertIs<ProfileDecision.Accepted>(ProfileNucleus.decide(
+        return ProfileNucleus.complete(
             frame.nextState,
-            ProfileNucleusPulse.WriteCompleted(persist.effectRef, ProfileWriteResult.Written(persist.snapshot.revision)),
-        )).frame.nextState
+            persist.effectRef, ProfileWriteResult.Written(persist.snapshot.revision),
+        ).nextState
     }
 
     /** The one snapshot the accepted frame asks to persist. */

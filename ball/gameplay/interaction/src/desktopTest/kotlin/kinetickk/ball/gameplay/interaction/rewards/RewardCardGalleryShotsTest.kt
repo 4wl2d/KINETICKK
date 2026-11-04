@@ -21,13 +21,19 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.showsIntegrityAmounts
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RewardFocus
+import kinetickk.ball.content.api.SignalKind
+import kinetickk.ball.content.api.SignalOption
 import kinetickk.ball.content.api.SkillId
+import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.gameplay.interaction.canvas.with
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
@@ -41,6 +47,7 @@ import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
 import kotlin.test.Test
+import kinetickk.ball.gameplay.interaction.overlay.*
 
 /**
  * Visual QA gallery of the reward card styles (writes PNGs only when `KK_SHOTS_OUT` names a folder):
@@ -50,7 +57,11 @@ import kotlin.test.Test
  * - one Russian sheet, all relics, and a sheet of weapon, totem, direction, meld and decline cards;
  * - the active item cards as the nucleus deals them (a free slot in the character's lane, a full loadout, a rank-up to
  *   rank III, an epic, a touch slot) and the slot prompt's replace and keep cards, board and phone, English and Russian;
- * - a six-frame strip (t = 0..5 s) of each legendary.
+ * - a six-frame strip (t = 0..5 s) of each legendary;
+ * - the run-variety decks: every omen and No omen, and every signal card with Ignore (the unaffordable ones locked), board
+ *   and phone, English and Russian;
+ * - the dimension rewards: every Blessing, every Pact and the Refuse card, board and phone, English and Russian, the
+ *   Blessings and Pacts also on the board in Protan and Mono.
  *
  * `KK_GALLERY_ONLY` (comma-separated canonical item names) renders only those items: their sheets
  * in every palette, the Russian sheet and their legendary strips.
@@ -79,6 +90,13 @@ class RewardCardGalleryShotsTest {
             render(File(folder, "items-board-deutan-$number.png"), english, Board, KkRolePalette.Deutan)
             render(File(folder, "items-board-mono-$number.png"), english, Board, KkRolePalette.Mono)
         }
+        // Rebirth 10 (×3,600): the items whose lines carry integrity amounts and the signal deck, in both languages.
+        val scaled = items.filter { it.showsIntegrityAmounts }.take(8)
+        render(File(folder, "items-board-tier10.png"), itemCards(scaled, AppLanguage.English, TIER_TEN_SCALE), Board, KkRolePalette.Default)
+        render(File(folder, "items-phone-tier10-ru.png"), itemCards(scaled, AppLanguage.Russian, TIER_TEN_SCALE), Phone, KkRolePalette.Default,
+            AppLanguage.Russian)
+        render(File(folder, "signals-phone-tier10-ru.png"), signalCards(AppLanguage.Russian, TIER_TEN_SCALE).take(8), Phone, KkRolePalette.Default,
+            AppLanguage.Russian)
         val russian = if (only != null) items.take(8) else representativeItems()
         render(File(folder, "items-board-default-ru.png"), itemCards(russian, AppLanguage.Russian), Board, KkRolePalette.Default, AppLanguage.Russian)
         if (only == null) {
@@ -97,6 +115,27 @@ class RewardCardGalleryShotsTest {
                 render(File(folder, "actives-phone-default$suffix.png"), activeCards(language), Phone, KkRolePalette.Default, language)
             }
         }
+        if (only == null) {
+            for (language in AppLanguage.entries) {
+                val suffix = if (language == AppLanguage.Russian) "-ru" else ""
+                omenCards(language).chunked(8).forEachIndexed { sheet, chunk ->
+                    render(File(folder, "omens-board-default-${"%02d".format(sheet + 1)}$suffix.png"), chunk, Board, KkRolePalette.Default, language)
+                    render(File(folder, "omens-phone-default-${"%02d".format(sheet + 1)}$suffix.png"), chunk, Phone, KkRolePalette.Default, language)
+                }
+                signalCards(language).chunked(8).forEachIndexed { sheet, chunk ->
+                    render(File(folder, "signals-board-default-${"%02d".format(sheet + 1)}$suffix.png"), chunk, Board, KkRolePalette.Default, language)
+                    render(File(folder, "signals-phone-default-${"%02d".format(sheet + 1)}$suffix.png"), chunk, Phone, KkRolePalette.Default, language)
+                }
+                boonCards(language).chunked(8).forEachIndexed { sheet, chunk ->
+                    render(File(folder, "boons-board-default-${"%02d".format(sheet + 1)}$suffix.png"), chunk, Board, KkRolePalette.Default, language)
+                    render(File(folder, "boons-phone-default-${"%02d".format(sheet + 1)}$suffix.png"), chunk, Phone, KkRolePalette.Default, language)
+                    if (language == AppLanguage.English) {
+                        render(File(folder, "boons-board-protan-${"%02d".format(sheet + 1)}.png"), chunk, Board, KkRolePalette.Protan, language)
+                        render(File(folder, "boons-board-mono-${"%02d".format(sheet + 1)}.png"), chunk, Board, KkRolePalette.Mono, language)
+                    }
+                }
+            }
+        }
         items.filter { it.rarity == ItemRarity.LEGENDARY }.forEach { item ->
             val card = itemCards(listOf(item), AppLanguage.English).single()
             val slug = item.name.lowercase().replace(Regex("[^a-z]+"), "-").trim('-')
@@ -110,6 +149,54 @@ class RewardCardGalleryShotsTest {
         render(null, relicCards().take(8), Board, KkRolePalette.Default)
         render(null, systemCards().take(8), Phone, KkRolePalette.Default)
         render(null, activeCards(AppLanguage.English), Phone, KkRolePalette.Default)
+        render(null, omenCards(AppLanguage.Russian).take(4) + signalCards(AppLanguage.Russian).take(4), Board, KkRolePalette.Default, AppLanguage.Russian)
+        render(null, boonCards(AppLanguage.Russian).let { it.take(2) + it.takeLast(2) }, Board, KkRolePalette.Default, AppLanguage.Russian)
+    }
+
+    /** Every Blessing, then every Pact and the Refuse card, as the dimension rewards deal them (each in its own offer). */
+    private fun boonCards(language: AppLanguage): List<RewardCardPresentation> {
+        fun card(boon: kinetickk.ball.content.api.RunBoonDefinition) =
+            ChoiceOption(ChoiceType.BOON, boon.name, boon.description, boon.kind.name, boonId = boon.id)
+        fun offer(layer: kinetickk.ball.content.api.WorldLayer, choices: List<ChoiceOption>) =
+            rewardFixtureModel(content = content, choiceType = ChoiceType.BOON, choices = choices, language = language, directedChoice = true)
+                .with("dimension" to kinetickk.ball.gameplay.nucleus.render.DimensionProjection(rewardLayer = layer))
+                .let { model -> choices.mapIndexed { index, choice -> model.rewardCardPresentation(choice, index, language) } }
+        val blessings = content.boons.filter { it.kind == kinetickk.ball.content.api.RunBoonKind.BLESSING }.map(::card)
+        val pacts = content.boons.filter { it.kind == kinetickk.ball.content.api.RunBoonKind.PACT }.map(::card) +
+            ChoiceOption(ChoiceType.BOON, "Refuse the pact", "Keep the run as it is and salvage 10 Kinetic Matter.", "DECLINE", salvageMatter = 10)
+        return offer(kinetickk.ball.content.api.WorldLayer.ZENITH, blessings) + offer(kinetickk.ball.content.api.WorldLayer.NADIR, pacts)
+    }
+
+    /** Every omen as the offer deals it (in a Ram-keyed run), then No omen. */
+    private fun omenCards(language: AppLanguage): List<RewardCardPresentation> {
+        val choices = content.variety.omens.definitions.map { omen ->
+            ChoiceOption(ChoiceType.OMEN, omen.name, omen.upside, "OMEN", omenId = omen.id)
+        } + ChoiceOption(ChoiceType.OMEN, "No omen", "Start the run as it is.", "DECLINE")
+        val model = rewardFixtureModel(content = content, choiceType = ChoiceType.OMEN, choices = choices, language = language)
+            .with("keynoteTag" to BuildTag.RAM, "keynoteElement" to StatusElement.THERMAL)
+        return choices.mapIndexed { index, choice -> model.rewardCardPresentation(choice, index, language) }
+    }
+
+    /**
+     * Every signal card with mid-run terms (the Merchant's offers locked, as an unbanked purse of 40 Matter leaves them),
+     * then Ignore.
+     */
+    private fun signalCards(language: AppLanguage, numberScale: Double = 1.0): List<RewardCardPresentation> {
+        val terms = mapOf(
+            SignalOption.MERCHANT_RARE_OFFER to Triple(85, 0, true), SignalOption.MERCHANT_EPIC_OFFER to Triple(210, 0, true),
+            SignalOption.MERCHANT_REROLLS to Triple(40, 2, false), SignalOption.SHRINE_BLOOD to Triple(54, 0, false),
+            SignalOption.SHRINE_WARD to Triple(20, 25, false), SignalOption.SHRINE_RELIC to Triple(72, 0, false),
+            SignalOption.GAMBLE_REROLL to Triple(1, 3, false), SignalOption.GAMBLE_MATTER to Triple(10, 22, false),
+            SignalOption.GAMBLE_INTEGRITY to Triple(27, 0, false), SignalOption.DERELICT_REPAIR to Triple(0, 72, false),
+            SignalOption.DERELICT_CARGO to Triple(0, 52, false),
+        )
+        val choices = SignalOption.entries.map { option ->
+            val (cost, payout, locked) = terms[option] ?: Triple(0, 0, false)
+            signal(option, option.kind ?: SignalKind.DERELICT, cost, payout, locked)
+        }
+        val model = rewardFixtureModel(content = content, choiceType = ChoiceType.SIGNAL, choices = choices, language = language,
+            numberScale = numberScale)
+        return choices.mapIndexed { index, choice -> model.rewardCardPresentation(choice, index, language) }
     }
 
     /**
@@ -148,9 +235,10 @@ class RewardCardGalleryShotsTest {
 
     private class CardSize(val width: Int, val height: Int, val phone: Boolean)
 
-    private fun itemCards(items: List<ItemDefinition>, language: AppLanguage): List<RewardCardPresentation> {
+    private fun itemCards(items: List<ItemDefinition>, language: AppLanguage, numberScale: Double = 1.0): List<RewardCardPresentation> {
         val choices = items.map { ChoiceOption(ChoiceType.ITEM, it.name, it.description, it.rarity.displayLabel.uppercase(), itemId = it.id) }
-        val model = rewardFixtureModel(content = content, choices = choices, discoveredItems = content.items.map { it.id }.toSet(), language = language)
+        val model = rewardFixtureModel(content = content, choices = choices, discoveredItems = content.items.map { it.id }.toSet(), language = language,
+            numberScale = numberScale)
         return choices.mapIndexed { index, choice -> model.rewardCardPresentation(choice, index, language) }
     }
 
@@ -188,7 +276,7 @@ class RewardCardGalleryShotsTest {
         val focus = listOf(RewardFocus.OFFENSE to ChoiceType.ITEM, RewardFocus.GRAVITIC to ChoiceType.RELIC, RewardFocus.MOTION to ChoiceType.TOTEM)
             .map { (focus, type) -> card(type, ChoiceOption(type, focus.label, "Choose a direction.", "FOCUS", rewardFocus = focus)) }
         val declines = listOf(
-            card(ChoiceType.RELIC, ChoiceOption(ChoiceType.RELIC, "Leave hollow", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE)),
+            card(ChoiceType.RELIC, ChoiceOption(ChoiceType.RELIC, "Salvage resonance", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE)),
             card(ChoiceType.RELIC, ChoiceOption(ChoiceType.RELIC, "Leave heirloom", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE, heirloom = true)),
         )
         return totems + focus + declines + weapons
@@ -237,6 +325,8 @@ class RewardCardGalleryShotsTest {
     }
 
     private companion object {
+        /** Rebirth 10's number scale. */
+        const val TIER_TEN_SCALE = 3_600.0
         val Board = CardSize(300, 450, phone = false)
         val Phone = CardSize(195, 254, phone = true)
         const val Pad = 18

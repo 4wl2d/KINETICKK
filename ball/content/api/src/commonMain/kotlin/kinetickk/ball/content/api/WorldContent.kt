@@ -8,8 +8,9 @@ package kinetickk.ball.content.api
  * world units and speeds dp per second.
  *
  * The collision bands are expressed as cursor reach, the same normalized center-to-edge measure as
- * [FatigueTuning.edgeStrainStart]: a Core speed is compared with the steady speed that holding the
- * cursor at that reach along the viewport's long axis sustains. Steady speed grows with the viewport, so
+ * [FatigueTuning.edgeStrainStart]: a collision's impact speed (normal speed plus [scrapeShare] of the
+ * sliding speed) is compared with the straight steady speed that holding the cursor at that reach along
+ * the viewport's long axis sustains. Steady speed grows with the viewport, so
  * fixed speeds would make a wide window lethal at a gentle reach and a phone safe at the edge; the long
  * axis keeps the bands the same for every heading.
  */
@@ -19,8 +20,8 @@ data class ObstacleTuning(
     /** Chunks per side of the generated window around the Core's chunk (odd). */
     val windowChunks: Int = 5,
     /** Mean obstacles per chunk before Rebirth density; a chunk holds at most [maximumPerChunk]. */
-    val meanPerChunk: Float = 2.2f,
-    val maximumPerChunk: Int = 5,
+    val meanPerChunk: Float = 0.85f,
+    val maximumPerChunk: Int = 3,
     /** Fractured Space multiplies the mean by this. */
     val fracturedDensityMultiplier: Float = 1.4f,
     val asteroidMinimumRadius: Float = 46f,
@@ -32,33 +33,40 @@ data class ObstacleTuning(
     /** Share of asteroids that are unstable, only under Fractured Space. */
     val fracturedUnstableShare: Float = 0.15f,
     /** No obstacle reaches inside this distance of the run origin. */
-    val safeRadius: Float = 900f,
-    /** Least clear space between two obstacles. */
-    val minimumGap: Float = 90f,
-    /** Cursor reach whose steady speed starts collision damage (tier 3 and above). */
-    val damageStartReach: Float = 0.45f,
-    /** Cursor reach whose steady speed makes a collision lethal. */
-    val lethalReach: Float = 0.72f,
+    val safeRadius: Float = 1_200f,
+    /** Least clear space between two obstacle bodies, including across chunk borders. */
+    val minimumGap: Float = 300f,
+    /**
+     * Cursor reach whose steady speed an impact needs to hurt (tier 3 and above); every hurting hit costs at least
+     * [minimumDamageShare].
+     */
+    val damageStartReach: Float = 0.32f,
+    /** Cursor reach whose steady speed makes an impact lethal before Matrix and item bonuses (reach 0.6 hurts). */
+    val lethalReach: Float = 0.67f,
     /**
      * A Dash from a cruise at this reach is never lethal: the lethal speed stays at least
      * [dashLethalMargin] above that cruise speed plus the Dash impulse.
      */
-    val dashSafeReach: Float = 0.35f,
+    val dashSafeReach: Float = 0.30f,
     val dashLethalMargin: Float = 60f,
     /** At tier 0 collisions start hurting this much faster, shrinking linearly to 0 at [forgivingTiers]. */
-    val forgivingStartBonus: Float = 80f,
+    val forgivingStartBonus: Float = 40f,
     /** At tier 0 collision damage is multiplied by this, rising linearly to 1 at [forgivingTiers]. */
     val forgivingDamageScale: Float = 0.7f,
     val forgivingTiers: Int = 3,
-    /** Collision damage at the lethal speed as a share of maximum integrity. */
-    val damageShare: Float = 0.5f,
-    val damageExponent: Float = 1.3f,
+    /** Collision damage at the lethal end of the band as a share of maximum integrity. */
+    val damageShare: Float = 0.55f,
+    /** Shape of the band from [minimumDamageShare] to [damageShare]: 1 is linear. */
+    val damageExponent: Float = 1.0f,
     /** Collision damage grows by this per Rebirth tier (it replaces the Rebirth incoming-damage multiplier). */
     val damagePerTier: Float = 0.04f,
     val restitution: Float = 0.6f,
     /** A Core bounce below this normal speed slides along the surface instead of bouncing. */
     val slideSpeed: Float = 120f,
-    /** Collision damage and ricochets land at most once per this many seconds. */
+    /**
+     * Collision damage and ricochets of one surface land at most once per this many seconds; another surface, or a
+     * lethal hit, lands at once.
+     */
     val hitCooldownSeconds: Float = 0.25f,
     val bumperMinimumExitSpeed: Float = 700f,
     val bumperMaximumExitSpeed: Float = 1_400f,
@@ -88,6 +96,23 @@ data class ObstacleTuning(
     val minimapViewportFactor: Float = 1.4f,
     /** Blackout multiplies the minimap range by this. */
     val blackoutMinimapScale: Float = 0.5f,
+    /** Share of the sliding (tangential) speed a collision adds to its normal speed: a fast glance hurts. */
+    val scrapeShare: Float = 0.3f,
+    /**
+     * Cursor reach whose straight steady speed (plus the tier-0 start bonus) a bounce's normal speed needs to count as a
+     * ricochet: RICOCHET clauses, Ricochet Rig, Gravity Surfer, the Dipole counter and the ambush pace.
+     */
+    val ricochetReach: Float = 0.45f,
+    /** Matrix and item bonuses never lift the lethal speed past the build's straight steady speed at this reach. */
+    val lethalCeilingReach: Float = 0.77f,
+    /** Damage of a hit at the damage-start speed, as a share of maximum integrity. */
+    val minimumDamageShare: Float = 0.06f,
+    /** Share of collision damage that passes through shields (Glass Comet still lets all of it through). */
+    val shieldBleed: Float = 0.4f,
+    /** A hurting hit keeps 1 − scrapeFriction × severity of its sliding speed; severity is 1 at the lethal speed. */
+    val scrapeFriction: Float = 0.35f,
+    /** The obstacle kinds: per-layer mixes and every new kind's mechanics. */
+    val kinds: ObstacleKindTuning = ObstacleKindTuning(),
 ) {
     init {
         require(chunkSize.isFinite() && chunkSize >= 400f) { "Obstacle chunks must be at least 400 u" }
@@ -127,6 +152,17 @@ data class ObstacleTuning(
         require(thrownSeconds.isFinite() && thrownSeconds >= 0f && slamCooldownSeconds.isFinite() && slamCooldownSeconds >= 0f)
         require(minimapRange.isFinite() && minimapRange > 0f && minimapViewportFactor.isFinite() && minimapViewportFactor > 0f)
         require(blackoutMinimapScale.isFinite() && blackoutMinimapScale > 0f && blackoutMinimapScale <= 1f)
+        require(scrapeShare in 0f..1f) { "Scrape share must be in 0..1" }
+        require(ricochetReach >= damageStartReach && ricochetReach < 1f) { "A ricochet is always a hurting hit" }
+        require(lethalCeilingReach > lethalReach && lethalCeilingReach < 1f) { "The lethal ceiling must lie past the lethal reach" }
+        require(minimumDamageShare >= 0f && minimumDamageShare < damageShare) { "The damage floor must stay below the lethal share" }
+        require(shieldBleed in 0f..1f && scrapeFriction in 0f..1f) { "Shield bleed and scrape friction must be in 0..1" }
+        require(
+            kinds.gateMaximumRadius <= asteroidMaximumRadius && kinds.mineClusterMaximumRadius <= asteroidMaximumRadius &&
+                kinds.ventMaximumRadius <= asteroidMaximumRadius && kinds.wellCoreRadius <= asteroidMaximumRadius,
+        ) { "Every obstacle kind body must fit the largest asteroid" }
+        require(kinds.wellCoreRadius >= bumperRadius) { "A gravity knot is at least bumper sized" }
+        require(kinds.crystalMaximumCandidate >= asteroidMinimumRadius) { "Crystals must be able to replace the smallest asteroid" }
     }
 }
 

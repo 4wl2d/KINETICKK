@@ -54,6 +54,7 @@ import kinetickk.ball.profile.interaction.profileTextScale
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthRenderModel
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthTierStatus
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.formatCompactNumber
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
 import kotlin.math.roundToInt
@@ -564,44 +565,6 @@ internal fun DrawScope.drawRebirthRow(
     drawProfileText(next, rect.right, cy, nextColor, "$role.value", align = KkAlign.END, valign = KkVAlign.CENTER)
     drawLine(Kk.Line, Offset(rect.left, rect.bottom), Offset(rect.right, rect.bottom), frame.density)
 }
-
-/** One comparison row: label, current and next values and the direction of the change. */
-internal class RebirthRow(val label: String, val current: String, val next: String, val change: RebirthChange)
-
-/** Hostile modifiers for the current and next tier, from the game's tier profiles. */
-internal fun rebirthHostileRows(current: RebirthProfile, next: RebirthProfile, language: AppLanguage): List<RebirthRow> = listOf(
-    RebirthRow(language.text(ProfileText.OpeningHostiles), current.openingEnemyCount.toString(), next.openingEnemyCount.toString(),
-        rebirthChange(current.openingEnemyCount.toFloat(), next.openingEnemyCount.toFloat())),
-    multiplierRow(language.text(ProfileText.EnemyCap), current.enemyCapMultiplier, next.enemyCapMultiplier, language),
-    multiplierRow(language.text(ProfileText.SpawnRate), current.spawnRateMultiplier, next.spawnRateMultiplier, language),
-    multiplierRow(language.text(ProfileText.EliteRate), current.eliteRateMultiplier, next.eliteRateMultiplier, language),
-    multiplierRow(language.text(ProfileText.EnemyIntegrity), current.enemyHealthMultiplier, next.enemyHealthMultiplier, language),
-    multiplierRow(language.text(ProfileText.EnemySpeed), current.enemySpeedMultiplier, next.enemySpeedMultiplier, language),
-    multiplierRow(language.text(ProfileText.IncomingDamage), current.incomingDamageMultiplier, next.incomingDamageMultiplier, language),
-    RebirthRow(language.text(ProfileText.ThreatAdvance),
-        language.text(ProfileText.Seconds, current.threatTimeOffsetSeconds.roundToInt()),
-        language.text(ProfileText.Seconds, next.threatTimeOffsetSeconds.roundToInt()),
-        rebirthChange(current.threatTimeOffsetSeconds, next.threatTimeOffsetSeconds)),
-)
-
-/** Compensation for the player for the current and next tier. */
-internal fun rebirthCompensationRows(current: RebirthProfile, next: RebirthProfile, language: AppLanguage): List<RebirthRow> = listOf(
-    multiplierRow(language.text(ProfileText.PlayerPower), current.playerPowerMultiplier, next.playerPowerMultiplier, language),
-    multiplierRow(language.text(ProfileText.KineticMatter), current.matterGainMultiplier, next.matterGainMultiplier, language),
-    RebirthRow(language.text(ProfileText.BonusRerolls), "+${current.bonusRerolls}", "+${next.bonusRerolls}",
-        rebirthChange(current.bonusRerolls.toFloat(), next.bonusRerolls.toFloat())),
-)
-
-private fun multiplierRow(label: String, current: Float, next: Float, language: AppLanguage): RebirthRow =
-    RebirthRow(label, rebirthMultiplier(current, language), rebirthMultiplier(next, language), rebirthChange(current, next))
-
-/** `×1.10`: two decimals with the language's decimal separator. */
-internal fun rebirthMultiplier(value: Float, language: AppLanguage): String {
-    val hundredths = (value * 100f).roundToLong()
-    val separator = if (language == AppLanguage.Russian) ',' else '.'
-    return "×${hundredths / 100L}$separator${(100L + hundredths % 100L).toString().substring(1)}"
-}
-
 
 /** Clip paths for the split numeral and the bone wedge, rebuilt only when the geometry moves. */
 private object NumeralPaths {

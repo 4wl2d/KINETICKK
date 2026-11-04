@@ -9,6 +9,7 @@ import kinetickk.ball.gameplay.api.GameplayAcceptance
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.impl.GameComponent
 import kinetickk.ball.gameplay.impl.GameplayCommandTestCaller
 import kinetickk.ball.gameplay.api.GameplayRunStarted
@@ -20,9 +21,10 @@ import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.CharacterAbilityProjection
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
+import kinetickk.ball.gameplay.nucleus.render.RewardPreview
 import kinetickk.foundation.dispatch.InlineReply
 import kinetickk.ball.profile.api.ProfileReadPort
 import kinetickk.ball.profile.api.ProfileProgress
@@ -45,7 +47,7 @@ import kinetickk.performance.BenchmarkValidation
 import kinetickk.performance.BenchmarkValidationContext
 import kinetickk.performance.runBenchmarkSuite
 
-private const val SUITE_VERSION = "gameplay-component-v3"
+private const val SUITE_VERSION = "gameplay-component-v5"
 private const val DEFAULT_SEED = 731_991
 private const val OPERATIONS_PER_ITERATION = 128
 private val BENCHMARK_RUN_ID = RunId(31)
@@ -77,9 +79,10 @@ private class GameplayComponentBenchmarkFixtures(private val seed: Int) {
             name = "component_frame_60hz_running",
             description =
                 "Real GameComponent accept -> renderSnapshot -> visualFxSnapshot path for one " +
-                    "running 60 Hz frame; a fresh pre-started fixture is consumed per operation.",
+                    "running 60 Hz frame; a fresh fixture started and past its run Omen choice is " +
+                    "consumed per operation.",
             pulse = frame60,
-            pauseBeforeProbe = false,
+            fixture = ComponentFixture.PAST_OMEN_CHOICE,
         ),
         componentScenario(
             name = "component_pointer_move_running",
@@ -87,7 +90,7 @@ private class GameplayComponentBenchmarkFixtures(private val seed: Int) {
                 "Real GameComponent accept -> renderSnapshot -> visualFxSnapshot path for one " +
                     "validated pointer move; a fresh pre-started fixture is consumed per operation.",
             pulse = pointerMove,
-            pauseBeforeProbe = false,
+            fixture = ComponentFixture.STARTED,
         ),
         componentScenario(
             name = "component_frame_60hz_paused",
@@ -95,7 +98,16 @@ private class GameplayComponentBenchmarkFixtures(private val seed: Int) {
                 "Real GameComponent accept -> renderSnapshot -> visualFxSnapshot path for one " +
                     "paused 60 Hz frame; a fresh pre-paused fixture is consumed per operation.",
             pulse = frame60,
-            pauseBeforeProbe = true,
+            fixture = ComponentFixture.PAUSED,
+        ),
+        componentScenario(
+            name = "component_frame_opens_choice",
+            description =
+                "Real GameComponent accept -> renderSnapshot -> visualFxSnapshot path for the first " +
+                    "60 Hz frame of a run, which opens the run Omen choice and projects its reward " +
+                    "previews; a fresh pre-started fixture is consumed per operation.",
+            pulse = frame60,
+            fixture = ComponentFixture.STARTED,
         ),
     )
 
@@ -103,9 +115,9 @@ private class GameplayComponentBenchmarkFixtures(private val seed: Int) {
         name: String,
         description: String,
         pulse: GameplayInteractionPulse,
-        pauseBeforeProbe: Boolean,
+        fixture: ComponentFixture,
     ): BenchmarkScenario {
-        val probe = ComponentPipelineProbe(seed, pulse, pauseBeforeProbe)
+        val probe = ComponentPipelineProbe(seed, pulse, fixture)
         val expected = probe.expectedContract()
         return BenchmarkScenario(
             name = name,
@@ -120,7 +132,7 @@ private class GameplayComponentBenchmarkFixtures(private val seed: Int) {
                 "acceptedRevision" to expected.acceptedRevision.toString(),
                 "operationsPerIteration" to OPERATIONS_PER_ITERATION.toString(),
                 "preparedFixtureCount" to requiredPreparedOperationCount().toString(),
-                "setupExcluded" to "create,start,pause-if-needed,baseline-snapshot",
+                "setupExcluded" to fixture.setup,
                 "measurementPath" to
                     "GameComponent.accept->renderSnapshot->visualFxSnapshot",
                 "outcomeFingerprint" to expected.outcomeWitness.toString(),
@@ -145,14 +157,14 @@ private class GameplayComponentBenchmarkFixtures(private val seed: Int) {
 private class ComponentPipelineProbe(
     private val seed: Int,
     private val pulse: GameplayInteractionPulse,
-    private val pauseBeforeProbe: Boolean,
+    private val fixture: ComponentFixture,
 ) {
-    private val expectedInitialRevision: Long = if (pauseBeforeProbe) 2L else 1L
+    private val expectedInitialRevision: Long = fixture.revision
     private var pool: Array<PreparedPipeline?> = emptyArray()
     private var nextFixtureIndex: Int = 0
 
     fun expectedContract(): ExpectedPipelineContract {
-        val prepared = newPreparedPipeline(seed, pauseBeforeProbe)
+        val prepared = newPreparedPipeline(seed, fixture)
         val initialState = prepared.component.stateSnapshot()
         val acceptance = prepared.component.accept(pulse) as GameplayAcceptance.Accepted
         val snapshot = prepared.component.renderSnapshot()
@@ -179,7 +191,7 @@ private class ComponentPipelineProbe(
     fun prepare() {
         pool = arrayOfNulls(requiredPreparedOperationCount())
         pool.indices.forEach { index ->
-            pool[index] = newPreparedPipeline(seed, pauseBeforeProbe)
+            pool[index] = newPreparedPipeline(seed, fixture)
         }
         nextFixtureIndex = 0
     }
@@ -234,7 +246,19 @@ private data class PreparedPipeline(
     val audio: BenchmarkAudioExecutor,
 )
 
-private fun newPreparedPipeline(seed: Int, pauseBeforeProbe: Boolean): PreparedPipeline {
+/** The state a fixture is prepared to before its measured operation, and the revision it is left at. */
+private enum class ComponentFixture(val revision: Long, val setup: String) {
+    /** Started; the first frame opens the run Omen choice. */
+    STARTED(1L, "create,start,baseline-snapshot"),
+
+    /** Started, its first frame opened the run Omen choice and No omen was taken, so the run is running again. */
+    PAST_OMEN_CHOICE(3L, "create,start,first-frame,no-omen-choice,baseline-snapshot"),
+
+    /** Started and paused. */
+    PAUSED(2L, "create,start,pause,baseline-snapshot"),
+}
+
+private fun newPreparedPipeline(seed: Int, fixture: ComponentFixture): PreparedPipeline {
     val audio = BenchmarkAudioExecutor()
     val component = GameComponent.create(
         runId = BENCHMARK_RUN_ID,
@@ -245,19 +269,37 @@ private fun newPreparedPipeline(seed: Int, pauseBeforeProbe: Boolean): PreparedP
         seed = seed,
     )
     val start = GameplayCommandTestCaller<GameplayRunStarted>()
-    start.call(component::startRun)
+    start.call { reply -> component.startRun(RunMode.STANDARD, reply) }
     check(start.applied.single().runId == BENCHMARK_RUN_ID && start.refused.isEmpty()) {
         "Benchmark GameComponent fixture could not start"
     }
     check(component.stateSnapshot().revision.value == 1L)
     check(component.stateSnapshot().phase == GameplayRunPhase.RUNNING)
-    if (pauseBeforeProbe) {
-        check(component.accept(GameplayInteractionPulse.PauseToggled) is GameplayAcceptance.Accepted) {
-            "Benchmark GameComponent fixture could not pause"
+    when (fixture) {
+        ComponentFixture.STARTED -> Unit
+        ComponentFixture.PAST_OMEN_CHOICE -> {
+            check(component.accept(GameplayInteractionPulse.FrameElapsed.fromValidated(1f / 60f)) is GameplayAcceptance.Accepted)
+            check(component.stateSnapshot().phase == GameplayRunPhase.CHOICE) {
+                "Benchmark GameComponent fixture did not open the run Omen choice"
+            }
+            // No omen is the last card of the Omen choice.
+            val choices = checkNotNull(component.renderSnapshot().renderModel).choices
+            check(choices.last().omenId == null && choices.dropLast(1).all { it.omenId != null }) {
+                "Benchmark GameComponent fixture opened a choice other than the run Omen choice"
+            }
+            check(component.accept(GameplayInteractionPulse.ChoiceSelected.fromValidated(choices.lastIndex)) is GameplayAcceptance.Accepted)
+            check(component.stateSnapshot().phase == GameplayRunPhase.RUNNING) {
+                "Benchmark GameComponent fixture did not return to the run after its Omen choice"
+            }
         }
-        check(component.stateSnapshot().revision.value == 2L)
-        check(component.stateSnapshot().phase == GameplayRunPhase.PAUSED)
+        ComponentFixture.PAUSED -> {
+            check(component.accept(GameplayInteractionPulse.PauseToggled) is GameplayAcceptance.Accepted) {
+                "Benchmark GameComponent fixture could not pause"
+            }
+            check(component.stateSnapshot().phase == GameplayRunPhase.PAUSED)
+        }
     }
+    check(component.stateSnapshot().revision.value == fixture.revision)
     component.renderSnapshot()
     component.visualFxSnapshot()
     audio.reset()
@@ -306,7 +348,7 @@ private object BenchmarkProfilePort : ProfileReadPort, ProfileProgress {
 }
 
 private class BenchmarkAudioExecutor : GameplayAudioExecutor {
-    var advanceCount: Int = 0
+    var tickCount: Int = 0
         private set
     var unlockCount: Int = 0
         private set
@@ -315,10 +357,13 @@ private class BenchmarkAudioExecutor : GameplayAudioExecutor {
     var lastCues: ImmutableList<GameplayAudioCue>? = null
         private set
 
-    override fun advance(realDeltaSeconds: Float, cues: ImmutableList<GameplayAudioCue>) {
-        advanceCount += 1
-        lastDeltaBits = realDeltaSeconds.toRawBits()
+    override fun play(cues: ImmutableList<GameplayAudioCue>) {
         lastCues = cues
+    }
+
+    override fun tick(realDeltaSeconds: Float) {
+        tickCount += 1
+        lastDeltaBits = realDeltaSeconds.toRawBits()
     }
 
     override fun ensureUnlocked() {
@@ -326,7 +371,7 @@ private class BenchmarkAudioExecutor : GameplayAudioExecutor {
     }
 
     fun reset() {
-        advanceCount = 0
+        tickCount = 0
         unlockCount = 0
         lastDeltaBits = 0
         lastCues = null
@@ -354,7 +399,7 @@ private fun timedPipelineSignature(
     signature = mix(signature, visualFx.shockwaves.size)
     signature = mix(signature, visualFx.damageNumbers.size)
     signature = mix(signature, visualFx.weaponArcs.size)
-    signature = mix(signature, audio.advanceCount)
+    signature = mix(signature, audio.tickCount)
     signature = mix(signature, audio.lastDeltaBits)
     return mix(signature, audio.lastCues?.size ?: 0)
 }
@@ -387,7 +432,7 @@ private fun canonicalPipelineFingerprint(
     signature = mixLong(signature, snapshot.revision.value)
     signature = mixLong(signature, canonicalRenderFingerprint(render))
     signature = mixLong(signature, canonicalVisualFxFingerprint(visualFx))
-    signature = mix(signature, audio.advanceCount)
+    signature = mix(signature, audio.tickCount)
     signature = mix(signature, audio.unlockCount)
     signature = mix(signature, audio.lastDeltaBits)
     val cues = audio.lastCues
@@ -507,11 +552,13 @@ private fun canonicalRenderFingerprint(render: GameplayRenderModel): Long {
         signature = mix(signature, obstacle.y.toRawBits())
         signature = mix(signature, obstacle.radius.toRawBits())
         signature = mix(signature, obstacle.shapeSeed)
+        signature = mix(signature, obstacle.fuseAt.toRawBits())
+        signature = mix(signature, obstacle.repels.asInt())
     }
     signature = mixLong(signature, canonicalCharacterAbilityFingerprint(render.characterAbility))
-    signature = mix(signature, render.pointsOfInterest.size)
-    render.pointsOfInterest.forEach { point ->
-        signature = mixLong(signature, canonicalPointOfInterestFingerprint(point))
+    signature = mix(signature, render.sites.size)
+    render.sites.forEach { site ->
+        signature = mixLong(signature, canonicalSiteFingerprint(site))
     }
     signature = mix(signature, render.directedChoice.asInt())
     signature = mix(signature, render.choiceType.ordinal)
@@ -519,6 +566,10 @@ private fun canonicalRenderFingerprint(render: GameplayRenderModel): Long {
     signature = mix(signature, render.choices.size)
     render.choices.forEach { choice ->
         signature = mixLong(signature, canonicalChoiceFingerprint(choice))
+    }
+    signature = mix(signature, render.rewardPreviews.size)
+    render.rewardPreviews.forEach { preview ->
+        signature = mixLong(signature, canonicalRewardPreviewFingerprint(preview))
     }
     signature = mix(signature, render.itemStacksSnapshot.size)
     render.itemStacksSnapshot.forEach { stack -> signature = mix(signature, stack) }
@@ -561,6 +612,32 @@ internal fun canonicalChoiceFingerprint(choice: ChoiceOption): Long {
     signature = mix(signature, choice.rewardFocus?.ordinal ?: -1)
     signature = mix(signature, choice.reborn.asInt())
     return mix(signature, choice.heirloom.asInt())
+}
+
+internal fun canonicalRewardPreviewFingerprint(preview: RewardPreview): Long {
+    var signature = mix(0L, preview.requiresSlot.asInt())
+    signature = mix(signature, preview.changes.size)
+    preview.changes.forEach { change ->
+        signature = mix(signature, change.name.hashCode())
+        signature = mix(signature, change.before.toRawBits())
+        signature = mix(signature, change.after.toRawBits())
+        signature = mix(signature, change.unit.hashCode())
+        signature = mix(signature, change.lowerIsBetter.asInt())
+        signature = mix(signature, change.sourceRelic?.ordinal ?: -1)
+    }
+    signature = mix(signature, preview.forecasts.size)
+    preview.forecasts.forEach { forecast ->
+        signature = mix(signature, forecast.kind.ordinal)
+        signature = mix(signature, forecast.reaction?.ordinal ?: -1)
+        signature = mix(signature, forecast.tag?.ordinal ?: -1)
+        signature = mix(signature, forecast.element?.ordinal ?: -1)
+        signature = mix(signature, forecast.before)
+        signature = mix(signature, forecast.after)
+        signature = mix(signature, forecast.pairing?.ordinal ?: -1)
+        signature = mix(signature, forecast.relic?.ordinal ?: -1)
+        signature = mix(signature, forecast.discovered.asInt())
+    }
+    return signature
 }
 
 internal fun canonicalCharacterAbilityFingerprint(ability: CharacterAbilityProjection): Long {
@@ -609,19 +686,32 @@ internal fun canonicalCharacterAbilityFingerprint(ability: CharacterAbilityProje
     return mix(signature, ability.previousGhostY.toRawBits())
 }
 
-internal fun canonicalPointOfInterestFingerprint(point: PointOfInterestProjection): Long {
-    var signature = mix(0L, point.kind.ordinal)
-    signature = mix(signature, point.name.hashCode())
-    signature = mix(signature, point.x.toRawBits())
-    signature = mix(signature, point.y.toRawBits())
-    signature = mix(signature, point.active.asInt())
-    signature = mix(signature, point.remaining.toRawBits())
-    signature = mix(signature, point.nextBeacon)
-    signature = mix(signature, point.progress.toRawBits())
-    signature = mix(signature, point.defenderIds.size)
-    point.defenderIds.forEach { id -> signature = mix(signature, id) }
-    signature = mix(signature, point.warningRemaining.toRawBits())
-    return mix(signature, point.volleyAngle.toRawBits())
+internal fun canonicalSiteFingerprint(site: SiteProjection): Long {
+    var signature = mix(0L, site.kind.ordinal)
+    signature = mix(signature, site.name.hashCode())
+    signature = mix(signature, site.x.toRawBits())
+    signature = mix(signature, site.y.toRawBits())
+    signature = mix(signature, site.active.asInt())
+    signature = mix(signature, site.remaining.toRawBits())
+    signature = mix(signature, site.step)
+    signature = mix(signature, site.progress.toRawBits())
+    signature = mix(signature, site.foeIds.size)
+    site.foeIds.forEach { id -> signature = mix(signature, id) }
+    signature = mix(signature, site.warningRemaining.toRawBits())
+    signature = mix(signature, site.volleyAngle.toRawBits())
+    signature = mix(signature, site.course.size)
+    site.course.forEach { mark ->
+        signature = mix(signature, mark.dx.toRawBits())
+        signature = mix(signature, mark.dy.toRawBits())
+    }
+    signature = mix(signature, site.radius.toRawBits())
+    signature = mix(signature, site.sides)
+    signature = mix(signature, site.clock.toRawBits())
+    signature = mix(signature, site.medal)
+    signature = mix(signature, site.activationRadius.toRawBits())
+    signature = mix(signature, site.reveal.toRawBits())
+    signature = mix(signature, site.aimDx.toRawBits())
+    return mix(signature, site.aimDy.toRawBits())
 }
 
 internal fun canonicalBuildNotificationFingerprint(notification: BuildNotificationProjection): Long {
@@ -739,12 +829,15 @@ private fun appendRenderCollections(initial: Long, render: GameplayRenderModel):
     signature = mix(signature, synergy.scalingMultiplier.toRawBits())
     signature = mix(signature, synergy.masteryForms)
     signature = mix(signature, synergy.activeMasteryForm?.hashCode() ?: 0)
-    val totem = render.totem
-    signature = mix(signature, if (totem == null) 0 else 1)
-    if (totem != null) {
-        signature = mix(signature, totem.x.toRawBits())
-        signature = mix(signature, totem.y.toRawBits())
-        signature = mix(signature, totem.pulse.toRawBits())
+    val chests = render.totemChests
+    signature = mix(signature, chests.size)
+    for (index in chests.indices) {
+        val chest = chests[index]
+        signature = mix(signature, chest.id.hashCode())
+        signature = mix(signature, chest.x.toRawBits())
+        signature = mix(signature, chest.y.toRawBits())
+        signature = mix(signature, chest.charges)
+        signature = mix(signature, chest.armedAt.toRawBits())
     }
     return signature
 }

@@ -32,6 +32,12 @@ import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
 import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
+import kinetickk.ball.gameplay.nucleus.simulation.combat.*
+import kinetickk.ball.gameplay.nucleus.simulation.elements.*
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
+import kinetickk.ball.gameplay.nucleus.simulation.weapons.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.foundation.collections.immutableListOf
@@ -181,7 +187,7 @@ class GameplayCollectionBoundsTest {
     }
 
     @Test
-    fun soundCuesAcceptThirtyTwoAndRejectThirtyThird() {
+    fun soundCuesHoldEachCueOnceWithinTheirBound() {
         val state = newState(seed = 901)
         repeat(MutableGameState.MAX_GAMEPLAY_SOUND_CUES) {
             state.emitSound(GameplayAudioCue.DASH)
@@ -190,8 +196,8 @@ class GameplayCollectionBoundsTest {
 
         val cues = state.takeSoundCues()
 
-        assertEquals(MutableGameState.MAX_GAMEPLAY_SOUND_CUES, cues.size)
-        assertTrue(cues.all { cue -> cue == GameplayAudioCue.DASH })
+        assertEquals(listOf(GameplayAudioCue.DASH, GameplayAudioCue.VICTORY), cues)
+        assertTrue(cues.size <= MutableGameState.MAX_GAMEPLAY_SOUND_CUES)
     }
 
     @Test
@@ -583,12 +589,12 @@ class GameplayCollectionBoundsTest {
                 candidateCount - itemCards,
                 relicContent.relics.count { relic -> relic.id !in selectedRelicIds },
             )
-            // The fourth card declines into an empty slot; it never consumes a relic candidate.
-            assertEquals(RelicChoiceAction.DECLINE, relicState.choices.last().relicAction)
+            // The fourth card melds an empty slot; it never consumes a relic candidate.
+            assertEquals(RelicChoiceAction.MELD, relicState.choices.last().relicAction)
             assertEquals(itemCards + 1, relicState.choices.size)
         }
 
-        // A Totem recalibration offers three weapons, never the Ledger-widened item bound.
+        // A Totem choice's weapon change offers three weapons, never the Ledger-widened item bound.
         listOf(WEAPON_OFFER_CHOICES, WEAPON_OFFER_CHOICES + 1).forEachIndexed { index, candidateCount ->
             val currentWeapon = canonicalGameplayContent.weapon(WeaponId.FLUX_WAKE)
             val weaponCandidates = canonicalGameplayContent.weapons

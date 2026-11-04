@@ -106,16 +106,16 @@ class KkTokensTest {
     fun colorVisionPalettesMatchTheHandoffTokens() {
         fun hex(color: Color) = (color.toArgb().toLong() and 0xFFFFFFFFL).toString(16).uppercase()
         val expected = mapOf(
-            KkVisionMode.DEFAULT to listOf("FFD8FF3E", "FFFF3B6B", "FFFF8A1F", "FF45E0FF", "FFA98BFF"),
-            KkVisionMode.PROTAN to listOf("FFFFE14D", "FF3D8BFF", "FFFFB000", "FF9AD0FF", "FFE0E0E0"),
-            KkVisionMode.DEUTAN to listOf("FFFFD84A", "FF2F6BFF", "FFFF9E1A", "FFA6D8FF", "FFD6D6D6"),
-            KkVisionMode.TRITAN to listOf("FF5CF2E0", "FFFF3B3B", "FFFF7A9A", "FFE4E4E4", "FFFF9ED8"),
-            KkVisionMode.MONO to listOf("FFFFFFFF", "FFFFFFFF", "FFBDBDBD", "FF8A8A8A", "FFD9D9D9"),
+            KkVisionMode.DEFAULT to listOf("FFD8FF3E", "FFFF3B6B", "FFFF8A1F", "FF45E0FF", "FFA98BFF", "FF9CF7C4"),
+            KkVisionMode.PROTAN to listOf("FFFFE14D", "FF3D8BFF", "FFFFB000", "FF9AD0FF", "FFE0E0E0", "FF6CA69A"),
+            KkVisionMode.DEUTAN to listOf("FFFFD84A", "FF2F6BFF", "FFFF9E1A", "FFA6D8FF", "FFD6D6D6", "FF6CA69A"),
+            KkVisionMode.TRITAN to listOf("FF5CF2E0", "FFFF3B3B", "FFFF7A9A", "FFE4E4E4", "FFFF9ED8", "FF919E77"),
+            KkVisionMode.MONO to listOf("FFFFFFFF", "FFFFFFFF", "FFBDBDBD", "FF8A8A8A", "FFD9D9D9", "FF9E9E9E"),
         )
         assertEquals(KkVisionMode.entries.toSet(), expected.keys)
         expected.forEach { (mode, colors) ->
             val palette = mode.palette
-            assertEquals(colors, listOf(palette.you, palette.threat, palette.heat, palette.shield, palette.pol).map(::hex), "$mode")
+            assertEquals(colors, listOf(palette.you, palette.threat, palette.heat, palette.shield, palette.pol, palette.soft).map(::hex), "$mode")
             assertEquals(mode == KkVisionMode.MONO, palette.hatchThreats, "$mode hatch")
         }
         assertEquals(KkRolePalette.Default, KkVisionMode.DEFAULT.palette)

@@ -12,6 +12,17 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.assertNull
+import kinetickk.ball.gameplay.nucleus.simulation.characters.*
+import kinetickk.ball.gameplay.nucleus.simulation.combat.*
+import kinetickk.ball.gameplay.nucleus.simulation.elements.*
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
+import kinetickk.ball.gameplay.nucleus.simulation.flight.*
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
+import kinetickk.ball.gameplay.nucleus.simulation.sites.*
+import kinetickk.ball.gameplay.nucleus.simulation.skills.*
+import kinetickk.ball.gameplay.nucleus.simulation.variety.*
+import kinetickk.ball.gameplay.nucleus.simulation.world.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 
 /**
  * Real input-only runs of a fresh profile. The controller can inspect current threats, but cannot alter simulation
@@ -20,16 +31,18 @@ import kotlin.test.assertNull
  * Both rules are population gates (0.5.0 active items) over [PopulationSeeds]: on the 05885fa9 base
  * the reference seed 2026 alone won as the reference does with probability 0.53, and the ten further probe seeds
  * reached five POI-free wins with probability 0.70, so both re-rolled with every change to the reward stream. Each
- * threshold is the base share minus two standard errors, rounded down. The reference seed is still flown twice to show
- * the run is deterministic, and every choice of every run keeps the loadout invariant.
+ * threshold is the lower of the seeded rule (the reference seed wins so; five of the ten seeds win without a POI) and
+ * the Elite-resonance base share minus two standard errors, rounded down. The reference seed is still flown twice to
+ * show the run is deterministic, and every choice of every run keeps the loadout invariant.
  */
 class NoPoiPlaythroughTest {
     /**
      * A fresh run wins as the reference did: VICTORY within 720-900 s with the Architect arriving at 720 s, every POI
-     * skipped, no completed orbit pending, the foundation at 180 s (weapon level 3, three items, a Relic slot) and the
-     * opportunity at 360 s (four Elites seen, four Relic slots), and weapon level 10 with four Relics, two of them
-     * ranked, at the end. The base share over the population was 158 of 300 (0.527, SE 0.029; 44 base wins touched a
-     * POI); at least [MIN_REFERENCE_SHARE] must win so.
+     * skipped, no completed orbit pending, the foundation at 180 s (weapon level 3, three items, a Relic claimed) and the
+     * opportunity at 360 s (four Elites seen, two Relics claimed: the Relic budget unlocks its Elite drops at 30, 195,
+     * 360 and 525 s), and weapon level 10 with the whole Relic budget claimed at the end. On the Elite-resonance base,
+     * when the rule read four Relic slots at 360 s and four Relics, two of them ranked, at the end, 221 of the 300 runs
+     * won so (0.737, SE 0.025; base - 2 SE 0.686; 0.717 on the tree before it); at least [MIN_REFERENCE_SHARE] must.
      */
     @Test fun freshProfilesWinNoPoiRunsWithinTwelveToFifteenActiveMinutes() {
         java.io.File(System.getProperty("java.io.tmpdir"), "kinetickk-nopoi-evidence.txt").writeText("")
@@ -45,14 +58,16 @@ class NoPoiPlaythroughTest {
     /**
      * The reference win is not a knife-edge seed: other fresh-profile runs win without a POI. Only a victory that
      * skipped every POI is a no-POI win (the bot's avoidance is a heuristic), and each one lasts 720-900 s and ends
-     * with four Relics. The base share over the population was 160 of 300 (0.533, SE 0.029); at least
-     * [MIN_NO_POI_WIN_SHARE] must win so. Earlier, on the ten fixed probe seeds: 6 wins after wave A, 7 after the
-     * second wave, all 10 after the final weapon balance (floor 5).
+     * with the whole Relic budget claimed. On the Elite-resonance base 248 of the 300 runs win so (0.827, SE 0.022; 0.720 on the tree
+     * before it); at least [MIN_NO_POI_WIN_SHARE] must, the seeded five of ten, since the base minus two standard errors
+     * (0.783) lies above it. Earlier, on the ten fixed probe seeds: 6 wins after wave A, 7 after the second wave, all 10
+     * after the final weapon balance (floor 5).
      */
     @Test fun freshProfileAlsoWinsFurtherReferenceNoPoiSeeds() {
         population.filter { it.noPoiWin }.forEach { run ->
             assertTrue(run.seconds in 720f..900f, "seed=${run.seed} activeSeconds=${run.seconds}")
-            assertEquals(4, run.relics.size, "seed=${run.seed}")
+            // A win may leave the last opportunity unclaimed (no Elite fell after it unlocked); it never passes the budget.
+            assertTrue(run.relicClaims <= canonicalGameplayContent.relicPolicy.acquisitionsPerRun, "seed=${run.seed} claims=${run.relicClaims}")
         }
         val share = population.shareOf { it.noPoiWin }
         report("NOPOI FURTHER population ${population.count { it.noPoiWin }} of ${population.size} (${"%.3f".format(share)})")
@@ -60,31 +75,66 @@ class NoPoiPlaythroughTest {
             "only ${"%.3f".format(share)} of ${population.size} fresh runs won without a POI; expected at least $MIN_NO_POI_WIN_SHARE")
     }
 
-    private companion object {
+    /**
+     * An avoiding bot offered two Data cards and Decay Spores (which it ranks below Data) rerolls the offer, and with no
+     * reroll left takes the Data card as a counted breach.
+     */
+    @Test fun anAvoidingBotCountsDecaySporesAsDataInAForcedOffer() {
+        fun offered(rerolls: Int): MutableGameState = MutableGameState(canonicalGameplayContent, seed = REFERENCE_SEED).apply {
+            startRun()
+            val data = content.items.filter { it.minimumRebirth == 0 && it.isDataEconomy && it.active == null }.take(2)
+            val spores = checkNotNull(content.activeItem(SkillId.DECAY_SPORES))
+            activeChoiceType = ChoiceType.ITEM
+            choices = (data + spores).map { itemCard(it, it.rarity.displayLabel.uppercase(), reborn = false) }
+            phase = GamePhase.CHOICE
+            rerollsRemaining = rerolls
+        }
+        val rerolling = offered(rerolls = 1)
+        val rerollingBot = NoPoiBot(dataPolicy = DataPolicy.AVOID)
+        rerollingBot.choose(rerolling)
+        assertEquals(0, rerolling.rerollsRemaining, "it rerolls the offer")
+        assertEquals(0, rerollingBot.avoidBreaches)
+
+        val forced = offered(rerolls = 0)
+        val data = forced.choices.take(2).map { checkNotNull(it.itemId) }
+        val bot = NoPoiBot(dataPolicy = DataPolicy.AVOID)
+        bot.choose(forced)
+        assertEquals(1, bot.avoidBreaches, "taking Data is a counted breach")
+        assertTrue(data.any { forced.itemStacks[it] > 0 }, "it takes a Data card")
+        assertTrue(!forced.skillLoadout.owns(SkillId.DECAY_SPORES), "never Decay Spores")
+    }
+
+    internal companion object {
         const val REFERENCE_SEED = 2026
 
-        /** The least share of [PopulationSeeds] runs that win as the reference does (base 0.527, SE 0.029). */
-        const val MIN_REFERENCE_SHARE = 0.46
+        /** The least share of [PopulationSeeds] runs that win as the reference does (Elite-resonance base 0.737, SE 0.025). */
+        const val MIN_REFERENCE_SHARE = 0.68
 
-        /** The least share of [PopulationSeeds] runs that win without a POI (base 0.533, SE 0.029). */
-        const val MIN_NO_POI_WIN_SHARE = 0.47
+        /** The least share of [PopulationSeeds] runs that win without a POI (seeded 5 of 10; Elite-resonance base 0.827, SE 0.022). */
+        const val MIN_NO_POI_WIN_SHARE = 0.50
 
         /** One fresh run per [PopulationSeeds] seed, shared by both rules. */
         val population: List<NoPoiRun> by lazy { populationOf(PopulationSeeds) { seed -> fly(seed) } }
 
         /**
          * One fresh run on [seed]; [reportAttempt] (the reference replays) also writes its minutes to the evidence
-         * file.
+         * file. Probes pass their own [content] and an [observer] that sees the state after every input frame.
          */
-        fun fly(seed: Int, reportAttempt: Int? = null): NoPoiRun {
+        fun fly(
+            seed: Int,
+            reportAttempt: Int? = null,
+            content: GameplayContentSnapshot = canonicalGameplayContent,
+            observer: (MutableGameState) -> Unit = {},
+        ): NoPoiRun {
             if (reportAttempt != null) report("REFERENCE attempt=$reportAttempt seed=$seed simulationSpeed=1.0 inputHz=50 freshLab=true")
-            val state = MutableGameState(canonicalGameplayContent, seed = seed)
+            val state = MutableGameState(content, seed = seed)
             state.unlockWeaponsForTesting(ReferenceArmory)
+            state.startingWeapon = botLoadout(BotWeaponOrder, ReferenceArmory)
             state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
             state.startRun()
             assertEquals(1f, state.settings.simulationSpeed)
             assertEquals(CoreShape.ORB, state.coreShape)
-            assertEquals(WeaponId.FLUX_WAKE, state.weapon)
+            assertEquals(WeaponId.ARC_COIL, state.weapon, "the bot loads out its first owned preferred weapon")
             assertTrue((0 until state.matrixRanks.size).all { state.matrixRanks[it] == 0 })
             assertEquals(0, state.rebirthLevel)
             val bot = NoPoiBot()
@@ -107,15 +157,15 @@ class NoPoiPlaythroughTest {
                 }
                 state.enemies.filter { it.type == EnemyType.ELITE }.forEach { observedEliteIds += it.id }
                 if (state.bossSpawned && bossObservedAt == null) bossObservedAt = state.elapsed
-                if (reportAttempt != null && !poiEngaged && state.pointsOfInterest.any { it.active }) {
-                    report("POI ACTIVATED sec=${state.elapsed} core=${state.coreX.toInt()},${state.coreY.toInt()} speed=${state.speed.toInt()} points=${state.pointsOfInterest.map { "${it.kind}@${it.x.toInt()},${it.y.toInt()}" }} relics=${state.equippedRelics}")
+                if (reportAttempt != null && !poiEngaged && state.sites.any { it.active }) {
+                    report("POI ACTIVATED sec=${state.elapsed} core=${state.coreX.toInt()},${state.coreY.toInt()} speed=${state.speed.toInt()} points=${state.sites.map { "${it.kind}@${it.x.toInt()},${it.y.toInt()}" }} relics=${state.equippedRelics}")
                 }
-                poiEngaged = poiEngaged || state.pointsOfInterest.any { it.active } ||
-                    state.directedReward != null || state.pendingDirectedRewards.isNotEmpty()
+                poiEngaged = poiEngaged || state.optionalSitesTouched()
                 if (state.elapsed >= 180f && foundation == null) foundation = milestone(state, observedEliteIds.size)
                 if (state.elapsed >= 360f && fourSlotOpportunity == null) fourSlotOpportunity = milestone(state, observedEliteIds.size)
                 damage += max(0f, previousHealth - state.hp)
                 previousHealth = state.hp
+                observer(state)
                 state.takeSoundCues()
                 state.takeVisualFxCues()
                 if (reportAttempt != null && state.elapsed >= minute * 60f) {
@@ -125,7 +175,7 @@ class NoPoiPlaythroughTest {
             }
             val run = NoPoiRun(seed, state.phase, state.elapsed, state.message, state.hp, state.level, state.weapon, state.weaponLevel,
                 state.kills, state.itemStacks.indices.map { state.itemStacks[it] }, state.equippedRelics.toList(), bossObservedAt,
-                poiEngaged, state.pendingCompletedOrbits, foundation, fourSlotOpportunity)
+                poiEngaged, state.pendingCompletedOrbits, foundation, fourSlotOpportunity, state.relicRun.relicClaims)
             if (reportAttempt != null) report("NOPOI FINAL seed=$seed sec=${state.elapsed} phase=${state.phase} reason=${state.message} hp=${state.hp} kills=${state.kills} level=${state.level} weapon=${state.weapon}/${state.weaponLevel} damage=$damage bossAt=$bossObservedAt completedOrbits=${state.pendingCompletedOrbits} poi=$poiEngaged foundation=$foundation sixMinutes=$fourSlotOpportunity")
             return run
         }
@@ -133,28 +183,34 @@ class NoPoiPlaythroughTest {
 }
 
 /** One fresh no-POI run as the rules read it: its end, the Architect's arrival, POI contact and the two milestones. */
-private data class NoPoiRun(
+internal data class NoPoiRun(
     val seed: Int, val phase: GamePhase, val seconds: Float, val reason: String, val remainingHp: Float, val level: Int,
     val weapon: WeaponId, val weaponLevel: Int, val kills: Int, val itemStacks: List<Int>, val relics: List<EquippedRelic>,
     val bossObservedAt: Float?, val poiEngaged: Boolean, val pendingCompletedOrbits: Int,
     val foundation: Milestone?, val sixMinutes: Milestone?,
+    /** Relic opportunities the run claimed (its Relic budget's count). */
+    val relicClaims: Int,
 ) {
     /** A victory that skipped every POI. */
     val noPoiWin: Boolean get() = phase == GamePhase.VICTORY && !poiEngaged
 
-    /** The reference rule: a POI-free victory in 720-900 s that reached both milestones and the late build. */
+    /**
+     * The reference rule: a POI-free victory in 720-900 s that reached both milestones and the late build. The Relic
+     * clauses follow the Relic budget: one claim by 180 s, two by 360 s (the schedule's first two Elite drops) and the
+     * whole budget at the end, however the bot spent each claim (a bind, a rank-up or a Meld).
+     */
     val winsLikeTheReference: Boolean get() = noPoiWin && seconds in 720f..900f && bossObservedAt?.let { it in 720f..720.05f } == true &&
         pendingCompletedOrbits == 0 &&
-        foundation?.let { it.weaponLevel >= 3 && it.items >= 3 && it.relicSlots >= 1 } == true &&
-        sixMinutes?.let { it.eliteOpportunities >= 4 && it.relicSlots == 4 } == true &&
-        weaponLevel >= 10 && relics.size == 4 && relics.count { it.rank > 1 } >= 2
+        foundation?.let { it.weaponLevel >= 3 && it.items >= 3 && it.relicClaims >= 1 } == true &&
+        sixMinutes?.let { it.eliteOpportunities >= 4 && it.relicClaims >= 2 } == true &&
+        weaponLevel >= 10 && relicClaims == canonicalGameplayContent.relicPolicy.acquisitionsPerRun
 
     fun summary(): String = "$seed:$phase@${seconds.toInt()}s(L$level $reason)"
 }
 
-private data class Milestone(val level: Int, val weaponLevel: Int, val items: Int, val relicSlots: Int, val eliteOpportunities: Int)
+internal data class Milestone(val level: Int, val weaponLevel: Int, val items: Int, val relicClaims: Int, val eliteOpportunities: Int)
 private fun milestone(state: MutableGameState, eliteOpportunities: Int) = Milestone(
-    state.level, state.weaponLevel, state.acquiredItemCount, state.equippedRelics.size, eliteOpportunities,
+    state.level, state.weaponLevel, state.acquiredItemCount, state.relicRun.relicClaims, eliteOpportunities,
 )
 
 private fun report(value: String) {
@@ -167,8 +223,11 @@ private fun report(value: String) {
  * Steering uses a short approximate projectile forecast; all actual motion/damage goes through update().
  * Each 20 ms input is a normal pointer/Brake/Dash action, independent of the configured simulation speed.
  */
-/** How far the bot keeps the momentum-projected Core from a skipped POI's center. */
-private const val POI_CLEARANCE = 360f
+/** How far beyond a skipped optional site's radius the bot keeps the momentum-projected Core (65 + 295 = 360). */
+private const val SITE_CLEARANCE_MARGIN = 295f
+
+/** How far beyond a skipped optional site's radius a Blink, Arc Hook or Slingshot line must pass (65 + 85 = 150). */
+private const val SITE_GUARD_MARGIN = 85f
 
 /** The bot looks at its skills this often (simulated seconds). */
 private const val SKILL_CHECK_SECONDS = 0.1f
@@ -186,49 +245,105 @@ private const val APEX_GATE_MARGIN_STRIKES = 2
 private const val MIRROR_SHOT_REACH = 160f
 private const val MIRROR_CONTACT_REACH = 120f
 
+/** How far ahead (seconds of straight travel at the predicted post-Dash velocity) the Dash hazard check looks. */
+private const val DASH_HAZARD_SECONDS = 0.3f
+
+/** The share of a backward velocity part a Dash cancels before its impulse (performDash's reverse assist). */
+private const val DASH_REVERSE_ASSIST = 0.72f
+
+/** Blink Drive: the Blink stops this far short of the singularity and falls back to a pushed Dash below this range. */
+private const val BLINK_DRIVE_SINGULARITY_GAP = 60f
+private const val BLINK_DRIVE_MINIMUM_RANGE = 30f
+
+/**
+ * How the bot presses Dash. [HUMAN] is the reference pilot (decisions Addendum B1): at most one press per Dash phase,
+ * and no threat-dodge or Apex Dash that would carry the Core into a solid body at the build's lethal obstacle speed.
+ * [LEGACY] is the bot before B1, which re-pressed Dash on every 0.02 s input frame while a shot kept closing and never
+ * looked at rocks; only the terrain calibration probe flies it, as the old-bot arm.
+ */
+internal enum class DashRule { HUMAN, LEGACY }
+
+/** The weapons the bot orbits its target with; it rams with every other one. */
+internal val BotOrbitWeapons: Set<WeaponId> = setOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.PRISM_RELAY)
+
+/**
+ * The bot's boss engagement: its orbit radius and speed with the Flux Wake, else with any other weapon (the speed of
+ * its every other orbit too).
+ */
+internal const val WAKE_BOSS_RADIUS = 100f
+internal const val WAKE_BOSS_SPEED = 350f
+internal const val ARC_BOSS_RADIUS = 300f
+internal const val ARC_BOSS_SPEED = 460f
+
 internal class NoPoiBot(
     private val archetypeTag: BuildTag = BuildTag.RAM,
     private val element: StatusElement? = StatusElement.ENTROPY,
-    private val weaponOrder: List<WeaponId> = listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.ENTROPY_FIELD, WeaponId.PRISM_RELAY),
-    /** An impact-driven player avoids liabilities that cut impacts, healing, integrity or steering. */
+    private val weaponOrder: List<WeaponId> = BotWeaponOrder,
+    /**
+     * The Relics whose rule its build cannot use, so only the liability is left (RelicValueProbeTest measures each on the
+     * reference build): it melds rather than bind one.
+     */
     private val relicTaste: Map<RelicId, Float> = mapOf(
-        RelicId.ECHO_CHAMBER to -40f,
-        RelicId.GLASS_COMET to -20f,
-        RelicId.VERDANT_ROT to -20f,
-        RelicId.PERPETUAL_VECTOR to -20f,
-        RelicId.AEGIS_INVERSION to -20f,
-        // Its arc weapons cannot crit, so the Prism would only cost 20 %.
-        RelicId.EXECUTIONERS_PRISM to -20f,
-        // It takes steady chip damage, which Stormheart turns into self-discharges.
-        RelicId.STORMHEART_CAPACITOR to -20f,
-        // It never manages heat, so the Covenant's cooling cut keeps it above 80 heat, bleeding integrity.
+        // It never manages heat, so the Covenant's heat bonus never comes.
         RelicId.FURNACE_COVENANT to -20f,
+        // It never brakes on purpose, so Stasis Anchor only slows its weapon.
+        RelicId.STASIS_ANCHOR to -20f,
+        // Its rot stacks seldom sit within reach, so Verdant Rot mostly halves its regeneration and level repairs.
+        RelicId.VERDANT_ROT to -20f,
+        // It applies neither Sonic nor Void, so Shatter and Unmake never fire.
+        RelicId.THUNDER_CHOIR to -20f,
+        RelicId.NULL_COVENANT to -20f,
     ),
     /** How the bot treats Data-gain cards (economy §2.1); [DataPolicy.NEUTRAL] plays exactly as the reference bot. */
     private val dataPolicy: DataPolicy = DataPolicy.NEUTRAL,
     /**
-     * A setup measured without key harmony: the bot leaves a Relic slot hollow rather than bind a Relic that carries
-     * the equipped weapon's key. Off, the bot plays exactly as the reference bot.
+     * A setup measured without key harmony: the bot melds rather than bind a Relic that carries the equipped weapon's
+     * key. Off, the bot plays exactly as the reference bot.
      */
     private val avoidWeaponHarmony: Boolean = false,
+    /** How the bot presses Dash; [DashRule.HUMAN] unless a probe flies the old bot. */
+    private val dashRule: DashRule = DashRule.HUMAN,
+    /** Item cards the bot takes before every other rule; [RarityTaste.NONE] plays exactly as the reference bot. */
+    private val rarityTaste: RarityTaste = RarityTaste.NONE,
+    /**
+     * A Stasis player: with Stasis Anchor bound it brakes while hostile shots or three enemies are inside the stasis and
+     * the stasis holds, and lets go to fire the catch. Off, the bot plays exactly as the reference bot.
+     */
+    private val brakeForStasis: Boolean = false,
 ) {
     private var cursorAngle = 0f
     private var braking = false
+    /** Scratch for the optional-site marks, rewritten on every read. */
+    private val siteMarks = FloatArray(MAX_OPTIONAL_SITE_MARKS * 3)
     private var decisions = 0
     private var nextSkillCheckAt = 0f
+    /** The unstick rule a player follows when the Core crawls (and Core Freeze would close in). */
+    private val stall = PilotStallBreaker()
 
     /** An independent bot in this bot's current state (a forked run continues with it). */
-    fun copy(): NoPoiBot = NoPoiBot(archetypeTag, element, weaponOrder, relicTaste, dataPolicy, avoidWeaponHarmony).also { copy ->
+    fun copy(): NoPoiBot = NoPoiBot(archetypeTag, element, weaponOrder, relicTaste, dataPolicy, avoidWeaponHarmony, dashRule, rarityTaste, brakeForStasis).also { copy ->
         copy.cursorAngle = cursorAngle
         copy.braking = braking
         copy.decisions = decisions
         copy.nextSkillCheckAt = nextSkillCheckAt
         copy.avoidBreaches = avoidBreaches
+        copy.stall.copyFrom(stall)
     }
 
-    /** [DataPolicy.AVOID] only: offers of nothing but Data-gain cards with no reroll left, so one had to be taken. */
+    /**
+     * [DataPolicy.AVOID] only: offers of nothing but Data-gain cards (and Decay Spores, which ranks below them) with no
+     * reroll left, so a Data card had to be taken.
+     */
     var avoidBreaches = 0
         private set
+
+    /**
+     * Turns the remembered cursor to where the pointer is: another pilot (or a jitter) may have moved it, and the bot
+     * swings its cursor from what it remembers, so a stale angle would throw the singularity across the Core.
+     */
+    fun syncCursor(s: MutableGameState) {
+        cursorAngle = atan2(s.pointerY - s.screenHeight * 0.5f - (s.coreY - s.cameraY), s.pointerX - s.screenWidth * 0.5f - (s.coreX - s.cameraX))
+    }
 
     fun control(s: MutableGameState) {
         val boss = s.enemies.firstOrNull { it.type == EnemyType.ARCHITECT }
@@ -241,16 +356,17 @@ internal class NoPoiBot(
         if (targetEnemy != null) {
             targetX = targetEnemy.x + targetEnemy.vx * 0.3f
             targetY = targetEnemy.y + targetEnemy.vy * 0.3f
-            radius = if (s.weapon in listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.PRISM_RELAY)) 280f else 0f
+            radius = if (s.weapon in BotOrbitWeapons) 280f else 0f
         }
-        val totem = s.totem
+        // A waiting Totem chest while the bot holds a Key (population runs never finish a dungeon, so never there).
+        val chest = if (s.keys > 0 && s.inBaseLayer()) s.structures.totemChests.minByOrNull { distanceSquared(s.coreX, s.coreY, it.x, it.y) } else null
         val pickup = s.pickups.filter { it.type == PickupType.KEY || it.type == PickupType.RELIC || it.type == PickupType.REPAIR && s.hp < s.maxHp - 15f || it.type == PickupType.DATA && distanceSquared(s.coreX, s.coreY, it.x, it.y) < 180f * 180f }
             .minByOrNull { distanceSquared(s.coreX, s.coreY, it.x, it.y) }
         if (boss != null) {
             targetX = boss.x; targetY = boss.y
-            radius = if (s.weapon == WeaponId.FLUX_WAKE) 100f else 300f
-        } else if (totem != null && s.keys > 0) {
-            targetX = totem.x; targetY = totem.y; radius = 5f
+            radius = if (s.weapon == WeaponId.FLUX_WAKE) WAKE_BOSS_RADIUS else ARC_BOSS_RADIUS
+        } else if (chest != null) {
+            targetX = chest.x; targetY = chest.y; radius = 5f
         } else if (pickup != null) {
             targetX = pickup.x; targetY = pickup.y; radius = 10f
         }
@@ -259,7 +375,7 @@ internal class NoPoiBot(
         val dist = max(1f, length(dx, dy))
         val nx = if (dist > 2f) dx / dist else 1f
         val ny = if (dist > 2f) dy / dist else 0f
-        val orbitSpeed = if (boss != null && s.weapon == WeaponId.FLUX_WAKE) 350f else 460f
+        val orbitSpeed = if (boss != null && s.weapon == WeaponId.FLUX_WAKE) WAKE_BOSS_SPEED else ARC_BOSS_SPEED
         val radial = ((radius - dist) * 2.4f).coerceIn(-480f, 480f)
         var desiredX = -ny * orbitSpeed + nx * radial
         var desiredY = nx * orbitSpeed + ny * radial
@@ -267,22 +383,35 @@ internal class NoPoiBot(
             desiredX = -nx * 650f
             desiredY = -ny * 650f
         }
-        // Keep voluntarily skipped POI activation circles outside the intended path.
-        for (point in s.pointsOfInterest) {
+        // A crawl (terms that cancel, a rock between the Core and its target) breaks out sideways; the berths below
+        // still apply to the way out.
+        if (stall.stalled(s)) stall.sideStep(s, targetX, targetY)
+        if (stall.escaping(s)) {
+            desiredX = stall.escapeX
+            desiredY = stall.escapeY
+        }
+        // Keep voluntarily skipped optional sites outside the intended path.
+        val siteCount = s.optionalSiteMarks(siteMarks)
+        for (mark in 0 until siteCount) {
+            val base = mark * 3
             // Steer from where momentum carries the Core, so low-drag builds still clear the circle.
-            val px = s.coreX + s.velocityX * 0.35f - point.x
-            val py = s.coreY + s.velocityY * 0.35f - point.y
+            val px = s.coreX + s.velocityX * 0.35f - siteMarks[base]
+            val py = s.coreY + s.velocityY * 0.35f - siteMarks[base + 1]
+            val clearance = siteMarks[base + 2] + SITE_CLEARANCE_MARGIN
             val pd = max(1f, length(px, py))
-            if (pd < POI_CLEARANCE) {
-                desiredX += px / pd * (POI_CLEARANCE - pd) * 8f
-                desiredY += py / pd * (POI_CLEARANCE - pd) * 8f
+            if (pd < clearance) {
+                desiredX += px / pd * (clearance - pd) * 8f
+                desiredY += py / pd * (clearance - pd) * 8f
             }
         }
-        // Steer around obstacles ahead, from where momentum carries the Core (a player reading the minimap).
+        // Steer around obstacles ahead, from where momentum carries the Core (a player reading the minimap): solid bodies
+        // with a wide berth, a mine's arming reach or a vent's plume with a narrow one; accelerator gates are harmless.
         for (obstacle in s.obstacleField.obstacles) {
+            val reach = s.obstacleHazardReach(obstacle)
+            if (reach <= 0f) continue
             val px = s.coreX + s.velocityX * 0.3f - obstacle.x
             val py = s.coreY + s.velocityY * 0.3f - obstacle.y
-            val clearance = obstacle.radius + s.coreRadius + 110f
+            val clearance = reach + s.coreRadius + if (obstacle.kind.solid) 110f else 40f
             val pd = max(1f, length(px, py))
             if (pd < clearance) {
                 desiredX += px / pd * (clearance - pd) * 6f
@@ -304,16 +433,17 @@ internal class NoPoiBot(
         }
         val ax = (desiredX - s.velocityX) * 5f + s.velocityX * s.dragCoefficient
         val ay = (desiredY - s.velocityY) * 5f + s.velocityY * s.dragCoefficient
-        val desiredAngle = atan2(ay, ax)
+        val aim = s.steeringAimFor(ax, ay)
+        val desiredAngle = aim.heading
         val difference = atan2(sin(desiredAngle - cursorAngle), cos(desiredAngle - cursorAngle))
         val goalAngle = cursorAngle + difference.coerceIn(-0.30f, 0.30f)
-        val force = length(ax, ay).coerceIn(395f, 1700f)
+        val neededTether = aim.distance.coerceIn(65f, 400f)
         var bestAngle = goalAngle
         var bestScore = Float.POSITIVE_INFINITY
         val nearbyShots = s.projectiles.filter { it.hostile && distanceSquared(it.x, it.y, s.coreX, s.coreY) < 450f * 450f }
         for (offset in listOf(0f, -0.3f, 0.3f, -0.6f, 0.6f, -1f, 1f)) {
             val option = goalAngle + offset
-            val score = steeringScore(s, option, force, desiredX, desiredY, nearbyShots)
+            val score = steeringScore(s, option, neededTether, desiredX, desiredY, nearbyShots)
             if (score < bestScore) { bestScore = score; bestAngle = option }
         }
         val selectedDifference = atan2(sin(bestAngle - cursorAngle), cos(bestAngle - cursorAngle))
@@ -327,7 +457,6 @@ internal class NoPoiBot(
         val normalHalfHeight = s.screenHeight * 0.5f * s.content.tempo.fatigue.edgeStrainStart - 10f
         val availableX = if (ux > 0f) (normalHalfWidth - offsetX) / ux else if (ux < 0f) (-normalHalfWidth - offsetX) / ux else 10_000f
         val availableY = if (uy > 0f) (normalHalfHeight - offsetY) / uy else if (uy < 0f) (-normalHalfHeight - offsetY) / uy else 10_000f
-        val neededTether = ((length(ax, ay) - 92f) / s.magnetStrength).coerceIn(65f, 400f)
         val tether = min(neededTether, min(availableX, availableY)).coerceAtLeast(65f)
         s.updatePointer(s.screenWidth * 0.5f + offsetX + ux * tether, s.screenHeight * 0.5f + offsetY + uy * tether)
         if (s.speed > 900f) braking = true
@@ -338,7 +467,10 @@ internal class NoPoiBot(
         } || s.enemies.any {
             it.alive && !it.isBossClass && distanceSquared(it.x, it.y, s.coreX, s.coreY) <= MIRROR_CONTACT_REACH * MIRROR_CONTACT_REACH
         })
-        s.setBrake(braking || mirrorBrake)
+        val stasisBrake = brakeForStasis && s.build.upside(RelicId.STASIS_ANCHOR) && s.stasisLockedUntil <= s.elapsed && s.stasisMeter > 0f && (s.projectiles.any {
+            it.hostile && !it.spent && distanceSquared(it.x, it.y, s.coreX, s.coreY) <= STASIS_RADIUS * STASIS_RADIUS
+        } || s.enemies.count { it.alive && distanceSquared(it.x, it.y, s.coreX, s.coreY) <= STASIS_RADIUS * STASIS_RADIUS } >= 3)
+        s.setBrake(braking || mirrorBrake || stasisBrake)
         val threat = s.projectiles.any {
             if (!it.hostile) false else {
                 val px = it.x - s.coreX
@@ -349,14 +481,69 @@ internal class NoPoiBot(
                 time in 0f..0.20f && length(px + vx * time, py + vy * time) < 32f
             }
         }
-        // A Blink teleports along the cursor, so never Dash when the landing would touch a skipped POI.
-        val blinkLandsOnPoi = s.relicRank(RelicId.BLINK_DRIVE) > 0 && s.pointsOfInterest.any { point ->
-            segmentCircleIntersects(s.coreX, s.coreY, s.coreX + ux * 320f, s.coreY + uy * 320f, point.x, point.y, 150f)
-        }
+        // A Blink teleports along the cursor, so never Dash when the landing would touch a skipped optional site.
+        val blinkLandsOnPoi = s.relicRank(RelicId.BLINK_DRIVE) > 0 &&
+            crossesOptionalSite(s, s.coreX, s.coreY, s.coreX + ux * 320f, s.coreY + uy * 320f)
         // Vivisect's free Dashes and Total Eclipse's fast Blinks are those Apexes: while one runs, the bot Dashes when it can.
         val apexDashes = s.apexActive() && (s.coreShape == CoreShape.SHARD || s.coreShape == CoreShape.CRESCENT)
-        if ((threat || apexDashes) && s.dashReady && s.heat < 60f && !blinkLandsOnPoi) s.requestDash()
+        if ((threat || apexDashes) && s.dashReady && s.heat < 60f && !blinkLandsOnPoi &&
+            (dashRule == DashRule.LEGACY || humanDashAllowed(s))
+        ) s.requestDash()
         castSkills(s)
+    }
+
+    /**
+     * The human Dash rule ([DashRule.HUMAN]):
+     * - **Cadence.** No new press while the previous Dash phase runs, read from the game's own
+     *   [MutableGameState.dashPhaseTime] (a Matrix ricochet phase, which the game runs as a Dash phase, holds it too).
+     *   The phase lasts 0.24 s in 1/120 s steps, so with a 0.02 s input frame two presses land at least 13 frames
+     *   (0.26 s; 31 or 32 steps between the Dashes) apart, where the old bot pressed on consecutive frames and stacked
+     *   one impulse per frame.
+     * - **Hazard.** No press when the Dash would carry the Core into a solid body at its lethal speed: the post-Dash
+     *   velocity predicted as the game's Dash makes it (the reverse assist, then the build's impulse at the
+     *   character's strongest multiplier, the one the lethal speed's own Dash floor uses) reaches the build's
+     *   [obstacleLethalSpeed], and the Blink's own [obstacleBlocksSegment] (solid obstacles of every kind, a
+     *   materialised phase shard, structure walls and sealed doors) finds a body along the straight post-Dash path
+     *   within [DASH_HAZARD_SECONDS]. A Blink adds no speed (it keeps a share and stops short of every body), so the
+     *   check reads only a pushed Dash.
+     * Production reads only, no allocation.
+     */
+    private fun humanDashAllowed(s: MutableGameState): Boolean {
+        if (s.dashPhaseTime > 0f) return false
+        val targetX = s.cameraX + s.pointerX - s.screenWidth * 0.5f
+        val targetY = s.cameraY + s.pointerY - s.screenHeight * 0.5f
+        val toTarget = length(targetX - s.coreX, targetY - s.coreY)
+        val directionX = if (toTarget > 24f) (targetX - s.coreX) / toTarget else s.lastAimDirectionX
+        val directionY = if (toTarget > 24f) (targetY - s.coreY) / toTarget else s.lastAimDirectionY
+        if (dashBlinks(s, directionX, directionY, targetX, targetY)) return true
+        var vx = s.velocityX
+        var vy = s.velocityY
+        val forward = vx * directionX + vy * directionY
+        if (forward < 0f) {
+            vx -= directionX * forward * DASH_REVERSE_ASSIST
+            vy -= directionY * forward * DASH_REVERSE_ASSIST
+        }
+        val impulse = s.effectiveDashImpulse() * s.maxCharacterDashImpulseMultiplier()
+        vx += directionX * impulse
+        vy += directionY * impulse
+        if (length(vx, vy) < s.obstacleLethalSpeed()) return true
+        return !s.obstacleBlocksSegment(
+            s.coreX, s.coreY, s.coreX + vx * DASH_HAZARD_SECONDS, s.coreY + vy * DASH_HAZARD_SECONDS, s.coreRadius,
+        )
+    }
+
+    /**
+     * True when the Dash along ([directionX], [directionY]) becomes a Blink: always for the Crescent; with Blink Drive
+     * when the Blink has its minimum range, short of the singularity at ([targetX], [targetY]) and clear of bodies.
+     */
+    private fun dashBlinks(s: MutableGameState, directionX: Float, directionY: Float, targetX: Float, targetY: Float): Boolean {
+        if (s.coreShape == CoreShape.CRESCENT) return true
+        if (!s.build.upside(RelicId.BLINK_DRIVE)) return false
+        var range = s.relicValue(RelicId.BLINK_DRIVE, 1) * if (s.build.pairing(RelicPairingId.HEAVY_BLINK)) 0.65f else 1f
+        if ((targetX - s.coreX) * directionX + (targetY - s.coreY) * directionY > 0f) {
+            range = min(range, max(0f, length(targetX - s.coreX, targetY - s.coreY) - BLINK_DRIVE_SINGULARITY_GAP))
+        }
+        return s.blinkRangeClearOfObstacles(directionX, directionY, range) >= BLINK_DRIVE_MINIMUM_RANGE
     }
 
     /**
@@ -364,7 +551,7 @@ internal class NoPoiBot(
      * its situation holds, and a ready Apex when the Architect is in the open, a crowd presses or integrity runs
      * low. The bot never moves its pointer to aim; area skills land where it already points.
      */
-    private fun castSkills(s: MutableGameState) {
+    internal fun castSkills(s: MutableGameState) {
         if (s.elapsed < nextSkillCheckAt) return
         nextSkillCheckAt = s.elapsed + SKILL_CHECK_SECONDS
         for (slot in 0 until SkillRuntime.SLOTS) {
@@ -454,31 +641,51 @@ internal class NoPoiBot(
                 shot.hostile && !shot.spent && length(shot.x - s.coreX, shot.y - s.coreY) <= 140f &&
                     (shot.vx - s.velocityX) * (s.coreX - shot.x) + (shot.vy - s.velocityY) * (s.coreY - shot.y) > 0f
             }
-            // The hook throws the Core at its target, so (like a Blink) never along a line that touches a skipped POI.
+            // The hook throws the Core at its target, so (like a Blink) never along a line that touches a skipped site.
             SkillId.ARC_HOOK -> s.nearestSkillTarget(singularityX, singularityY, values[0])?.let { target ->
-                s.pointsOfInterest.none { point ->
-                    segmentCircleIntersects(s.coreX, s.coreY, target.x, target.y, point.x, point.y, 150f)
-                }
+                !crossesOptionalSite(s, s.coreX, s.coreY, target.x, target.y)
             } == true
-            SkillId.SLINGSHOT -> s.speed >= 500f && (s.velocityX * aimX + s.velocityY * aimY) / s.speed <= 0f
+            // The swing throws the Core along the aim at its swing speed (the speed times the scale, within the minimum
+            // and maximum), so (like a Blink and the hook) never along a line that touches a skipped site within the
+            // swing's own clear-path horizon.
+            SkillId.SLINGSHOT -> s.speed >= 500f && (s.velocityX * aimX + s.velocityY * aimY) / s.speed <= 0f && run {
+                val reach = (s.speed * values[0]).coerceIn(values[1], values[2]) * SLING_CLEAR_SECONDS
+                !crossesOptionalSite(s, s.coreX, s.coreY, s.coreX + aimX * reach, s.coreY + aimY * reach)
+            }
         }
     }
 
-    private fun steeringScore(s: MutableGameState, angle: Float, force: Float, desiredX: Float, desiredY: Float, shots: List<Projectile>): Float {
+    /** True when the segment passes within [SITE_GUARD_MARGIN] of an optional site's radius. */
+    private fun crossesOptionalSite(s: MutableGameState, x0: Float, y0: Float, x1: Float, y1: Float): Boolean {
+        val count = s.optionalSiteMarks(siteMarks)
+        for (mark in 0 until count) {
+            val base = mark * 3
+            val radius = siteMarks[base + 2] + SITE_GUARD_MARGIN
+            if (segmentCircleIntersects(x0, y0, x1, y1, siteMarks[base], siteMarks[base + 1], radius)) return true
+        }
+        return false
+    }
+
+    /**
+     * Predicts 0.3 s of flight with the singularity held [tether] dp from the Core along [angle] through the production
+     * law (the camera lag frozen at its current value) and scores how close it ends to the desired velocity and how
+     * near it passes the [shots].
+     */
+    private fun steeringScore(s: MutableGameState, angle: Float, tether: Float, desiredX: Float, desiredY: Float, shots: List<Projectile>): Float {
         var x = s.coreX
         var y = s.coreY
         var vx = s.velocityX
         var vy = s.velocityY
         var penalty = 0f
-        val ux = cos(angle)
-        val uy = sin(angle)
+        val tetherX = cos(angle) * tether
+        val tetherY = sin(angle) * tether
+        val offsetX = s.coreX - s.cameraX + tetherX
+        val offsetY = s.coreY - s.cameraY + tetherY
+        val retained = exp(-s.steeringDrag() * 0.05f)
         repeat(6) { sample ->
-            val speed = max(1f, length(vx, vy))
-            val forward = max(0f, (ux * vx + uy * vy) / speed * force) * (1f - s.tetherAuthority)
-            vx += (ux * force - vx / speed * forward) * 0.05f
-            vy += (uy * force - vy / speed * forward) * 0.05f
-            vx *= exp(-s.dragCoefficient * 0.05f)
-            vy *= exp(-s.dragCoefficient * 0.05f)
+            val acceleration = s.steeringAcceleration(tetherX, tetherY, offsetX, offsetY, vx, vy)
+            vx = (vx + acceleration.x * 0.05f) * retained
+            vy = (vy + acceleration.y * 0.05f) * retained
             x += vx * 0.05f
             y += vy * 0.05f
             val time = (sample + 1) * 0.05f
@@ -492,9 +699,28 @@ internal class NoPoiBot(
 
     fun choose(s: MutableGameState) {
         val choices = s.choices
+        // The bot opts into nothing: it declines an omen and a signal prompt, and takes a boon's first card (it never
+        // enters a rift, so no boon offer reaches it). A missing decline card falls back to the first card rather
+        // than leaving the run stuck on the choice. An opt-out is not a build decision, so it leaves the tie-break
+        // counter (and every later pick) as it would be without the offer.
+        val optOut = when (s.choiceType) {
+            ChoiceType.OMEN -> choices.indexOfFirst { it.omenId == null }.coerceAtLeast(0)
+            ChoiceType.SIGNAL -> choices.indexOfFirst { it.signalOption == SignalOption.IGNORE }.coerceAtLeast(0)
+            ChoiceType.BOON -> 0
+            else -> -1
+        }
+        if (optOut >= 0) {
+            s.choose(optOut)
+            return
+        }
         if (s.choiceType == ChoiceType.ACTIVE_SLOT) {
             decisions++
             s.choose(slotChoice(s))
+            return
+        }
+        tastePick(s)?.let { index ->
+            decisions++
+            s.choose(index)
             return
         }
         // SEEK takes a Data active first (economy §2.1); every policy takes a rank-up of an owned active next.
@@ -510,14 +736,15 @@ internal class NoPoiBot(
                     s.rerollChoices()
                     return
                 }
-                DataPolicy.AVOID -> if (choices.isNotEmpty() && choices.all { isDataGainCard(s, it) }) {
+                // Decay Spores ranks below every Data card, so an offer of nothing else forces Data as well.
+                DataPolicy.AVOID -> if (choices.isNotEmpty() && choices.all { isDataGainCard(s, it) || activeEffect(s, it) == SkillId.DECAY_SPORES }) {
                     if (s.choicesCanReroll) {
                         s.rerollChoices()
                         return
                     }
-                    // Every card gains Data: take the one that gains the least.
+                    // Every card gains Data or is Decay Spores: take the Data card that gains the least.
                     avoidBreaches++
-                    val least = choices.indices.minBy { dataWeight(s, choices[it]) }
+                    val least = choices.indices.minBy { if (isDataGainCard(s, choices[it])) dataWeight(s, choices[it]) else Float.MAX_VALUE }
                     decisions++
                     s.choose(least)
                     return
@@ -533,13 +760,46 @@ internal class NoPoiBot(
         s.choose(index)
     }
 
-    /** SEEK ranks a Data-gain card by its Data weight above every other card; AVOID scores it −5 000. */
+    /**
+     * The item card [rarityTaste] takes before every other rule: a Legendary, then (luck-seeking) the card with the most
+     * Luck, then an Epic; a card it would only salvage or that would ask for an active slot is left to the other rules.
+     */
+    private fun tastePick(s: MutableGameState): Int? {
+        if (rarityTaste == RarityTaste.NONE || s.choiceType != ChoiceType.ITEM) return null
+        fun taste(c: ChoiceOption): Float {
+            val item = c.itemId?.let(s.content::item) ?: return 0f
+            if (s.itemStacks[item.id] >= item.maxStacks || s.needsActiveSlot(item)) return 0f
+            val luck = luckOf(s, c)
+            return when {
+                item.rarity == ItemRarity.LEGENDARY && (rarityTaste == RarityTaste.LUCK_SEEKING || luck == 0f) -> 10f
+                rarityTaste == RarityTaste.LUCK_SEEKING && luck > 0f -> 5f + luck
+                item.rarity == ItemRarity.EPIC -> 1f
+                else -> 0f
+            }
+        }
+        val best = s.choices.indices.maxByOrNull { taste(s.choices[it]) } ?: return null
+        return best.takeIf { taste(s.choices[it]) > 0f }
+    }
+
+    /** The Luck an item card adds at one stack (0 for any other card). */
+    private fun luckOf(s: MutableGameState, c: ChoiceOption): Float =
+        c.itemId?.let(s.content::item)?.stats?.filter { it.effect == ItemEffect.LUCK }?.sumOf { it.amount.toDouble() }?.toFloat() ?: 0f
+
+    /**
+     * SEEK ranks a Data-gain card by its Data weight above every other card; AVOID scores it −15 000, below an
+     * active it would only salvage for Matter, so it takes Data only when every card gains Data (a counted breach)
+     * or is Decay Spores.
+     */
     private fun policyScore(s: MutableGameState, c: ChoiceOption, index: Int): Float = when {
-        // An active the bot would not take (it would only salvage, or AVOID's Decay Spores) is a last resort.
+        // The greedy taste never invests in Luck: a Luck card only when nothing else is offered.
+        rarityTaste == RarityTaste.GREEDY && luckOf(s, c) > 0f -> -5_000f
+        // AVOID's Decay Spores (Spored deaths drop Data) ranks below its Data cards.
+        dataPolicy == DataPolicy.AVOID && activeEffect(s, c) == SkillId.DECAY_SPORES -> -20_000f
+        // Any other active the bot would not take only salvages: a last resort.
         activeEffect(s, c) != null && activeEffect(s, c) !in wantedActives(s) -> -10_000f
         dataPolicy == DataPolicy.NEUTRAL || !isDataGainCard(s, c) -> score(s, c, index)
         dataPolicy == DataPolicy.SEEK -> dataWeight(s, c)
-        else -> -5_000f
+        else -> -15_000f
     }
 
     /** `5 000 + 1 000 × ΣDATA_GAIN + 500 × [has GainData]` for a Data-gain item card (economy §2.1). */
@@ -637,18 +897,16 @@ internal class NoPoiBot(
 
     /**
      * A committed Ram and Entropy build: archetype and element items first, survival stats second,
-     * then whatever already has points. Relics fill empty slots, then rank up through duplicates and
-     * Meld. A small deterministic spread stands in for a player's taste between equal cards.
+     * then whatever already has points. Each Relic offer spends one of the run's Relic opportunities: a Relic it likes
+     * binds into an open slot first, a rank-up of a bound Relic comes next, and it melds when every Relic card is a poor
+     * fit (one whose rule its build cannot use, or any new Relic once the Hollow Crown is bound, [MELD_SCORE]). A small deterministic spread stands in for a player's taste
+     * between equal cards.
      */
     private fun score(s: MutableGameState, c: ChoiceOption, index: Int): Float {
-        val full = s.equippedRelics.size >= s.content.relicPolicy.maxSlots
+        val full = s.openRelicSlots() <= 0
         val spread = ((decisions * 31 + index * 7) % 7).toFloat()
         if (c.relicAction == RelicChoiceAction.DECLINE) return -50f
-        if (c.relicAction == RelicChoiceAction.MELD) return if (full) 40f else -40f
-        if (c.relicAction == RelicChoiceAction.MELD_TARGET) {
-            val relic = s.equippedRelics[c.relicSlot ?: return -1000f]
-            return if (s.canMeld(relic.id)) 60f - relic.rank * 10f + spread else -1000f
-        }
+        if (c.relicAction == RelicChoiceAction.MELD) return MELD_SCORE
         if (c.relicAction == RelicChoiceAction.REPLACE) return -10f - (s.equippedRelics.getOrNull(c.relicSlot ?: 0)?.rank ?: 0)
         if (c.totemAction == TotemAction.CHANGE_WEAPON) return if (s.weapon !in weaponOrder) 1_000f else -1f
         if (c.totemAction == TotemAction.AMPLIFY_CURRENT) return 100f
@@ -680,22 +938,51 @@ internal class NoPoiBot(
         }
         c.relicId?.let { id ->
             if (avoidWeaponHarmony && s.currentWeaponDefinition.key in s.content.relic(id).keys) return -100f
+            val taste = relicTaste[id] ?: 0f
             return when {
-                s.relicRank(id) > 0 -> if (full) 50f else 15f + spread
+                s.relicRank(id) > 0 -> 30f + spread + taste
                 full -> -20f
-                else -> 40f + spread + (relicTaste[id] ?: 0f)
+                // The Hollow Crown pays for empty slots: it takes the Crown while at most one other Relic is bound, and
+                // with the Crown bound it melds the rest (a sealed slot stays empty for the Crown).
+                id == RelicId.HOLLOW_CROWN && s.equippedRelics.size > 1 -> -20f
+                s.relicRank(RelicId.HOLLOW_CROWN) > 0 -> -20f
+                else -> 40f + spread + taste
             }
         }
         return 0f
     }
 }
 
+/**
+ * The bot's Meld score: above every Relic card it dislikes (a new one at most 26, its liability taste -20 or lower), below
+ * a Relic it likes (at least 40) and a rank-up of one it bound (at least 30).
+ */
+private const val MELD_SCORE = 27f
+
 /** How a bot treats Data-gain cards: as any other card, first ([SEEK], with rerolls) or last ([AVOID]). */
 internal enum class DataPolicy { NEUTRAL, SEEK, AVOID }
 
 /**
- * The reference run owns the original twelve weapons, so its Totem recalibrations deal exactly the
- * offers they did before weapon offers were limited to owned weapons (a profile that owns only the
- * starter can amplify but never recalibrate).
+ * Item cards a bot takes first: none ([NONE], the reference bot), every Legendary and then every Epic but never a Luck
+ * card while another is offered ([GREEDY], the base-Luck player of the rarity probes), or a Legendary, then the most
+ * Luck, then an Epic ([LUCK_SEEKING], the max-Luck player).
+ */
+internal enum class RarityTaste { NONE, GREEDY, LUCK_SEEKING }
+
+/**
+ * The reference run owns the original twelve weapons: the population bots load out from it ([botLoadout]) and its
+ * Totem chest and directed-site recalibrations deal from it (a profile that owns only the starter can amplify but
+ * never recalibrate).
  */
 internal val ReferenceArmory: List<WeaponId> = WeaponId.entries.take(12)
+
+/** The reference bot's weapon preference, best first. */
+internal val BotWeaponOrder: List<WeaponId> = listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.ENTROPY_FIELD, WeaponId.PRISM_RELAY)
+
+/**
+ * The weapon a bot preferring [weaponOrder] loads out of [owned]: the first it prefers that the profile owns, as a player
+ * with that armory picks in the Hangar ([fallback], the starter, when it owns none). The world Totem used to make this
+ * switch at its first recalibration; without it the population harnesses start on the loaded-out weapon (harness H1).
+ */
+internal fun botLoadout(weaponOrder: List<WeaponId>, owned: Collection<WeaponId>, fallback: WeaponId = WeaponId.FLUX_WAKE): WeaponId =
+    weaponOrder.firstOrNull { it in owned } ?: fallback

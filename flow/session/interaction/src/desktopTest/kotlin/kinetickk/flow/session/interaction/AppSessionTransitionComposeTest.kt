@@ -16,6 +16,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.gameplay.interaction.GameplayPresentation
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
@@ -33,7 +34,6 @@ import kinetickk.flow.session.interaction.profile.api.ProfileUnavailableFeature
 import kinetickk.foundation.design.KkShutter
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -66,7 +66,6 @@ class AppSessionTransitionComposeTest {
 }
 
 private class OverlaySessionPort : AppSessionPort {
-    override val instanceId = LOCAL_APP_SESSION_INSTANCE_ID
     val pulses = mutableListOf<SessionInteractionPulse>()
     private var overlay: AppDestination? = null
     override fun accept(pulse: SessionInteractionPulse): SessionAcceptance {
@@ -76,10 +75,10 @@ private class OverlaySessionPort : AppSessionPort {
             SessionInteractionPulse.CloseOverlay -> overlay = null
             else -> Unit
         }
-        return SessionAcceptance.Accepted(instanceId, SessionRevision(pulses.size.toLong()))
+        return SessionAcceptance.Accepted(SessionRevision(pulses.size.toLong()))
     }
-    override fun query(query: AppSessionQuery.GetShell) = AppShellProjection(
-        instanceId, SessionRevision(pulses.size.toLong()), SessionRevision.ZERO, AppDestination.Home, overlay,
+    override fun shell() = AppShellProjection(
+        SessionRevision(pulses.size.toLong()), SessionRevision.ZERO, AppDestination.Home, overlay,
         null, false, null, SessionLifecycle.READY, false, null,
     )
 }
@@ -94,7 +93,7 @@ private fun TransitionShell(port: AppSessionPort) {
             @Composable override fun Content(inputEnabled: Boolean, onOutput: (GameplayInteractionOutput) -> Unit) = Unit
         },
         homeFeature = object : HomeFeature {
-            @Composable override fun Content(inputEnabled: Boolean, onOutput: (HomeOutput) -> Unit) {
+            @Composable override fun Content(inputEnabled: Boolean, runMode: RunMode, onOutput: (HomeOutput) -> Unit) {
                 BasicText("open", Modifier.testTag("transition-open").clickable(enabled = inputEnabled) { onOutput(HomeOutput.OpenCodex) })
             }
         },
@@ -119,7 +118,6 @@ private fun TransitionShell(port: AppSessionPort) {
 
 private object TransitionSilentAudio : AudioService {
     override fun updatePreferences(preferences: AudioPreferences) = Unit
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

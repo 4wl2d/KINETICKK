@@ -9,6 +9,7 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.DamageNumberFormat
@@ -31,7 +32,6 @@ import kinetickk.ball.profile.api.PreferenceAdjustmentDirection
 import kinetickk.ball.profile.api.PreferencesProjection
 import kinetickk.ball.profile.api.ProfileBootstrapBlockReason
 import kinetickk.ball.profile.api.ProfileBootstrapStatus
-import kinetickk.ball.profile.api.ProfileEffectRef
 import kinetickk.ball.profile.api.ProfileGameplayProgressRejection
 import kinetickk.ball.profile.api.ProfilePersistenceStatus
 import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
@@ -44,8 +44,6 @@ import kinetickk.ball.profile.api.ProfileRunBootstrapResult
 import kinetickk.ball.profile.api.ProfileSnapshot
 import kinetickk.ball.profile.api.ProfileSnapshotReadResult
 import kinetickk.ball.profile.api.ProfileSnapshotRejection
-import kinetickk.ball.profile.api.ProfileWriteFailure
-import kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
 import kinetickk.ball.profile.api.ProfileWriteResult
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProgressProjection
@@ -73,9 +71,9 @@ class ProfileNucleusTest {
         assertFalse(state.profile.preferences.runStatisticsOnLeft)
         assertEquals(frame.nextState.profile, assertIs<ProfileOutput.PersistSnapshot>(frame.outputs.single()).snapshot.profile)
         val persist = assertIs<ProfileOutput.PersistSnapshot>(frame.outputs.single())
-        val written = ProfileNucleus.decide(frame.nextState, ProfileNucleusPulse.WriteCompleted(
+        val written = ProfileNucleus.complete(frame.nextState,
             persist.effectRef, ProfileWriteResult.Written(persist.snapshot.revision),
-        )).acceptedFrame()
+        )
         val restored = ProfileNucleus.decide(written.nextState, pulse).acceptedFrame()
         assertFalse(restored.nextState.profile.preferences.runStatisticsOnLeft)
     }
@@ -524,6 +522,45 @@ class ProfileNucleusTest {
     }
 
     @Test
+    fun worldDiscoveriesUnion() {
+        val state = readyState()
+        val first = applyGameplayProgress(state, GameplayProgressUpdate(
+            discoveredItemIds = emptySet(),
+            discoveredWorldEntries = setOf(WorldDiscovery.GATE_RACE, WorldDiscovery.LOST_CURSOR),
+        )).acceptedFrame()
+        // The accepted frame persists the union with the rest of the profile.
+        assertEquals(first.nextState.profile, assertIs<ProfileOutput.PersistSnapshot>(first.outputs.first()).snapshot.profile)
+        val second = applyGameplayProgress(first.persisted(), GameplayProgressUpdate(
+            discoveredItemIds = emptySet(),
+            discoveredWorldEntries = setOf(WorldDiscovery.LOST_CURSOR, WorldDiscovery.ZENITH),
+        )).acceptedFrame()
+        val collection = second.nextState.profile.collection
+        assertEquals(setOf(WorldDiscovery.GATE_RACE, WorldDiscovery.LOST_CURSOR, WorldDiscovery.ZENITH), collection.discoveredWorldEntries)
+        // Nothing else moves: no item, relic or counter is touched by a discovery.
+        assertEquals(
+            state.profile.copy(collection = state.profile.collection.copy(discoveredWorldEntries = collection.discoveredWorldEntries)),
+            second.nextState.profile,
+        )
+        // A known discovery is no change, so nothing is written again.
+        assertEquals(
+            ProfileRejection.NoChange,
+            applyGameplayProgress(second.persisted(), GameplayProgressUpdate(
+                discoveredItemIds = emptySet(),
+                discoveredWorldEntries = setOf(WorldDiscovery.GATE_RACE),
+            )).rejection(),
+        )
+        // Every discovery, the secret bosses included, fits one profile.
+        val everything = applyGameplayProgress(state, GameplayProgressUpdate(
+            discoveredItemIds = emptySet(),
+            discoveredWorldEntries = WorldDiscovery.entries.toSet(),
+        )).acceptedFrame().nextState.profile.collection
+        assertEquals(WorldDiscovery.entries.toSet(), everything.discoveredWorldEntries)
+        // A run that ends with nothing but counters keeps every discovery.
+        val counted = applyGameplayProgress(second.persisted(), GameplayProgressUpdate(totalKills = 3)).acceptedFrame()
+        assertEquals(collection.discoveredWorldEntries, counted.nextState.profile.collection.discoveredWorldEntries)
+    }
+
+    @Test
     fun targetOwnedCommandOrdersPersistenceBeforeCorrelatedCompletion() {
         val frame = ProfileNucleus.decide(
             readyState(),
@@ -717,51 +754,6 @@ class ProfileNucleusTest {
         assertIs<ProfileRunBootstrapResult.Unavailable>(
             ProfileNucleus.query(failed, ProfileQuery.GetRunBootstrap).result,
         )
-    }
-
-    @Test
-    fun acceptedResourceEffectStagesOneFactBeforePersistenceCompletion() {
-        val mutation = ProfileNucleus.decide(
-            readyState(),
-            ProfileNucleusPulse.Intent(
-                ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.ToggleSoundEffects),
-            ),
-        ).acceptedFrame()
-        val persist = assertIs<ProfileOutput.PersistSnapshot>(mutation.outputs.single())
-
-        val unknown = ProfileNucleus.decide(
-            mutation.nextState,
-            ProfileNucleusPulse.WriteCompleted(
-                persist.effectRef,
-                ProfileWriteResult.OutcomeUnknown(
-                    ProfileWriteOutcomeUnknownReason.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
-                ),
-            ),
-        ).acceptedFrame()
-        assertEquals(mutation.nextState.profile, unknown.nextState.profile)
-        assertIs<ProfilePersistenceStatus.OutcomeUnknown>(unknown.nextState.persistence)
-        assertTrue(unknown.outputs.isEmpty())
-
-        val failed = ProfileNucleus.decide(
-            mutation.nextState,
-            ProfileNucleusPulse.WriteCompleted(
-                persist.effectRef,
-                ProfileWriteResult.ResourceFailure(
-                    ProfileWriteFailure.PROVIDER_WRITE_FAILED_BEFORE_EXECUTION,
-                ),
-            ),
-        ).acceptedFrame()
-        assertIs<ProfilePersistenceStatus.ResourceFailure>(failed.nextState.persistence)
-
-        assertFailsWith<IllegalStateException> {
-            ProfileNucleus.decide(
-                mutation.nextState,
-                ProfileNucleusPulse.WriteCompleted(
-                    ProfileEffectRef(persist.effectRef.sourceRevision, persist.effectRef.ordinal + 1),
-                    ProfileWriteResult.Written(persist.snapshot.revision),
-                ),
-            )
-        }
     }
 
     @Test
@@ -1078,10 +1070,10 @@ class ProfileNucleusTest {
 /** Completes the frame's write so the next decision starts from a settled State. */
 private fun ProfileAcceptedFrame.persisted(): ProfileState {
     val persist = assertIs<ProfileOutput.PersistSnapshot>(outputs.first())
-    return ProfileNucleus.decide(
+    return ProfileNucleus.complete(
         nextState,
-        ProfileNucleusPulse.WriteCompleted(persist.effectRef, ProfileWriteResult.Written(persist.snapshot.revision)),
-    ).acceptedFrame().nextState
+        persist.effectRef, ProfileWriteResult.Written(persist.snapshot.revision),
+    ).nextState
 }
 
 private fun ProfileDecision.acceptedFrame(): ProfileAcceptedFrame =

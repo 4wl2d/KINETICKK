@@ -31,6 +31,10 @@ import kotlin.test.assertTrue
  * - Mono elements are pure greys.
  * - Every tone stays 12 ΔE from the preset's gold ([KkRolePalette.gold]): gold is the legendary
  *   material and Rebirth's, so a type mark must never read as it.
+ * - The soft role ([KkRolePalette.soft], the easy run mode's harmless cursor) stays 15 ΔE from the
+ *   preset's threat and 12 ΔE from its volt in every preset, and reaches 4.5:1 on ink. Outside Mono
+ *   it also stays 12 ΔE from the shield, from Entropy (the green element) and from every gold colour;
+ *   in Mono it is a pure grey, told from the shield grey by shape.
  */
 class KkHueGrammarTest {
     @Test
@@ -45,6 +49,37 @@ class KkHueGrammarTest {
         assertTrue(fresh.isEmpty(), "new hue grammar breaks:\n" + fresh.joinToString("\n") { it.detail })
         val resolved = PendingPaletteFixes - breaks.map { it.key }.toSet()
         assertTrue(resolved.isEmpty(), "fixed in KkRolePalette, remove from PendingPaletteFixes: $resolved")
+    }
+
+    @Test
+    fun softRoleStaysHarmlessInEveryPreset() {
+        val breaks = mutableListOf<String>()
+        KkVisionMode.entries.forEach { mode ->
+            val palette = mode.palette
+            val vision = mode.vision()
+            val soft = lab(palette.soft, vision)
+            fun far(name: String, color: Color, minimum: Double) {
+                val distance = deltaE2000(soft, lab(color, vision))
+                if (distance < minimum) breaks += "$mode soft is ${tenths(distance)} ΔE from $name (needs ${tenths(minimum)})"
+            }
+            far("threat", palette.threat, MIN_THREAT_DELTA_E)
+            far("volt", palette.you, MIN_TONE_DELTA_E)
+            val onInk = wcagContrast(palette.soft, Kk.Ink)
+            if (onInk < MIN_INK_CONTRAST) breaks += "$mode soft has ${tenths(onInk)}:1 on ink"
+            if (mode == KkVisionMode.MONO) {
+                val argb = palette.soft.toArgb()
+                val grey = (argb shr 16 and 0xFF) == (argb shr 8 and 0xFF) && (argb shr 8 and 0xFF) == (argb and 0xFF)
+                if (!grey) breaks += "$mode soft is tinted, not a pure grey"
+            } else {
+                far("shield", palette.shield, MIN_TONE_DELTA_E)
+                far("Entropy", palette.element(ENTROPY_ELEMENT), MIN_TONE_DELTA_E)
+                val gold = palette.gold
+                listOf(gold.base, gold.light, gold.seam, gold.stripe, gold.ray).forEachIndexed { index, color ->
+                    far("gold colour $index", color, MIN_TONE_DELTA_E)
+                }
+            }
+        }
+        assertEquals(emptyList(), breaks)
     }
 
     @Test
@@ -113,6 +148,7 @@ class KkHueGrammarTest {
         const val MIN_TONE_DELTA_E = 12.0
         const val MIN_THREAT_DELTA_E = 15.0
         const val MIN_INK_CONTRAST = 4.5
+        const val ENTROPY_ELEMENT = 4
         val ToneNames = listOf("kinetic", "thermal", "cryo", "ion", "gravitic", "entropy", "sonic", "void")
 
         /**

@@ -1,0 +1,70 @@
+// SPDX-FileCopyrightText: 2026 Vladislav Tomilov
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package kinetickk.ball.content.api
+
+import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.toImmutableList
+import kinetickk.foundation.common.localization.AppLanguage
+
+/**
+ * The item's passive mechanics as display lines: stats, then one TRIGGER and one EFFECT line per
+ * clause, then rules; every cost line follows the rest in declaration order. An active item's effect
+ * is not among them: cards and the Codex present it from its [SkillDefinition] (its summary, its
+ * [rankLines] at the rank the item reaches and its rank III text).
+ */
+fun ItemDefinition.ruleLines(
+    language: AppLanguage,
+    context: RuleTextContext = RuleTextContext(),
+): ImmutableList<RuleLine> {
+    val writer = RuleWriter(language, context)
+    val lines = ArrayList<RuleLine>(stats.size + clauses.size * 2 + rules.size * 2)
+    stats.forEach { lines += writer.stat(it) }
+    clauses.forEach { clause ->
+        lines += writer.trigger(clause)
+        lines += writer.effect(clause)
+    }
+    rules.forEach { lines += writer.rule(it) }
+    val (costs, rest) = lines.partition { it.kind == RuleLineKind.COST }
+    return (rest + costs).toImmutableList()
+}
+
+/**
+ * Whether the item's lines write an absolute integrity amount (an integrity stat, a heal, a shield, a recoil), which a
+ * run shows at its number scale and the Codex at the tier-0 base.
+ */
+val ItemDefinition.showsIntegrityAmounts: Boolean
+    get() = stats.any { it.effect.isIntegrityAmount } || rules.any { it is ItemRule.ReactionRecoil } ||
+        clauses.any { clause -> clause.actions.any { it is EffectAction.Heal || it is EffectAction.Shield } }
+
+/**
+ * The upside in [language] with its `{n}` values at [rank], using the language's decimal separator; integrity and damage
+ * values ([RelicValue.powerUnits]) read at [numberScale] (a run's number scale, 1 for the tier-0 base).
+ */
+fun RelicDefinition.upsideText(language: AppLanguage, rank: Int, numberScale: Double = 1.0): String =
+    RelicValuePlaceholder.replace(upside.localizedContent(language)) { match ->
+        match.groupValues[1].toIntOrNull()?.let(values::getOrNull)
+            ?.let { value ->
+                val shown = value.at(rank).toDouble()
+                if (value.powerUnits) language.amount(shown, RELIC_DECIMALS, numberScale) else language.number(shown, RELIC_DECIMALS)
+            }
+            ?: match.value
+    }
+
+/** The mandatory cost in [language]; liabilities never scale with rank. */
+fun RelicDefinition.liabilityText(language: AppLanguage): String = liability.localizedContent(language)
+
+private val RelicValuePlaceholder = Regex("\\{([0-9]+)\\}")
+private const val RELIC_DECIMALS = 2
+
+/** Critical chance kept by [ConversionKind.CRIT_CHANCE_TO_DAMAGE]. */
+internal const val CRIT_CHANCE_CONVERSION_CAP = 0.3
+
+/** Cooling kept by [ConversionKind.DASH_HEAT_TO_SKILLS]. */
+const val DASH_HEAT_CONVERSION_COOLING: Float = 0.8f
+
+/** Data gain kept by [ConversionKind.DATA_TO_SKILLS]. */
+const val DATA_CONVERSION_GAIN: Float = 0.8f
+
+/** Skill cooldown scale of [ConversionKind.SKILLS_COST_HEAT]. */
+const val SKILL_HEAT_CONVERSION_COOLDOWN: Float = 0.6f

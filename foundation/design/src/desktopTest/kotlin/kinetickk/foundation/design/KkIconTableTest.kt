@@ -24,6 +24,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /** `docs/design/redesign/icons.json` is the source of truth for the generated [KkIcon] table. */
@@ -33,6 +34,16 @@ class KkIconTableTest {
             .map { File(it, "docs/design/redesign/icons.json") }
             .first { it.isFile }
         Json.parseToJsonElement(file.readText()).jsonObject
+    }
+
+    @Test
+    fun preparationRetainsEveryIconAcrossRepeatedStarts() {
+        prepareInterfaceIcons()
+        val prepared = KkIcon.entries.map(KkIconPaths::of)
+        prepareInterfaceIcons()
+        for (icon in KkIcon.entries) {
+            assertSame(prepared[icon.ordinal], KkIconPaths.of(icon), icon.key)
+        }
     }
 
     @Test

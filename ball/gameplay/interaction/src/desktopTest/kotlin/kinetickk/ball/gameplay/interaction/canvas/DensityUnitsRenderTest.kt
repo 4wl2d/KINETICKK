@@ -19,8 +19,8 @@ import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.input.GameInteractionValidator
 import kinetickk.ball.gameplay.interaction.input.InteractionValidationResult
-import kinetickk.ball.gameplay.interaction.input.hudHeight
-import kinetickk.ball.gameplay.interaction.input.hudWidth
+import kinetickk.ball.gameplay.interaction.layout.hudHeight
+import kinetickk.ball.gameplay.interaction.layout.hudWidth
 import kinetickk.ball.gameplay.nucleus.GameplayDecision
 import kinetickk.ball.gameplay.nucleus.GameplayNucleus
 import kinetickk.ball.gameplay.nucleus.GameplayNucleusPulse
@@ -35,6 +35,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.interaction.*
+import kinetickk.ball.gameplay.interaction.canvas.hud.*
+import kinetickk.ball.gameplay.interaction.canvas.world.*
+import kinetickk.ball.gameplay.interaction.canvas.world.places.*
 
 /**
  * The simulation runs in dp: the interaction boundary divides the viewport and the pointer by the

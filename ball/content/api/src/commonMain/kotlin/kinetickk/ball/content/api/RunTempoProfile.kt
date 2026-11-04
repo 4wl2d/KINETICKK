@@ -36,7 +36,18 @@ data class FatigueTuning(
     }
 }
 
-/** One immutable source for encounter pressure, build growth and the displayed boss clock. */
+/**
+ * One immutable source for encounter pressure, build growth and the displayed boss clock: the run layer of
+ * docs/balance/progression.md. Every curve reads the run progress `p = elapsed / bossAtSeconds` (clamped to 0..1).
+ * The enemy side grows integrity `1 + 5.9p` ([enemyHealthMultiplier], ×6.9 at the boss) and hostile damage `1 + 0.5p`
+ * ([hostileDamageRunGrowth]). The player side answers integrity with the equipped weapon's run growth `1 + 1.6p`
+ * ([weaponRunGrowth], ×2.6), its level factor `1 + 0.08 (level − 1)` ([weaponLevelFactor]; a fresh run reaches about
+ * level 19 by the boss, ×2.44, and the level never passes [maximumWeaponLevel], ×3.32) and its mastery (Ascended +35 %
+ * from level 10): about ×8.6 at the boss before items, ahead of ×6.9, so a run that builds keeps pace with the ramp.
+ * Abilities grow `1 + 1.0p` ([abilityRunGrowth]) and impacts `1 + 1.2p` ([impactRunGrowth]), slower than integrity:
+ * they are the openers, the weapon carries the late run. The Rebirth tier's integrity and damage curves (the tier
+ * layer) sit on top of this ramp and are answered by permanent progression, never by the run.
+ */
 data class RunTempoProfile(
     val bossAtSeconds: Float = 12f * 60f,
     val firstEliteAtSeconds: Float = 38f,
@@ -44,7 +55,21 @@ data class RunTempoProfile(
     val matterRewardMultiplier: Float = 1.40f,
     val weaponAmplificationEveryLevels: Int = 2,
     val maximumAutomaticWeaponLevel: Int = 10,
+    /** Power each weapon level adds to the equipped weapon and abilities ([weaponLevelFactor]). */
+    val weaponLevelStep: Float = 0.08f,
+    /**
+     * The highest weapon level any source reaches: automatic amplification, Elite resonance, Totem chests and directed
+     * WEAPON rewards all stop here, so late power is designed rather than unbounded.
+     */
+    val maximumWeaponLevel: Int = 30,
+    /**
+     * Weapon levels every Elite-class kill (the kills that drop a Key) adds at once; 0 turns Elite resonance off.
+     * The Elite's description promises the amplification, so revise that copy when switching it off.
+     */
+    val eliteResonanceLevels: Int = 1,
     val fatigue: FatigueTuning = FatigueTuning(),
+    /** The Core's flight law. */
+    val steering: SteeringTuning = SteeringTuning(),
     /** Highest run level; Data stops levelling here (the Apex unlocks at it). */
     val maximumLevel: Int = DEFAULT_MAXIMUM_LEVEL,
     /**
@@ -62,6 +87,10 @@ data class RunTempoProfile(
      * table and a value at or above [maximumLevel] scales nothing.
      */
     val rebirthScaleFromLevel: Int = LEGACY_LEVELS + 1,
+    /** Weapon changes one run may make (a Totem chest's or a weapon site's change); Amplify is never limited. */
+    val weaponChangesPerRun: Int = 1,
+    /** Share of the current weapon level a changed weapon keeps, rounded down and never below level 1. */
+    val weaponChangeKeptLevelShare: Float = 0.6f,
 ) {
     init {
         require(bossAtSeconds.isFinite() && bossAtSeconds > 0f)
@@ -70,6 +99,11 @@ data class RunTempoProfile(
         require(matterRewardMultiplier.isFinite() && matterRewardMultiplier > 0f)
         require(weaponAmplificationEveryLevels > 0)
         require(maximumAutomaticWeaponLevel in 1..100)
+        require(weaponLevelStep.isFinite() && weaponLevelStep >= 0f)
+        require(maximumWeaponLevel in maximumAutomaticWeaponLevel..100) {
+            "The weapon level cap must lie between the automatic cap and 100"
+        }
+        require(eliteResonanceLevels in 0..3) { "Elite resonance must add 0..3 weapon levels" }
         require(maximumLevel in MIN_MAXIMUM_LEVEL..ContentBounds.MAX_RUN_LEVEL) {
             "Maximum run level must be within $MIN_MAXIMUM_LEVEL..${ContentBounds.MAX_RUN_LEVEL}"
         }
@@ -84,6 +118,10 @@ data class RunTempoProfile(
         require(levelRepair.isFinite() && levelRepair >= 0f)
         require(rebirthScaleFromLevel in 1..ContentBounds.MAX_RUN_LEVEL) {
             "The Rebirth Data scale must start on a run level within 1..${ContentBounds.MAX_RUN_LEVEL}"
+        }
+        require(weaponChangesPerRun in 0..10) { "Weapon changes per run must be in 0..10" }
+        require(weaponChangeKeptLevelShare.isFinite() && weaponChangeKeptLevelShare in 0f..1f) {
+            "A weapon change keeps a share of the level in 0..1"
         }
     }
 
@@ -114,6 +152,10 @@ data class RunTempoProfile(
     fun abilityRunGrowth(elapsedSeconds: Float): Float = 1f + 1.0f * progress(elapsedSeconds)
     /** Damage the build deals to its own Core (reaction recoil) keeps linear growth. */
     fun selfDamageRunGrowth(elapsedSeconds: Float): Float = 1f + 1.6f * progress(elapsedSeconds)
+    /** Growth of every hostile attack (contacts, strikes, blasts, shots): 1 + 0.5p. */
+    fun hostileDamageRunGrowth(elapsedSeconds: Float): Float = 1f + 0.5f * progress(elapsedSeconds)
+    /** The weapon level's power factor `1 + weaponLevelStep × (level − 1)`, the level clamped to 1..[maximumWeaponLevel]. */
+    fun weaponLevelFactor(level: Int): Float = 1f + (level.coerceIn(1, maximumWeaponLevel) - 1) * weaponLevelStep
     fun attackRateMultiplier(elapsedSeconds: Float): Float = 1f + progress(elapsedSeconds) * 0.40f
     fun denseAttacks(elapsedSeconds: Float): Boolean = progress(elapsedSeconds) >= 0.58f
     /** Total: at and past the cap it returns the last entry, which the capped state only displays. */
@@ -131,6 +173,9 @@ data class RunTempoProfile(
     }
 
     fun grantsWeaponAmplification(level: Int): Boolean = level > 1 && level % weaponAmplificationEveryLevels == 0
+
+    /** The level a weapon change from weapon level [level] starts the new weapon at. */
+    fun weaponLevelAfterChange(level: Int): Int = (level * weaponChangeKeptLevelShare).toInt().coerceAtLeast(1)
 
     companion object {
         /** A run needs at least one level-up below its cap. */

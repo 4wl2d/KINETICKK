@@ -520,7 +520,14 @@ fun DrawScope.drawKkIcon(
     }
 }
 
-/** Parsed icon paths, one array per icon, created on first draw. */
+/** Prepares the normalized paths and common strokes retained by every icon draw. UI thread only. */
+fun prepareInterfaceIcons() {
+    for (icon in KkIcon.entries) KkIconPaths.of(icon)
+    KkIconStrokes.solid(2f)
+    KkIconStrokes.solid(1.5f)
+}
+
+/** Parsed icon paths, one array per icon, prepared at startup or on first standalone draw. */
 internal object KkIconPaths {
     private val cache = arrayOfNulls<Array<Path>>(KkIcon.entries.size)
 

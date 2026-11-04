@@ -8,6 +8,7 @@ import kinetickk.ball.profile.interaction.ProfileLayoutMode
 import kinetickk.ball.profile.interaction.TestWeapons
 import kinetickk.ball.profile.interaction.profileFrame
 import kinetickk.ball.profile.interaction.profileTextScale
+import kinetickk.ball.profile.interaction.workshop.armory.*
 import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegment
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test

@@ -6,9 +6,13 @@ package kinetickk.ball.content.api
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
+import kotlin.math.abs
 import kotlin.math.floor
+import kotlin.math.log10
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
+import kotlin.math.round
 
 /**
  * A named rule a Rebirth tier adds to the run. Tier n activates entry n - 1 and every entry before
@@ -61,6 +65,11 @@ data class RebirthProfile(
      * level, [dataRequirement]); 1 keeps the base curve.
      */
     val dataRequirementScale: Float = 1f,
+    /**
+     * Display scale of every absolute number a run shows at this tier: damage, integrity and shield read as
+     * power units × this ([rebirthNumberScale]); the simulation keeps computing in power units.
+     */
+    val numberScale: Double = rebirthNumberScale(tier),
 ) {
     init {
         require(tier >= 0) { "Rebirth tier must be non-negative" }
@@ -80,6 +89,7 @@ data class RebirthProfile(
         require(dataRequirementScale.isFinite() && dataRequirementScale >= 1f) {
             "Data requirement scale must be finite and at least 1"
         }
+        require(numberScale.isFinite() && numberScale >= 1.0) { "Number scale must be finite and at least 1" }
     }
 
     private val mutatorMask: Int = mutators.fold(0) { mask, mutator -> mask or (1 shl mutator.ordinal) }
@@ -117,6 +127,41 @@ data class RebirthProfile(
 /** Data requirement growth per Rebirth tier: tier t needs `1 + 0.14t` times the base table (Data supply grows alike). */
 const val REBIRTH_DATA_REQUIREMENT_SCALE_PER_TIER: Float = 0.14f
 
+/** Enemy integrity grows by this factor per Rebirth tier: `H(t) = 1.29^t` (tier 10: ×12.8). */
+const val REBIRTH_ENEMY_INTEGRITY_GROWTH: Float = 1.29f
+
+/** Damage the Core takes grows by this factor per Rebirth tier: `D(t) = 1.19^t` (tier 10: ×5.69). */
+const val REBIRTH_INCOMING_DAMAGE_GROWTH: Float = 1.19f
+
+/** Matter a run earns grows by this factor per Rebirth tier: `1.16^t` (tier 10: ×4.41), so pushing a tier pays. */
+const val REBIRTH_MATTER_GROWTH: Float = 1.16f
+
+/** The last tier the late surge leaves alone; tiers above it add [REBIRTH_LATE_SURGE] per squared step. */
+const val REBIRTH_LATE_SURGE_FROM: Int = 7
+
+/**
+ * The top tiers' surge on enemy integrity and incoming damage: `1 + s × max(0, t − 7)²` with s = [REBIRTH_LATE_SURGE]
+ * (tiers 8, 9 and 10: ×1.05, ×1.20 and ×1.45), so tier 10 stays a hard fight even for a fully progressed profile while
+ * the lower tiers keep their plain growth.
+ */
+const val REBIRTH_LATE_SURGE: Float = 0.05f
+
+/** `growth^tier` as a product of [tier] Float factors (no platform `pow`), 1 at tier 0. */
+fun rebirthTierPower(growth: Float, tier: Int): Float {
+    var power = 1f
+    repeat(tier.coerceAtLeast(0)) { power *= growth }
+    return power
+}
+
+/** The late surge of [tier] at strength [surge]: `1 + surge × max(0, tier − REBIRTH_LATE_SURGE_FROM)²`. */
+fun rebirthLateSurge(tier: Int, surge: Float = REBIRTH_LATE_SURGE): Float {
+    val steps = (tier - REBIRTH_LATE_SURGE_FROM).coerceAtLeast(0)
+    return 1f + surge * steps * steps
+}
+
+/** Pack Hunters' extra members in every pack, at a tier that runs it or in a run an omen adds it to. */
+const val PACK_HUNTERS_PACK_SIZE_BONUS: Int = 1
+
 /** Name of the tier without mutators. */
 const val BASELINE_REBIRTH_NAME: String = "Baseline"
 
@@ -126,14 +171,18 @@ val RebirthTierNames: List<String> = listOf(
 )
 
 /**
- * The shipped tuning of Rebirth tier [tier] (selected tier t). Hostile scaling grows faster than the
- * player's compensation, so each tier is a real step up: enemy integrity `1 + 0.32t + 0.05t²`,
- * incoming damage `1 + 0.14t + 0.008t²`, enemy speed `1 + 0.035t`, spawn rate `1 + 0.09t`, enemy cap
- * `1 + 0.10t`, Elite rate `1 + 0.07t`, threat `12t` s ahead, Matter `1 + 0.2t`, player power
- * `1 + 0.03t`, `t / 4` bonus rerolls, `5 + t` opening enemies, obstacle density `1 + 0.05t` and run-level Data
- * requirements `1 + 0.14t` from [RunTempoProfile.rebirthScaleFromLevel] ([REBIRTH_DATA_REQUIREMENT_SCALE_PER_TIER]). Tier
- * n also activates the first n [RebirthMutator]s and carries its short name ([RebirthTierNames]). Lives in the
- * API (like the Matrix and enemy rosters) so fixtures can mirror the catalog exactly.
+ * The shipped tuning of Rebirth tier [tier] (selected tier t), the tier layer of docs/balance/progression.md. The tier
+ * multiplies what the enemy brings and never the player's power ([RebirthProfile.playerPowerMultiplier] is 1 at every
+ * tier): enemy integrity `H(t) = 1.29^t` ([REBIRTH_ENEMY_INTEGRITY_GROWTH]), incoming damage `D(t) = 1.19^t`
+ * ([REBIRTH_INCOMING_DAMAGE_GROWTH]), both times the top tiers' surge ([rebirthLateSurge]), and the Matter reward
+ * `1.16^t` ([REBIRTH_MATTER_GROWTH]), so a tier is beaten by
+ * permanent progression (the Core Matrix, Refit and Honing) and pushing a tier pays. Each power is a product of t
+ * factors in Float, the same on every platform. Besides: enemy speed `1 + 0.035t`, spawn rate `1 + 0.09t`, enemy cap
+ * `1 + 0.10t`, Elite rate `1 + 0.07t`, threat `12t` s ahead, `t / 4` bonus rerolls, `5 + t` opening enemies, obstacle
+ * density `1 + 0.05t` and run-level Data requirements `1 + 0.14t` from [RunTempoProfile.rebirthScaleFromLevel]
+ * ([REBIRTH_DATA_REQUIREMENT_SCALE_PER_TIER]). Tier n also activates the first n [RebirthMutator]s and carries its
+ * short name ([RebirthTierNames]). Lives in the API (like the Matrix and enemy rosters) so fixtures can mirror the
+ * catalog exactly.
  */
 fun defaultRebirthProfile(
     tier: Int,
@@ -149,24 +198,50 @@ fun defaultRebirthProfile(
         openingEnemyCount = 5 + tier,
         enemyCapMultiplier = 1f + t * 0.10f,
         spawnRateMultiplier = 1f + t * 0.09f,
-        enemyHealthMultiplier = 1f + t * 0.32f + t * t * 0.05f,
+        enemyHealthMultiplier = rebirthTierPower(REBIRTH_ENEMY_INTEGRITY_GROWTH, tier) * rebirthLateSurge(tier),
         enemySpeedMultiplier = 1f + t * 0.035f,
-        incomingDamageMultiplier = 1f + t * 0.14f + t * t * 0.008f,
+        incomingDamageMultiplier = rebirthTierPower(REBIRTH_INCOMING_DAMAGE_GROWTH, tier) * rebirthLateSurge(tier),
         eliteRateMultiplier = 1f + t * 0.07f,
         threatTimeOffsetSeconds = t * 12f,
-        playerPowerMultiplier = 1f + t * 0.03f,
+        playerPowerMultiplier = 1f,
         playerIntegrityBonus = 0f,
-        matterGainMultiplier = 1f + t * 0.2f,
+        matterGainMultiplier = rebirthTierPower(REBIRTH_MATTER_GROWTH, tier),
         bonusRerolls = tier / 4,
         maximumActiveEnemies = maximumActiveEnemies,
         minimumSpawnIntervalSeconds = minimumSpawnIntervalSeconds,
         minimumEliteIntervalSeconds = minimumEliteIntervalSeconds,
         mutators = mutators,
-        packSizeBonus = if (RebirthMutator.PACK_HUNTERS in mutators) 1 else 0,
+        packSizeBonus = if (RebirthMutator.PACK_HUNTERS in mutators) PACK_HUNTERS_PACK_SIZE_BONUS else 0,
         obstacleDensityMultiplier = 1f + t * 0.05f,
         dataRequirementScale = 1f + t * REBIRTH_DATA_REQUIREMENT_SCALE_PER_TIER,
     )
 }
+
+/**
+ * The display scale of Rebirth tier [tier]: `10^(0.0211t + 0.03345t²)` rounded to two significant digits (t0 1, t1 1.1,
+ * t2 1.5, t3 2.3, t4 4.2, t5 8.7, t6 21, t7 61, t8 200, t9 790, t10 3600), so a tier-0 hit reads 10–20 and a tier-10
+ * hit reads in the hundreds of thousands. Only presentation reads it.
+ */
+fun rebirthNumberScale(tier: Int): Double {
+    require(tier >= 0) { "Rebirth tier must be non-negative" }
+    val t = tier.toDouble()
+    val raw = 10.0.pow(REBIRTH_NUMBER_SCALE_LINEAR * t + REBIRTH_NUMBER_SCALE_QUADRATIC * t * t)
+    // Two significant digits; the power of ten is built exactly so 200 and 3600 stay whole.
+    val exponent = floor(log10(raw)).toInt() - 1
+    var step = 1.0
+    repeat(abs(exponent)) { step *= 10.0 }
+    return if (exponent >= 0) round(raw / step) * step else round(raw * step) / step
+}
+
+private const val REBIRTH_NUMBER_SCALE_LINEAR = 0.0211
+private const val REBIRTH_NUMBER_SCALE_QUADRATIC = 0.03345
+
+/**
+ * Scale of flat element, proc and skill damage [elapsedSeconds] into a run on [rebirth]: the run growth times the tier's
+ * player power. The simulation's flat damage and the reward cards' rule text both read it.
+ */
+fun RunTempoProfile.flatDamageScale(elapsedSeconds: Float, rebirth: RebirthProfile): Float =
+    runScaleGrowth(elapsedSeconds) * rebirth.playerPowerMultiplier
 
 /**
  * Content a Rebirth rank opens, derived from the content gates: weapons, characters (a Reborn-rank

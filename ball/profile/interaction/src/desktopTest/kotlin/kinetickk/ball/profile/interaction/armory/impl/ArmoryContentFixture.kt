@@ -11,10 +11,11 @@ import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.ball.profile.interaction.ProfileFrame
-import kinetickk.ball.profile.interaction.armory.api.ArmoryRenderModel
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
 import kinetickk.ball.profile.interaction.profileTextScale
 import kinetickk.ball.profile.interaction.workshop.api.WorkshopTab
+import kinetickk.ball.profile.interaction.workshop.armory.*
+import kinetickk.ball.profile.interaction.workshop.armory.ArmoryRenderModel
 import kinetickk.ball.profile.interaction.workshop.impl.WorkshopPanel
 import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegment
 import kinetickk.ball.profile.interaction.workshop.impl.label

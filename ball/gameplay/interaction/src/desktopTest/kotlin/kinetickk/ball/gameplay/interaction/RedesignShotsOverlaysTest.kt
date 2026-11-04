@@ -24,13 +24,19 @@ import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.DirectorPersonalityId
+import kinetickk.ball.content.api.OmenId
+import kinetickk.ball.content.api.SignalKind
+import kinetickk.ball.content.api.SignalOption
+import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.gameplay.interaction.canvas.with
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.WeaponId
-import kinetickk.ball.gameplay.interaction.canvas.drawGameplay
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
@@ -41,7 +47,7 @@ import kinetickk.ball.gameplay.interaction.rewards.rewardActiveFixtureContent
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureActiveBase
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureContent
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureModel
-import kinetickk.ball.gameplay.interaction.terminal.TerminalContent
+import kinetickk.ball.gameplay.interaction.overlay.TerminalContent
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
@@ -283,20 +289,6 @@ class RedesignShotsOverlaysTest {
                     )
                 })
             },
-            Scene("relic-meld") { w, h, l ->
-                RewardShot(model {
-                    rewardFixtureModel(
-                        choiceType = ChoiceType.RELIC_BIND, relics = relics3, language = l, width = w, height = h, textScale = textScale,
-                        discoveredRelics = relics3.map { it.id }.toSet(),
-                        choices = relics3.mapIndexed { index, equipped ->
-                            val current = rewardFixtureContent.relic(equipped.id)
-                            ChoiceOption(ChoiceType.RELIC_BIND, "Meld ${current.name}", "Collapse the offering into slot ${index + 1}.",
-                                "SLOT ${index + 1} // RANK ${equipped.rank}", relicId = equipped.id, relicAction = RelicChoiceAction.MELD_TARGET, relicSlot = index)
-                        },
-                        previews = listOf(RewardPreview(immutableListOf(RewardStatChange("Damage: speed ≥500", 10f, 15f, "%", sourceRelic = RelicId.PERPETUAL_VECTOR)))),
-                    )
-                })
-            },
             // Directed reward focus steps (after every resolved anomaly trial) with the game's strings.
             Scene("focus-items") { w, h, l ->
                 RewardShot(model {
@@ -332,14 +324,14 @@ class RedesignShotsOverlaysTest {
                 RewardShot(model {
                     val offers = listOf(RelicId.EVENT_HORIZON, RelicId.ECHO_CHAMBER)
                     rewardFixtureModel(
-                        choiceType = ChoiceType.RELIC, relics = relics4, language = l, width = w, height = h, textScale = textScale,
-                        discoveredRelics = relics4.map { it.id }.toSet(),
+                        choiceType = ChoiceType.RELIC, relics = relics3, language = l, width = w, height = h, textScale = textScale,
+                        discoveredRelics = relics3.map { it.id }.toSet(),
                         choices = offers.map { id ->
                             val relic = rewardFixtureContent.relic(id)
                             ChoiceOption(ChoiceType.RELIC, relic.name, relic.upside, relic.aspect.displayLabel.uppercase(),
                                 relicId = id, relicAction = RelicChoiceAction.ACQUIRE)
-                        } + ChoiceOption(ChoiceType.RELIC, "Meld resonance",
-                            "Collapse this offering into one of the four bound Relics and raise its rank.", "MELD", relicAction = RelicChoiceAction.MELD),
+                        } + ChoiceOption(ChoiceType.RELIC, "Meld",
+                            "Seal the empty slot for this run for lasting damage and maximum integrity.", "MELD", relicAction = RelicChoiceAction.MELD),
                     )
                 })
             },
@@ -351,19 +343,93 @@ class RedesignShotsOverlaysTest {
                 WorldShot(rewardFixtureModel(phase = GamePhase.PAUSED, relics = relics3, language = l, width = w, height = h, textScale = textScale,
                     weaponLevel = 10))
             },
+            // Rebirth 10: the shield and damage totals at the tier's number scale (×3,600).
+            Scene("pause-tier10") { w, h, l ->
+                WorldShot(rewardFixtureModel(phase = GamePhase.PAUSED, relics = relics3, language = l, width = w, height = h, textScale = textScale,
+                    rebirthLevel = 10, numberScale = 3_600.0).with("maxShield" to 60f))
+            },
+            // Rebirth 10 item cards without previews: integrity stats and rule amounts at the tier's number scale.
+            Scene("levelup-cards-tier10") { w, h, l ->
+                RewardShot(rewardFixtureModel(choices = listOf(itemChoice(0), itemChoice(1), itemChoice(4)), discoveredItems = setOf(0), language = l,
+                    width = w, height = h, textScale = textScale, rebirthLevel = 10, numberScale = 3_600.0))
+            },
             Scene("report-victory") { w, h, l ->
                 TerminalShot(rewardFixtureModel(phase = GamePhase.VICTORY, relics = relics4, language = l, width = w, height = h, textScale = textScale,
                     message = "ARCHITECT DISMANTLED", runMatter = 640L, totalMatter = 1_924L, kills = 1_412, elapsed = 846f, level = 22, weaponLevel = 10))
             },
-            // The final tier's clear: the gold crown and the Ascendant line.
+            // The final tier's clear: the gold crown and the Ascendant line, its totals at the tier's number scale (×3,600).
             Scene("report-victory-ascendant") { w, h, l ->
                 TerminalShot(rewardFixtureModel(phase = GamePhase.VICTORY, relics = relics4, language = l, width = w, height = h, textScale = textScale,
                     message = "ARCHITECT DISMANTLED", runMatter = 640L, totalMatter = 1_924L, kills = 1_412, elapsed = 846f, level = 22, weaponLevel = 10,
-                    rebirthLevel = 10))
+                    rebirthLevel = 10, numberScale = 3_600.0))
             },
             Scene("report-defeat") { w, h, l ->
                 TerminalShot(rewardFixtureModel(phase = GamePhase.GAME_OVER, relics = relics4, language = l, width = w, height = h, textScale = textScale,
                     message = "SINGULARITY CONTACT", runMatter = 640L, totalMatter = 1_284L, kills = 901, elapsed = 554f, level = 16, weaponLevel = 8))
+            },
+            // Core Freeze ended the run: the cause stamp and shatter in ice, the rule under the stamp.
+            Scene("report-defeat-frozen") { w, h, l ->
+                TerminalShot(rewardFixtureModel(phase = GamePhase.GAME_OVER, relics = relics4, language = l, width = w, height = h, textScale = textScale,
+                    message = "CORE FROZEN", runMatter = 640L, totalMatter = 1_284L, kills = 901, elapsed = 554f, level = 16, weaponLevel = 8)
+                    .with("coreStasis" to 1f, "coreStasisMotion" to kinetickk.ball.gameplay.nucleus.render.CoreStasisMotion.FROZEN))
+            },
+            // Baby mode counts nothing: the soft Not counted stamp, the matter not banked, no bank or Rebirth lines.
+            Scene("report-victory-easy") { w, h, l ->
+                TerminalShot(rewardFixtureModel(phase = GamePhase.VICTORY, relics = relics4, language = l, width = w, height = h, textScale = textScale,
+                    message = "ARCHITECT DISMANTLED", runMatter = 640L, totalMatter = 1_924L, kills = 1_412, elapsed = 846f, level = 22, weaponLevel = 10)
+                    .with("easyMode" to true))
+            },
+            Scene("report-defeat-easy") { w, h, l ->
+                TerminalShot(rewardFixtureModel(phase = GamePhase.GAME_OVER, relics = relics4, language = l, width = w, height = h, textScale = textScale,
+                    message = "CORE FRACTURED", runMatter = 640L, totalMatter = 1_284L, kills = 901, elapsed = 554f, level = 16, weaponLevel = 8)
+                    .with("easyMode" to true))
+            },
+            // The production start's omen offer: three omens (a mutator one among them) and No omen, the run's pattern and
+            // Keynote under the heading.
+            Scene("reward-omen") { w, h, l ->
+                RewardShot(model {
+                    val omens = rewardFixtureContent.variety.omens.definitions
+                    rewardFixtureModel(
+                        choiceType = ChoiceType.OMEN, language = l, width = w, height = h, textScale = textScale, elapsed = 0.02f, level = 1,
+                        choices = listOf(OmenId.GLASS_SUN, OmenId.CROWNED_QUARRY, OmenId.AMPLIFIED_KEYNOTE).map { id ->
+                            ChoiceOption(ChoiceType.OMEN, omens[id.ordinal].name, omens[id.ordinal].upside, "OMEN", omenId = id)
+                        } + ChoiceOption(ChoiceType.OMEN, "No omen", "Start the run as it is.", "DECLINE"),
+                        previews = listOf(RewardPreview(immutableListOf(RewardStatChange("Impact power", 1f, 1.25f, "×"),
+                            RewardStatChange("Weapon power", 1f, 1.2f, "×")))),
+                    ).with("directorPersonality" to DirectorPersonalityId.HUNTER_CELL, "keynoteTag" to BuildTag.DRIVE,
+                        "keynoteElement" to StatusElement.ION)
+                })
+            },
+            // A Merchant signal mid-run: the offers out of reach (locked), the bundle open, Ignore.
+            Scene("reward-signal") { w, h, l ->
+                RewardShot(model {
+                    rewardFixtureModel(
+                        choiceType = ChoiceType.SIGNAL, language = l, width = w, height = h, textScale = textScale,
+                        choices = listOf(SignalOption.MERCHANT_RARE_OFFER to Triple(85, 0, true), SignalOption.MERCHANT_EPIC_OFFER to Triple(210, 0, true),
+                            SignalOption.MERCHANT_REROLLS to Triple(40, 2, false), SignalOption.IGNORE to Triple(0, 0, false)).map { (option, terms) ->
+                            ChoiceOption(ChoiceType.SIGNAL, option.title, "", if (option == SignalOption.IGNORE) "DECLINE" else "MERCHANT",
+                                signalKind = SignalKind.MERCHANT, signalOption = option, signalCost = terms.first, signalPayout = terms.second,
+                                locked = terms.third)
+                        },
+                    )
+                })
+            },
+            // A Shrine signal: the blessings preview the stats they leave.
+            Scene("reward-signal-shrine") { w, h, l ->
+                RewardShot(model {
+                    rewardFixtureModel(
+                        choiceType = ChoiceType.SIGNAL, language = l, width = w, height = h, textScale = textScale,
+                        choices = listOf(SignalOption.SHRINE_BLOOD to 54, SignalOption.SHRINE_WARD to 20, SignalOption.SHRINE_RELIC to 72,
+                            SignalOption.IGNORE to 0).map { (option, cost) ->
+                            ChoiceOption(ChoiceType.SIGNAL, option.title, "", if (option == SignalOption.IGNORE) "DECLINE" else "SHRINE",
+                                signalKind = SignalKind.SHRINE, signalOption = option, signalCost = cost, signalPayout = if (option == SignalOption.SHRINE_WARD) 25 else 0)
+                        },
+                        previews = listOf(
+                            RewardPreview(immutableListOf(RewardStatChange("Impact power", 1.64f, 1.74f, "×"), RewardStatChange("Weapon power", 1.36f, 1.46f, "×"))),
+                            RewardPreview(immutableListOf(RewardStatChange("Shield", 0f, 25f, ""), RewardStatChange("Damage reduction", 0f, 4f, "%"))),
+                        ),
+                    )
+                })
             },
         )
     }
@@ -396,7 +462,7 @@ private fun activeSlotModel(language: AppLanguage, width: Float, height: Float, 
 private fun laneOf(effect: SkillId): CoreShape = CoreShape.entries.first { effect in rewardActiveFixtureContent.coreShape(it).activeLane }
 
 @Composable
-private fun WorldShot(model: GameplayRenderModel) {
+internal fun WorldShot(model: GameplayRenderModel) {
     val typography = rememberInterfaceTypography()
     val measurer = CanvasTextMeasurer(rememberTextMeasurer(), model.settings.textScale, LocalAppLanguage.current, typography, LocalKkRolePalette.current)
     Canvas(Modifier.fillMaxSize()) {
@@ -406,7 +472,7 @@ private fun WorldShot(model: GameplayRenderModel) {
 }
 
 @Composable
-private fun RewardShot(model: GameplayRenderModel, touch: Boolean = false) {
+internal fun RewardShot(model: GameplayRenderModel, touch: Boolean = false) {
     WorldShot(model)
     RewardContent(
         model,
@@ -416,7 +482,7 @@ private fun RewardShot(model: GameplayRenderModel, touch: Boolean = false) {
 }
 
 @Composable
-private fun TerminalShot(model: GameplayRenderModel) {
+internal fun TerminalShot(model: GameplayRenderModel) {
     WorldShot(model)
     TerminalContent(model, 4f, true) {}
 }

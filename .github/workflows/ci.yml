@@ -17,12 +17,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  desktop-and-architecture:
-    name: Desktop and architecture
+  desktop-shards:
+    # Each shard runs its share of the classes (build-logic DesktopTestShard),
+    # and desktop-and-architecture checks their union.
+    name: Desktop and architecture (${{ matrix.shard }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    env:
-      POKEBALL_SNAPSHOT_DIR: ${{ github.workspace }}/pokeball
+    # Leave headroom for cold builds and seeded gates on slower hosted runners.
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        # build-logic's DesktopTestShardsTest keeps these entries in step with DesktopTestShard.
+        include:
+          # Every class no gate shard lists, plus build-logic and the module graph.
+          - shard: rest
+            tasks: ":build-logic:test verifyArchitecture desktopTest"
+          # Seeded balance gates; each gate shard compiles and tests only the project that holds its classes.
+          - shard: gates-1
+            tasks: ":ball:gameplay:nucleus:desktopTest"
+          - shard: gates-2
+            tasks: ":ball:gameplay:nucleus:desktopTest"
+          - shard: gates-3
+            tasks: ":ball:gameplay:nucleus:desktopTest"
+          - shard: gates-4
+            tasks: ":ball:gameplay:nucleus:desktopTest"
+          - shard: gates-5
+            tasks: ":ball:gameplay:nucleus:desktopTest"
+          - shard: gates-6
+            tasks: ":ball:gameplay:nucleus:desktopTest"
+          - shard: gates-7
+            tasks: ":ball:gameplay:nucleus:desktopTest"
+          - shard: gates-8
+            tasks: ":ball:gameplay:nucleus:desktopTest"
+          - shard: gates-9
+            tasks: ":ball:gameplay:nucleus:desktopTest"
+          - shard: gates-10
+            tasks: ":ball:gameplay:nucleus:desktopTest"
+          - shard: gates-11
+            tasks: ":ball:gameplay:nucleus:desktopTest"
+          - shard: gates-12
+            tasks: ":ball:gameplay:nucleus:desktopTest"
+          - shard: gates-13
+            tasks: ":ball:gameplay:nucleus:desktopTest"
     defaults:
       run:
         shell: bash
@@ -33,16 +69,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 0
           path: kinetickk
-          persist-credentials: false
-
-      - name: Check out pinned Pokeball Core
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          repository: 4wl2d/Pokeball
-          ref: b4a8219ecb70ae5e81214edd6b509b61d9db0637
-          path: pokeball
           persist-credentials: false
 
       - name: Set up JDK 17
@@ -54,22 +81,28 @@ jobs:
       - name: Verify JDK
         run: java -version
 
+      # The shard lists are sized for this runner's CPU; record what it was.
+      - name: Describe the runner CPU
+        run: lscpu | grep -E '^(Model name|CPU\(s\)|Thread\(s\) per core|Core\(s\) per socket):' || lscpu
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@4733eaac7c1b0da527e4206b7671e0061de1ce37 # v6
         with:
           # PR caches are scoped to their merge ref; forks only restore trusted caches.
           cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
-      - name: Verify architecture and run desktop tests
+      - name: Run the desktop test shard
+        env:
+          SHARD: ${{ matrix.shard }}
+          TASKS: ${{ matrix.tasks }}
         run: |
           set -o pipefail
           mkdir -p build/ci
+          read -ra tasks <<<"$TASKS"
           ./gradlew \
-            -PpokeballSnapshotDir="$POKEBALL_SNAPSHOT_DIR" \
-            verifyArchitecture \
-            verifyPokeballArchitecture \
-            verifyPokeballConformance \
-            desktopTest \
+            "${tasks[@]}" \
+            -Pkinetickk.variant=release \
+            -Pkinetickk.desktopTest.shard="$SHARD" \
             -Pkinetickk.gradle.isolatedProfile=true \
             --isolated-projects \
             --no-daemon \
@@ -81,11 +114,119 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: desktop-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          name: desktop-reports-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             kinetickk/build/ci/
             kinetickk/**/build/test-results/**/*.xml
             kinetickk/**/build/reports/
+          if-no-files-found: warn
+          retention-days: 7
+
+  desktop-and-architecture:
+    name: Desktop and architecture
+    needs: desktop-shards
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+        working-directory: kinetickk
+
+    steps:
+      - name: Check out KINETICKK
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: kinetickk
+          persist-credentials: false
+
+      - name: Download the shards' desktop reports
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          # Every attempt: re-running only the failed shards keeps the passed shards' reports.
+          pattern: desktop-reports-*-${{ github.run_id }}-*
+          path: desktop-reports
+
+      - name: Test the shard union check
+        run: python3 -m unittest discover -s tools/ci -p 'test_*.py' -v
+
+      - name: Check that the shards ran every desktop test exactly once
+        run: python3 tools/ci/desktop_test_union.py --reports ../desktop-reports --sources .
+
+      - name: Require every desktop shard to pass
+        env:
+          SHARDS: ${{ needs.desktop-shards.result }}
+        run: |
+          if [[ "$SHARDS" != success ]]; then
+            printf 'desktop test shards: %s\n' "$SHARDS" >&2
+            exit 1
+          fi
+
+  desktop-variants:
+    name: Desktop Debug and optimized Release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out KINETICKK
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17.0.20+8"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@4733eaac7c1b0da527e4206b7671e0061de1ce37 # v6
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+
+      - name: Test diagnostic recording and desktop crash handling
+        run: >-
+          ./gradlew -Pkinetickk.variant=debug
+          :app:shared:desktopTest
+          :foundation:common:desktopTest
+          :ball:gameplay:impl:desktopTest
+          --no-daemon --stacktrace
+
+      - name: Build both desktop variants
+        run: |
+          bash tools/build/variant.sh debug desktop build --no-daemon --stacktrace
+          bash tools/build/variant.sh release desktop build --no-daemon --stacktrace
+
+      - name: Check that Release contains no diagnostic implementation
+        run: |
+          python3 -m unittest discover -s tools/build -p 'test_*.py' -v
+          python3 tools/build/verify_variants.py --platform desktop \
+            --debug app/desktop/build-debug/compose/jars \
+            --release app/desktop/build/compose/jars \
+            --output build/variant-verification/desktop.json
+
+      - name: Verify all optimized application bytecode
+        run: |
+          set -o pipefail
+          release_jars=(app/desktop/build/compose/jars/*-release.jar)
+          test "${#release_jars[@]}" -eq 1
+          java -cp "${release_jars[0]}" tools/build/VerifyJvmClasses.java "${release_jars[0]}" 2>&1 \
+            | tee build/variant-verification/desktop-bytecode.txt
+
+      - name: Upload variant reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop-variant-reports
+          path: |
+            build/variant-verification/
+            **/build-debug/test-results/**/*.xml
+            **/build-debug/reports/
           if-no-files-found: warn
           retention-days: 7
 
@@ -138,14 +279,14 @@ jobs:
           # PR caches are scoped to their merge ref; forks only restore trusted caches.
           cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
-      - name: Build app APKs and compile instrumentation APK
+      - name: Build Debug and Release APKs and compile instrumentation APKs
         run: |
           set -o pipefail
           mkdir -p build/ci
           ./gradlew \
             :app:android:assembleDebug \
-            :app:android:assembleBenchmark \
             :app:android:assembleDebugAndroidTest \
+            -Pkinetickk.variant=debug \
             -Pkinetickk.gradle.isolatedProfile=true \
             --isolated-projects \
             --console=plain \
@@ -176,8 +317,18 @@ jobs:
             exit 1
           fi
 
+          # The shared library's device-test APK needs its own resources, so it builds after the scan.
           ./gradlew \
             :app:shared:assembleAndroidDeviceTest \
+            -Pkinetickk.variant=debug \
+            -Pkinetickk.gradle.isolatedProfile=true \
+            --isolated-projects \
+            --console=plain \
+            --stacktrace
+
+          ./gradlew \
+            :app:android:assembleBenchmark \
+            -Pkinetickk.variant=release \
             -Pkinetickk.gradle.isolatedProfile=true \
             --isolated-projects \
             --console=plain \
@@ -189,10 +340,10 @@ jobs:
           aapt="$build_tools/aapt"
           apksigner="$build_tools/apksigner"
           zipalign="$build_tools/zipalign"
-          debug_apk="app/android/build/outputs/apk/debug/app-android-debug.apk"
+          debug_apk="app/android/build-debug/outputs/apk/debug/app-android-debug.apk"
           benchmark_apk="app/android/build/outputs/apk/benchmark/app-android-benchmark.apk"
-          test_apk="app/android/build/outputs/apk/androidTest/debug/app-android-debug-androidTest.apk"
-          shared_test_apk="app/shared/build/outputs/apk/androidTest/app-shared-androidTest.apk"
+          test_apk="app/android/build-debug/outputs/apk/androidTest/debug/app-android-debug-androidTest.apk"
+          shared_test_apk="app/shared/build-debug/outputs/apk/androidTest/app-shared-androidTest.apk"
           mapping="app/android/build/outputs/mapping/benchmark/mapping.txt"
           usage="app/android/build/outputs/mapping/benchmark/usage.txt"
 
@@ -258,6 +409,9 @@ jobs:
 
           "$apksigner" verify --verbose "$benchmark_apk"
           "$zipalign" -c -P 16 4 "$benchmark_apk"
+          python3 tools/build/verify_variants.py --platform android \
+            --debug "$debug_apk" --release "$benchmark_apk" \
+            --output build/variant-verification/android.json
 
           {
             printf '### Android artifact verification\n\n'
@@ -266,10 +420,19 @@ jobs:
             printf -- '- Shared Android-KMP capability-test APK: compiled; this job did not execute device tests.\n'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Upload Android variant report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-variant-report
+          path: kinetickk/build/variant-verification/android.json
+          if-no-files-found: warn
+          retention-days: 7
+
   wasm-and-browser:
     name: Wasm and browser
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 90
     defaults:
       run:
         shell: bash
@@ -317,6 +480,7 @@ jobs:
           CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
         run: >-
           ./gradlew
+          -Pkinetickk.variant=release
           wasmJsBrowserTest
           wasmJsBrowserDistribution
           --no-daemon
@@ -398,3 +562,27 @@ jobs:
             printf 'packaged Skiko runtime is not referenced by production JavaScript\n' >&2
             exit 1
           fi
+
+      - name: Build Debug web and test its diagnostic recorder
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          ./gradlew -Pkinetickk.variant=debug :app:shared:wasmJsBrowserTest \
+            --no-daemon --max-workers=1 --stacktrace
+          bash tools/build/variant.sh debug web build --no-daemon --max-workers=1 --stacktrace
+
+      - name: Check web variant separation
+        run: |
+          python3 tools/build/verify_variants.py --platform web \
+            --debug app/web/build-debug/dist/wasmJs/developmentExecutable \
+            --release app/web/build/dist/wasmJs/productionExecutable \
+            --output build/variant-verification/web.json
+
+      - name: Upload web variant report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: web-variant-report
+          path: build/variant-verification/web.json
+          if-no-files-found: warn
+          retention-days: 7

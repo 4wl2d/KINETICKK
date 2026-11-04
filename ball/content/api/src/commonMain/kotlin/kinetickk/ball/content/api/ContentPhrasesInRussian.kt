@@ -24,6 +24,22 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Broodmother" to "Матка роя",
     "Reflector" to "Отражатель",
     "Herald" to "Глашатай",
+    "Comet" to "Комета",
+    "Pylon" to "Пилон",
+    "Sentry" to "Часовой",
+    "Crawler" to "Ползун",
+    "Seraph" to "Серафим",
+    "Choir" to "Хор",
+    "Imp" to "Бесёнок",
+    "Hound" to "Гончая",
+    "Cipher" to "Шифр",
+    "Mirror" to "Зеркало",
+    "Warden Prime" to "Верховный страж",
+    "Brood Queen" to "Королева роя",
+    "Throne" to "Престол",
+    "Pyre Herald" to "Огненный глашатай",
+    "Cartographer" to "Картограф",
+    "Antecedent" to "Предтеча",
     "Drifts straight at the Core. Weak alone, dangerous in numbers." to "Дрейфует прямо к ядру. Слаб в одиночку, опасен толпой.",
     "Holds its distance and fires aimed bolts." to "Держит дистанцию и стреляет прицельными зарядами.",
     "Creeps closer, winds up and dashes through the Core." to "Подкрадывается, замахивается и проносится сквозь ядро.",
@@ -32,8 +48,8 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Keeps its range, pulls the Core into its well and fires radial bursts." to
         "Держит дистанцию, затягивает ядро в свой колодец и стреляет кольцевыми залпами.",
     "Sways forward and breaks into two fragments when destroyed." to "Раскачиваясь, идёт вперёд и при уничтожении распадается на два осколка.",
-    "Carries an elemental aspect, fires radial volleys and drops a Key and a Relic." to
-        "Несёт стихийный аспект, стреляет кольцевыми залпами и оставляет ключ и реликвию.",
+    "Carries an elemental aspect, fires radial volleys and drops a Key and a Relic; its fall amplifies your weapon." to
+        "Несёт стихийный аспект, стреляет кольцевыми залпами и оставляет ключ и реликвию; его гибель усиливает ваше оружие.",
     "The final boss. It shifts between phases and hardens against your build." to
         "Финальный босс. Переходит между фазами и закаляется против вашей сборки.",
     "Arrives in packs of six to ten and flocks around the Core." to "Прилетает стаями от шести до десяти и кружит вокруг ядра.",
@@ -51,6 +67,36 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
         "Передний щит смягчает столкновения и отражает выстрелы. Бейте его сзади.",
     "A mini-boss with spiral volleys, aspect escorts and a shield only impacts can break." to
         "Мини-босс со спиральными залпами, эскортом своего аспекта и щитом, который пробивают только столкновения.",
+    "Marks a lane and streaks along it. A fast impact shatters it, and so does an obstacle in its path." to
+        "Отмечает полосу и проносится по ней. Её раскалывает быстрое столкновение или препятствие на пути.",
+    "Docks on an obstacle and fires aimed volleys. Weapons barely scratch it; impacts and slammed enemies break it." to
+        "Крепится к препятствию и стреляет прицельными залпами. Оружие едва царапает его, а разбивают столкновения и впечатанные в него враги.",
+    "Mounts in place, tracks the Core and fires bolt trains down corridors." to
+        "Закрепляется на месте, следит за ядром и пускает по коридорам цепочки зарядов.",
+    "Creeps along walls and obstacles in packs, then lunges at the Core." to "Стаей ползёт вдоль стен и препятствий, а затем бросается на ядро.",
+    "Weaves at mid range, mends nearby allies and wraps them in shields only impacts can break." to
+        "Петляет на средней дистанции, чинит союзников рядом и окутывает их щитами, которые пробивают только столкновения.",
+    "Keeps its range and sings radial pulses that fire bolts and shove the Core away." to
+        "Держит дистанцию и поёт кольцевые импульсы: они выпускают заряды и отталкивают ядро.",
+    "Jinks at the Core and bursts, leaving fire traps that burn a slow Core." to
+        "Петляя, летит к ядру и взрывается, оставляя огненные ловушки, которые жгут медленное ядро.",
+    "Hunts in packs, circles the Core and dashes through it." to "Охотится стаей, кружит у ядра и проносится сквозь него.",
+    "Glitches out of reach, reappears elsewhere around the Core and fires." to
+        "Сбоит и пропадает из досягаемости, появляется в другом месте вокруг ядра и стреляет.",
+    "Mirrors the Core through the singularity and meets it there." to "Отражает ядро относительно сингулярности и встречает его там.",
+    "A mini-boss whose well pulls, then pushes, with radial bursts and Warden guards." to
+        "Мини-босс, чей колодец то притягивает, то отталкивает; стреляет кольцевыми залпами и зовёт стражей.",
+    "A mini-boss that births Swarmling spirals from egg sacs. Fast impacts burst the sacs." to
+        "Мини-босс, рождающий спирали роевиков из яйцевых мешков. Быстрые столкновения лопают мешки.",
+    "A mini-boss behind rotating shield arcs. Only hits through the gaps land in full." to
+        "Мини-босс за вращающимися дугами щита. В полную силу проходят только удары сквозь просветы.",
+    "A mini-boss with spiral volleys, a trail of fire traps and a shield only impacts can break." to
+        "Мини-босс со спиральными залпами, следом огненных ловушек и щитом, который пробивают только столкновения.",
+    "A secret boss that draws lanes of fire and lines of mines, then jumps between obstacles." to
+        "Тайный босс: чертит огненные полосы и линии мин, а затем прыгает между препятствиями.",
+    "When its far sigil is touched" to "Когда касаются его дальней печати",
+    "A secret boss, the Architect's forerunner. It alternates Zenith and Nadir phases and hardens against your build." to
+        "Тайный босс, предшественник Архитектора. Чередует фазы Зенита и Надира и закаляется против вашей сборки.",
     "Overdrive" to "Перегрузка",
     "Transcendent" to "Запредельная скорость",
     "Impact damage" to "Урон от столкновений",
@@ -73,6 +119,8 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Damage reduction" to "Снижение урона",
     "Combo window" to "Окно комбо",
     "Overdrive gain" to "Накопление перегрузки",
+    "Grip" to "Сцепление",
+    "Sling" to "Раскрутка",
     "Common" to "Обычный",
     "Uncommon" to "Необычный",
     "Rare" to "Редкий",
@@ -228,19 +276,20 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Reactions deal 20% more damage and statuses are 15% more potent." to "Реакции наносят на 20% больше урона, а состояния на 15% сильнее.",
     "Start every run with 50 Overdrive and gain Overdrive 25% faster." to
         "Каждый забег начинается с 50 единицами перегрузки, а перегрузка копится на 25% быстрее.",
-    "Weapon power gains up to an extra +40% as the run progresses." to "По ходу забега мощность оружия получает до +40% сверху.",
-    "All damage +35%. Maximum integrity −30." to "Весь урон +35%. Максимальная прочность −30.",
-    "+25 maximum integrity per rank." to "+25 к максимальной прочности за ранг.",
-    "+20 shield capacity per rank." to "+20 к ёмкости щита за ранг.",
-    "Obstacle collisions deal 25% less damage per rank, and the lethal collision speed rises by 150 per rank." to
-        "Столкновения с препятствиями наносят на 25% меньше урона за ранг, а смертельная скорость столкновения растёт на 150 за ранг.",
+    "Weapon power gains up to an extra +80% as the run progresses." to "По ходу забега мощность оружия получает до +80% сверху.",
+    "All damage +35%. Maximum integrity −15%." to "Весь урон +35%. Максимальная прочность −15%.",
+    "+15% maximum integrity per rank." to "+15% к максимальной прочности за ранг.",
+    "Shield capacity +10% of maximum integrity per rank." to "Ёмкость щита +10% от максимальной прочности за ранг.",
+    "Obstacle collisions deal 25% less damage per rank, and the lethal collision speed rises by 150 per rank, up to a cap." to
+        "Столкновения с препятствиями наносят на 25% меньше урона за ранг, а смертельная скорость столкновения растёт на 150 за ранг, но не выше предела.",
     "Once per run, lethal damage leaves you at 30% integrity with 2 seconds of invulnerability." to
         "Раз за забег смертельный урон оставляет 30% прочности и 2 секунды неуязвимости.",
     "+0.8 integrity regeneration per second per rank." to "+0,8 к восстановлению прочности в секунду за ранг.",
-    "+12% damage reduction." to "+12% к снижению урона.",
-    "+30 shield capacity, and the shield starts recharging 40% sooner." to "+30 к ёмкости щита, а щит начинает восстанавливаться на 40% раньше.",
-    "Mass +30%, impact damage +20%, contact damage taken −30%, drag +10%." to
-        "Масса +30%, урон от столкновений +20%, получаемый контактный урон −30%, сопротивление +10%.",
+    "+30% damage reduction." to "+30% к снижению урона.",
+    "Shield capacity +50% of maximum integrity, and the shield starts recharging 40% sooner." to
+        "Ёмкость щита +50% от максимальной прочности, а щит начинает восстанавливаться на 40% раньше.",
+    "Mass +30%, impact damage +30%, contact damage taken −40%, drag +10%." to
+        "Масса +30%, урон от столкновений +30%, получаемый контактный урон −40%, сопротивление +10%.",
     "+70 pickup radius and +6% Data from each pickup per rank." to "+70 к радиусу сбора и +6% данных с каждого подбора за ранг.",
     "+20% cooling and 10% less Dash heat per rank." to "+20% к охлаждению и на 10% меньше нагрева от рывка за ранг.",
     "+15% Dash impulse per rank." to "+15% к импульсу рывка за ранг.",
@@ -249,8 +298,8 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Asteroid bounces keep 75% of your speed instead of 60%, and each ricochet bursts for impact damage within 140." to
         "Отскок от астероида сохраняет 75% скорости вместо 60%, а каждый рикошет взрывается уроном от столкновения в радиусе 140.",
     "+12% attack speed per rank." to "+12% к скорости атаки за ранг.",
-    "Ricochets grant 0.4 seconds of Dash phase, and the lethal collision speed rises by 250." to
-        "Рикошеты дают 0,4 секунды фазы рывка, а смертельная скорость столкновения растёт на 250.",
+    "Ricochets grant 0.4 seconds of Dash phase, and the lethal collision speed rises by 250, up to a cap." to
+        "Рикошеты дают 0,4 секунды фазы рывка, а смертельная скорость столкновения растёт на 250, но не выше предела.",
     "Drag −40% and magnetism −10%. One Dash every 6 seconds costs no heat." to
         "Сопротивление −40%, магнетизм −10%. Один рывок раз в 6 секунд не нагревает Ядро.",
     "+15% Matter per rank." to "+15% материи за ранг.",
@@ -297,36 +346,39 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "APEX ONLINE" to "АПЕКС В СЕТИ",
     "OVERHEAT" to "ПЕРЕГРЕВ",
     "SINGULARITY CONTACT" to "КОНТАКТ С СИНГУЛЯРНОСТЬЮ",
+    "BOOP" to "БУП",
     "POLARITY FIELD STRAIN" to "ПОЛЕ ПОЛЯРНОСТИ ПЕРЕНАПРЯЖЕНО",
     "ARCHITECT DISMANTLED" to "АРХИТЕКТОР РАЗОБРАН",
     "CATALOG COMPLETE // MATTER SALVAGED" to "КАТАЛОГ ЗАВЕРШЁН // МАТЕРИЯ ИЗВЛЕЧЕНА",
     "CORE FRACTURED" to "ЯДРО РАЗРУШЕНО",
+    "CORE FROZEN" to "ЯДРО ЗАМЁРЗЛО",
     "OBSTACLE COLLISION" to "СТОЛКНОВЕНИЕ С ПРЕПЯТСТВИЕМ",
     "ELITE KEY ACQUIRED" to "ПОЛУЧЕН ЭЛИТНЫЙ КЛЮЧ",
+    "ELITE RESONANCE" to "РЕЗОНАНС ЭЛИТЫ",
     "RELIC RESONANCE" to "РЕЗОНАНС РЕЛИКВИИ",
-    "TOTEM DETECTED" to "ОБНАРУЖЕН ТОТЕМ",
     "ELITE SIGNAL" to "ЭЛИТНЫЙ СИГНАЛ",
     "HERALD APPROACHES" to "ПРИБЛИЖАЕТСЯ ГЛАШАТАЙ",
     "TWO ANOMALIES DETECTED // CHOOSE A COURSE" to "ОБНАРУЖЕНЫ ДВЕ АНОМАЛИИ // ВЫБЕРИТЕ ПУТЬ",
     "ANOMALY LOST" to "АНОМАЛИЯ УТРАЧЕНА",
     "ANOMALY RESOLVED" to "АНОМАЛИЯ ЗАВЕРШЕНА",
+    "SECRET SIGNAL" to "ТАЙНЫЙ СИГНАЛ",
+    "SECRET SIGNAL LOST" to "ТАЙНЫЙ СИГНАЛ ПОТЕРЯН",
+    "SECRET BOSS DEFEATED" to "ТАЙНЫЙ БОСС ПОВЕРЖЕН",
+    "THE CARTOGRAPHER ENRAGES" to "КАРТОГРАФ В ЯРОСТИ",
+    "THE ANTECEDENT ENRAGES" to "ПРЕДТЕЧА В ЯРОСТИ",
     "Change weapon" to "Сменить оружие",
     "Recalibrate the Totem, then choose another weapon system you own." to "Перенастройте Тотем и выберите другую свою оружейную систему.",
     "RECALIBRATE" to "ПЕРЕНАСТРОЙКА",
-    "Meld resonance" to "Слить резонанс",
-    "Leave hollow" to "Оставить пустой",
-    "Keep the slot empty and salvage the resonance for Kinetic Matter." to
-        "Оставить ячейку пустой и утилизировать резонанс в кинетическую материю.",
+    "Meld" to "Слияние",
+    "Seal the empty slot for this run for lasting damage and maximum integrity." to
+        "Запечатать пустую ячейку до конца забега ради постоянного урона и максимальной целостности.",
     "Leave the heirloom" to "Отказаться от наследия",
     "Start without it and gain two rerolls." to "Начать без него и получить два обновления.",
-    "Collapse this offering into a bound Relic and raise it to rank 2." to
-        "Слить дар с привязанной реликвией и повысить её до ранга 2.",
     "Salvage resonance" to "Утилизировать резонанс",
-    "Collapse this offering into a bound Relic for Kinetic Matter." to
-        "Слить дар с привязанной реликвией и получить кинетическую материю.",
+    "Salvage the resonance for Kinetic Matter." to "Утилизировать резонанс в кинетическую материю.",
     "DECLINE" to "ОТКАЗ",
     "HEIRLOOM" to "НАСЛЕДИЕ",
-    "SLOT LEFT HOLLOW" to "ЯЧЕЙКА ОСТАВЛЕНА ПУСТОЙ",
+    "SLOT SEALED // MELD" to "ЯЧЕЙКА ЗАПЕЧАТАНА // СЛИЯНИЕ",
     "HEIRLOOM LEFT // +2 REROLLS" to "НАСЛЕДИЕ ОСТАВЛЕНО // +2 ОБНОВЛЕНИЯ",
     "OUROBOROS // REBORN" to "УРОБОРОС // ПЕРЕРОЖДЕНИЕ",
     "REACTION DISCOVERED" to "РЕАКЦИЯ ОТКРЫТА",
@@ -343,6 +395,10 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "FOCUS" to "НАПРАВЛЕНИЕ",
     "Raise current weapon mastery by one level." to "Повысьте мастерство текущего оружия на один уровень.",
     "AMPLIFY" to "УСИЛЕНИЕ",
+    "This weapon is at its maximum level; selecting it salvages Kinetic Matter." to
+        "Это оружие уже на максимальном уровне; его выбор принесёт кинетическую материю.",
+    "MAX LEVEL" to "МАКС. УРОВЕНЬ",
+    "WEAPON AT MAXIMUM // MATTER SALVAGED" to "ОРУЖИЕ НА МАКСИМУМЕ // МАТЕРИЯ ИЗВЛЕЧЕНА",
     "CHANGE" to "СМЕНА",
     "/s" to "/с",
     "s" to "с",

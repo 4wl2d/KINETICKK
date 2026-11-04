@@ -22,17 +22,23 @@ import kotlin.test.assertTrue
  *
  * The two price locks read their medians over [PopulationSeeds] (0.5.0 active items; policy.md, "Balance gate
  * populations"): a five-seed median moves with the reward stream, and the active items' offers moved it enough that the
- * gate seeds became a coin flip. Their bounds stay the design's (by the population threshold rule: the base population
- * meets each with room to spare). The rising medians keep the five gate seeds, which pass with probability 0.99 on the
- * 05885fa9 base and with the active items.
+ * gate seeds became a coin flip. Their bounds stay the design's (by the population threshold rule on the
+ * Elite-resonance base: the base population meets each with room to spare). The rising medians keep the five gate
+ * seeds, which pass with probability 0.996 on the Elite-resonance base (medians 2,448, 5,353, 12,983 and 23,329 over
+ * 300 population runs per arm) and 0.994 on the tree before it (2,416, 5,271, 12,707 and 22,558).
+ *
+ * The progression curves (docs/balance/progression.md) priced the Core Matrix from Matter income over whole campaigns
+ * and kept these locks for Refit and Honing: the tier's Matter reward became `1.16^t` (tier 6 ×2.44 for ×2.2), and the
+ * full-Matrix tier-6 median over [PopulationSeeds] read 22,663, so the derivation still gives the bases 55 and 40
+ * (Refit 10 at 1.24 and Honing 10 at 0.90 of it; the five gate seeds' medians read 2,432, 5,452, 11,872 and 23,695).
  */
 class MatterIncomeProbeTest {
     /**
      * Every rank-0 Refit and Honing base costs at most 3 % of a fresh tier-0 run's median Matter over
      * [PopulationSeeds]. The five gate seeds met it with probability 0.91 on the 05885fa9 base and 0.84 with the
-     * shipped active items. The base population's median was 2,499 Matter (bootstrap SE 17, n 300), so the largest
-     * base, 55, was 0.022 of it (SE 0.0002); by the population threshold rule the bound is the higher of the design's
-     * 0.03 and that plus two standard errors: 0.03.
+     * shipped active items. On the Elite-resonance base the population's median is 2,448 Matter (bootstrap SE 29, n
+     * 300; 2,416 on the tree before it), so the largest base, 55, is 0.022 of it (SE 0.0003); by the population
+     * threshold rule the bound is the higher of the design's 0.03 and that plus two standard errors: 0.03.
      */
     @Test fun theFirstRefitAndHoningLevelsCostAtMostThreePercentOfAFreshWin() {
         val fresh = population(Setup.T0_FRESH).median
@@ -43,9 +49,10 @@ class MatterIncomeProbeTest {
     /**
      * The tenth Refit level costs 1.0-1.5 and the tenth Honing level 0.7-1.0 full-Matrix tier-6 runs, by the median
      * Matter over [PopulationSeeds]. The five gate seeds met both with probability 0.95 on the 05885fa9 base and 0.89
-     * with the shipped active items. The base population's median was 23,517 Matter (bootstrap SE 183, n 300): Refit 10
-     * cost 1.197 of it (SE 0.009) and Honing 10 0.871 (SE 0.007), so by the population threshold rule each band (the
-     * wider of the design's and the base ± two standard errors) is the design's.
+     * with the shipped active items. On the Elite-resonance base the population's median is 23,329 Matter (bootstrap
+     * SE 240, n 300; 22,558 on the tree before it): Refit 10 costs 1.207 of it (SE 0.013) and Honing 10 0.878 (SE
+     * 0.009), so by the population threshold rule each band (the wider of the design's and the base ± two standard
+     * errors) is the design's.
      */
     @Test fun theTenthRefitAndHoningLevelsTrackAFullMatrixTierSixRun() {
         val tierSix = population(Setup.T6_FULL).median
@@ -84,7 +91,7 @@ class MatterIncomeProbeTest {
         /** RebirthBalanceGateTest's strong build: Pentagon, Arc Coil and four Relics bound from the start, full Matrix. */
         T10_STRONG(
             { gateProfile(GateMatrix.FULL, tier = 10, shape = CoreShape.PENTAGON, weapon = WeaponId.ARC_COIL) },
-            listOf(RelicId.STORMHEART_CAPACITOR, RelicId.PANDEMIC_CODEX, RelicId.THUNDER_CHOIR, RelicId.CINDER_CROWN),
+            SweepStrongRelics,
         ),
     }
 

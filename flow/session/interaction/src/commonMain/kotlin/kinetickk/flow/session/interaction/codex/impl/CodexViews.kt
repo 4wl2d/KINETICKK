@@ -80,6 +80,8 @@ import kinetickk.foundation.design.labelStyle
 import kinetickk.foundation.design.measureKkText
 import kinetickk.foundation.design.monoStyle
 import kotlin.math.max
+import kinetickk.ball.gameplay.interaction.canvas.look.drawItemIcon
+import kinetickk.ball.gameplay.interaction.canvas.look.drawRelicIcon
 
 /**
  * Section heading of a grid: label and value as separate texts, an optional gold [badge] (the
@@ -279,7 +281,7 @@ internal fun CodexPairingRow(
                     val relic = conflict.relics.firstOrNull()
                     val radius = size.height * 0.42f
                     if (item != null) drawItemIcon(item, Offset(radius + 2.dp.toPx(), size.height * 0.5f), radius * 0.9f, codexItemColor(item, roles))
-                    if (relic != null) drawRelicIcon(relic, catalog.relicPolicy, Offset(size.width - radius - 2.dp.toPx(), size.height * 0.5f), radius, roles = roles)
+                    if (relic != null) drawRelicIcon(relic, catalog.relicPolicy, Offset(size.width - radius - 2.dp.toPx(), size.height * 0.5f), radius, accent = relicAspectColor(relic.aspect, roles))
                     else drawKkIcon(KkIcon.SYSTEM_DISMANTLED, Offset(size.width - radius - 2.dp.toPx(), size.height * 0.5f), radius * 1.3f, roles.threat)
                     drawLine(roles.threat, Offset(radius * 2.2f, size.height * 0.3f), Offset(size.width - radius * 2.2f, size.height * 0.7f), 2.5.dp.toPx())
                 }
@@ -362,7 +364,7 @@ internal fun CodexCostBlock(build: GameplayBuildSummaryProjection, catalog: UiCa
             val severed = build.relics.none { it.id == relic.id }
             Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Canvas(Modifier.size((26f * ui).dp)) {
-                    drawRelicIcon(relic, catalog.relicPolicy, center, size.minDimension * 0.46f, alpha = if (severed) 0.5f else 1f, roles = roles)
+                    drawRelicIcon(relic, catalog.relicPolicy, center, size.minDimension * 0.46f, alpha = if (severed) 0.5f else 1f, accent = relicAspectColor(relic.aspect, roles))
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

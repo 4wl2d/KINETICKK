@@ -1,0 +1,830 @@
+[
+ {
+  "name": "gameplayRandom",
+  "vis": "internal",
+  "kind": "var",
+  "start": 189,
+  "decl": 189,
+  "end": 190,
+  "text": "    internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()\n        ?: CloneableXorWowRandom(seed)"
+ },
+ {
+  "name": "rewardRandom",
+  "vis": "internal",
+  "kind": "var",
+  "start": 191,
+  "decl": 192,
+  "end": 193,
+  "text": "    /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */\n    internal var rewardRandom: CloneableXorWowRandom = copySource?.rewardRandom?.copy()\n        ?: CloneableXorWowRandom(seed xor REWARD_SEED_SALT)"
+ },
+ {
+  "name": "spawnRandom",
+  "vis": "internal",
+  "kind": "var",
+  "start": 194,
+  "decl": 198,
+  "end": 199,
+  "text": "    /**\n     * Every spawn, spawn position, enemy type, Elite and Herald aspect and director draw comes from this\n     * stream, so spawning never shifts crits and procs, and a different run seed reshapes the waves.\n     */\n    internal var spawnRandom: CloneableXorWowRandom = copySource?.spawnRandom?.copy()\n        ?: CloneableXorWowRandom(seed xor SPAWN_SEED_SALT)"
+ },
+ {
+  "name": "matrix",
+  "vis": "internal",
+  "kind": "var",
+  "start": 200,
+  "decl": 201,
+  "end": 201,
+  "text": "    /** Folded Matrix effects of [matrixRanks]; immutable, refolded when a run starts. */\n    internal var matrix: MatrixModifiers = copySource?.matrix ?: foldMatrix()"
+ },
+ {
+  "name": "pendingDiscoveredItemIds",
+  "vis": "internal",
+  "kind": "val",
+  "start": 202,
+  "decl": 202,
+  "end": 203,
+  "text": "    internal val pendingDiscoveredItemIds: PendingDiscoveredItemIdBuffer\n        get() = PendingDiscoveredItemIdBuffer(this)"
+ },
+ {
+  "name": "easyMode",
+  "vis": "internal",
+  "kind": "val",
+  "start": 204,
+  "decl": 205,
+  "end": 205,
+  "text": "    /** Baby mode (RunMode.EASY), fixed when the run is created; a run never changes it. */\n    internal val easyMode: Boolean = copySource?.easyMode ?: (runMode == RunMode.EASY)"
+ },
+ {
+  "name": "build",
+  "vis": "internal",
+  "kind": "var",
+  "start": 206,
+  "decl": 207,
+  "end": 207,
+  "text": "    /** Immutable compiled build shared by reduction siblings; replaced by [recompileBuild]. */\n    internal var build: CompiledBuild = copySource?.build ?: CompiledBuild.empty(content)"
+ },
+ {
+  "name": "skillLoadout",
+  "vis": "internal",
+  "kind": "var",
+  "start": 208,
+  "decl": 209,
+  "end": 209,
+  "text": "    /** What the skill slots hold: the owned active items' effects; immutable, replaced when an active item binds, ranks or is replaced. */\n    internal var skillLoadout: SkillLoadout = copySource?.skillLoadout ?: SkillLoadout.EMPTY"
+ },
+ {
+  "name": "skillRuntime",
+  "vis": "internal",
+  "kind": "var",
+  "start": 210,
+  "decl": 211,
+  "end": 211,
+  "text": "    /** Skill and Apex timing; a deep copy forks it. */\n    internal var skillRuntime: SkillRuntime = copySource?.skillRuntime?.fork() ?: SkillRuntime()"
+ },
+ {
+  "name": "invulnerableUntil",
+  "vis": "internal",
+  "kind": "var",
+  "start": 212,
+  "decl": 212,
+  "end": 212,
+  "text": "    internal var invulnerableUntil: Float = copySource?.invulnerableUntil ?: 0f"
+ },
+ {
+  "name": "overdriveBurnoutUntil",
+  "vis": "internal",
+  "kind": "var",
+  "start": 213,
+  "decl": 213,
+  "end": 213,
+  "text": "    internal var overdriveBurnoutUntil: Float = copySource?.overdriveBurnoutUntil ?: 0f"
+ },
+ {
+  "name": "overheatArmed",
+  "vis": "internal",
+  "kind": "var",
+  "start": 214,
+  "decl": 214,
+  "end": 214,
+  "text": "    internal var overheatArmed: Boolean = copySource?.overheatArmed ?: true"
+ },
+ {
+  "name": "wasBraking",
+  "vis": "internal",
+  "kind": "var",
+  "start": 215,
+  "decl": 215,
+  "end": 215,
+  "text": "    internal var wasBraking: Boolean = copySource?.wasBraking ?: false"
+ },
+ {
+  "name": "brakeHoldTime",
+  "vis": "internal",
+  "kind": "var",
+  "start": 216,
+  "decl": 216,
+  "end": 216,
+  "text": "    internal var brakeHoldTime: Float = copySource?.brakeHoldTime ?: 0f"
+ },
+ {
+  "name": "brakeShedSpeed",
+  "vis": "internal",
+  "kind": "var",
+  "start": 217,
+  "decl": 217,
+  "end": 217,
+  "text": "    internal var brakeShedSpeed: Float = copySource?.brakeShedSpeed ?: 0f"
+ },
+ {
+  "name": "critMissStreak",
+  "vis": "internal",
+  "kind": "var",
+  "start": 218,
+  "decl": 218,
+  "end": 218,
+  "text": "    internal var critMissStreak: Int = copySource?.critMissStreak ?: 0"
+ },
+ {
+  "name": "freeDashPrimed",
+  "vis": "internal",
+  "kind": "var",
+  "start": 219,
+  "decl": 219,
+  "end": 219,
+  "text": "    internal var freeDashPrimed: Boolean = copySource?.freeDashPrimed ?: false"
+ },
+ {
+  "name": "freeDashReadyAt",
+  "vis": "internal",
+  "kind": "var",
+  "start": 220,
+  "decl": 220,
+  "end": 220,
+  "text": "    internal var freeDashReadyAt: Float = copySource?.freeDashReadyAt ?: 0f"
+ },
+ {
+  "name": "dashHitThisDash",
+  "vis": "internal",
+  "kind": "var",
+  "start": 221,
+  "decl": 221,
+  "end": 221,
+  "text": "    internal var dashHitThisDash: Boolean = copySource?.dashHitThisDash ?: false"
+ },
+ {
+  "name": "soundCues",
+  "vis": "internal",
+  "kind": "val",
+  "start": 222,
+  "decl": 222,
+  "end": 223,
+  "text": "    internal val soundCues: PendingSoundCueBuffer\n        get() = PendingSoundCueBuffer(this)"
+ },
+ {
+  "name": "visualFxCues",
+  "vis": "internal",
+  "kind": "val",
+  "start": 224,
+  "decl": 224,
+  "end": 225,
+  "text": "    internal val visualFxCues: PendingVisualFxCueBuffer\n        get() = PendingVisualFxCueBuffer(this)"
+ },
+ {
+  "name": "siteRandom",
+  "vis": "internal",
+  "kind": "var",
+  "start": 226,
+  "decl": 227,
+  "end": 228,
+  "text": "    /** Window kinds draw from their own stream, so sites never shift offers, spawns or crits. */\n    internal var siteRandom: CloneableXorWowRandom = copySource?.siteRandom?.copy()\n        ?: CloneableXorWowRandom(seed xor SITE_SEED_SALT)"
+ },
+ {
+  "name": "nextEntityId",
+  "vis": "internal",
+  "kind": "var",
+  "start": 230,
+  "decl": 230,
+  "end": 230,
+  "text": "    internal var nextEntityId: Int = copySource?.nextEntityId ?: 1"
+ },
+ {
+  "name": "runSeed",
+  "vis": "internal",
+  "kind": "val",
+  "start": 231,
+  "decl": 232,
+  "end": 232,
+  "text": "    /** Seed of this run; obstacle chunks hash it with their absolute chunk. */\n    internal val runSeed: Int = copySource?.runSeed ?: seed"
+ },
+ {
+  "name": "structureTemplatePool",
+  "vis": "internal",
+  "kind": "val",
+  "start": 233,
+  "decl": 234,
+  "end": 235,
+  "text": "    /** Content and seed are fixed for this state and all reduction siblings; rank the template pool only once. */\n    internal val structureTemplatePool: Int = copySource?.structureTemplatePool\n        ?: structureTemplateMask(content.structures, runSeed)"
+ },
+ {
+  "name": "worldLayer",
+  "vis": "internal",
+  "kind": "var",
+  "start": 236,
+  "decl": 237,
+  "end": 237,
+  "text": "    /** The run's world layer; only a layer switch writes it. */\n    internal var worldLayer: WorldLayer = copySource?.worldLayer ?: WorldLayer.BASE"
+ },
+ {
+  "name": "runBoons",
+  "vis": "internal",
+  "kind": "var",
+  "start": 238,
+  "decl": 239,
+  "end": 239,
+  "text": "    /** Run boons owned, in grant order, at most [ContentBounds.MAX_RUN_BOONS]. */\n    internal var runBoons: ImmutableList<Int> = copySource?.runBoons ?: immutableListOf()"
+ },
+ {
+  "name": "dashBufferTime",
+  "vis": "internal",
+  "kind": "var",
+  "start": 240,
+  "decl": 240,
+  "end": 240,
+  "text": "    internal var dashBufferTime: Float = copySource?.dashBufferTime ?: 0f"
+ },
+ {
+  "name": "bossSpawned",
+  "vis": "internal",
+  "kind": "var",
+  "start": 241,
+  "decl": 241,
+  "end": 241,
+  "text": "    internal var bossSpawned: Boolean = copySource?.bossSpawned ?: false"
+ },
+ {
+  "name": "keyboardBrakeActive",
+  "vis": "internal",
+  "kind": "var",
+  "start": 242,
+  "decl": 242,
+  "end": 242,
+  "text": "    internal var keyboardBrakeActive: Boolean = copySource?.keyboardBrakeActive ?: false"
+ },
+ {
+  "name": "secondaryBrakeActive",
+  "vis": "internal",
+  "kind": "var",
+  "start": 243,
+  "decl": 243,
+  "end": 243,
+  "text": "    internal var secondaryBrakeActive: Boolean = copySource?.secondaryBrakeActive ?: false"
+ },
+ {
+  "name": "touchBrakeActive",
+  "vis": "internal",
+  "kind": "var",
+  "start": 244,
+  "decl": 244,
+  "end": 244,
+  "text": "    internal var touchBrakeActive: Boolean = copySource?.touchBrakeActive ?: false"
+ },
+ {
+  "name": "previousCoreX",
+  "vis": "internal",
+  "kind": "var",
+  "start": 245,
+  "decl": 245,
+  "end": 245,
+  "text": "    internal var previousCoreX: Float = copySource?.previousCoreX ?: 0f"
+ },
+ {
+  "name": "previousCoreY",
+  "vis": "internal",
+  "kind": "var",
+  "start": 246,
+  "decl": 246,
+  "end": 246,
+  "text": "    internal var previousCoreY: Float = copySource?.previousCoreY ?: 0f"
+ },
+ {
+  "name": "previousSingularityX",
+  "vis": "internal",
+  "kind": "var",
+  "start": 247,
+  "decl": 247,
+  "end": 247,
+  "text": "    internal var previousSingularityX: Float = copySource?.previousSingularityX ?: 0f"
+ },
+ {
+  "name": "previousSingularityY",
+  "vis": "internal",
+  "kind": "var",
+  "start": 248,
+  "decl": 248,
+  "end": 248,
+  "text": "    internal var previousSingularityY: Float = copySource?.previousSingularityY ?: 0f"
+ },
+ {
+  "name": "shieldRechargeDelay",
+  "vis": "internal",
+  "kind": "var",
+  "start": 249,
+  "decl": 249,
+  "end": 249,
+  "text": "    internal var shieldRechargeDelay: Float = copySource?.shieldRechargeDelay ?: 0f"
+ },
+ {
+  "name": "overheatHoldTime",
+  "vis": "internal",
+  "kind": "var",
+  "start": 250,
+  "decl": 250,
+  "end": 250,
+  "text": "    internal var overheatHoldTime: Float = copySource?.overheatHoldTime ?: 0f"
+ },
+ {
+  "name": "saturationHeadingX",
+  "vis": "internal",
+  "kind": "var",
+  "start": 251,
+  "decl": 251,
+  "end": 251,
+  "text": "    internal var saturationHeadingX: Float = copySource?.saturationHeadingX ?: 1f"
+ },
+ {
+  "name": "saturationHeadingY",
+  "vis": "internal",
+  "kind": "var",
+  "start": 252,
+  "decl": 252,
+  "end": 252,
+  "text": "    internal var saturationHeadingY: Float = copySource?.saturationHeadingY ?: 0f"
+ },
+ {
+  "name": "smoothedVelocityX",
+  "vis": "internal",
+  "kind": "var",
+  "start": 253,
+  "decl": 253,
+  "end": 253,
+  "text": "    internal var smoothedVelocityX: Float = copySource?.smoothedVelocityX ?: 0f"
+ },
+ {
+  "name": "smoothedVelocityY",
+  "vis": "internal",
+  "kind": "var",
+  "start": 254,
+  "decl": 254,
+  "end": 254,
+  "text": "    internal var smoothedVelocityY: Float = copySource?.smoothedVelocityY ?: 0f"
+ },
+ {
+  "name": "turnHeadingEstablished",
+  "vis": "internal",
+  "kind": "var",
+  "start": 255,
+  "decl": 255,
+  "end": 255,
+  "text": "    internal var turnHeadingEstablished: Boolean = copySource?.turnHeadingEstablished ?: false"
+ },
+ {
+  "name": "turnHoldTime",
+  "vis": "internal",
+  "kind": "var",
+  "start": 256,
+  "decl": 256,
+  "end": 256,
+  "text": "    internal var turnHoldTime: Float = copySource?.turnHoldTime ?: 0f"
+ },
+ {
+  "name": "turnRecoveryCooldown",
+  "vis": "internal",
+  "kind": "var",
+  "start": 257,
+  "decl": 257,
+  "end": 257,
+  "text": "    internal var turnRecoveryCooldown: Float = copySource?.turnRecoveryCooldown ?: 0f"
+ },
+ {
+  "name": "turnDirection",
+  "vis": "internal",
+  "kind": "var",
+  "start": 258,
+  "decl": 258,
+  "end": 258,
+  "text": "    internal var turnDirection: Int = copySource?.turnDirection ?: 0"
+ },
+ {
+  "name": "coreStraightness",
+  "vis": "internal",
+  "kind": "var",
+  "start": 259,
+  "decl": 260,
+  "end": 260,
+  "text": "    /** How straight the Core's heading has stayed (0..1); straight-line fatigue reads it. */\n    internal var coreStraightness: Float = copySource?.coreStraightness ?: 0f"
+ },
+ {
+  "name": "timeSinceDamage",
+  "vis": "internal",
+  "kind": "var",
+  "start": 261,
+  "decl": 261,
+  "end": 261,
+  "text": "    internal var timeSinceDamage: Float = copySource?.timeSinceDamage ?: 0f"
+ },
+ {
+  "name": "hurtCooldown",
+  "vis": "internal",
+  "kind": "var",
+  "start": 262,
+  "decl": 262,
+  "end": 262,
+  "text": "    internal var hurtCooldown: Float = copySource?.hurtCooldown ?: 0f"
+ },
+ {
+  "name": "lastAimDirectionX",
+  "vis": "internal",
+  "kind": "var",
+  "start": 263,
+  "decl": 263,
+  "end": 263,
+  "text": "    internal var lastAimDirectionX: Float = copySource?.lastAimDirectionX ?: 1f"
+ },
+ {
+  "name": "lastAimDirectionY",
+  "vis": "internal",
+  "kind": "var",
+  "start": 264,
+  "decl": 264,
+  "end": 264,
+  "text": "    internal var lastAimDirectionY: Float = copySource?.lastAimDirectionY ?: 0f"
+ },
+ {
+  "name": "phase",
+  "vis": "",
+  "kind": "var",
+  "start": 266,
+  "decl": 266,
+  "end": 267,
+  "text": "    var phase: GamePhase = copySource?.phase ?: GamePhase.RUNNING\n        internal set"
+ },
+ {
+  "name": "settings",
+  "vis": "",
+  "kind": "var",
+  "start": 268,
+  "decl": 268,
+  "end": 269,
+  "text": "    var settings: PlayerPreferences = copySource?.settings ?: bootstrapProgress?.preferences ?: PlayerPreferences()\n        internal set"
+ },
+ {
+  "name": "rebirthLevel",
+  "vis": "",
+  "kind": "var",
+  "start": 270,
+  "decl": 270,
+  "end": 271,
+  "text": "    var rebirthLevel: Int = copySource?.rebirthLevel ?: activeRebirthProfile.tier\n        internal set"
+ },
+ {
+  "name": "rebirthRank",
+  "vis": "",
+  "kind": "var",
+  "start": 272,
+  "decl": 276,
+  "end": 278,
+  "text": "    /**\n     * Rebirth rank (one above the highest clear) from the bootstrap profile, never below the run's tier.\n     * Unlock gates (items, Relics, Heirloom cards) read it; tier scaling and the roster read [rebirthLevel].\n     */\n    var rebirthRank: Int = copySource?.rebirthRank\n        ?: max(activeRebirthProfile.tier, bootstrapProgress?.rebirthProgress?.rank ?: activeRebirthProfile.tier)\n        internal set"
+ },
+ {
+  "name": "screenWidth",
+  "vis": "",
+  "kind": "var",
+  "start": 279,
+  "decl": 279,
+  "end": 280,
+  "text": "    var screenWidth: Float = copySource?.screenWidth ?: 1280f\n        internal set"
+ },
+ {
+  "name": "screenHeight",
+  "vis": "",
+  "kind": "var",
+  "start": 281,
+  "decl": 281,
+  "end": 282,
+  "text": "    var screenHeight: Float = copySource?.screenHeight ?: 720f\n        internal set"
+ },
+ {
+  "name": "coreX",
+  "vis": "",
+  "kind": "var",
+  "start": 284,
+  "decl": 284,
+  "end": 285,
+  "text": "    var coreX: Float = copySource?.coreX ?: 0f\n        internal set"
+ },
+ {
+  "name": "coreY",
+  "vis": "",
+  "kind": "var",
+  "start": 286,
+  "decl": 286,
+  "end": 287,
+  "text": "    var coreY: Float = copySource?.coreY ?: 0f\n        internal set"
+ },
+ {
+  "name": "coreRadius",
+  "vis": "internal",
+  "kind": "var",
+  "start": 288,
+  "decl": 289,
+  "end": 289,
+  "text": "    /** Collision and draw radius of the Core; every simulation contact reads this, never [CORE_RADIUS]. */\n    internal var coreRadius: Float = copySource?.coreRadius ?: CORE_RADIUS"
+ },
+ {
+  "name": "velocityX",
+  "vis": "",
+  "kind": "var",
+  "start": 290,
+  "decl": 290,
+  "end": 291,
+  "text": "    var velocityX: Float = copySource?.velocityX ?: 0f\n        internal set"
+ },
+ {
+  "name": "velocityY",
+  "vis": "",
+  "kind": "var",
+  "start": 292,
+  "decl": 292,
+  "end": 293,
+  "text": "    var velocityY: Float = copySource?.velocityY ?: 0f\n        internal set"
+ },
+ {
+  "name": "cameraX",
+  "vis": "",
+  "kind": "var",
+  "start": 294,
+  "decl": 294,
+  "end": 295,
+  "text": "    var cameraX: Float = copySource?.cameraX ?: 0f\n        internal set"
+ },
+ {
+  "name": "cameraY",
+  "vis": "",
+  "kind": "var",
+  "start": 296,
+  "decl": 296,
+  "end": 297,
+  "text": "    var cameraY: Float = copySource?.cameraY ?: 0f\n        internal set"
+ },
+ {
+  "name": "pointerX",
+  "vis": "",
+  "kind": "var",
+  "start": 298,
+  "decl": 298,
+  "end": 299,
+  "text": "    var pointerX: Float = copySource?.pointerX ?: 900f\n        internal set"
+ },
+ {
+  "name": "pointerY",
+  "vis": "",
+  "kind": "var",
+  "start": 300,
+  "decl": 300,
+  "end": 301,
+  "text": "    var pointerY: Float = copySource?.pointerY ?: 360f\n        internal set"
+ },
+ {
+  "name": "pointerActive",
+  "vis": "",
+  "kind": "var",
+  "start": 302,
+  "decl": 302,
+  "end": 303,
+  "text": "    var pointerActive: Boolean = copySource?.pointerActive ?: true\n        internal set"
+ },
+ {
+  "name": "braking",
+  "vis": "",
+  "kind": "var",
+  "start": 304,
+  "decl": 304,
+  "end": 305,
+  "text": "    var braking: Boolean = copySource?.braking ?: false\n        internal set"
+ },
+ {
+  "name": "elapsed",
+  "vis": "",
+  "kind": "var",
+  "start": 307,
+  "decl": 307,
+  "end": 308,
+  "text": "    var elapsed: Float = copySource?.elapsed ?: 0f\n        internal set"
+ },
+ {
+  "name": "heat",
+  "vis": "",
+  "kind": "var",
+  "start": 309,
+  "decl": 309,
+  "end": 310,
+  "text": "    var heat: Float = copySource?.heat ?: 0f\n        internal set"
+ },
+ {
+  "name": "overheated",
+  "vis": "",
+  "kind": "var",
+  "start": 311,
+  "decl": 311,
+  "end": 312,
+  "text": "    var overheated: Boolean = copySource?.overheated ?: false\n        internal set"
+ },
+ {
+  "name": "dashPhaseTime",
+  "vis": "",
+  "kind": "var",
+  "start": 313,
+  "decl": 313,
+  "end": 314,
+  "text": "    var dashPhaseTime: Float = copySource?.dashPhaseTime ?: 0f\n        internal set"
+ },
+ {
+  "name": "hp",
+  "vis": "",
+  "kind": "var",
+  "start": 315,
+  "decl": 315,
+  "end": 316,
+  "text": "    var hp: Float = copySource?.hp ?: 100f\n        internal set"
+ },
+ {
+  "name": "maxHp",
+  "vis": "",
+  "kind": "var",
+  "start": 317,
+  "decl": 317,
+  "end": 318,
+  "text": "    var maxHp: Float = copySource?.maxHp ?: 100f\n        internal set"
+ },
+ {
+  "name": "shield",
+  "vis": "",
+  "kind": "var",
+  "start": 319,
+  "decl": 319,
+  "end": 320,
+  "text": "    var shield: Float = copySource?.shield ?: 0f\n        internal set"
+ },
+ {
+  "name": "maxShield",
+  "vis": "",
+  "kind": "var",
+  "start": 321,
+  "decl": 321,
+  "end": 322,
+  "text": "    var maxShield: Float = copySource?.maxShield ?: 0f\n        internal set"
+ },
+ {
+  "name": "combo",
+  "vis": "",
+  "kind": "var",
+  "start": 324,
+  "decl": 324,
+  "end": 325,
+  "text": "    var combo: Int = copySource?.combo ?: 0\n        internal set"
+ },
+ {
+  "name": "comboTime",
+  "vis": "",
+  "kind": "var",
+  "start": 326,
+  "decl": 326,
+  "end": 327,
+  "text": "    var comboTime: Float = copySource?.comboTime ?: 0f\n        internal set"
+ },
+ {
+  "name": "runGrace",
+  "vis": "",
+  "kind": "var",
+  "start": 328,
+  "decl": 328,
+  "end": 329,
+  "text": "    var runGrace: Float = copySource?.runGrace ?: 0f\n        internal set"
+ },
+ {
+  "name": "polarityStability",
+  "vis": "",
+  "kind": "var",
+  "start": 331,
+  "decl": 331,
+  "end": 332,
+  "text": "    var polarityStability: Float = copySource?.polarityStability ?: 1f\n        internal set"
+ },
+ {
+  "name": "weapon",
+  "vis": "",
+  "kind": "var",
+  "start": 334,
+  "decl": 334,
+  "end": 336,
+  "text": "    var weapon: WeaponId = copySource?.weapon\n        ?: bootstrapProgress?.loadout?.selectedWeapon ?: WeaponId.FLUX_WAKE\n        internal set"
+ },
+ {
+  "name": "startingWeapon",
+  "vis": "",
+  "kind": "var",
+  "start": 337,
+  "decl": 337,
+  "end": 338,
+  "text": "    var startingWeapon: WeaponId = copySource?.startingWeapon ?: weapon\n        internal set"
+ },
+ {
+  "name": "overdriveCharge",
+  "vis": "",
+  "kind": "var",
+  "start": 339,
+  "decl": 339,
+  "end": 340,
+  "text": "    var overdriveCharge: Float = copySource?.overdriveCharge ?: 0f\n        internal set"
+ },
+ {
+  "name": "overdriveTime",
+  "vis": "",
+  "kind": "var",
+  "start": 341,
+  "decl": 341,
+  "end": 342,
+  "text": "    var overdriveTime: Float = copySource?.overdriveTime ?: 0f\n        internal set"
+ },
+ {
+  "name": "equippedRelics",
+  "vis": "",
+  "kind": "var",
+  "start": 343,
+  "decl": 343,
+  "end": 344,
+  "text": "    var equippedRelics: List<EquippedRelic> = copySource?.equippedRelics ?: emptyList()\n        internal set"
+ },
+ {
+  "name": "enemies",
+  "vis": "",
+  "kind": "val",
+  "start": 346,
+  "decl": 346,
+  "end": 348,
+  "text": "    val enemies: MutableList<Enemy> = copySource?.enemies?.let { source ->\n        source.mapTo(ArrayList(source.size), Enemy::isolatedCopy)\n    } ?: mutableListOf()"
+ },
+ {
+  "name": "projectiles",
+  "vis": "",
+  "kind": "val",
+  "start": 349,
+  "decl": 349,
+  "end": 352,
+  "text": "    val projectiles: MutableList<Projectile> = copySource?.projectiles?.let { source ->\n        source.mapTo(ArrayList(source.size), Projectile::isolatedCopy)\n    }\n        ?: mutableListOf()"
+ },
+ {
+  "name": "pickups",
+  "vis": "",
+  "kind": "val",
+  "start": 353,
+  "decl": 353,
+  "end": 356,
+  "text": "    val pickups: MutableList<Pickup> = copySource?.pickups?.let { source ->\n        source.mapTo(ArrayList(source.size), Pickup::copy)\n    }\n        ?: mutableListOf()"
+ },
+ {
+  "name": "trail",
+  "vis": "",
+  "kind": "val",
+  "start": 357,
+  "decl": 357,
+  "end": 360,
+  "text": "    val trail: MutableList<TrailPoint> = copySource?.trail?.let { source ->\n        source.mapTo(ArrayList(source.size), TrailPoint::copy)\n    }\n        ?: mutableListOf()"
+ },
+ {
+  "name": "weaponNodes",
+  "vis": "",
+  "kind": "val",
+  "start": 361,
+  "decl": 361,
+  "end": 364,
+  "text": "    val weaponNodes: MutableList<WeaponNode> = copySource?.weaponNodes?.let { source ->\n        source.mapTo(ArrayList(source.size), WeaponNode::copy)\n    }\n        ?: mutableListOf()"
+ },
+ {
+  "name": "weaponOrbitals",
+  "vis": "",
+  "kind": "val",
+  "start": 365,
+  "decl": 365,
+  "end": 368,
+  "text": "    val weaponOrbitals: MutableList<WeaponOrbital> = copySource?.weaponOrbitals?.let { source ->\n        source.mapTo(ArrayList(source.size), WeaponOrbital::copy)\n    }\n        ?: mutableListOf()"
+ },
+ {
+  "name": "choices",
+  "vis": "",
+  "kind": "var",
+  "start": 369,
+  "decl": 369,
+  "end": 375,
+  "text": "    var choices: List<ChoiceOption> = copySource?.choices ?: emptyList()\n        internal set(value) {\n            require(value.size <= MAX_CHOICES) {\n                \"choices cannot exceed $MAX_CHOICES entries\"\n            }\n            field = value\n        }"
+ }
+]

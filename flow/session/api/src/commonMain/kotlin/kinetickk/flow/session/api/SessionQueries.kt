@@ -4,15 +4,11 @@
 package kinetickk.flow.session.api
 
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 
-sealed interface AppSessionQuery {
-    data object GetShell : AppSessionQuery
-}
-
 data class AppShellProjection(
-    val instanceId: AppSessionInstanceId,
     val revision: SessionRevision,
     val routeRevision: SessionRevision,
     val base: AppDestination,
@@ -23,6 +19,8 @@ data class AppShellProjection(
     val lifecycle: SessionLifecycle,
     val rebirthConfirmationArmed: Boolean,
     val workflowFailure: SessionWorkflowFailureCode?,
+    /** The mode every next start carries; chosen on the bare Home, STANDARD at every launch. */
+    val runMode: RunMode = RunMode.STANDARD,
 ) {
     init {
         require(base.isBaseDestination()) { "Only Home and Gameplay may be base destinations" }
@@ -56,9 +54,7 @@ data class AppShellProjection(
 
 /** Local Interaction/query facade. Participant command authority is bound separately by Impl. */
 interface AppSessionPort {
-    val instanceId: AppSessionInstanceId
-
     fun accept(pulse: SessionInteractionPulse): SessionAcceptance
 
-    fun query(query: AppSessionQuery.GetShell): AppShellProjection
+    fun shell(): AppShellProjection
 }

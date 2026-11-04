@@ -27,6 +27,7 @@ import kinetickk.ball.content.impl.createContentCatalog
 import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.impl.DefaultGameplayFeature
+import kinetickk.ball.gameplay.interaction.GameplayInteractionPort
 import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.GameAction
 import kinetickk.ball.profile.api.KeyBindings
@@ -36,12 +37,11 @@ import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
 import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kinetickk.ball.profile.impl.createProfileComponent
 import kinetickk.flow.session.api.AppDestination
-import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
-import kinetickk.resource.audio.api.ToneRequest
 import kotlin.time.Duration.Companion.minutes
 import org.jetbrains.skia.Image
 import kinetickk.foundation.dispatch.call
@@ -104,6 +104,7 @@ class SettingsNavigationComposeTest {
                         owner.Content()
                     }
                 }
+                awaitAppStartup()
                 fun settle() {
                     mainClock.advanceTimeBy(260)
                     waitForIdle()
@@ -127,7 +128,7 @@ class SettingsNavigationComposeTest {
                 settle()
                 onRoot().performKeyInput { pressKey(Key.S) }
                 settle()
-                assertEquals(AppDestination.Settings, owner.sessionPort.query(AppSessionQuery.GetShell).active)
+                assertEquals(AppDestination.Settings, owner.sessionPort.shell().active)
                 for (language in listOf("ru", "en")) {
                     click("kinetickk.settings.group.game")
                     click("kinetickk.settings.language.$language")
@@ -184,10 +185,11 @@ class SettingsNavigationComposeTest {
                         owner.Content()
                     }
                 }
+                awaitAppStartup()
                 fun render(expected: AppDestination) {
                     mainClock.advanceTimeBy(260)
                     waitForIdle()
-                    assertEquals(expected, owner.sessionPort.query(AppSessionQuery.GetShell).active)
+                    assertEquals(expected, owner.sessionPort.shell().active)
                     val rendered = onNodeWithTag(APP_TAG).captureToImage()
                     assertTrue(rendered.width > 0 && rendered.height > 0)
                     System.getenv("KINETICKK_RENDER_CAPTURE_DIR")?.let { directory ->
@@ -274,7 +276,7 @@ class SettingsNavigationComposeTest {
                     assertVolume(42)
                     key(Key.Enter, AppDestination.Settings)
                     input.assertIsNotFocused()
-                    key(Key.Escape, owner.sessionPort.query(AppSessionQuery.GetShell).base)
+                    key(Key.Escape, owner.sessionPort.shell().base)
                     key(Key.S, AppDestination.Settings)
                     selectGroup("sound")
                     assertVolume(42)
@@ -544,6 +546,9 @@ class SettingsNavigationComposeTest {
 
                 onNodeWithTag("kinetickk.home.start").performSemanticsAction(SemanticsActions.RequestFocus) { assertTrue(it()) }
                 key(Key.Enter, AppDestination.Gameplay)
+                // The run takes No omen; the frames that follow show the running run before P.
+                (gameplay.activeRun() as GameplayInteractionPort).declineOmenIfOffered()
+                render(AppDestination.Gameplay)
                 key(Key.P, AppDestination.Gameplay)
                 assertEquals(GameplayRunPhase.PAUSED, gameplay.activeRun()?.query(GameplayQuery.GetRunStatus)?.phase)
                 onNodeWithTag("kinetickk.gameplay.settings").performClick()
@@ -631,7 +636,6 @@ private class InMemorySettingsPersistence : ProfilePersistenceCapability {
 private class SettingsSilentAudio : AudioService {
     var preferences: AudioPreferences? = null
     override fun updatePreferences(preferences: AudioPreferences) { this.preferences = preferences }
-    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
     override fun ensureUnlocked() = Unit
     override fun close() = Unit
 }

@@ -121,9 +121,8 @@ internal class WeaponEntity(
 
 /**
  * Owned state of the equipped weapon beyond its clocks: world entities, the proc gates, element and
- * infusion cadences and the inputs the scaling stats read. A full reduction forks it (entities are
- * copied, at most [MAX_WEAPON_ENTITIES]); a scalar-input reduction shares it, since no scalar input
- * writes it.
+ * infusion cadences and the inputs the scaling stats read. A deep copy forks it (entities are
+ * copied, at most [MAX_WEAPON_ENTITIES]).
  *
  * Proc rule: a discrete activation takes the next [activationSerial]; only its first enemy hit qualifies
  * ([procMask] bit k marks activation `serial − k` as spent). Persistent sources (continuous, contact,

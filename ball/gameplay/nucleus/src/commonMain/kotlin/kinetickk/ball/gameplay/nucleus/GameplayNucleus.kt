@@ -3,7 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus
 
-import kinetickk.ball.gameplay.nucleus.simulation.buildSummary
+import kinetickk.ball.gameplay.nucleus.simulation.builds.buildSummary
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MatrixNodeId
@@ -28,18 +28,21 @@ import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
 import kinetickk.ball.gameplay.nucleus.reducer.GameReduction
 import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
+import kinetickk.ball.gameplay.nucleus.reducer.ReductionOutcome
 import kinetickk.ball.gameplay.nucleus.reducer.initialEngineState
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
-import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.simulation.applyPreferences
-import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
+import kinetickk.ball.gameplay.nucleus.simulation.deepCopy
 import kinetickk.ball.gameplay.nucleus.simulation.exitRun
 import kinetickk.ball.gameplay.nucleus.simulation.pauseForOverlay
 import kinetickk.ball.gameplay.nucleus.simulation.startRun
-import kinetickk.ball.gameplay.nucleus.simulation.takeProgressUpdate
+import kinetickk.ball.gameplay.nucleus.simulation.progression.takeProgressUpdate
 import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
 import kinetickk.ball.gameplay.nucleus.simulation.takeVisualFxCues
-import kinetickk.ball.gameplay.nucleus.simulation.toRenderModel
+import kinetickk.ball.gameplay.nucleus.projection.ProjectionSources
+import kinetickk.ball.gameplay.nucleus.projection.captureProjectionSources
+import kinetickk.ball.gameplay.nucleus.projection.projectionProvenance
+import kinetickk.ball.gameplay.nucleus.projection.toRenderModel
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.ball.profile.api.PlayerPreferences
@@ -69,6 +72,51 @@ object GameplayNucleus {
             is GameplayNucleusPulse.ProgressApplied -> completeProfileProgress(state, GameplayExitProgressResult.Applied)
             is GameplayNucleusPulse.ProgressRefused -> completeProfileProgress(state, GameplayExitProgressResult.NotApplied)
         }
+    }
+
+    /** Production frame/input path: mutates [state]'s engine model in place (deep copy only while progress is pending). */
+    fun tick(
+        state: GameplayState,
+        pulse: GameplayInteractionPulse,
+        outputs: GameplayTickOutputs,
+    ): GameplayTickResult {
+        outputs.reset()
+        lifecycleGate(state)?.let { return GameplayTickResult.Rejected(it) }
+        val engine = state.engine!!
+        val sink = outputs.sink
+        val outcome = reducer.admit(engine.model, pulse, sink)
+        if (outcome == ReductionOutcome.REJECTED) return GameplayTickResult.Rejected(checkNotNull(sink.rejection))
+        // Earned progress awaits its Profile reply: a step that could publish more runs on a copy a rejection drops.
+        val isolated = outcome == ReductionOutcome.STEPPED && state.progressPending
+        val model = if (isolated) engine.model.deepCopy() else engine.model
+        reducer.reduceInPlace(model, pulse, outcome, sink)
+        val publishesProgress = sink.progressUpdate != null
+        if (publishesProgress && state.progressPending) {
+            return GameplayTickResult.Rejected(GameplayRejection.ProgressPending)
+        }
+        outputs.visualFxCues = sink.visualFxCues
+        outputs.audioCues = sink.soundCues
+        outputs.progressUpdate = sink.progressUpdate
+        if (pulse is GameplayInteractionPulse.FrameElapsed) {
+            outputs.frameAccepted = true
+            outputs.frameRealDeltaSeconds = pulse.realDeltaSeconds
+        }
+        outputs.ensuresAudioUnlocked = outcome == ReductionOutcome.AUDIO_UNLOCKED
+        outputs.renderNeutral = when (outcome) {
+            ReductionOutcome.AUDIO_UNLOCKED,
+            ReductionOutcome.IDLE_FRAME,
+            ReductionOutcome.UNCHANGED,
+            -> true
+            else -> pulse === GameplayInteractionPulse.DashRequested
+        }
+        return GameplayTickResult.Accepted(
+            state.copy(
+                revision = state.revision.next(),
+                phase = model.phase.toRunPhase(),
+                engine = if (isolated) EngineState(model) else engine,
+                progressPending = publishesProgress || state.progressPending,
+            ),
+        )
     }
 
     fun renderSnapshot(state: GameplayState): GameplayRenderSnapshot =
@@ -104,6 +152,30 @@ object GameplayNucleus {
         )
     }
 
+    /** Tick path: no identity reuse against the (same, mutated) source; content equality against [previous]. */
+    fun renderSnapshot(state: GameplayState, previous: GameplayRenderSnapshot): GameplayRenderSnapshot {
+        require(previous.instanceId == state.instanceId) {
+            "Previous Gameplay render snapshot belongs to another instance"
+        }
+        val reusableModel = previous.renderModel
+        require(reusableModel == null || reusableModel.content === state.content) {
+            "Previous Gameplay render model belongs to different content"
+        }
+        val engine = state.engine ?: return GameplayRenderSnapshot(state.instanceId, state.revision, null, null)
+        val model = engine.model
+        val previousSources = (previous.projectionSourceIdentity as? ProjectionSources)?.takeIf { reusableModel != null }
+        return GameplayRenderSnapshot(
+            instanceId = state.instanceId,
+            revision = state.revision,
+            renderModel = model.toRenderModel(
+                reusableCollections = reusableModel,
+                identitySource = null,
+                sources = previousSources,
+            ),
+            projectionSourceIdentity = model.captureProjectionSources(engine.renderProjectionIdentity, previousSources),
+        )
+    }
+
     /** Restamps a render-neutral transition without allocating another render model. */
     fun reuseRenderSnapshot(
         state: GameplayState,
@@ -114,11 +186,15 @@ object GameplayNucleus {
         require((state.engine == null) == (reusableSnapshot.renderModel == null)) {
             "Render-neutral transition changed Gameplay engine availability"
         }
+        val engineIdentity = state.engine?.renderProjectionIdentity
         return GameplayRenderSnapshot(
             instanceId = state.instanceId,
             revision = state.revision,
             renderModel = reusableSnapshot.renderModel,
-            projectionSourceIdentity = state.engine?.renderProjectionIdentity,
+            // The same engine keeps the tick path's capture: a render-neutral transition replaced none of its values.
+            projectionSourceIdentity = reusableSnapshot.projectionSourceIdentity.takeIf {
+                engineIdentity != null && projectionProvenance(it) === engineIdentity
+            } ?: engineIdentity,
         )
     }
 
@@ -152,7 +228,7 @@ object GameplayNucleus {
             "Reusable Gameplay render source/model nullability mismatch"
         }
         require(
-            reusableSnapshot.projectionSourceIdentity ===
+            projectionProvenance(reusableSnapshot.projectionSourceIdentity) ===
                 reusableState.engine?.renderProjectionIdentity,
         ) {
             "Reusable Gameplay render snapshot was not projected from its claimed source"
@@ -215,6 +291,8 @@ object GameplayNucleus {
             content = state.content,
             seed = startInputs.seed,
             bootstrapProgress = startInputs.profile,
+            runMode = startInputs.mode,
+            offerRunOmen = true,
         )
         engine.model.startRun()
         engine.model.takeSoundCues()
@@ -420,7 +498,7 @@ object GameplayNucleus {
         engine: EngineState,
         mutation: (kinetickk.ball.gameplay.nucleus.simulation.MutableGameState) -> Unit,
     ): GameReduction {
-        val candidate = engine.model.copyForReduction()
+        val candidate = engine.model.deepCopy()
         mutation(candidate)
         val visualFxCues = candidate.takeVisualFxCues()
         val progressUpdate = candidate.takeProgressUpdate()
@@ -486,14 +564,6 @@ object GameplayNucleus {
 
     private fun rejected(reason: GameplayRejection): GameplayDecision.Rejected =
         GameplayDecision.Rejected(reason)
-
-    private fun GamePhase.toRunPhase(): GameplayRunPhase = when (this) {
-        GamePhase.RUNNING -> GameplayRunPhase.RUNNING
-        GamePhase.PAUSED -> GameplayRunPhase.PAUSED
-        GamePhase.CHOICE -> GameplayRunPhase.CHOICE
-        GamePhase.GAME_OVER -> GameplayRunPhase.GAME_OVER
-        GamePhase.VICTORY -> GameplayRunPhase.VICTORY
-    }
 
     private fun GameplayRevision.next(): GameplayRevision = GameplayRevision(value + 1L)
 }

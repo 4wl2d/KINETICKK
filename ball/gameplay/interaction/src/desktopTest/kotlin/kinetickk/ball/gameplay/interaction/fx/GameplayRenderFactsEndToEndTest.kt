@@ -28,15 +28,15 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import kinetickk.ball.gameplay.interaction.canvas.BossTarget
-import kinetickk.ball.gameplay.interaction.canvas.FxDrawBudget
-import kinetickk.ball.gameplay.interaction.canvas.FxFrame
-import kinetickk.ball.gameplay.interaction.canvas.FxPool
-import kinetickk.ball.gameplay.interaction.canvas.HudBlock
-import kinetickk.ball.gameplay.interaction.canvas.HudLayoutProbe
-import kinetickk.ball.gameplay.interaction.canvas.HudPresentationMemory
+import kinetickk.ball.gameplay.interaction.canvas.hud.BossTarget
+import kinetickk.ball.gameplay.interaction.canvas.fx.FxDrawBudget
+import kinetickk.ball.gameplay.interaction.canvas.fx.FxFrame
+import kinetickk.ball.gameplay.interaction.canvas.fx.FxPool
+import kinetickk.ball.gameplay.interaction.canvas.hud.HudBlock
+import kinetickk.ball.gameplay.interaction.canvas.hud.HudLayoutProbe
+import kinetickk.ball.gameplay.interaction.canvas.hud.HudPresentationMemory
 import kinetickk.ball.gameplay.interaction.canvas.HudTestFonts
-import kinetickk.ball.gameplay.interaction.canvas.drawGameplay
+import kinetickk.ball.gameplay.interaction.drawGameplay
 import kinetickk.ball.gameplay.interaction.canvas.with
 import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
 import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
@@ -165,7 +165,22 @@ class GameplayRenderFactsEndToEndTest {
      */
     @Test
     fun theReactionEffectsLevelTheRunReceivedShapesTheFxLayer() {
-        val (frame, fx) = runs.flatMap { it.samples.entries }.first { it.key == "reactions" }.value
+        val (publishedFrame, publishedFx) = runs.flatMap { it.samples.entries }.first { it.key == "primary-reaction" }.value
+        val primary = publishedFx.elementBursts.first {
+            it.reaction >= 0 && it.flags and (ReactionCueFlags.ECHO or ReactionCueFlags.CASCADE) == 0
+        }
+        // Isolate a real emitted primary reaction at mid-life and inside the viewport. The earliest
+        // crowded reaction frame can contain only echoes/cascades, for which all settings correctly
+        // use the signature-only form; it cannot prove the quality preference changed the FX layer.
+        val frame = publishedFrame.with(
+            "enemies" to publishedFrame.enemies.take(0).toImmutableList(),
+            "interpolationAlpha" to 1f,
+        )
+        val fx = VisualFxProjection.EMPTY.copy(elementBursts = immutableListOf(primary.copy(
+            x = frame.cameraX + 80f,
+            y = frame.cameraY,
+            life = primary.maxLife * 0.65f,
+        )))
         val used = ReactionEffectsLevel.entries.associateWith { level ->
             val settings = runWithReactionEffects(level).settings
             assertEquals(level, settings.reactionEffects, "the run applied $level")
@@ -210,13 +225,15 @@ internal object FactRuns {
 
 /**
  * The shipped catalog with a short level curve and active items offered from the first offer (unlocked at level 1, the
- * whole catalog dealt, a high active weight), so a minute of play fills three slots and unlocks the Apex.
+ * whole catalog dealt, a high active weight), so a minute of play fills three slots and unlocks the Apex. The bot's
+ * four-minute flights chase enemies far from the origin and know nothing of walls, so its world has no structures.
  */
 internal fun shortCurveContent(): GameplayContentSnapshot {
     val shipped = createContentCatalog().gameplayContent()
     val maximum = SHORT_MAXIMUM_LEVEL
     val policy = shipped.build.policy
     return shipped.copy(
+        structures = shipped.structures.copy(enabled = false),
         items = shipped.items.map { if (it.isActive) it.copy(unlockLevel = 1) else it }.toImmutableList(),
         build = shipped.build.copy(
             policy = policy.copy(
@@ -234,6 +251,8 @@ internal fun shortCurveContent(): GameplayContentSnapshot {
             // The Architect (boss-class: the Apex strikes it) arrives while the Apex is in play.
             bossAtSeconds = ARCHITECT_AT_SECONDS,
         ),
+        // Seeded frames sample skill and reaction facts: realspace keeps the asteroid field without the obstacle kind mix.
+        obstacles = shipped.obstacles.copy(kinds = shipped.obstacles.kinds.copy(space = kinetickk.ball.content.api.ObstacleMix())),
     )
 }
 
@@ -351,7 +370,14 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
             when (output) {
                 is GameplayOutput.EmitVisualFx -> {
                     record(output.cues)
-                    reducer.apply(output.cues)
+                    // Cue by cue, as apply walks a batch: a later flash of the same kind inside the merge distance
+                    // joins an earlier one and its flags win, so each reaction cue's flags are read as it lands.
+                    for (cue in output.cues) {
+                        reducer.apply(listOf(cue))
+                        if (cue is VisualFxCue.ReactionTriggered) {
+                            for (burst in reducer.snapshot().elementBursts) projectedReactionFlags = projectedReactionFlags or burst.flags
+                        }
+                    }
                 }
                 is GameplayOutput.SendProfileCommand -> progress = true
                 else -> Unit
@@ -406,6 +432,8 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
 
     private fun choose(model: GameplayRenderModel): Int {
         val choices = model.choices
+        // The run starts with No omen.
+        if (model.choiceType == ChoiceType.OMEN) return choices.indexOfFirst { it.omenId == null }.coerceAtLeast(0)
         // The run never replaces an active: the slot prompt keeps the loadout.
         if (model.choiceType == ChoiceType.ACTIVE_SLOT) return choices.indexOfFirst { it.activeSlot == null }.coerceAtLeast(0)
         // A focus card only narrows the offer; take a card that resolves it.
@@ -496,7 +524,11 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
         for (arc in fx.weaponArcs) projectedLinkStyles += arc.style
         for (wave in fx.shockwaves) projectedShockwaveColors += wave.colorIndex
         if (fx.skillBursts.isNotEmpty()) samples.getOrPut("skill-burst") { model to fx }
-        if (fx.elementBursts.count { it.reaction >= 0 } >= 3) samples.getOrPut("reactions") { model to fx }
+        // Drawn samples keep their fact inside the viewport: the renderer culls flashes and glyphs off screen.
+        if (fx.elementBursts.count { it.reaction >= 0 && model.shows(it.x, it.y) } >= 3) samples.getOrPut("reactions") { model to fx }
+        if (fx.elementBursts.any { it.reaction >= 0 && it.flags and (ReactionCueFlags.ECHO or ReactionCueFlags.CASCADE) == 0 }) {
+            samples.getOrPut("primary-reaction") { model to fx }
+        }
         if (fx.weaponArcs.any { it.style != LinkStyleCode.WEAPON }) samples.getOrPut("styled-link") { model to fx }
 
         val slots = model.skillBar.slots
@@ -527,8 +559,12 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
         for (field in model.combatFields) fieldSources += field.source
         if (model.combatFields.isNotEmpty()) samples.getOrPut("fields") { model to fx }
         var bits = 0
-        for (enemy in model.enemies) bits = bits or enemy.controlBits
-        if (bits != 0) samples.getOrPut("control-bits") { model to fx }
+        var shownBits = 0
+        for (enemy in model.enemies) {
+            bits = bits or enemy.controlBits
+            if (!enemy.dead && model.shows(enemy.x, enemy.y)) shownBits = shownBits or enemy.controlBits
+        }
+        if (shownBits != 0) samples.getOrPut("control-bits") { model to fx }
         if (bits and EnemyControlBits.APEX_STRIKE_TARGET != 0) samples.getOrPut("apex-strike-target") { model to fx }
         controlBits = controlBits or bits
         if (model.coreState !== CoreStateProjection.NEUTRAL) {
@@ -537,14 +573,18 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
         }
     }
 
+    /** True when the world point ([x], [y]) lies inside this frame's viewport. */
+    private fun GameplayRenderModel.shows(x: Float, y: Float): Boolean =
+        abs(x - cameraX) < screenWidth * 0.5f && abs(y - cameraY) < screenHeight * 0.5f
+
     fun report(): String = buildString {
-        append("level=$maxLevelSeen/$modelMaxLevel skills=$maxSkillsOwned casts=${skillCasts.sortedBy { it.first }} ")
+        append("level=$maxLevelSeen/$modelMaxLevel skills=$maxSkillsOwned casts=${skillCasts.sortedWith(compareBy({ it.first }, { it.second }))} ")
         append("projectedSkills=${projectedSkillPhases.size} delayed=${skillCasts.count { it.second == SkillCueCodes.PHASE_IMPACT }} ")
         append("apex=$apexActivations/$projectedApex unlocked=$apexUnlocked@$apexUnlockedAt ready=$apexReadySeen active=$apexActiveSeen cooling=$apexCooling ")
         append("apexRefunded=$apexRefunded strikes=$apexStrikesSeen refusals=$refusals skillRefunded=$skillRefunded pending=$skillPending ")
         append("skillActive=$skillActive reactionFlags=$reactionFlags/$projectedReactionFlags directions=$reactionDirections/$projectedDirections ")
         append("links=${linkStyles.sorted()}/${projectedLinkStyles.sorted()} waves=${shockwaveColors.sorted()}/${projectedShockwaveColors.sorted()} ")
-        append("bursts=${burstColors.sorted()} fields=$fieldSources controlBits=${Integer.toBinaryString(controlBits)} coreStates=$coreStates ")
+        append("bursts=${burstColors.sorted()} fields=${fieldSources.sorted()} controlBits=${Integer.toBinaryString(controlBits)} coreStates=$coreStates ")
         append("samples=${samples.keys} ")
         append("radii=${reactionRadii.entries.sortedBy { it.key }.joinToString { "${it.key}:${it.value.first.toInt()}-${it.value.second.toInt()}" }}")
         val end = model

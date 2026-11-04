@@ -15,6 +15,7 @@ import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
 import kinetickk.ball.gameplay.api.GameplayRunPort
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.api.GameplaySettingsApplied
 import kinetickk.ball.gameplay.api.GameplayRefusal
 import kinetickk.ball.gameplay.api.GameplayRunStarted
@@ -32,11 +33,14 @@ import kinetickk.ball.gameplay.nucleus.GameplayOutput
 import kinetickk.ball.gameplay.nucleus.GameplayStartContext
 import kinetickk.ball.gameplay.nucleus.GameplayStartInputs
 import kinetickk.ball.gameplay.nucleus.GameplayState
+import kinetickk.ball.gameplay.nucleus.GameplayTickOutputs
+import kinetickk.ball.gameplay.nucleus.GameplayTickResult
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.dispatch.BoundedCompletionDeque
 import kinetickk.foundation.dispatch.InlineAcceptance
 import kinetickk.foundation.dispatch.InlineReply
@@ -44,6 +48,11 @@ import kinetickk.foundation.dispatch.call
 import kinetickk.ball.profile.api.ProfileReadPort
 import kinetickk.ball.profile.api.ProfileProgress
 import kinetickk.ball.gameplay.api.GameplayRunExited
+import kinetickk.foundation.diagnostics.CrashDiagnostics
+import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
+import kinetickk.foundation.diagnostics.DiagnosticPhase
+import kinetickk.foundation.diagnostics.PerformanceDiagnostics
+import kotlin.time.TimeSource
 
 /** Sole owner, acceptor, atomic publisher, and ordered-output dispatcher for one GameplayRun. */
 internal class GameComponent private constructor(
@@ -52,7 +61,9 @@ internal class GameComponent private constructor(
     private val profileProgress: ProfileProgress,
     private val audioExecutor: GameplayAudioExecutor,
     private val seed: Int,
+    private val diagnostics: CrashDiagnostics,
 ) : GameplayRunPort, GameplayPresentationPort, GameplayInteractionPort {
+    private val performanceDiagnostics = if (DIAGNOSTICS_ENABLED) diagnostics as? PerformanceDiagnostics else null
     private val acceptance = InlineAcceptance(gameplayCompletionDeque<GameplayWorkItem>())
 
     private val localOutputItem = GameplayWorkItem.Local
@@ -65,6 +76,10 @@ internal class GameComponent private constructor(
     private val committedRenderSnapshot: GameplayRenderSnapshot
         get() = committedFrame.renderSnapshot
     private var interactionFxReducer: InteractionFxReducer? = null
+    /** Reused by every local tick; read only between the tick and the next one. */
+    private val tickOutputs = GameplayTickOutputs()
+    /** A tick that threw may have left the run mid-step; it never simulates again. */
+    private var tickFault: Throwable? = null
 
     override val instanceId
         get() = committedState.instanceId
@@ -77,8 +92,8 @@ internal class GameComponent private constructor(
         reply: InlineReply<GameplaySettingsApplied, GameplayRefusal>,
     ) = dispatchDirect(reply) { GameplayWorkItem.Settings(GameplayNucleusPulse.ApplyPreferences(preferences), reply) }
 
-    override fun startRun(reply: InlineReply<GameplayRunStarted, GameplayRefusal>) =
-        dispatchDirect(reply) { GameplayWorkItem.Starting(trustedStartContext(), reply) }
+    override fun startRun(mode: RunMode, reply: InlineReply<GameplayRunStarted, GameplayRefusal>) =
+        dispatchDirect(reply) { GameplayWorkItem.Starting(trustedStartContext(mode), reply) }
 
     override fun pauseForOverlay(reply: InlineReply<GameplayOverlayPaused, GameplayRefusal>) =
         dispatchDirect(reply) { GameplayWorkItem.Pausing(reply) }
@@ -125,7 +140,7 @@ internal class GameComponent private constructor(
 
     internal fun stateSnapshot(): GameplayState = committedState
 
-    private fun trustedStartContext(): GameplayContext {
+    private fun trustedStartContext(mode: RunMode): GameplayContext {
         val projection = profilePort.query(ProfileQuery.GetRunBootstrap)
         check(projection.instanceId == profilePort.instanceId) {
             "Profile bootstrap projection came from the wrong instance"
@@ -137,6 +152,7 @@ internal class GameComponent private constructor(
                         content = committedState.content,
                         profile = result.snapshot,
                         seed = seed,
+                        mode = mode,
                     ),
                 ),
             )
@@ -146,35 +162,104 @@ internal class GameComponent private constructor(
         }
     }
 
+    /**
+     * Frames and inputs tick the committed engine in place. Without Profile progress the owner restamps or projects the
+     * snapshot, publishes it and executes FX then audio directly; progress takes the ordered output and completion route.
+     */
     private fun dispatchLocal(pulse: GameplayInteractionPulse): GameplayAcceptance =
         acceptance.dispatch {
             check(committedState.revision.value <= Long.MAX_VALUE - MAX_LOCAL_REVISIONS_PER_DISPATCH) {
                 "Gameplay local revision capacity exhausted before Intent construction"
             }
+            tickFault?.let { fault -> throw IllegalStateException("A failed Gameplay tick stopped this run", fault) }
             val before = committedState
-            when (val decision = GameplayNucleus.decide(
-                before,
-                GameplayNucleusPulse.Intent(pulse),
-                GameplayContext.Empty,
-            )) {
-                is GameplayDecision.Rejected -> GameplayAcceptance.Rejected(
+            val result = try {
+                timed(DiagnosticPhase.Simulation) { GameplayNucleus.tick(before, pulse, tickOutputs) }
+            } catch (failure: Throwable) {
+                tickFault = failure
+                throw failure
+            }
+            when (result) {
+                is GameplayTickResult.Rejected -> GameplayAcceptance.Rejected(
                     instanceId = before.instanceId,
                     observedRevision = before.revision,
-                    reason = decision.reason,
+                    reason = result.reason,
                 )
-                is GameplayDecision.Accepted -> {
-                    dispatchAccepted(
-                        rootFrame = decision.frame,
-                        rootItem = localOutputItem,
-                        renderModelNeutralTransition = pulse === GameplayInteractionPulse.DashRequested,
-                    )
+                is GameplayTickResult.Accepted -> {
+                    val next = result.nextState
+                    if (tickOutputs.progressUpdate == null) {
+                        acceptTick(before, next)
+                    } else {
+                        dispatchAccepted(
+                            rootFrame = tickOutputs.toAcceptedFrame(next),
+                            rootItem = localOutputItem,
+                            tickedRoot = true,
+                        )
+                    }
                     GameplayAcceptance.Accepted(
-                        instanceId = decision.frame.nextState.instanceId,
-                        revision = decision.frame.nextState.revision,
+                        instanceId = next.instanceId,
+                        revision = next.revision,
                     )
                 }
             }
         }
+
+    /** The tick fast path: publish the restamped or projected snapshot, then run every effect before the first fault. */
+    private fun acceptTick(before: GameplayState, next: GameplayState) {
+        val outputs = tickOutputs
+        val renderSnapshot = timed(DiagnosticPhase.Projection) { tickRenderSnapshot(before, next) }
+        publish(next, renderSnapshot)
+        var fault: Throwable? = null
+        if (outputs.visualFxCues.isNotEmpty()) {
+            try {
+                checkNotNull(interactionFxReducer).apply(outputs.visualFxCues)
+            } catch (failure: Throwable) {
+                fault = failure
+            }
+        }
+        if (outputs.frameAccepted || outputs.audioCues.isNotEmpty()) {
+            try {
+                timed(DiagnosticPhase.Audio) {
+                    if (outputs.audioCues.isNotEmpty()) audioExecutor.play(outputs.audioCues)
+                    if (outputs.frameAccepted) audioExecutor.tick(outputs.frameRealDeltaSeconds)
+                }
+            } catch (failure: Throwable) {
+                fault = keepFirstFault(fault, failure)
+            }
+        }
+        if (outputs.ensuresAudioUnlocked) {
+            try {
+                audioExecutor.ensureUnlocked()
+            } catch (failure: Throwable) {
+                fault = keepFirstFault(fault, failure)
+            }
+        }
+        fault?.let { throw it }
+    }
+
+    /** The tick mutated the committed engine: restamp a render-neutral tick, project any other against the last snapshot. */
+    private fun tickRenderSnapshot(before: GameplayState, next: GameplayState): GameplayRenderSnapshot =
+        if (tickOutputs.renderNeutral) {
+            GameplayNucleus.reuseRenderSnapshot(
+                state = next,
+                reusableState = before,
+                reusableSnapshot = committedRenderSnapshot,
+            )
+        } else {
+            GameplayNucleus.renderSnapshot(next, committedRenderSnapshot)
+        }
+
+    /** Runs [block] and, while performance capture is on, records its duration as [phase]. */
+    private inline fun <T> timed(phase: DiagnosticPhase, block: () -> T): T {
+        val sink = if (DIAGNOSTICS_ENABLED) performanceDiagnostics?.takeIf { it.capturesPerformance } else null
+        if (sink == null) return block()
+        val startedAt = TimeSource.Monotonic.markNow()
+        try {
+            return block()
+        } finally {
+            sink.phase(phase, startedAt.elapsedNow().inWholeNanoseconds)
+        }
+    }
 
     /** Shared source, expanded at ingress to keep the input path free of extra call boundaries. */
     @Suppress("NOTHING_TO_INLINE")
@@ -182,14 +267,16 @@ internal class GameComponent private constructor(
         before: GameplayState,
         item: GameplayWorkItem,
         frame: GameplayAcceptedFrame,
-        renderModelNeutralTransition: Boolean = false,
+        tickedRoot: Boolean = false,
     ) {
-        val renderSnapshot = preflight(
-            before = before,
-            renderModelNeutralTransition = renderModelNeutralTransition,
-            item = item,
-            frame = frame,
-        )
+        val renderSnapshot = timed(DiagnosticPhase.Projection) {
+            preflight(
+                before = before,
+                tickedRoot = tickedRoot,
+                item = item,
+                frame = frame,
+            )
+        }
         publish(frame.nextState, renderSnapshot)
         initializeInteractionFxIfStarted(before, item)
     }
@@ -199,7 +286,7 @@ internal class GameComponent private constructor(
     private inline fun dispatchAccepted(
         rootFrame: GameplayAcceptedFrame,
         rootItem: GameplayWorkItem,
-        renderModelNeutralTransition: Boolean = false,
+        tickedRoot: Boolean = false,
     ) {
         acceptance.acceptAndDrain(
             rootItem = rootItem,
@@ -210,7 +297,7 @@ internal class GameComponent private constructor(
                     before = committedState,
                     item = item,
                     frame = frame,
-                    renderModelNeutralTransition = renderModelNeutralTransition && item === rootItem,
+                    tickedRoot = tickedRoot && item === rootItem,
                 )
             },
             decideCompletion = { completion ->
@@ -230,7 +317,7 @@ internal class GameComponent private constructor(
 
     private fun preflight(
         before: GameplayState,
-        renderModelNeutralTransition: Boolean,
+        tickedRoot: Boolean,
         item: GameplayWorkItem,
         frame: GameplayAcceptedFrame,
     ): GameplayRenderSnapshot {
@@ -242,10 +329,11 @@ internal class GameComponent private constructor(
             "Gameplay revision must advance exactly once"
         }
         if (item is GameplayWorkItem.Direct<*>) item.reply.checkAvailable()
-        val renderSnapshot = if (
-            next.engine === before.engine ||
-            renderModelNeutralTransition
-        ) {
+        val renderSnapshot = if (tickedRoot) {
+            check(committedRenderSnapshot.instanceId == before.instanceId)
+            check(committedRenderSnapshot.revision == before.revision)
+            tickRenderSnapshot(before, next)
+        } else if (next.engine === before.engine) {
             check(committedRenderSnapshot.instanceId == before.instanceId)
             check(committedRenderSnapshot.revision == before.revision)
             GameplayNucleus.reuseRenderSnapshot(
@@ -277,20 +365,13 @@ internal class GameComponent private constructor(
             check(render.phase == expectedRenderPhase)
         }
         check(frame.outputs.size <= MAX_GAMEPLAY_OUTPUTS_PER_DECISION)
+        // GameplayAcceptedFrame already admits only the FX -> Profile -> Audio -> result order.
         var profileOutput: GameplayOutput.SendProfileCommand? = null
         var profileOutputCount = 0
         var directResultCount = 0
         var outputIndex = 0
-        var previousDispatchOrder = 0
         while (outputIndex < frame.outputs.size) {
             val output = frame.outputs[outputIndex]
-            val dispatchOrder = output.dispatchOrder
-            if (outputIndex > 0) {
-                check(previousDispatchOrder <= dispatchOrder) {
-                    "Gameplay outputs are not in FX -> Profile -> Audio -> result order"
-                }
-            }
-            previousDispatchOrder = dispatchOrder
             if (output is GameplayOutput.SendProfileCommand) {
                 profileOutputCount++
                 if (profileOutput == null) {
@@ -361,7 +442,17 @@ internal class GameComponent private constructor(
     }
 
     private fun publish(state: GameplayState, renderSnapshot: GameplayRenderSnapshot) {
+        val previous = committedFrame
         committedFrame = CommittedGameplayFrame(state, renderSnapshot)
+        if (DIAGNOSTICS_ENABLED && diagnostics.enabled) {
+            if (previous.state.phase != state.phase) {
+                diagnostics.event("gameplay.phase", "${previous.state.phase} -> ${state.phase} revision=${state.revision}")
+            }
+            val model = renderSnapshot.renderModel
+            if (model != null && previous.renderSnapshot.renderModel?.level != model.level) {
+                diagnostics.event("gameplay.level", "level=${model.level} kills=${model.kills} elapsed=${model.elapsed}")
+            }
+        }
     }
 
     private fun initializeInteractionFxIfStarted(
@@ -381,8 +472,11 @@ internal class GameComponent private constructor(
             is GameplayOutput.EmitVisualFx ->
                 checkNotNull(interactionFxReducer).apply(output.cues)
             is GameplayOutput.SendProfileCommand -> executeProfileCommand(output, item)
-            is GameplayOutput.AdvanceAudio ->
-                audioExecutor.advance(output.realDeltaSeconds, output.cues)
+            // Music advances only for the frame this tick accepted; lifecycle audio only plays its cues.
+            is GameplayOutput.AdvanceAudio -> timed(DiagnosticPhase.Audio) {
+                if (output.cues.isNotEmpty()) audioExecutor.play(output.cues)
+                if (item === localOutputItem && tickOutputs.frameAccepted) audioExecutor.tick(output.realDeltaSeconds)
+            }
             GameplayOutput.EnsureAudioUnlocked ->
                 audioExecutor.ensureUnlocked()
             is GameplayOutput.RunExited -> checkNotNull(item.exitReplyOrNull()).accepted(output.result)
@@ -418,14 +512,33 @@ internal class GameComponent private constructor(
             profileProgress: ProfileProgress,
             audioExecutor: GameplayAudioExecutor,
             seed: Int,
+            diagnostics: CrashDiagnostics = CrashDiagnostics.None,
         ): GameComponent = GameComponent(
             initialState = GameplayState.initial(runId, content),
             profilePort = profilePort,
             audioExecutor = audioExecutor,
             profileProgress = profileProgress,
             seed = seed,
+            diagnostics = diagnostics,
         )
     }
+}
+
+/** Today's ordered outputs of a tick that published Profile progress: FX, the Profile command, then audio. */
+private fun GameplayTickOutputs.toAcceptedFrame(next: GameplayState): GameplayAcceptedFrame {
+    val outputs = ArrayList<GameplayOutput>(MAX_GAMEPLAY_OUTPUTS_PER_DECISION)
+    if (visualFxCues.isNotEmpty()) outputs += GameplayOutput.EmitVisualFx(visualFxCues)
+    outputs += GameplayOutput.SendProfileCommand(checkNotNull(progressUpdate))
+    if (frameAccepted || audioCues.isNotEmpty()) {
+        outputs += GameplayOutput.AdvanceAudio(if (frameAccepted) frameRealDeltaSeconds else 0f, audioCues)
+    }
+    return GameplayAcceptedFrame(nextState = next, outputs = outputs.toImmutableList())
+}
+
+private fun keepFirstFault(first: Throwable?, later: Throwable): Throwable {
+    if (first == null) return later
+    if (first !== later) first.addSuppressed(later)
+    return first
 }
 
 private data class CommittedGameplayFrame(
@@ -511,18 +624,6 @@ private fun GameplayWorkItem.exitReplyOrNull(): InlineReply<GameplayRunExited, G
     is GameplayWorkItem.ProgressCompletion -> exitReply
     else -> null
 }
-
-private val GameplayOutput.dispatchOrder: Int
-    get() = when (this) {
-        is GameplayOutput.EmitVisualFx -> 0
-        is GameplayOutput.SendProfileCommand -> 1
-        is GameplayOutput.AdvanceAudio,
-        GameplayOutput.EnsureAudioUnlocked,
-        -> 2
-        is GameplayOutput.RunExited, is GameplayOutput.SettingsApplied,
-        is GameplayOutput.RunStarted, is GameplayOutput.OverlayPaused,
-        -> 3
-    }
 
 private const val GAMEPLAY_COMPLETION_CAPACITY: Int = 8
 private const val MAX_LOCAL_REVISIONS_PER_DISPATCH: Long = 2L
