@@ -100,11 +100,12 @@ class PermanentUpgradeRunTest {
         fun droneDamage(refit: Int): Float {
             val hive = run(shape = CoreShape.HEXAGON, refit = refit)
             hive.characterRuntime.droneCount = 2
-            val target = hive.addEnemyForTesting(300f, 0f, hp = 100_000f)
+            // Integrity small enough that a Float keeps the hit to a part in 10^5.
+            val target = hive.addEnemyForTesting(300f, 0f, hp = 10_000f)
             val ability = hive.characterRuntime.abilityDamage
             hive.dronesDartAt(target)
-            assertEquals(100_000.0 - target.hp, hive.characterRuntime.abilityDamage - ability, 1e-2, "drones count as ability output")
-            return 100_000f - target.hp
+            assertEquals(10_000.0 - target.hp, hive.characterRuntime.abilityDamage - ability, 1e-2, "drones count as ability output")
+            return 10_000f - target.hp
         }
         assertTrue(droneDamage(0) > 0f)
         assertEquals(droneDamage(0) * power, droneDamage(10), droneDamage(10) * 1e-4f)

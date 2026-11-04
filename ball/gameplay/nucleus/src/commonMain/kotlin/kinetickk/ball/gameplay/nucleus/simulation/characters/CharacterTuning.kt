@@ -70,10 +70,13 @@ internal const val REFIT_SIGNATURE_FLOOR_SHARE: Float = 0.5f
 
 // Ability damage is calibrated by CharacterBalanceTest: averaged over its seeded 90 s fights (packs at
 // random bearings, content bolt damage, exact and jittered timing) every offensive character's ability
-// output stays within 40 % of their median (Orbit 42, Puncture 180, Halo 12/s and 16, Lattice 5.6 + 2.8
-// per node, slams 54 + 0.1125 per u/s from 100 u/s, Pulse burst 40, scars 35, drones 9). The 0.6.0 flight law
-// (grip carves tighter, faster arcs) lifted Orbit and cost the Star and the Dipole their pack meetings: Orbit
-// 70 -> 42, the early Supernova from 12 -> 6 Stellar Mass, Repel 420 -> 700 with throws of 0.6 -> 1.5 s.
+// output stays within 40 % of their median at Refit 0 and Refit 10 (Orbit 42, Puncture 180, Halo 12/s and 16,
+// Lattice 5 + 2.5 per node, slams 54 + 0.1125 per u/s from 100 u/s, Pulse burst 40 and streak 9 % per stack,
+// scars 35, drones 7). The 0.6.0 flight law (grip carves tighter, faster arcs) lifted Orbit and cost the Star
+// and the Dipole their pack meetings: Orbit 70 -> 42, the early Supernova from 12 -> 6 Stellar Mass, Repel
+// 420 -> 700 with throws of 0.6 -> 1.5 s. Refit's x1.97 at level 10 compounds with kill-fed drones and lifts
+// mechanic damage but not the streak's impact share, so Refit 10 put the Hive and the Lattice above the band and
+// the Pentagon below it: drones 9 -> 7, Lattice 5.6 + 2.8 -> 5 + 2.5, streak 6 % -> 9 % per stack.
 
 internal const val ORBIT_ARC: Float = 0.698f
 internal const val ORBIT_MIN_DISTANCE: Float = 100f
@@ -120,8 +123,8 @@ internal const val LATTICE_RECORD_DISTANCE: Float = 120f
 internal const val LATTICE_CLOSE_DISTANCE: Float = 130f
 internal const val LATTICE_SPACING: Float = 150f
 internal const val LATTICE_LIFE_SECONDS: Float = 7f
-internal const val LATTICE_BASE_DAMAGE: Float = 5.6f
-internal const val LATTICE_NODE_DAMAGE: Float = 2.8f
+internal const val LATTICE_BASE_DAMAGE: Float = 5f
+internal const val LATTICE_NODE_DAMAGE: Float = 2.5f
 internal const val LATTICE_INSIDE_MULTIPLIER: Float = 1.5f
 
 internal const val STAR_IMPACT_PER_STACK: Float = 0.03f
@@ -166,7 +169,7 @@ internal const val BEAT_IMPACT_MULTIPLIER: Float = 1.6f
 internal const val BEAT_BURST_RADIUS: Float = 80f
 internal const val BEAT_BURST_DAMAGE: Float = 40f
 internal const val BEAT_ACTIVATION_MULTIPLIER: Float = 1.4f
-internal const val STREAK_IMPACT_PER_STACK: Float = 0.06f
+internal const val STREAK_IMPACT_PER_STACK: Float = 0.09f
 
 internal const val BLINK_RANGE: Float = 240f
 internal const val BLINK_SINGULARITY_GAP: Float = 60f
@@ -187,7 +190,7 @@ internal const val DRONE_FIRST_DART_SECONDS: Float = 0.3f
 internal const val DRONE_ORBIT_RADIUS: Float = 70f
 internal const val DRONE_ORBIT_SPEED: Float = 2.4f
 internal const val DRONE_RANGE: Float = 260f
-internal const val DRONE_DAMAGE: Float = 9f
+internal const val DRONE_DAMAGE: Float = 7f
 internal const val DRONE_INTERVAL: Float = 1f
 internal const val DRONE_DART_SECONDS: Float = 0.2f
 internal const val DRONE_KILL_HEAL: Float = 0.5f
