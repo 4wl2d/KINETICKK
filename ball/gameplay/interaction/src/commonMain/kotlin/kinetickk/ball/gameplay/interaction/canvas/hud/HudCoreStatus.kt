@@ -13,6 +13,9 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.REGULAR_HUD_BOTTOM_DP
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.foundation.common.localization.COMPACT_NUMBER_THRESHOLD
+import kinetickk.foundation.common.localization.compactNumberRounded
+import kinetickk.foundation.common.localization.formatCompactNumber
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
 import kotlin.math.max
@@ -111,25 +114,29 @@ internal fun DrawScope.drawCoreStatus(
             Kk.Bone, alpha = 0.5f + 0.5f * kotlin.math.sin(renderTime * 20f).let { it * it }, style = kkStroke(frame.u(1.5f)))
     }
 
-    // Number row: integrity number (split channels while a hit ghost drains), shield cells, ability.
-    val numberBottom = barTop - frame.u(if (frame.regular) 8f else 5f)
-    val value = engine.hp.coerceAtLeast(0f).toLong()
-    val style = measurer.typography.wideStyle(numberSize, tabular = true, trackingEm = colorTracking(if (critical) 3 else 0))
-    val numberTop = numberBottom - digitBoxHeight(measurer, style)
-    val numberColor = if (critical) roles.threat else Kk.Bone
-    if (ghost > 0f) {
-        // Split channels while the hit ghost drains, each copy with its own digit layouts.
-        val split = d(2f) * (ghost * 4f).coerceAtMost(1f)
-        drawKkTabularNumber(measurer, value, measurer.typography.wideStyle(numberSize, tabular = true, trackingEm = colorTracking(1)),
-            left - split, numberTop, roles.threat, alpha = 0.7f)
-        drawKkTabularNumber(measurer, value, measurer.typography.wideStyle(numberSize, tabular = true, trackingEm = colorTracking(2)),
-            left + split, numberTop, roles.shield, alpha = 0.55f)
-    }
-    val numberWidth = drawKkTabularNumber(measurer, value, style, left, numberTop, numberColor)
-    HudLayoutProbe.record(HudBlock.INTEGRITY, left, numberTop, max(left + width, left + numberWidth), bottom)
+    drawNumberRow(engine, measurer, frame, roles, left, left + width, barTop - frame.u(if (frame.regular) 8f else 5f), bottom, numberSize,
+        ghost, critical)
+}
 
-    val right = left + width
+/**
+ * The number row on [numberBottom]: shield cells and the ability right-aligned at [right], the integrity number (split
+ * channels while a hit ghost drains) in the room left of them.
+ */
+private fun DrawScope.drawNumberRow(
+    engine: GameplayRenderModel,
+    measurer: TextMeasurer,
+    frame: HudFrame,
+    roles: KkRolePalette,
+    left: Float,
+    right: Float,
+    numberBottom: Float,
+    bottom: Float,
+    numberSize: Float,
+    ghost: Float,
+    critical: Boolean,
+) {
     var anchorBottom = numberBottom - frame.u(if (frame.regular) 6f else 4f)
+    var blockLeft = right
     if (engine.maxShield > 0f) {
         val cells = shieldCells(engine.maxShield)
         val filled = filledShieldCells(engine.shield, engine.maxShield, cells)
@@ -139,9 +146,52 @@ internal fun DrawScope.drawCoreStatus(
         val total = cells * d(cellWidth) + (cells - 1) * d(gap)
         drawKkPips(Offset(right - total, anchorBottom - d(cellHeight)), cells, filled, roles.shield, sizeDp = cellHeight,
             widthDp = cellWidth, gapDp = gap, emptyColor = roles.shield, emptyOutlined = true)
+        blockLeft = right - total
         anchorBottom -= d(cellHeight) + frame.u(7f)
     }
-    drawAbilityMeter(engine, frame, roles, right, anchorBottom)
+    blockLeft = min(blockLeft, drawAbilityMeter(engine, frame, roles, right, anchorBottom))
+    val room = blockLeft - frame.u(6f) - left
+    val value = (engine.hp.coerceAtLeast(0f).toDouble() * engine.numberScale).toLong()
+    val style = measurer.typography.wideStyle(numberSize, tabular = true, trackingEm = colorTracking(if (critical) 3 else 0))
+    if (ghost > 0f) {
+        // Split channels while the hit ghost drains, each copy with its own layouts.
+        val split = d(2f) * (ghost * 4f).coerceAtMost(1f)
+        drawIntegrityNumber(measurer, value, measurer.typography.wideStyle(numberSize, tabular = true, trackingEm = colorTracking(1)),
+            left - split, numberBottom, room, roles.threat, alpha = 0.7f)
+        drawIntegrityNumber(measurer, value, measurer.typography.wideStyle(numberSize, tabular = true, trackingEm = colorTracking(2)),
+            left + split, numberBottom, room, roles.shield, alpha = 0.55f)
+    }
+    val numberWidth = drawIntegrityNumber(measurer, value, style, left, numberBottom, room, if (critical) roles.threat else Kk.Bone)
+    HudLayoutProbe.record(HudBlock.INTEGRITY, left, numberBottom - digitBoxHeight(measurer, style), max(right, left + numberWidth), bottom)
+}
+
+/**
+ * The displayed integrity [value] (integrity × the run's number scale) on [bottom]: below 1,000 from cached digit
+ * layouts, which stay allocation-free while it changes; above, its compact text ("1.08M"), built again only when the
+ * shown text changes (keyed by [compactNumberRounded]). A number wider than [room] shrinks about its bottom-left corner
+ * to fit beside the shield cells. Returns the drawn width.
+ */
+private fun DrawScope.drawIntegrityNumber(
+    measurer: TextMeasurer,
+    value: Long,
+    style: androidx.compose.ui.text.TextStyle,
+    x: Float,
+    bottom: Float,
+    room: Float,
+    color: Color,
+    alpha: Float = 1f,
+): Float {
+    val top = bottom - digitBoxHeight(measurer, style)
+    val layout = if (value < COMPACT_NUMBER_THRESHOLD) null else {
+        val language = measurer.language
+        measureKkText(measurer, HudScratch.integrity.of(language, compactNumberRounded(value)) { formatCompactNumber(value, language) }, style)
+    }
+    val natural = if (layout != null) layout.size.width.toFloat() else kkTabularNumberWidth(measurer, value, style)
+    val fit = if (natural > room && room > 0f) room / natural else 1f
+    withTransform({ scale(fit, fit, Offset(x, bottom)) }) {
+        if (layout == null) drawKkTabularNumber(measurer, value, style, x, top, color, alpha = alpha) else drawKkText(layout, x, top, color, alpha = alpha)
+    }
+    return natural * fit
 }
 
 internal const val DASH_PHASE_SECONDS = 0.24f
@@ -159,9 +209,9 @@ internal fun heartbeat(time: Float): Float {
 
 /**
  * Character ability: the form's glyph ([KkFormGeometry]) and a small sheared meter of the mechanic's
- * readiness, segmented by what it counts (facets, nodes, charges, drones, streak).
+ * readiness, segmented by what it counts (facets, nodes, charges, drones, streak). Returns its left edge.
  */
-private fun DrawScope.drawAbilityMeter(engine: GameplayRenderModel, frame: HudFrame, roles: KkRolePalette, right: Float, bottom: Float) {
+private fun DrawScope.drawAbilityMeter(engine: GameplayRenderModel, frame: HudFrame, roles: KkRolePalette, right: Float, bottom: Float): Float {
     val ability = engine.characterAbility
     val width = frame.u(if (frame.regular) 64f else 44f)
     val height = frame.u(if (frame.regular) 5f else 4f)
@@ -186,6 +236,7 @@ private fun DrawScope.drawAbilityMeter(engine: GameplayRenderModel, frame: HudFr
             drawPath(path, color)
         }
     }
+    return center.x - glyph
 }
 
 /** Bottom-center: speed number stretched by velocity tier, velocity ladder, overdrive bar. */

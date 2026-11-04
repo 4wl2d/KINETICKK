@@ -51,6 +51,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.formatCompactNumber
+import kinetickk.foundation.common.localization.formatGroupedNumber
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
 import kotlin.math.roundToInt
@@ -241,9 +243,7 @@ private fun ProfileHeader(
 /** Matter with digit grouping (1,284); large balances switch to the compact form. */
 internal fun formatMatter(value: Long, language: AppLanguage): String {
     val safe = value.coerceAtLeast(0L)
-    if (safe >= 100_000L) return formatCompact(safe, language)
-    val separator = if (language == AppLanguage.Russian) "\u202F" else ","
-    return safe.toString().reversed().chunked(3).joinToString(separator).reversed()
+    return if (safe >= 100_000L) formatCompactNumber(safe, language) else formatGroupedNumber(safe, language)
 }
 
 private fun chipValueStyle(measurer: CanvasTextMeasurer) =

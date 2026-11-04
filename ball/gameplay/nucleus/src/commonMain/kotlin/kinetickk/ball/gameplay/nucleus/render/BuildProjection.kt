@@ -79,3 +79,20 @@ data class BuildForecast(
     val after: Int = 0,
     val discovered: Boolean = true,
 )
+
+/**
+ * What links the equipped weapon to the build right now (SPEC 10.2): points in its two tags and the
+ * power they add, whether the character is its signature, the bound Relic carrying its key, the element
+ * its hits apply or adopt, its scaling multiplier and how many of its three mastery forms are open
+ * ([activeMasteryForm] is the latest one's content text).
+ */
+data class WeaponSynergyProjection(
+    val tagPoints: Int = 0,
+    val tagBonus: Float = 0f,
+    val signatureActive: Boolean = false,
+    val harmonizingRelic: RelicId? = null,
+    val infusionElement: StatusElement? = null,
+    val scalingMultiplier: Float = 1f,
+    val masteryForms: Int = 0,
+    val activeMasteryForm: String? = null,
+)

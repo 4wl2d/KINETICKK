@@ -24,6 +24,7 @@ import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.RelicLinkKind
 import kinetickk.ball.gameplay.nucleus.render.formatRunTime
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.formatGroupedNumber
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
 import kotlin.math.roundToLong
@@ -233,16 +234,16 @@ internal fun GameplayRenderModel.pauseBuildOverview(language: AppLanguage, touch
             OverlayStat(language.text(HudRedesignText.ImpactPower), overlayMultiplier(damageMultiplier, language), damageMultiplier > 1.001f),
             OverlayStat(language.text(HudRedesignText.WeaponPower), overlayMultiplier(effectiveWeaponPower, language), effectiveWeaponPower > 1.001f),
             OverlayStat(language.text(HudRedesignText.CriticalChance), overlayPercent(critChance, language), false),
-            OverlayStat(language.text(HudRedesignText.ShieldCapacity), overlayGrouped(maxShield.roundToLong(), language), false),
+            OverlayStat(language.text(HudRedesignText.ShieldCapacity), overlayAmount(maxShield.toDouble(), language), false),
         ),
         runLabel = language.text(GameplayText.DetailedStatistics),
         run = listOf(
             PauseRunStat(language.text(OverlayRedesignText.RunTimeShort), formatRunTime(elapsed), PauseValueTone.BONE),
-            PauseRunStat(language.text(OverlayRedesignText.DestroyedShort), overlayGrouped(kills.toLong(), language), PauseValueTone.BONE),
-            PauseRunStat(language.text(OverlayRedesignText.ElitesShort), overlayGrouped(stats.eliteKills.toLong(), language), PauseValueTone.THREAT),
-            PauseRunStat(language.text(OverlayRedesignText.MatterShort), "+" + overlayGrouped(runMatter, language), PauseValueTone.YOU),
+            PauseRunStat(language.text(OverlayRedesignText.DestroyedShort), formatGroupedNumber(kills.toLong(), language), PauseValueTone.BONE),
+            PauseRunStat(language.text(OverlayRedesignText.ElitesShort), formatGroupedNumber(stats.eliteKills.toLong(), language), PauseValueTone.THREAT),
+            PauseRunStat(language.text(OverlayRedesignText.MatterShort), "+" + formatGroupedNumber(runMatter, language), PauseValueTone.YOU),
             PauseRunStat(language.text(OverlayRedesignText.ChainShort), "×" + stats.bestCombo, PauseValueTone.YOU),
-            PauseRunStat(language.text(OverlayRedesignText.DamageShort), overlayCompact(stats.damageDealt.roundToLong(), language), PauseValueTone.BONE),
+            PauseRunStat(language.text(OverlayRedesignText.DamageShort), overlayAmount(stats.damageDealt, language), PauseValueTone.BONE),
         ),
         synergyLabel = language.text(HudRedesignText.WeaponSynergy),
         synergies = synergies,

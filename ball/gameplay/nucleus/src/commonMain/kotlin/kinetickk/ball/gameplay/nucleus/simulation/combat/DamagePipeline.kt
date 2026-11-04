@@ -10,6 +10,7 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.WEAPON_BASIS_UNIT_DAMAGE
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
@@ -441,7 +442,7 @@ internal fun MutableGameState.basisAmount(basis: DamageBasis, hit: Float, victim
     DamageBasis.HIT -> hit
     DamageBasis.IMPACT -> impactPower(speed)
     DamageBasis.BRAKE -> impactPower(max(brakeShedSpeed, 200f)) * sqrt(runScale())
-    DamageBasis.WEAPON -> 40f * abilityPower()
+    DamageBasis.WEAPON -> WEAPON_BASIS_UNIT_DAMAGE * abilityPower()
     DamageBasis.FLAT -> runScale() * relicSurge()
     DamageBasis.VICTIM_MAX_HP -> if (victim == null) 0f else victim.maxHp * victimFactor(victim)
     DamageBasis.SHIELD -> shieldCapacity() * sqrt(runScale())
@@ -491,12 +492,13 @@ internal fun MutableGameState.damageEnemy(
         enemy.status[StatusCell.LAST_SOURCE] = (source?.ordinal?.plus(1) ?: 0).toFloat()
     }
     enemy.flash = max(enemy.flash, if (applied >= 5f) 1f else 0.16f)
+    // The floor reads power units; the number shows the hit at the tier's display scale.
     if (showNumber && settings.damageNumbers && applied >= 5f) {
         emitVisualFx(
             VisualFxCue.DamageNumberAdded(
                 x = enemy.x,
                 y = enemy.y - enemy.radius,
-                amount = applied.roundToLong(),
+                amount = (applied * rebirthProfile.numberScale).roundToLong(),
                 critical = critical,
                 tone = tone,
             ),

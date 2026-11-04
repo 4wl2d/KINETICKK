@@ -15,7 +15,7 @@ data class RuleTextContext(
     val secondary: StatusElement? = null,
     /** Run progress and Rebirth factor applied to [DamageBasis.FLAT] amounts. */
     val flatScale: Float? = null,
-    /** Damage of one [DamageBasis.WEAPON] unit (40 × ability power). */
+    /** Damage of one [DamageBasis.WEAPON] unit ([WEAPON_BASIS_UNIT_DAMAGE] × ability power). */
     val weaponUnit: Float? = null,
     val shieldCapacity: Float? = null,
     /**
@@ -26,6 +26,11 @@ data class RuleTextContext(
     val bonus: Float = 1f,
     /** Copies of the item the text describes; threshold cuts and overfill grow per copy, not by magnitude. */
     val stacks: Int = 1,
+    /**
+     * Display scale of absolute integrity, shield and damage amounts (power units × this, compact from 1,000): the run's
+     * [RebirthProfile.numberScale]. 1 writes the tier-0 base values, as the Codex does.
+     */
+    val numberScale: Double = 1.0,
 ) {
     init {
         require(stackMagnitude.isFinite() && stackMagnitude > 0f) { "Stack magnitude must be finite and positive" }
@@ -34,6 +39,7 @@ data class RuleTextContext(
         require(listOfNotNull(flatScale, weaponUnit, shieldCapacity).all { it.isFinite() && it >= 0f }) {
             "Rule text scales must be finite and non-negative"
         }
+        require(numberScale.isFinite() && numberScale > 0.0) { "Rule text number scale must be finite and positive" }
     }
 }
 

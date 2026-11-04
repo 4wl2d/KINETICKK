@@ -321,8 +321,8 @@ internal fun DrawScope.drawRunPanels(
 
 /**
  * The fitted run panels of the last drawn row. Panels share the row equally while every label and
- * value fits its panel; a panel whose text needs more (a long Russian total such as "184,3 тыс.",
- * "Лучшая серия" at a large text size) widens and the others give way evenly
+ * value fits its panel; a panel whose text needs more (a long Russian label such as "Лучшая серия"
+ * at a large text size) widens and the others give way evenly
  * ([overlayRowWidths]). Labels then share one fitted size and values another, so no panel's text
  * is smaller than its neighbours'.
  */

@@ -147,6 +147,12 @@ internal enum class CodexText(
     OPPOSES("Opposes", "Противостоит"),
     CARRIED_BY("Carried by", "Носители"),
     UNLOCKS_AT("Unlocks at", "Открывается"),
+    /** The fact on entries whose integrity, shield or damage numbers are the tier-0 base a run scales. */
+    BASE_VALUES("Values", "Значения"),
+    BASE_VALUES_HELP(
+        "Integrity, shield and damage numbers here are Rebirth 0 values; in a run they scale with the Rebirth tier.",
+        "Числа прочности, щита и урона здесь даны для перерождения 0; в забеге они растут с уровнем перерождения.",
+    ),
     REBIRTH_GATE_HELP(
         "Reach this Rebirth tier to find it during runs.",
         "Достигните этого уровня перерождения, чтобы находить это в забегах.",

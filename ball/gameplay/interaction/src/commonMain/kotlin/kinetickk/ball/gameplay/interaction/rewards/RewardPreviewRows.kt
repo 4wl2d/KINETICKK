@@ -124,7 +124,7 @@ internal fun GameplayRenderModel.rewardRelicPreview(
     val rows = buildList {
         if (action == RelicChoiceAction.REPLACE && slotRelic != null) {
             val lost = content.relic(slotRelic.id)
-            add(RewardPreviewRow("−", lost.name.localizedContent(language), lost.upsideText(language, slotRelic.rank), RewardTone.THREAT))
+            add(RewardPreviewRow("−", lost.name.localizedContent(language), lost.upsideText(language, slotRelic.rank, numberScale), RewardTone.THREAT))
             // Severance: the replaced relic's liability lingers after it leaves.
             add(RewardPreviewRow("=", language.text(OverlayRedesignText.CostStays, overlayDecimal(content.build.policy.severanceSeconds, language)),
                 lost.liabilityText(language), RewardTone.THREAT))
@@ -133,9 +133,9 @@ internal fun GameplayRenderModel.rewardRelicPreview(
         val owned = ownedSlot?.let(equippedRelics::getOrNull)
         if (action == RelicChoiceAction.ACQUIRE && owned != null && owned.rank < policy.maxRank) {
             val relic = content.relic(owned.id)
-            val (before, after) = relic.rankValueChange(language, owned.rank, owned.rank + 1)
+            val (before, after) = relic.rankValueChange(language, owned.rank, owned.rank + 1, numberScale)
             add(RewardPreviewRow("+", language.text(OverlayRedesignText.Rank, owned.rank + 1),
-                if (after == null) relic.upsideText(language, owned.rank + 1) else null, RewardTone.YOU, before = before, after = after))
+                if (after == null) relic.upsideText(language, owned.rank + 1, numberScale) else null, RewardTone.YOU, before = before, after = after))
         }
         // The Meld's lasting bonus once this slot is sealed (it compounds with earlier Melds).
         if (action == RelicChoiceAction.MELD && target != null) {

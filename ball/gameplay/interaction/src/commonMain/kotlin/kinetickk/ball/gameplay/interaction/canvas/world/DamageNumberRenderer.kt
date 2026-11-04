@@ -64,7 +64,7 @@ internal fun DrawScope.drawDamageNumbers(
         val drift = KkEase.Out.transform(progress) * DAMAGE_NUMBER_DRIFT
         val location = worldOnScreen(engine, number.x + number.driftX * drift, number.y + number.driftY * drift, shakeX, shakeY)
         if (!isOnScreen(location, 80f)) continue
-        val tier = damageNumberTier(number.amount, settings.damageNumberTierThreshold, number.critical)
+        val tier = damageNumberTier(number.amount, settings.damageNumberTierThreshold, number.critical, engine.numberScale)
         val fontSize = DAMAGE_NUMBER_BASE_SP * settings.damageNumberSize.scale * damageNumberScale(tier)
         val color = damageNumberColor(number.tone, roles)
         val text = number.formattedAmount(settings.damageNumberFormat, textMeasurer.language)

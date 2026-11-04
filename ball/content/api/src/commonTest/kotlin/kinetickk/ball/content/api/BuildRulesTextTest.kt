@@ -426,6 +426,13 @@ class BuildRulesTextTest {
 
         val falling = relic.copy(upside = "Cooling {0} %.", values = immutableListOf(RelicValue(-10f, -5f)))
         assertEquals("Cooling −20 %.", falling.upsideText(AppLanguage.English, 3))
+
+        // An integrity value reads at a run's number scale (compact from 1,000); every other value keeps its digits.
+        val healing = relic.copy(upside = "Heal {0} per second within {1} u.",
+            values = immutableListOf(RelicValue(0.25f, 0.05f, powerUnits = true), RelicValue(1_200f)))
+        assertEquals("Heal 0.25 per second within 1,200 u.", healing.upsideText(AppLanguage.English, 1))
+        assertEquals("Heal 900 per second within 1,200 u.", healing.upsideText(AppLanguage.English, 1, numberScale = 3_600.0))
+        assertEquals("Heal 1,26K per second within 1\u00A0200 u.", healing.upsideText(AppLanguage.Russian, 3, numberScale = 3_600.0))
     }
 
     @Test

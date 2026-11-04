@@ -18,6 +18,8 @@ import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.formatCompactNumber
+import kinetickk.foundation.common.localization.formatGroupedNumber
 
 /** Persistent ordinal order; append-only changes require an explicit save-format decision. */
 enum class ParticleDensity { LOW, NORMAL, HIGH }
@@ -32,6 +34,12 @@ enum class DamageNumberSize(val scale: Float) {
 
 /** Persistent ordinal order; append-only changes require an explicit save-format decision. */
 enum class DamageNumberFormat { COMPACT, FULL }
+
+/** [amount] as a damage number in [format]: three significant digits ("1.23K") or every digit grouped ("1,234"). */
+fun formatDamageNumber(amount: Long, format: DamageNumberFormat, language: AppLanguage): String = when (format) {
+    DamageNumberFormat.COMPACT -> formatCompactNumber(amount, language)
+    DamageNumberFormat.FULL -> formatGroupedNumber(amount, language)
+}
 
 /**
  * Role-color remapping for color vision (you, threat, heat, shield, polarity). Persisted by stable

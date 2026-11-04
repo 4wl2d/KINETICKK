@@ -132,7 +132,10 @@ sealed interface VisualFxCue {
         val colorIndex: Int,
     ) : VisualFxCue
 
-    /** [tone] is 0 for Kinetic damage, otherwise 1 + the status element ordinal. */
+    /**
+     * A hit's damage number: [amount] is the displayed damage (power units × the Rebirth number scale). [tone] is 0 for
+     * Kinetic damage, otherwise 1 + the status element ordinal.
+     */
     data class DamageNumberAdded(
         val x: Float,
         val y: Float,

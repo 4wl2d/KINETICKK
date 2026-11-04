@@ -3,7 +3,6 @@
 
 package kinetickk.ball.gameplay.nucleus.characterization
 
-import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
@@ -115,24 +114,6 @@ class MathTest {
     }
 
     @Test
-    fun abbreviatesIncrementalHudValues() {
-        assertEquals("999", abbreviateNumber(999L))
-        assertEquals("1K", abbreviateNumber(1_000L))
-        assertEquals("1.2K", abbreviateNumber(1_240L))
-        assertEquals("-1.2K", abbreviateNumber(-1_240L))
-        assertEquals("1M", abbreviateNumber(999_999L))
-        assertEquals("9.2Qi", abbreviateNumber(Long.MAX_VALUE))
-    }
-
-    @Test
-    fun damageNumbersSupportCompactAndFullFormats() {
-        assertEquals("999", formatDamageNumber(999L, DamageNumberFormat.COMPACT))
-        assertEquals("14K", formatDamageNumber(14_000L, DamageNumberFormat.COMPACT))
-        assertEquals("14000", formatDamageNumber(14_000L, DamageNumberFormat.FULL))
-        assertEquals(Long.MAX_VALUE.toString(), formatDamageNumber(Long.MAX_VALUE, DamageNumberFormat.FULL))
-    }
-
-    @Test
     fun damageNumberHeatTiersChangeAtConfiguredBoundaries() {
         assertEquals(DamageNumberTier.STANDARD, damageNumberTier(49L, firstThreshold = 50))
         assertEquals(DamageNumberTier.STRONG, damageNumberTier(50L, firstThreshold = 50))
@@ -144,6 +125,21 @@ class MathTest {
         assertEquals(DamageNumberTier.STRONG, damageNumberTier(399L, firstThreshold = 100))
         assertEquals(DamageNumberTier.POWERFUL, damageNumberTier(400L, firstThreshold = 100))
         assertEquals(DamageNumberTier.DEVASTATING, damageNumberTier(2_000L, firstThreshold = 100))
+    }
+
+    @Test
+    fun theSamePowerUnitHitEarnsTheSameTierOnEveryRebirthTier() {
+        // The threshold is tier-0 damage: at Rebirth 10 (×3,600) a hit shows 3,600 times larger and so do the tiers.
+        val scale = 3_600.0
+        for (power in listOf(10L, 49L, 50L, 199L, 200L, 999L, 1_000L, 25_000L)) for (critical in listOf(false, true)) {
+            assertEquals(damageNumberTier(power, firstThreshold = 50, critical = critical),
+                damageNumberTier((power * scale).toLong(), firstThreshold = 50, critical = critical, numberScale = scale), "$power $critical")
+        }
+        assertEquals(DamageNumberTier.STANDARD, damageNumberTier(176_400L, firstThreshold = 50, numberScale = scale))
+        assertEquals(DamageNumberTier.STRONG, damageNumberTier(180_000L, firstThreshold = 50, numberScale = scale))
+        assertEquals(DamageNumberTier.DEVASTATING, damageNumberTier(3_600_000L, firstThreshold = 50, numberScale = scale))
+        assertEquals(damageNumberTier(199L, firstThreshold = 50), damageNumberTier(199L, firstThreshold = 50, numberScale = 0.5),
+            "a scale below 1 reads as 1: it never lowers the thresholds")
     }
 
     @Test

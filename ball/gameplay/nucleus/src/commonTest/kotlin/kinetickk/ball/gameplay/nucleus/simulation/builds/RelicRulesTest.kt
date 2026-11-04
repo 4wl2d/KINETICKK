@@ -445,7 +445,7 @@ class RelicRulesTest {
         assertEquals(51f, state.hp, 0.001f)
         rotting.status[StatusCell.STACKS + StatusElement.ENTROPY.ordinal] = 40f
         state.updateRelicRuntime(1f)
-        assertEquals(51f + VERDANT_CAP, state.hp, 0.001f)
+        assertEquals(51f + state.verdantCap(), state.hp, 0.001f)
 
         rotting.status[StatusCell.STACKS + StatusElement.ENTROPY.ordinal] = 10f
         state.hp = 50f

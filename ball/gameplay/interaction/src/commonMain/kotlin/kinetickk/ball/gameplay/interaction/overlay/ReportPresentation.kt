@@ -9,8 +9,7 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.canvas.look.OverlayRelicSlot
-import kinetickk.ball.gameplay.interaction.canvas.look.overlayCompact
-import kinetickk.ball.gameplay.interaction.canvas.look.overlayGrouped
+import kinetickk.ball.gameplay.interaction.canvas.look.overlayAmount
 import kinetickk.ball.gameplay.interaction.canvas.look.overlayIcon
 import kinetickk.ball.gameplay.interaction.canvas.look.overlayLevel
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
@@ -20,6 +19,7 @@ import kinetickk.ball.gameplay.nucleus.render.CoreStasisMotion
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.formatGroupedNumber
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.formatOneDecimal
@@ -100,31 +100,31 @@ internal fun GameplayRenderModel.terminalPresentation(
         victory = victory,
         reason = message.localizedContent(language),
         time = formatRunTime(elapsed),
-        kills = overlayGrouped(kills.toLong(), language),
-        matter = overlayGrouped(runMatter, language),
+        kills = formatGroupedNumber(kills.toLong(), language),
+        matter = formatGroupedNumber(runMatter, language),
         weapon = currentWeaponDefinition.name.localizedContent(language),
         combat = listOf(
-            stat(GameplayText.EnemiesDestroyed, overlayGrouped(kills.toLong(), language)),
-            stat(GameplayText.ElitesDestroyed, overlayGrouped(stats.eliteKills.toLong(), language), TerminalTone.THREAT),
-            stat(GameplayText.DamageDealt, overlayCompact(stats.damageDealt.roundToLong(), language)),
-            stat(GameplayText.DamageTaken, overlayGrouped(stats.damageTaken.roundToLong(), language), if (victory) TerminalTone.BONE else TerminalTone.THREAT),
-            stat(GameplayText.DamageAbsorbed, overlayGrouped(stats.damageAbsorbed.roundToLong(), language)),
+            stat(GameplayText.EnemiesDestroyed, formatGroupedNumber(kills.toLong(), language)),
+            stat(GameplayText.ElitesDestroyed, formatGroupedNumber(stats.eliteKills.toLong(), language), TerminalTone.THREAT),
+            stat(GameplayText.DamageDealt, overlayAmount(stats.damageDealt, language)),
+            stat(GameplayText.DamageTaken, overlayAmount(stats.damageTaken, language), if (victory) TerminalTone.BONE else TerminalTone.THREAT),
+            stat(GameplayText.DamageAbsorbed, overlayAmount(stats.damageAbsorbed, language)),
             stat(GameplayText.BestCombo, "×" + stats.bestCombo, TerminalTone.YOU),
             stat(GameplayText.RunDuration, formatRunTime(elapsed)),
         ),
         collection = listOf(
-            stat(GameplayText.MatterEarned, overlayGrouped(runMatter, language), TerminalTone.YOU),
-            stat(GameplayText.DataCollected, overlayGrouped(stats.dataCollected, language)),
-            stat(GameplayText.PickupsCollected, overlayGrouped(stats.pickupsCollected, language)),
-            stat(GameplayText.KeysCollected, overlayGrouped(stats.keysCollected, language)),
-            stat(GameplayText.ArtifactsAcquired, overlayGrouped(acquiredItemCount.toLong(), language)),
+            stat(GameplayText.MatterEarned, formatGroupedNumber(runMatter, language), TerminalTone.YOU),
+            stat(GameplayText.DataCollected, formatGroupedNumber(stats.dataCollected, language)),
+            stat(GameplayText.PickupsCollected, formatGroupedNumber(stats.pickupsCollected, language)),
+            stat(GameplayText.KeysCollected, formatGroupedNumber(stats.keysCollected, language)),
+            stat(GameplayText.ArtifactsAcquired, formatGroupedNumber(acquiredItemCount.toLong(), language)),
             stat(GameplayText.LevelReached, overlayLevel(level, language)),
         ),
         rebirth = language.text(OverlayRedesignText.RebirthTag, rebirthLevel),
         rebirthLevel = rebirthLevel,
         form = content.coreShape(coreShape).displayName.localizedContent(language),
         formIcon = coreShape.overlayIcon(),
-        bank = if (easyMode) null else overlayGrouped(totalMatter, language),
+        bank = if (easyMode) null else formatGroupedNumber(totalMatter, language),
         weaponIcon = weapon.overlayIcon(),
         weaponLevel = overlayLevel(weaponLevel, language),
         weaponMaxLevel = nextWeaponMastery == null,

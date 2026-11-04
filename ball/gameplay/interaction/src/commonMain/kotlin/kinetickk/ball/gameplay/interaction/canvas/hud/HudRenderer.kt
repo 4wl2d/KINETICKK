@@ -75,6 +75,9 @@ internal object HudScratch {
     val matter = HudKeyedText()
     val keys = HudNumberText { it.toString() }
 
+    /** The compact integrity number, keyed by its shown value (below 1,000 the digits draw without it). */
+    val integrity = HudKeyedText()
+
     /** The Show FPS counter's value ("–" before the first measured window). */
     val fps = HudNumberText { if (it < 0L) "–" else it.toString() }
     val weaponLevel = HudKeyedText()

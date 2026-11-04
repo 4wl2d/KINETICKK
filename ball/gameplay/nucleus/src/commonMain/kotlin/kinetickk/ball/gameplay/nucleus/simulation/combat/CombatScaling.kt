@@ -9,6 +9,7 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.flatDamageScale
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.builds.*
@@ -22,8 +23,7 @@ import kotlin.math.max
 // Scaling helpers.
 
 /** Flat element and proc damage keeps pace with enemy integrity through the run. */
-internal fun MutableGameState.runScale(): Float =
-    content.tempo.runScaleGrowth(elapsed) * rebirthProfile.playerPowerMultiplier
+internal fun MutableGameState.runScale(): Float = content.tempo.flatDamageScale(elapsed, rebirthProfile)
 
 /** Impact growth through the run. */
 internal fun MutableGameState.impactRunGrowth(): Float = content.tempo.impactRunGrowth(elapsed)

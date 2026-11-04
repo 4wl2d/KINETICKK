@@ -948,13 +948,13 @@ class RedesignShotsWorldTest {
         )
     }
 
-    /** Big numbers at every screen edge (long Russian compact amounts clip first). */
+    /** Big numbers at every screen edge (a high tier's millions are the widest compact amounts). */
     private fun edgeNumbersFx(model: GameplayRenderModel): VisualFxProjection {
         val halfW = model.screenWidth * 0.5f
         val halfH = model.screenHeight * 0.5f
         val spots = listOf(halfW - 8f to 0f, -halfW + 8f to -60f, 0f to -halfH + 6f, 60f to halfH - 6f, halfW - 30f to halfH - 30f)
         return VisualFxProjection.EMPTY.copy(damageNumbers = spots.mapIndexed { index, (dx, dy) ->
-            DamageNumberProjection(model.coreX + dx, model.coreY + dy, listOf(48_200L, 3_900L, 1_250L, 912_000L, 6_600L)[index],
+            DamageNumberProjection(model.coreX + dx, model.coreY + dy, listOf(48_200L, 2_670_000L, 1_250L, 912_000L, 17_300_000L)[index],
                 critical = index % 2 == 0, life = 0.3f, driftX = 0f, driftY = -1f)
         }.toImmutableList())
     }

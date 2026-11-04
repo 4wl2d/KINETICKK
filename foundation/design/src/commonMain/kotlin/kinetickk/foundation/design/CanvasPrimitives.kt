@@ -28,34 +28,6 @@ private const val TAU = 6.2831855f
 fun polar(center: Offset, radius: Float, angle: Float): Offset =
     Offset(center.x + cos(angle) * radius, center.y + sin(angle) * radius)
 
-fun formatCompact(value: Long, language: AppLanguage = AppLanguage.English): String {
-    val safe = value.coerceAtLeast(0L)
-    val divisor = when {
-        safe >= 1_000_000_000_000L -> 1_000_000_000_000L
-        safe >= 1_000_000_000L -> 1_000_000_000L
-        safe >= 1_000_000L -> 1_000_000L
-        safe >= 1_000L -> 1_000L
-        else -> return safe.toString()
-    }
-    val suffix = when (language) {
-        AppLanguage.English -> when (divisor) {
-            1_000L -> "K"
-            1_000_000L -> "M"
-            1_000_000_000L -> "B"
-            else -> "T"
-        }
-        AppLanguage.Russian -> when (divisor) {
-            1_000L -> " тыс."
-            1_000_000L -> " млн"
-            1_000_000_000L -> " млрд"
-            else -> " трлн"
-        }
-    }
-    val tenths = safe / (divisor / 10L)
-    val separator = if (language == AppLanguage.Russian) ',' else '.'
-    return if (tenths % 10L == 0L) "${tenths / 10L}$suffix" else "${tenths / 10L}$separator${tenths % 10L}$suffix"
-}
-
 fun DrawScope.drawPolygon(center: Offset, radius: Float, sides: Int, rotation: Float, color: Color, style: androidx.compose.ui.graphics.drawscope.DrawStyle) {
     val path = Path()
     repeat(sides) { index ->

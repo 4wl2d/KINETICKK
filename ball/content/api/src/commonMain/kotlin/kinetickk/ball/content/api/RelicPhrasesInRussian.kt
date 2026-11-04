@@ -116,9 +116,9 @@ internal val RelicPhrasesInRussian: List<Pair<String, String>> = listOf(
         "Урон от контакта с врагами ×1,5. Данные больше не прилипают к вам, а повышение уровня их не притягивает.",
 
     "Verdant Rot" to "Цветущая гниль",
-    "Impacts apply 2 Entropy. Every Entropy stack within 320 u heals you {0} per second, up to 3.5." to
+    "Impacts apply 2 Entropy. Every Entropy stack within 320 u heals you {0} per second, up to {1}." to
         "Столкновения накладывают 2 слоя Энтропии. Каждый слой Энтропии в пределах 320 ед лечит вас " +
-        "на {0} в секунду, вплоть до 3,5.",
+        "на {0} в секунду, вплоть до {1}.",
     "All other healing is disabled, and every Entropy stack close to you makes you take 1.5 % more damage." to
         "Любое другое лечение отключено, а каждый слой Энтропии вблизи вас увеличивает получаемый урон на 1,5 %.",
 

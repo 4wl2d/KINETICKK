@@ -7,7 +7,6 @@ function-lines	ball/gameplay/impl/src/commonMain/kotlin/kinetickk/ball/gameplay/
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/GameplaySemanticControls.kt#GameplaySemanticControls	150
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/canvas/fx/ReactionFxRenderer.kt#drawStyledLink	125
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/canvas/hud/HudBossBar.kt#drawBossBar	103
-function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/canvas/hud/HudCoreStatus.kt#drawCoreStatus	122
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/canvas/hud/HudMinimapRenderer.kt#drawMinimap	105
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/canvas/world/BreakBurstRenderer.kt#drawBreakBurst	109
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/canvas/world/EnemyRenderer.kt#drawEnemy	120

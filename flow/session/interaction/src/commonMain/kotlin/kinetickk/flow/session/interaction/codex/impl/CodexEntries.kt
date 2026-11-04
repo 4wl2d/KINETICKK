@@ -26,6 +26,8 @@ import kinetickk.ball.gameplay.interaction.rewards.activeRankNumbers
 import kinetickk.ball.profile.api.rank
 import kinetickk.flow.session.interaction.localization.SessionText
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.COMPACT_NUMBER_THRESHOLD
+import kinetickk.foundation.common.localization.formatCompactNumber
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkRolePalette
@@ -254,6 +256,8 @@ internal fun codexWeaponIcon(id: WeaponId): KkIcon = requireNotNull(KkIcon.byKey
 }
 
 internal fun codexNumber(value: Float, language: AppLanguage = AppLanguage.English): String {
+    // Integrity rows of a high tier read in the compact form, like every large number in a run.
+    if (kotlin.math.abs(value) >= COMPACT_NUMBER_THRESHOLD) return formatCompactNumber(kotlin.math.round(value).toLong(), language)
     val number = ((value * 100f).toInt() / 100f).toString()
     return when (language) {
         AppLanguage.English -> number

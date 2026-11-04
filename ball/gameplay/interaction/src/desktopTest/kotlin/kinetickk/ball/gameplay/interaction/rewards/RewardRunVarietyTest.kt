@@ -36,7 +36,6 @@ import kinetickk.ball.content.api.SignalOption
 import kinetickk.ball.content.api.SignalTuning
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.localizedContent
-import kinetickk.ball.gameplay.interaction.canvas.look.overlayGrouped
 import kinetickk.ball.gameplay.interaction.canvas.with
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
@@ -48,6 +47,7 @@ import kinetickk.ball.gameplay.nucleus.render.RewardPreview
 import kinetickk.ball.gameplay.nucleus.render.RewardStatChange
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.formatGroupedNumber
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkIcon
@@ -187,7 +187,7 @@ class RewardRunVarietyTest {
         val rareRu = card(SignalOption.MERCHANT_RARE_OFFER, cost = 1_250, language = AppLanguage.Russian)
         assertEquals(listOf("Предложение предметов: «" + ItemRarity.RARE.displayLabel.localizedContent(AppLanguage.Russian) + "» и выше"),
             rareRu.descriptions)
-        assertEquals(listOf(overlayGrouped(1_250, AppLanguage.Russian) + " материи"), rareRu.liabilities, "Large prices group their digits")
+        assertEquals(listOf(formatGroupedNumber(1_250, AppLanguage.Russian) + " материи"), rareRu.liabilities, "Large prices group their digits")
         assertTrue(rareRu.liabilities.single().startsWith("1") && "250" in rareRu.liabilities.single())
         assertEquals(listOf("+2 rerolls"), card(SignalOption.MERCHANT_REROLLS, cost = 30, payout = 2).descriptions)
         val blessing = RewardPreview(immutableListOf(RewardStatChange("Impact power", 1f, 1.1f, "×"), RewardStatChange("Weapon power", 1f, 1.1f, "×")))
@@ -211,6 +211,16 @@ class RewardRunVarietyTest {
                 .rewardCardPresentation(epicReliquary, 0, language)
             assertEquals(listOf(language.text(RunVarietyText.OfferAtLeast, ItemRarity.EPIC.displayLabel.localizedContent(language))), shown.descriptions)
         }
+        // The Ward's integrity and shield are the nucleus terms (power units), at the run's number scale.
+        val ward = card(SignalOption.SHRINE_WARD, cost = 20, payout = 25)
+        assertEquals(listOf("+25 shield capacity and +4% damage reduction"), ward.descriptions)
+        assertEquals(listOf("−20 maximum integrity"), ward.liabilities)
+        val tierTenWard = signal(SignalOption.SHRINE_WARD, SignalKind.SHRINE, 20, 25)
+        val scaled = rewardFixtureModel(choiceType = ChoiceType.SIGNAL, choices = listOf(tierTenWard), numberScale = 3_600.0)
+            .rewardCardPresentation(tierTenWard, 0)
+        assertEquals(listOf("+90K shield capacity and +4% damage reduction"), scaled.descriptions)
+        assertEquals(listOf("−72K maximum integrity"), scaled.liabilities)
+        assertEquals(RewardChip(RewardChipKind.COST, "72K", icon = KkIcon.SYSTEM_INTEGRITY), scaled.chips.single())
         val repair = card(SignalOption.DERELICT_REPAIR, payout = 72)
         assertEquals(listOf("Restore 72 integrity"), repair.descriptions)
         assertTrue(repair.liabilities.isEmpty() && repair.chips.isEmpty(), "Salvage costs nothing")
@@ -233,9 +243,8 @@ class RewardRunVarietyTest {
         for (copy in listOf(RunVarietyText.ShrineBloodText.english, RunVarietyText.ShrineBloodText.russian)) {
             assertTrue(copy.startsWith("+" + percent(tuning.shrineBloodImpact)) && "+" + percent(tuning.shrineBloodWeapon) in copy.drop(1), copy)
         }
-        assertTrue(RunVarietyText.ShrineWardText.english.startsWith("+${tuning.shrineWardShield.roundToInt()} shield"))
+        assertTrue("+" + percent(tuning.shrineWardReduction) in RunVarietyText.ShrineWardText.english)
         assertTrue("+" + percent(tuning.shrineWardReduction) in RunVarietyText.ShrineWardText.russian)
-        assertTrue(RunVarietyText.ShrineWardCost.english.startsWith("−${tuning.shrineWardIntegrity.roundToInt()} "))
         // "Even odds" and "three rerolls".
         assertEquals(0.5f, tuning.gambleRerollChance)
         assertEquals(3, tuning.gambleRerollWin)

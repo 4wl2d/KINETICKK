@@ -9,6 +9,7 @@ import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ModifierUnit
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.StatDelta
+import kinetickk.ball.content.api.isIntegrityAmount
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
@@ -16,6 +17,8 @@ import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.RewardStatChange
 import kinetickk.ball.gameplay.nucleus.render.TotemAction
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.COMPACT_NUMBER_THRESHOLD
+import kinetickk.foundation.common.localization.formatCompactNumber
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.label
 
@@ -33,29 +36,38 @@ internal fun RewardStatChange.presentation(language: AppLanguage): RewardStatPre
     )
 }
 
-/** Hundredths preserve small bonuses such as 0.04s; rounding never truncates them to zero. */
+/**
+ * Hundredths preserve small bonuses such as 0.04s; rounding never truncates them to zero. From 1,000 on a value reads in
+ * the compact form ("1.08M").
+ */
 internal fun rewardNumber(value: Float, unit: String, language: AppLanguage, precision: Int = 2): String {
+    val suffix = if (language == AppLanguage.Russian) when (unit) { "s" -> " с"; "/s" -> "/с"; "u/s" -> " ед/с"; else -> unit } else unit
+    val whole = kotlin.math.round(value).toLong()
+    if (kotlin.math.abs(whole) >= COMPACT_NUMBER_THRESHOLD) return formatCompactNumber(whole, language) + suffix
     val factor = (1..precision).fold(1L) { result, _ -> result * 10L }
     val rounded = kotlin.math.round(value * factor).toLong()
     val magnitude = kotlin.math.abs(rounded)
     val decimals = (factor + magnitude % factor).toString().substring(1).trimEnd('0')
     val separator = if (language == AppLanguage.Russian) "," else "."
     val number = (if (rounded < 0) "−" else "") + magnitude / factor + if (decimals.isEmpty()) "" else separator + decimals
-    val suffix = if (language == AppLanguage.Russian) when (unit) { "s" -> " с"; "/s" -> "/с"; "u/s" -> " ед/с"; else -> unit } else unit
     return number + suffix
 }
 
 /** A passive stat line of an offered item: [scale] × the per-copy amount; negative amounts are costs. */
-internal fun StatDelta.presentation(scale: Float, language: AppLanguage): RewardStatPresentation =
-    statPresentation(effect, amount * scale, language)
+internal fun StatDelta.presentation(scale: Float, numberScale: Double, language: AppLanguage): RewardStatPresentation =
+    statPresentation(effect, amount * scale, numberScale, language)
 
-/** A stat line: the stat's name and [value] signed in its unit ("+25", "+20%", "−0.6 s"); negative values are costs. */
-internal fun statPresentation(effect: ItemEffect, value: Float, language: AppLanguage): RewardStatPresentation {
+/**
+ * A stat line: the stat's name and [value] signed in its unit ("+25", "+20%", "−0.6 s"); negative values are costs. An
+ * integrity stat's power units read at [numberScale] (the run's number scale).
+ */
+internal fun statPresentation(effect: ItemEffect, value: Float, numberScale: Double, language: AppLanguage): RewardStatPresentation {
+    val amount = if (effect.isIntegrityAmount) (value * numberScale).toFloat() else value
     val (shown, unit) = when (effect.unit) {
-        ModifierUnit.PERCENT -> value * 100f to "%"
-        ModifierUnit.PER_SECOND -> value to "/s"
-        ModifierUnit.SECONDS -> value to "s"
-        ModifierUnit.FLAT -> value to ""
+        ModifierUnit.PERCENT -> amount * 100f to "%"
+        ModifierUnit.PER_SECOND -> amount to "/s"
+        ModifierUnit.SECONDS -> amount to "s"
+        ModifierUnit.FLAT -> amount to ""
     }
     val number = rewardNumber(shown, unit, language)
     return RewardStatPresentation(effect.displayLabel.localizedContent(language), "", if (value > 0f) "+$number" else number, value > 0f)

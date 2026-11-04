@@ -27,6 +27,7 @@ import kinetickk.foundation.collections.immutableListOfSize
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.roundToLong
 
 /** One pure, detached read of the accepted simulation revision. */
 internal fun MutableGameState.buildSummary(
@@ -184,12 +185,15 @@ internal fun MutableGameState.buildStats(
         BuildStatContribution(BuildStatSource.SYNERGIES, buildSpeed - masterySpeed),
         BuildStatContribution(BuildStatSource.TEMPORARY, effectiveSpeed - buildSpeed),
     ).filter { it.amount != 0f }.toImmutableList())
-    stat("Integrity", maxHp, baseIntegrity, classIntegrity * matrix.integrityShare + rebirthProfile.playerIntegrityBonus)
+    // Integrity rows read in display units: power units at the tier's number scale, like the HUD.
+    val shown = rebirthProfile.numberScale.toFloat()
     val matrixShield = matrix.shieldShare * maxHp
-    stat("Shield", shieldCapacity(), 0f, matrixShield, relics = shieldCapacity() - maxShield - matrixShield)
+    stat("Integrity", maxHp * shown, baseIntegrity * shown,
+        (classIntegrity * matrix.integrityShare + rebirthProfile.playerIntegrityBonus) * shown)
+    stat("Shield", shieldCapacity() * shown, 0f, matrixShield * shown, relics = (shieldCapacity() - maxShield - matrixShield) * shown)
     stat("Damage reduction", effectiveDamageReduction() * 100f, 0f, matrixShare(ItemEffect.DAMAGE_REDUCTION, 0f) * 100f,
         relics = (effectiveDamageReduction() - damageReduction) * 100f, unit = "%")
-    stat("Regeneration", regenPerSecond, 0f, matrixShare(ItemEffect.REGEN, 0f), unit = "/s")
+    stat("Regeneration", regenPerSecond * shown, 0f, matrixShare(ItemEffect.REGEN, 0f) * shown, unit = "/s")
     stat("Mass", effectiveMass(), baseMass, matrixShare(ItemEffect.MASS, baseMass), relics = effectiveMass() - mass)
     stat("Magnetism", effectiveMagnetism(), 4.65f, matrixShare(ItemEffect.MAGNETISM, 4.65f),
         relics = effectiveMagnetism() - magnetStrength)
@@ -241,8 +245,7 @@ internal fun MutableGameState.emitBuildChange(before: BuildChangeSnapshot, title
     val deltas = after.mapIndexedNotNull { index, stat ->
         val previous = before.stats.getOrNull(index)?.takeIf { it.name == stat.name } ?: return@mapIndexedNotNull null
         val delta = stat.value - previous.value
-        if (abs(delta) < 0.0001f) null else stat.name + " " +
-            (if (delta > 0f) "+" else "") + ((delta * 100f).toInt() / 100f) + stat.unit
+        if (abs(delta) < 0.0001f) null else stat.name + " " + (if (delta > 0f) "+" else "") + toastNumber(delta) + stat.unit
     }
     val tiers = BuildTag.entries.filter { tagTier(it) > before.tagTiers[it.ordinal] }.map {
         "+ " + it.displayLabel + " " + tierNumeral(tagTier(it))
@@ -251,6 +254,10 @@ internal fun MutableGameState.emitBuildChange(before: BuildChangeSnapshot, title
     }
     emitVisualFx(VisualFxCue.BuildChanged(title, (deltas + tiers).toImmutableList(), legendary))
 }
+
+/** A toast's stat delta: hundredths, or whole digits from 1,000 on (integrity rows at a high tier's number scale). */
+private fun toastNumber(delta: Float): String =
+    if (abs(delta) >= 1_000f) delta.roundToLong().toString() else ((delta * 100f).toInt() / 100f).toString()
 
 internal fun tierNumeral(tier: Int): String = when (tier) {
     1 -> "I"
