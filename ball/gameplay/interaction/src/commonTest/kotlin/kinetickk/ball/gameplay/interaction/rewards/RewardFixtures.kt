@@ -70,12 +70,12 @@ internal val rewardFixtureRelics: List<RelicDefinition> = listOf(
     relic(RelicId.GLASS_COMET, "Glass Comet", RelicAspect.KINETIC, listOf(RelicKey.FRAGILE, RelicKey.CRITICAL), listOf(BuildTag.PRECISION, BuildTag.RAM),
         "All your damage +{0} %. Impact kills above 900 u/s grant a quarter second of invulnerability, " +
             "at most once every 1.5 seconds.",
-        "You take double damage, and shields and damage reduction no longer protect you.", RelicValue(100f, 25f)),
+        "You take 50 % more damage.", RelicValue(100f, 25f)),
     relic(RelicId.EXECUTIONERS_PRISM, "Executioner's Prism", RelicAspect.KINETIC, listOf(RelicKey.CRITICAL), listOf(BuildTag.PRECISION),
         "Critical hits are no longer random. Every 1 % critical chance, up to 50 %, becomes {0} % critical " +
-            "damage. Hits that can crit always crit against enemies below 35 % integrity, Frozen or Brittle enemies and " +
+            "damage. Hits that can crit always crit against enemies below half their integrity, Frozen or Brittle enemies and " +
             "enemies whose status is three quarters of the way to its Break.",
-        "Hits that do not crit deal 20 % less.", RelicValue(3f, 0.5f)),
+        "Hits that do not crit deal 10 % less.", RelicValue(3f, 0.5f)),
     relic(RelicId.ECHO_CHAMBER, "Echo Chamber", RelicAspect.KINETIC, listOf(RelicKey.ECHO), listOf(BuildTag.ARSENAL),
         "Weapon hits echo 0.35 seconds later for {0} % damage and apply their on-hit effects again.",
         "Impact damage −50 %.", RelicValue(50f, 10f)),
@@ -86,10 +86,10 @@ internal val rewardFixtureRelics: List<RelicDefinition> = listOf(
     relic(RelicId.CINDER_CROWN, "Cinder Crown", RelicAspect.THERMAL, listOf(RelicKey.HEAT, RelicKey.SPREAD), listOf(BuildTag.OVERCLOCK, BuildTag.CHAIN),
         "Thermal stacks no longer burn over time. They bank {0} % of their damage and Ignite at 5 stacks, " +
             "releasing the bank and spreading 2 Thermal.",
-        "Thermal fades twice as fast, and Ignites near you burn 4 % of your integrity.", RelicValue(160f, 30f)),
+        "Ignites near you burn 3 % of your integrity.", RelicValue(160f, 30f)),
     relic(RelicId.OVERDRIVE_CASCADE, "Overdrive Cascade", RelicAspect.THERMAL, listOf(RelicKey.HEAT), listOf(BuildTag.OVERCLOCK, BuildTag.ARSENAL),
         "Overdrive gain +{0} %. Each kill during Overdrive extends it, up to 2.5 extra seconds.",
-        "Outside Overdrive all your damage −30 %.", RelicValue(60f, 20f)),
+        "Outside Overdrive all your damage −15 %.", RelicValue(60f, 20f)),
     relic(RelicId.ABSOLUTE_ZERO, "Absolute Zero", RelicAspect.CRYO, listOf(RelicKey.COLD, RelicKey.CRITICAL), listOf(BuildTag.RAM, BuildTag.PRECISION),
         "Impacts apply {0} Cryo and Dash chills everything around you. Frozen enemies shatter on the next " +
             "direct hit for {1} % damage, chilling their neighbors.",
@@ -97,30 +97,30 @@ internal val rewardFixtureRelics: List<RelicDefinition> = listOf(
     relic(RelicId.STASIS_ANCHOR, "Stasis Anchor", RelicAspect.CRYO, listOf(RelicKey.STILLNESS, RelicKey.COLD), listOf(BuildTag.ANCHOR, BuildTag.ARSENAL),
         "While braking, enemies near you are slowed by {0} % and hostile bullets near you are caught, up to " +
             "24. Release Brake to fire them as your own. Stasis holds for 3 seconds and refills when you let go.",
-        "Weapon activation −30 % while you are not braking.", RelicValue(45f, 10f)),
+        "Weapon activation −15 % while you are not braking.", RelicValue(45f, 10f)),
     relic(RelicId.STORMHEART_CAPACITOR, "Stormheart Capacitor", RelicAspect.ION, listOf(RelicKey.CHARGE, RelicKey.MOTION), listOf(BuildTag.DRIVE, BuildTag.RAM),
         "Above 700 u/s the Core charges in 4 seconds. The next impact discharges into five enemies for " +
             "{0} % impact damage and 3 Ion each.",
-        "Taking a hit while half charged or more discharges into you for 10 % of your integrity.", RelicValue(200f, 40f)),
+        "Taking a hit while half charged or more discharges into you for 5 % of your integrity.", RelicValue(200f, 40f)),
     relic(RelicId.AEGIS_INVERSION, "Aegis Inversion", RelicAspect.ION, listOf(RelicKey.SHIELD, RelicKey.LIFE), listOf(BuildTag.BULWARK),
-        "All healing becomes shield, and shield capacity grows by 60 % of your maximum integrity. A breaking " +
+        "All healing becomes shield, and shield capacity grows by 40 % of your maximum integrity. A breaking " +
             "shield releases a nova worth {0} % of the damage it absorbed.",
-        "Integrity can never be restored, and shields no longer recharge on their own.", RelicValue(150f, 50f)),
+        "Integrity can never be restored, and shields recharge on their own at half speed.", RelicValue(150f, 50f)),
     relic(RelicId.NEUTRON_HEART, "Neutron Heart", RelicAspect.GRAVITIC, listOf(RelicKey.GRAVITY, RelicKey.STILLNESS), listOf(BuildTag.RAM, BuildTag.ANCHOR),
         "Mass +{0} %, and enemies barely move you. Slow collisions hurt you only half as much.",
         "Dash impulse −35 % and magnetism −20 %.", RelicValue(80f, 30f)),
     relic(RelicId.EVENT_HORIZON, "Event Horizon", RelicAspect.GRAVITIC, listOf(RelicKey.GRAVITY), listOf(BuildTag.ANCHOR, BuildTag.RAM),
-        "Enemies within 280 u are dragged toward you. Impacts against enemies carrying Gravitic deal {0} % more, and " +
-            "your Collapses implode toward you.",
-        "Contact damage taken ×1.5. Data no longer latches onto you, and level-ups no longer pull it in.",
+        "While you brake, enemies between 120 and 280\u00A0u away are dragged toward you. Your impacts deal {0} % more, " +
+            "twice that against enemies carrying Gravitic, and your Collapses implode toward you.",
+        "Level-ups no longer pull Data in.",
         RelicValue(40f, 20f)),
     relic(RelicId.VERDANT_ROT, "Verdant Rot", RelicAspect.ENTROPY, listOf(RelicKey.DECAY, RelicKey.LIFE), listOf(BuildTag.BULWARK),
         "Impacts apply 2 Entropy. Every Entropy stack within 320 u heals you {0} per second, up to 3.5.",
-        "All other healing is disabled, and every Entropy stack close to you makes you take 1.5 % more damage.", RelicValue(0.25f, 0.05f)),
+        "All other healing is halved.", RelicValue(0.25f, 0.05f)),
     relic(RelicId.PANDEMIC_CODEX, "Pandemic Codex", RelicAspect.ENTROPY, listOf(RelicKey.DECAY, RelicKey.SPREAD), listOf(BuildTag.CHAIN),
         "Statuses are contagious: when an enemy dies, {0} % of each of its statuses jumps to its two nearest " +
             "neighbors.",
-        "Enemies carrying a status move 20 % faster.", RelicValue(60f, 10f)),
+        "Enemies carrying a status move 10 % faster.", RelicValue(60f, 10f)),
     relic(RelicId.AGONY_SCEPTER, "Agony Scepter", RelicAspect.SOVEREIGN, listOf(RelicKey.ECHO), listOf(BuildTag.ARSENAL),
         "Your weapon takes its Forbidden form. Every rank deepens the mutation.",
         "Weapon activations add heat: 6 per shot, or 5 per second for continuous weapons.", minimumRebirth = 1),
@@ -131,7 +131,7 @@ internal val rewardFixtureRelics: List<RelicDefinition> = listOf(
     relic(RelicId.OUROBOROS_SEAL, "Ouroboros Seal", RelicAspect.SOVEREIGN, listOf(RelicKey.LIFE, RelicKey.VOID), listOf(BuildTag.BULWARK, BuildTag.FORTUNE),
         "Once per run, lethal damage instead restores your integrity, releases a nova for {0} damage and " +
             "grants two seconds of invulnerability. Then the seal is spent but keeps its slot.",
-        "Data gain −25 % while the seal is bound. The singularity still kills, and a spent seal locks its " +
+        "Data gain −15 % while the seal is bound. The singularity still kills, and a spent seal locks its " +
             "slot for two minutes.", RelicValue(120f, 60f), minimumRebirth = 5),
 )
 

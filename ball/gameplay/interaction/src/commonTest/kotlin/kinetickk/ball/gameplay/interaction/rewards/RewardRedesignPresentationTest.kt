@@ -34,11 +34,7 @@ import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
 import kinetickk.ball.gameplay.nucleus.render.RewardPreview
 import kinetickk.ball.gameplay.nucleus.render.RewardStatChange
 import kinetickk.ball.gameplay.nucleus.render.TotemAction
-import kinetickk.ball.content.api.ConversionKind
-import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
-import kinetickk.ball.content.api.ItemRarity
-import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.DamageBasis
 import kinetickk.ball.content.api.EffectAction
 import kinetickk.ball.content.api.EffectClause
@@ -184,56 +180,20 @@ class RewardRedesignPresentationTest {
 
     @Test
     fun suppressionStrikesTheLinesABoundRelicVoidsOnlyWhenTheNucleusReportsIt() {
-        val aegis = itemChoice(5)
-        val glass = listOf(EquippedRelic(RelicId.GLASS_COMET, 1))
-        val reported = rewardFixtureModel(choices = listOf(aegis), relics = glass,
+        // Solar Choir's Thermal Break spread is what Absolute Zero (Thermal turns to Cryo) voids.
+        val choir = itemChoice(1)
+        val frozen = listOf(EquippedRelic(RelicId.ABSOLUTE_ZERO, 1))
+        val reported = rewardFixtureModel(choices = listOf(choir), relics = frozen,
             previews = listOf(RewardPreview(forecasts = immutableListOf(BuildForecast(ForecastKind.SUPPRESSED)))))
-            .rewardCardPresentation(aegis, 0)
-        assertTrue(reported.rules.isNotEmpty() && reported.rules.all { it.suppressed }, "Glass Comet voids the shield-break clause")
-        assertEquals(RewardChip(RewardChipKind.SUPPRESSED, "Suppressed", relic = RelicId.GLASS_COMET,
-            rune = rewardFixtureContent.relic(RelicId.GLASS_COMET)), reported.forecast.first(), "The chip carries the voiding relic's rune")
-        val unreported = rewardFixtureModel(choices = listOf(aegis), relics = glass).rewardCardPresentation(aegis, 0)
+            .rewardCardPresentation(choir, 0)
+        assertTrue(reported.rules.isNotEmpty() && reported.rules.all { it.suppressed }, "Absolute Zero voids the Thermal rule")
+        assertEquals(RewardChip(RewardChipKind.SUPPRESSED, "Suppressed", relic = RelicId.ABSOLUTE_ZERO,
+            rune = rewardFixtureContent.relic(RelicId.ABSOLUTE_ZERO)), reported.forecast.first(), "The chip carries the voiding relic's rune")
+        val unreported = rewardFixtureModel(choices = listOf(choir), relics = frozen).rewardCardPresentation(choir, 0)
         assertTrue(unreported.rules.none { it.suppressed })
-        val free = rewardFixtureModel(choices = listOf(aegis),
-            previews = listOf(RewardPreview(forecasts = immutableListOf(BuildForecast(ForecastKind.SUPPRESSED))))).rewardCardPresentation(aegis, 0)
+        val free = rewardFixtureModel(choices = listOf(choir),
+            previews = listOf(RewardPreview(forecasts = immutableListOf(BuildForecast(ForecastKind.SUPPRESSED))))).rewardCardPresentation(choir, 0)
         assertTrue(free.rules.none { it.suppressed }, "Without the voiding relic no line is struck")
-    }
-
-    @Test
-    fun suppressionStrikesThePassiveStatsABoundRelicVoids() {
-        // Hardlight-like shield weave and Nanite-like mesh: what Glass Comet and Verdant Rot void are passive stats.
-        val weave = ItemDefinition(6, "Hardlight Weave", "Light woven tight enough to hold.", ItemRarity.RARE, immutableListOf(BuildTag.BULWARK),
-            stats = immutableListOf(StatDelta(ItemEffect.SHIELD_CAPACITY, 10f), StatDelta(ItemEffect.MASS, 0.1f)),
-            rules = immutableListOf(ItemRule.Convert(ConversionKind.OVERHEAL_TO_SHIELD, 1f)), maxStacks = 2, unlockLevel = 1)
-        val mesh = ItemDefinition(7, "Nanite Mesh", "Tiny menders in the hull.", ItemRarity.UNCOMMON, immutableListOf(BuildTag.BULWARK),
-            stats = immutableListOf(StatDelta(ItemEffect.REGEN, 1.2f)), maxStacks = 3, unlockLevel = 1)
-        val decay = ItemDefinition(8, "Rot Converter", "Mending turned to rot.", ItemRarity.RARE, immutableListOf(BuildTag.BULWARK),
-            rules = immutableListOf(ItemRule.Convert(ConversionKind.REGENERATION_TO_DECAY, 0.5f)), maxStacks = 1, unlockLevel = 1)
-        val content = rewardFixtureContent.copy(items = (rewardFixtureContent.items + weave + mesh + decay).toImmutableList())
-        val suppressed = RewardPreview(forecasts = immutableListOf(BuildForecast(ForecastKind.SUPPRESSED)))
-        fun card(item: ItemDefinition, relic: RelicId, preview: RewardPreview?, stacks: List<Int> = List(content.items.size) { 0 }): RewardCardPresentation {
-            val choice = ChoiceOption(ChoiceType.ITEM, item.name, "", "RARE", itemId = item.id)
-            return rewardFixtureModel(content = content, choices = listOf(choice), relics = listOf(EquippedRelic(relic, 1)),
-                itemStacks = stacks, previews = listOfNotNull(preview)).rewardCardPresentation(choice, 0)
-        }
-        // Without a nucleus preview the card's own stat lines are struck once the nucleus reports the suppression.
-        assertTrue(card(weave, RelicId.GLASS_COMET, null).changes.none { it.suppressed }, "Nothing is struck until the nucleus reports it")
-        val weaveChoice = ChoiceOption(ChoiceType.ITEM, weave.name, "", "RARE", itemId = weave.id)
-        val reported = rewardFixtureModel(content = content, choices = listOf(weaveChoice), relics = listOf(EquippedRelic(RelicId.GLASS_COMET, 1)),
-            build = BuildProjection(suppressedItemIds = immutableListOf(weave.id))).rewardCardPresentation(weaveChoice, 0)
-        assertEquals(listOf(true, false), reported.changes.map { it.suppressed }, "Shield capacity is void under Glass Comet, mass is not")
-        // With a preview, the nucleus stat rows of the voided stats are struck and the chip names the relic.
-        val previewed = card(weave, RelicId.GLASS_COMET, RewardPreview(immutableListOf(RewardStatChange("Shield", 0f, 10f, ""),
-            RewardStatChange("Mass", 1.18f, 1.28f, "")), suppressed.forecasts))
-        assertEquals(listOf(true, false), previewed.changes.map { it.suppressed })
-        assertTrue(previewed.rules.all { it.suppressed }, "The overheal conversion is void too")
-        assertEquals(RelicId.GLASS_COMET, previewed.forecast.first().relic)
-        val rotted = card(mesh, RelicId.VERDANT_ROT, RewardPreview(immutableListOf(RewardStatChange("Regeneration", 0f, 1.2f, "/s")), suppressed.forecasts))
-        assertEquals(listOf(true), rotted.changes.map { it.suppressed }, "Verdant Rot voids regeneration")
-        assertEquals(RelicId.VERDANT_ROT, rotted.forecast.first().relic)
-        val converted = card(mesh, RelicId.VERDANT_ROT, RewardPreview(immutableListOf(RewardStatChange("Regeneration", 0f, 1.2f, "/s")), suppressed.forecasts),
-            stacks = List(content.items.size) { if (it == decay.id) 1 else 0 })
-        assertTrue(converted.changes.none { it.suppressed }, "Regeneration turned into decay is not voided")
     }
 
     @Test
@@ -561,12 +521,12 @@ class RewardRedesignPresentationTest {
         val english = model.rewardCardPresentation(meld, 0)
         assertEquals(OverlayRedesignText.Meld.english, english.title)
         assertEquals(english.title, english.action?.label)
-        assertEquals(listOf(AppLanguage.English.text(OverlayRedesignText.MeldEffect, "4", "3")), english.descriptions)
+        assertEquals(listOf(AppLanguage.English.text(OverlayRedesignText.MeldEffect, "5", "3")), english.descriptions)
         // The Meld seals the last open slot, and its preview names the lasting bonus it reaches.
         val preview = requireNotNull(english.relicPreview)
         assertTrue(preview.meld)
         assertEquals(3, preview.targetSlot)
-        assertEquals("Meld ×1: damage +4%, integrity +3%", preview.rows.first().title)
+        assertEquals("Meld ×1: damage +5%, integrity +3%", preview.rows.first().title)
         assertEquals("+", preview.rows.first().sign)
         // Russian pairs the noun and the verb of the same word (Слияние / Слить).
         val russian = model.rewardCardPresentation(meld, 0, AppLanguage.Russian)

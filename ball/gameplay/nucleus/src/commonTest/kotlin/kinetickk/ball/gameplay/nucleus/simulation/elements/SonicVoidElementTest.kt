@@ -144,14 +144,14 @@ class SonicVoidElementTest {
         state.applyStatus(enemy, StatusElement.SONIC, sonic.breakThreshold, generation = 0)
 
         val shatter = sonic.breakPower * sonic.breakThreshold * state.runScale()
-        // Rank one: two links at 60 % of the Shatter's damage, nearest first.
-        assertEquals(near.maxHp - shatter * 0.6f, near.hp, 0.05f)
-        assertEquals(second.maxHp - shatter * 0.6f, second.hp, 0.05f)
-        assertEquals(third.maxHp, third.hp, "Only the two nearest Resonant enemies are reached")
+        // Rank one: three links at the Shatter's full damage, nearest first.
+        assertEquals(near.maxHp - shatter, near.hp, 0.05f)
+        assertEquals(second.maxHp - shatter, second.hp, 0.05f)
+        assertEquals(third.maxHp - shatter, third.hp, 0.05f)
         assertEquals(silent.maxHp, silent.hp, "Enemies without Resonance are skipped")
         assertEquals(outside.maxHp, outside.hp, "Resonant enemies beyond 260 are out of reach")
 
-        assertEquals(1.2f, state.knockbackTaken(state.dummy()), 0.0001f)
+        assertEquals(1.4f, state.knockbackTaken(state.dummy()), 0.0001f)
         assertEquals(1.15f, state.impactRecoilScale(), 0.0001f)
         assertEquals(1f, buildTestState().impactRecoilScale())
     }
@@ -221,15 +221,15 @@ class SonicVoidElementTest {
         val state = buildTestState()
         assertEquals(100f, state.maxHp)
         state.acquireRelic(RelicId.NULL_COVENANT)
-        assertEquals(90f, state.maxHp, 0.001f, "Maximum integrity −10 %")
+        assertEquals(95f, state.maxHp, 0.001f, "Maximum integrity −5 %")
         assertTrue(state.hp <= state.maxHp)
 
         val enemy = state.dummy(hp = 10_000f)
         state.applyStatus(enemy, StatusElement.VOID, 3, generation = 0)
         state.damageEnemy(enemy, 1_000f)
-        assertEquals(84f, enemy.status[StatusCell.HOLLOW_MEMORY], 0.001f, "Rank one remembers 40 % more")
+        assertEquals(108f, enemy.status[StatusCell.HOLLOW_MEMORY], 0.001f, "Rank one remembers 80 % more")
         state.applyStatus(enemy, StatusElement.VOID, 5, generation = 0)
-        assertEquals(9_000f - 84f * 1.6f, enemy.hp, 0.01f, "Unmake strikes immediately")
+        assertEquals(9_000f - 108f * 1.6f, enemy.hp, 0.01f, "Unmake strikes immediately")
         assertEquals(0f, enemy.status[StatusCell.UNMAKE_AT])
 
         val elite = state.dummy(type = EnemyType.ELITE)
@@ -244,7 +244,7 @@ class SonicVoidElementTest {
         // The liability lingers through severance and then returns the ceiling without healing.
         state.hp = 50f
         state.replaceRelic(0, RelicId.PERPETUAL_VECTOR)
-        assertEquals(90f, state.maxHp, 0.001f)
+        assertEquals(95f, state.maxHp, 0.001f)
         state.elapsed += state.content.build.policy.severanceSeconds + 1f
         state.updateRelicRuntime(MutableGameState.FIXED_STEP)
         assertEquals(100f, state.maxHp, 0.001f)
@@ -291,19 +291,19 @@ class SonicVoidElementTest {
     }
 
     @Test
-    fun nullCovenantKeepsTakingATenthOfARisingCeiling() {
+    fun nullCovenantKeepsTakingATwentiethOfARisingCeiling() {
         val state = buildTestState()
         state.acquireRelic(RelicId.NULL_COVENANT)
-        assertEquals(90f, state.maxHp, 0.001f)
+        assertEquals(95f, state.maxHp, 0.001f)
         state.hp = state.maxHp
 
         state.applyStatDelta(ItemEffect.MAX_INTEGRITY, 100f)
-        assertEquals(0.9f * 200f, state.maxHp, 0.01f, "the cut stays 10 % of the uncut 200")
-        assertEquals(20f, state.integrityLiabilityCut, 0.01f)
+        assertEquals(0.95f * 200f, state.maxHp, 0.01f, "the cut stays 5 % of the uncut 200")
+        assertEquals(10f, state.integrityLiabilityCut, 0.01f)
         assertEquals(state.maxHp, state.hp, 0.01f, "integrity rises by the ceiling actually gained")
 
         state.onLevelUp()
-        assertEquals(0.9f * (200f + state.content.tempo.levelIntegrity), state.maxHp, 0.01f)
+        assertEquals(0.95f * (200f + state.content.tempo.levelIntegrity), state.maxHp, 0.01f)
 
         // Ending the liability returns the whole cut and heals nothing.
         val integrity = state.hp

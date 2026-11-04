@@ -218,8 +218,9 @@ internal fun MutableGameState.updateSurvival(delta: Float) {
     if (shield > capacity) {
         // Overfilled shield (Hardlight Weave) decays back toward capacity.
         shield = max(capacity, shield - 3f * delta)
-    } else if (capacity > 0f && shieldRechargeDelay <= 0f && !build.liability(RelicId.AEGIS_INVERSION)) {
-        shield = min(capacity, shield + max(2f, capacity * 0.09f) * entropyTideShieldRegen() * delta)
+    } else if (capacity > 0f && shieldRechargeDelay <= 0f) {
+        val inverted = if (build.liability(RelicId.AEGIS_INVERSION)) AEGIS_INVERSION_RECHARGE else 1f
+        shield = min(capacity, shield + max(2f, capacity * 0.09f) * inverted * entropyTideShieldRegen() * delta)
         if (shield >= capacity * 0.5f) shieldBreakArmed = true
     }
     if (shield > capacity * (if (build.overhealOverfill > 0f) build.overhealOverfill else 1f)) {

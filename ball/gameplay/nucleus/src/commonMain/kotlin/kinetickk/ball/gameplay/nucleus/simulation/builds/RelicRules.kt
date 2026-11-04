@@ -25,18 +25,47 @@ import kotlin.math.sin
 
 internal const val STASIS_RADIUS: Float = 240f
 internal const val STASIS_MAX_BANK: Int = 24
+
+/** Stasis Anchor's liability: weapon activation while not braking is multiplied by this. */
+internal const val STASIS_ANCHOR_IDLE_ACTIVATION: Float = 0.85f
 internal const val EVENT_HORIZON_RADIUS: Float = 280f
+
+/** Event Horizon drags enemies only while they are farther than this from the Core, so the pull never forces contact. */
+internal const val EVENT_HORIZON_STANDOFF: Float = 120f
+
+/** Stormheart Capacitor's liability: a hit while half charged or more discharges this share of maximum integrity. */
+internal const val STORMHEART_SELF_DISCHARGE: Float = 0.05f
 internal const val VERDANT_RADIUS: Float = 320f
 
 /** Verdant Rot's heal cap in integrity per second: its second relic value, which its upside text shows. */
 internal fun MutableGameState.verdantCap(): Float = content.relic(RelicId.VERDANT_ROT).value(VERDANT_CAP_VALUE, 1)
 
 private const val VERDANT_CAP_VALUE = 1
+
+/** Verdant Rot's liability: every other heal is multiplied by this. */
+internal const val VERDANT_OTHER_HEALING: Float = 0.5f
 internal const val OUROBOROS_LOCK_SECONDS: Float = 120f
+
+/** Aegis Inversion: shield capacity grows by this share of maximum integrity. */
+internal const val AEGIS_INVERSION_CAPACITY: Float = 0.4f
+
+/** Aegis Inversion's liability: shields recharge on their own at this share of the usual rate. */
+internal const val AEGIS_INVERSION_RECHARGE: Float = 0.5f
+/** Executioner's Prism: hits that can crit always crit against enemies below this share of their integrity. */
+internal const val EXECUTIONER_LINE: Float = 0.5f
+
+/** Executioner's Prism's liability: direct hits that do not crit are multiplied by this. */
+internal const val EXECUTIONER_NON_CRITICAL_DAMAGE: Float = 0.9f
+
+/** Glass Comet's liability: damage taken, collisions included, is multiplied by this. */
+internal const val GLASS_COMET_DAMAGE_TAKEN: Float = 1.5f
 internal const val GLASS_INVULNERABILITY_SECONDS: Float = 0.25f
 internal const val GLASS_INVULNERABILITY_COOLDOWN: Float = 1.5f
 internal const val OVERDRIVE_BURNOUT_SECONDS: Float = 3f
 internal const val OVERDRIVE_EXTENSION_CAP: Float = 2.5f
+
+/** Overdrive Cascade's liability: damage dealt outside Overdrive is multiplied by this. */
+internal const val OVERDRIVE_CASCADE_IDLE_DAMAGE: Float = 0.85f
 internal const val GYRE_ECHO_DELAY: Float = 0.25f
 
 /** The upside value [index] of a bound relic at its rank, scaled by harmony, pairings and Hollow Crown. */
@@ -90,7 +119,8 @@ internal fun MutableGameState.updateRelicRuntime(delta: Float) {
         stormCharge = min(1f, stormCharge + delta / 4f * rate)
     }
     if (build.upside(RelicId.STASIS_ANCHOR)) updateStasis(delta)
-    if (build.upside(RelicId.EVENT_HORIZON)) {
+    // The horizon pulls only while the Core brakes: an anchor draws the crowd in on demand.
+    if (build.upside(RelicId.EVENT_HORIZON) && braking) {
         val radius = EVENT_HORIZON_RADIUS * if (build.pairing(RelicPairingId.BLACK_STAR)) 1.4f else 1f
         for (index in enemies.indices) {
             val enemy = enemies[index]
@@ -99,7 +129,7 @@ internal fun MutableGameState.updateRelicRuntime(delta: Float) {
             val dx = coreX - enemy.x
             val dy = coreY - enemy.y
             val distance = length(dx, dy)
-            if (distance < 1f || distance > radius) continue
+            if (distance < EVENT_HORIZON_STANDOFF || distance > radius) continue
             val pull = 260f * (1f - distance / radius * 0.6f) * knockback
             enemy.vx += dx / distance * pull * delta
             enemy.vy += dy / distance * pull * delta
@@ -203,7 +233,7 @@ internal fun MutableGameState.impactRecoilScale(): Float =
     if (build.liability(RelicId.THUNDER_CHOIR)) 1f + THUNDER_CHOIR_RECOIL else 1f
 
 /**
- * Null Covenant's liability: maximum integrity −10 % while it is bound or lingering. The cut stays 10 % of
+ * Null Covenant's liability: maximum integrity −5 % while it is bound or lingering. The cut stays 5 % of
  * the whole ceiling (the lowered one plus the cut), so later raises pay their share too, and it is returned
  * in full when the liability ends; integrity above the lowered ceiling is lost, and returning the ceiling
  * heals nothing.

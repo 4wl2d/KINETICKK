@@ -59,7 +59,7 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     val dataCount = profile.dataDrops
     gainOverdrive(dataCount * 1.8f)
     // Erasure: an executed victim's Data rushes to the Core (the scatter draws stay the same).
-    val latched = erasureLatchId == enemy.id && latchedVacuumActive()
+    val latched = erasureLatchId == enemy.id
     if (erasureLatchId == enemy.id) erasureLatchId = -1
     repeat(dataCount) {
         val angle = gameplayRandom.nextFloat() * TAU

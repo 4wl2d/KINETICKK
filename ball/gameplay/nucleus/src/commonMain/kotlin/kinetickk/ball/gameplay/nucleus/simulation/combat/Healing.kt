@@ -6,6 +6,7 @@ package kinetickk.ball.gameplay.nucleus.simulation.combat
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.gameplay.nucleus.simulation.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 import kinetickk.ball.gameplay.nucleus.simulation.variety.*
 import kotlin.math.max
 import kotlin.math.min
@@ -17,11 +18,11 @@ internal enum class HealSource { REGENERATION, REPAIR, ITEM, LEVEL, VERDANT, REL
 
 internal fun MutableGameState.heal(requested: Float, source: HealSource) {
     if (requested <= 0f) return
-    val amount = requested * entropyTideHealing()
-    if (build.liability(RelicId.VERDANT_ROT) && source != HealSource.VERDANT) return
+    var amount = requested * entropyTideHealing()
+    if (build.liability(RelicId.VERDANT_ROT) && source != HealSource.VERDANT) amount *= VERDANT_OTHER_HEALING
     if (build.upside(RelicId.AEGIS_INVERSION) || build.liability(RelicId.AEGIS_INVERSION)) {
-        if (build.liability(RelicId.GLASS_COMET)) {
-            if (build.pairing(RelicPairingId.SHATTERED_AEGIS)) glassCharge = min(90f, glassCharge + amount)
+        if (build.pairing(RelicPairingId.SHATTERED_AEGIS)) {
+            glassCharge = min(90f, glassCharge + amount)
             return
         }
         addShield(amount)
@@ -37,7 +38,7 @@ internal fun MutableGameState.heal(requested: Float, source: HealSource) {
 }
 
 internal fun MutableGameState.addShield(amount: Float, overfill: Boolean = false) {
-    if (amount <= 0f || build.liability(RelicId.GLASS_COMET)) return
+    if (amount <= 0f) return
     val capacity = shieldCapacity()
     val ceiling = if (overfill || build.overhealOverfill > 0f) capacity * max(1f, build.overhealOverfill) else capacity
     shield = min(ceiling, shield + amount)

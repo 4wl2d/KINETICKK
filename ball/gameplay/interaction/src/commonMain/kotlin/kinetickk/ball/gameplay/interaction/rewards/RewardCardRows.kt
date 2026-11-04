@@ -387,18 +387,14 @@ internal fun RewardStatLine(
 ) {
     val nameSize = (if (compact) 14f else if (first) 16f else 15f) * font
     val valueSize = (if (compact) (if (first) 16f else 12f) else if (first) 22f else 16f) * font
-    // A stat a bound relic voids is struck through in the threat role, name and values alike.
-    val struck = change.suppressed
     val afterColor = when {
-        struck -> roles.threat.copy(alpha = 0.8f)
         !change.improved -> roles.threat
         change.before.isNotEmpty() || first -> rewardValueTone(accent)
         else -> Kk.Bone
     }
-    val strike: (TextStyle) -> TextStyle = { if (struck) it.copy(textDecoration = TextDecoration.LineThrough) else it }
-    val nameStyle = strike(typography.bodyStyle(nameSize, color = if (struck) roles.threat.copy(alpha = 0.8f) else if (first) Kk.Bone else Kk.Mute))
-    val beforeStyle = strike(typography.wideStyle(valueSize * 0.62f, tabular = true, color = Kk.Mute2))
-    val afterStyle = strike(typography.wideStyle(valueSize, tabular = true, color = afterColor))
+    val nameStyle = typography.bodyStyle(nameSize, color = if (first) Kk.Bone else Kk.Mute)
+    val beforeStyle = typography.wideStyle(valueSize * 0.62f, tabular = true, color = Kk.Mute2)
+    val afterStyle = typography.wideStyle(valueSize, tabular = true, color = afterColor)
     val measurer = rememberTextMeasurer(cacheSize = 8)
     val density = LocalDensity.current.density
     BoxWithConstraints(modifier.fillMaxWidth()) {

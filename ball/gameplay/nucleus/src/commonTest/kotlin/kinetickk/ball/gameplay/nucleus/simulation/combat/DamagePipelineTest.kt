@@ -73,11 +73,11 @@ class DamagePipelineTest {
     fun liabilitiesMultiplyAfterTheSurgeAndOnlyAffectTheirSources() {
         val state = buildTestState(RelicId.OVERDRIVE_CASCADE, RelicId.EXECUTIONERS_PRISM)
         val target = state.dummy()
-        // Outside Overdrive −30 %, every non-critical direct hit −20 %.
-        assertEquals(56f, state.dealHit(target, 100f, HitSource.WEAPON).amount, 0.01f)
-        assertEquals(70f, state.dealStatusDamage(target, 100f, StatusElement.ION).amount, 0.01f)
+        // Outside Overdrive −15 %, every non-critical direct hit −10 %.
+        assertEquals(76.5f, state.dealHit(target, 100f, HitSource.WEAPON).amount, 0.01f)
+        assertEquals(85f, state.dealStatusDamage(target, 100f, StatusElement.ION).amount, 0.01f)
         state.overdriveTime = 3f
-        assertEquals(80f, state.dealHit(target, 100f, HitSource.WEAPON).amount, 0.01f)
+        assertEquals(90f, state.dealHit(target, 100f, HitSource.WEAPON).amount, 0.01f)
         assertFalse(state.dealStatusDamage(target, 100f, StatusElement.ION).critical, "Status damage never crits")
     }
 

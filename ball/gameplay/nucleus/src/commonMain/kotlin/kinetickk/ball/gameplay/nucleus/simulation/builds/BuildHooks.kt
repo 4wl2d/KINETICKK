@@ -132,7 +132,7 @@ internal fun MutableGameState.onLevelUp() {
  * Ouroboros Seal's liability and Data-to-skills' cost; applied to every Data gain, pickups and item clauses alike.
  */
 internal fun MutableGameState.dataGainLiability(): Float =
-    (if (build.liability(kinetickk.ball.content.api.RelicId.OUROBOROS_SEAL)) 0.75f else 1f) *
+    (if (build.liability(kinetickk.ball.content.api.RelicId.OUROBOROS_SEAL)) 0.85f else 1f) *
         if (build.dataToSkills > 0f) kinetickk.ball.content.api.DATA_CONVERSION_GAIN else 1f
 
 /** Agony Scepter's mutation strength: ranks 1, 2 and 3 map to the Forbidden forms 1, 3 and 5. */

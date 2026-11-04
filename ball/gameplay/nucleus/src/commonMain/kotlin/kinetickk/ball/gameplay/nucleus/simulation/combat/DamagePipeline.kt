@@ -102,13 +102,13 @@ internal fun MutableGameState.relicSurge(): Float {
 /** Multiplicative liabilities on damage dealt; never diluted by the surge soft cap. */
 private fun MutableGameState.damageLiability(source: HitSource, critical: Boolean): Float {
     var multiplier = 1f
-    if (build.liability(RelicId.OVERDRIVE_CASCADE) && overdriveTime <= 0f) multiplier *= 0.7f
+    if (build.liability(RelicId.OVERDRIVE_CASCADE) && overdriveTime <= 0f) multiplier *= OVERDRIVE_CASCADE_IDLE_DAMAGE
     if (source == HitSource.IMPACT || source == HitSource.DASH) {
         if (build.liability(RelicId.ECHO_CHAMBER)) multiplier *= 0.5f
         if (build.liability(RelicId.PERPETUAL_VECTOR) && speed < 600f) multiplier *= 0.7f
     }
     if (source.direct && !critical) {
-        if (build.liability(RelicId.EXECUTIONERS_PRISM)) multiplier *= 0.8f
+        if (build.liability(RelicId.EXECUTIONERS_PRISM)) multiplier *= EXECUTIONER_NON_CRITICAL_DAMAGE
         if (build.nonCriticalDamage != 0f) multiplier *= (1f + build.nonCriticalDamage).coerceAtLeast(0.1f)
     }
     return multiplier
@@ -126,9 +126,11 @@ internal fun MutableGameState.vulnerability(enemy: Enemy, source: HitSource, bri
         if (resonance > 0) vulnerable += resonance * RESONANCE_IMPACT_PER_STACK * build.potency(StatusElement.SONIC)
         val gravitic = stacks(enemy, StatusElement.GRAVITIC)
         vulnerable += gravitic * content.build.element(StatusElement.GRAVITIC).perStack * build.potency(StatusElement.GRAVITIC)
-        if (gravitic > 0 && build.upside(RelicId.EVENT_HORIZON)) {
-            vulnerable += content.relic(RelicId.EVENT_HORIZON).value(0, relicRank(RelicId.EVENT_HORIZON)) / 100f *
+        if (build.upside(RelicId.EVENT_HORIZON)) {
+            // Every impact strikes harder, a Gravitic carrier twice as hard.
+            val horizon = content.relic(RelicId.EVENT_HORIZON).value(0, relicRank(RelicId.EVENT_HORIZON)) / 100f *
                 build.relicUpside(RelicId.EVENT_HORIZON)
+            vulnerable += if (gravitic > 0) horizon * 2f else horizon
         }
     }
     if (enemy.status[StatusCell.EMBRITTLED_UNTIL] > elapsed) {
@@ -164,7 +166,7 @@ private fun MutableGameState.resolveCrit(
     if (build.pairing(RelicPairingId.COLD_VERDICT) && stacks(enemy, StatusElement.CRYO) >= 4) forced = true
     if (build.guaranteedCritAfter > 0 && critMissStreak >= build.guaranteedCritAfter) forced = true
     val critical = if (executioner) {
-        forced || belowExecutionLine(enemy, 0.35f, bossFinalPhaseOf(enemy), phased = encounterSpec(enemy) != null) ||
+        forced || belowExecutionLine(enemy, EXECUTIONER_LINE, bossFinalPhaseOf(enemy), phased = encounterSpec(enemy) != null) ||
             isFrozen(enemy) || enemy.status[StatusCell.BRITTLE] > 0f ||
             statusNearBreak(enemy, 0.75f)
     } else {

@@ -279,19 +279,20 @@ internal class NoPoiBot(
     private val archetypeTag: BuildTag = BuildTag.RAM,
     private val element: StatusElement? = StatusElement.ENTROPY,
     private val weaponOrder: List<WeaponId> = BotWeaponOrder,
-    /** An impact-driven player avoids liabilities that cut impacts, healing, integrity or steering. */
+    /**
+     * The Relics whose rule its build cannot use, so only the liability is left (RelicValueProbeTest measures each on the
+     * reference build): it melds rather than bind one.
+     */
     private val relicTaste: Map<RelicId, Float> = mapOf(
-        RelicId.ECHO_CHAMBER to -40f,
-        RelicId.GLASS_COMET to -20f,
-        RelicId.VERDANT_ROT to -20f,
-        RelicId.PERPETUAL_VECTOR to -20f,
-        RelicId.AEGIS_INVERSION to -20f,
-        // Its arc weapons cannot crit, so the Prism would only cost 20 %.
-        RelicId.EXECUTIONERS_PRISM to -20f,
-        // It takes steady chip damage, which Stormheart turns into self-discharges.
-        RelicId.STORMHEART_CAPACITOR to -20f,
-        // It never manages heat, so the Covenant's cooling cut keeps it above 80 heat, bleeding integrity.
+        // It never manages heat, so the Covenant's heat bonus never comes.
         RelicId.FURNACE_COVENANT to -20f,
+        // It never brakes on purpose, so Stasis Anchor only slows its weapon.
+        RelicId.STASIS_ANCHOR to -20f,
+        // Its rot stacks seldom sit within reach, so Verdant Rot mostly halves its regeneration and level repairs.
+        RelicId.VERDANT_ROT to -20f,
+        // It applies neither Sonic nor Void, so Shatter and Unmake never fire.
+        RelicId.THUNDER_CHOIR to -20f,
+        RelicId.NULL_COVENANT to -20f,
     ),
     /** How the bot treats Data-gain cards (economy §2.1); [DataPolicy.NEUTRAL] plays exactly as the reference bot. */
     private val dataPolicy: DataPolicy = DataPolicy.NEUTRAL,
@@ -304,6 +305,11 @@ internal class NoPoiBot(
     private val dashRule: DashRule = DashRule.HUMAN,
     /** Item cards the bot takes before every other rule; [RarityTaste.NONE] plays exactly as the reference bot. */
     private val rarityTaste: RarityTaste = RarityTaste.NONE,
+    /**
+     * A Stasis player: with Stasis Anchor bound it brakes while hostile shots or three enemies are inside the stasis and
+     * the stasis holds, and lets go to fire the catch. Off, the bot plays exactly as the reference bot.
+     */
+    private val brakeForStasis: Boolean = false,
 ) {
     private var cursorAngle = 0f
     private var braking = false
@@ -315,7 +321,7 @@ internal class NoPoiBot(
     private val stall = PilotStallBreaker()
 
     /** An independent bot in this bot's current state (a forked run continues with it). */
-    fun copy(): NoPoiBot = NoPoiBot(archetypeTag, element, weaponOrder, relicTaste, dataPolicy, avoidWeaponHarmony, dashRule, rarityTaste).also { copy ->
+    fun copy(): NoPoiBot = NoPoiBot(archetypeTag, element, weaponOrder, relicTaste, dataPolicy, avoidWeaponHarmony, dashRule, rarityTaste, brakeForStasis).also { copy ->
         copy.cursorAngle = cursorAngle
         copy.braking = braking
         copy.decisions = decisions
@@ -461,7 +467,10 @@ internal class NoPoiBot(
         } || s.enemies.any {
             it.alive && !it.isBossClass && distanceSquared(it.x, it.y, s.coreX, s.coreY) <= MIRROR_CONTACT_REACH * MIRROR_CONTACT_REACH
         })
-        s.setBrake(braking || mirrorBrake)
+        val stasisBrake = brakeForStasis && s.build.upside(RelicId.STASIS_ANCHOR) && s.stasisLockedUntil <= s.elapsed && s.stasisMeter > 0f && (s.projectiles.any {
+            it.hostile && !it.spent && distanceSquared(it.x, it.y, s.coreX, s.coreY) <= STASIS_RADIUS * STASIS_RADIUS
+        } || s.enemies.count { it.alive && distanceSquared(it.x, it.y, s.coreX, s.coreY) <= STASIS_RADIUS * STASIS_RADIUS } >= 3)
+        s.setBrake(braking || mirrorBrake || stasisBrake)
         val threat = s.projectiles.any {
             if (!it.hostile) false else {
                 val px = it.x - s.coreX
@@ -890,7 +899,7 @@ internal class NoPoiBot(
      * A committed Ram and Entropy build: archetype and element items first, survival stats second,
      * then whatever already has points. Each Relic offer spends one of the run's Relic opportunities: a Relic it likes
      * binds into an open slot first, a rank-up of a bound Relic comes next, and it melds when every Relic card is a poor
-     * fit (one whose liability it avoids, [MELD_SCORE]). A small deterministic spread stands in for a player's taste
+     * fit (one whose rule its build cannot use, or any new Relic once the Hollow Crown is bound, [MELD_SCORE]). A small deterministic spread stands in for a player's taste
      * between equal cards.
      */
     private fun score(s: MutableGameState, c: ChoiceOption, index: Int): Float {
@@ -933,6 +942,10 @@ internal class NoPoiBot(
             return when {
                 s.relicRank(id) > 0 -> 30f + spread + taste
                 full -> -20f
+                // The Hollow Crown pays for empty slots: it takes the Crown while at most one other Relic is bound, and
+                // with the Crown bound it melds the rest (a sealed slot stays empty for the Crown).
+                id == RelicId.HOLLOW_CROWN && s.equippedRelics.size > 1 -> -20f
+                s.relicRank(RelicId.HOLLOW_CROWN) > 0 -> -20f
                 else -> 40f + spread + taste
             }
         }

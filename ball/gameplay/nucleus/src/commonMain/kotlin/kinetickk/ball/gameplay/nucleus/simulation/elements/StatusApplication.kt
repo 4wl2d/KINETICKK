@@ -122,8 +122,5 @@ internal fun MutableGameState.applyStatusAround(
     }
 }
 
-internal fun MutableGameState.decaySeconds(element: StatusElement): Float {
-    var seconds = content.build.element(element).decaySeconds * build.durationMultiplier(element)
-    if (element == StatusElement.THERMAL && build.liability(RelicId.CINDER_CROWN)) seconds *= 0.5f
-    return seconds
-}
+internal fun MutableGameState.decaySeconds(element: StatusElement): Float =
+    content.build.element(element).decaySeconds * build.durationMultiplier(element)

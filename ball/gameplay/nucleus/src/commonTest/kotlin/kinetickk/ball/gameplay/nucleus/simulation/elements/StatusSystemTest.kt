@@ -42,11 +42,11 @@ class StatusSystemTest {
         state.updateStatuses(MutableGameState.FIXED_STEP)
         assertEquals(3, enemy.stacksOf(StatusElement.THERMAL))
 
-        // Kindling stretches Thermal stacks by half; Cinder Crown's liability halves them again.
+        // Kindling stretches Thermal stacks by half; Cinder Crown no longer shortens them.
         val kindled = buildTestState().apply { own("Kindling") }
         assertEquals(2.4f, kindled.decaySeconds(StatusElement.THERMAL), 0.0001f)
         kindled.acquireRelic(RelicId.CINDER_CROWN)
-        assertEquals(1.2f, kindled.decaySeconds(StatusElement.THERMAL), 0.0001f)
+        assertEquals(2.4f, kindled.decaySeconds(StatusElement.THERMAL), 0.0001f)
     }
 
     @Test

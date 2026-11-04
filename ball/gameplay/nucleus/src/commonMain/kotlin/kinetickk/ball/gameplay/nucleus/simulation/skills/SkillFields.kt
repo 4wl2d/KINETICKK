@@ -183,11 +183,10 @@ internal fun MutableGameState.gravityWellClosed(index: Int) {
     val x = table[index, FieldCell.X]
     val y = table[index, FieldCell.Y]
     val radius = table[index, FieldCell.RADIUS]
-    val latch = latchedVacuumActive()
     for (pickupIndex in pickups.indices) {
         val pickup = pickups[pickupIndex]
         if (!pickup.expires || pickup.attracted) continue
-        if (distanceSquared(x, y, pickup.x, pickup.y) <= radius * radius) pickup.attracted = latch
+        if (distanceSquared(x, y, pickup.x, pickup.y) <= radius * radius) pickup.attracted = true
     }
     val rank = skillLoadout.rank(table.owner(index)).coerceIn(1, ContentBounds.MAX_SKILL_RANK)
     emitVisualFx(VisualFxCue.SkillCast(SkillId.GRAVITY_WELL, x, y, 0f, 0f, radius, rank, SkillCueCodes.PHASE_IMPACT))

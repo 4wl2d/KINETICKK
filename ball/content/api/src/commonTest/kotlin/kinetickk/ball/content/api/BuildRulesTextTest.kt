@@ -413,12 +413,12 @@ class BuildRulesTextTest {
             keys = immutableListOf(RelicKey.DECAY),
             attunedTags = immutableListOf(),
             upside = "Every Entropy stack within 320 u heals you {0} per second, up to 3.5.",
-            liability = "Enemies carrying a status move 20 % faster.",
+            liability = "Enemies carrying a status move 10 % faster.",
             values = immutableListOf(RelicValue(0.25f, 0.05f)),
         )
         assertEquals("Every Entropy stack within 320 u heals you 0.25 per second, up to 3.5.", relic.upsideText(AppLanguage.English, 1))
         assertEquals("Every Entropy stack within 320 u heals you 0.35 per second, up to 3.5.", relic.upsideText(AppLanguage.English, 3))
-        assertEquals("Враги под действием стихии двигаются на 20 % быстрее.", relic.liabilityText(AppLanguage.Russian))
+        assertEquals("Враги под действием стихии двигаются на 10 % быстрее.", relic.liabilityText(AppLanguage.Russian))
 
         val wide = relic.copy(upside = "Blink up to {0} u, then {3}.", values = immutableListOf(RelicValue(1_200f, 100f)))
         assertEquals("Blink up to 1,400 u, then {3}.", wide.upsideText(AppLanguage.English, 3))

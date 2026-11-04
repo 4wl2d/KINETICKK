@@ -55,28 +55,27 @@ class BuildSummaryTest {
     @Test
     fun fullySuppressedAndMaxedItemsAreExcludedWhilePartlySuppressedItemsStillHelp() {
         val game = MutableGameState(canonicalGameplayContent, seed = 15).apply { startRun() }
-        val shieldCell = game.content.items.single { it.name == "Shield Cell" }
-        val naniteMesh = game.content.items.single { it.name == "Nanite Mesh" }
-        assertTrue(game.hasUsefulItemEffect(shieldCell))
+        val kindling = game.content.items.single { it.name == "Kindling" }
+        val phoenixCoil = game.content.items.single { it.name == "Phoenix Coil" }
+        assertTrue(game.hasUsefulItemEffect(kindling))
 
-        // Glass Comet removes shields: every effect of Shield Cell is disabled, so it is never useful.
-        game.acquireRelic(RelicId.GLASS_COMET)
-        assertEquals(1f, game.itemSuppressedShare(shieldCell))
-        assertFalse(game.hasUsefulItemEffect(shieldCell))
-        assertFalse(shieldCell in game.offerableItems())
+        // Absolute Zero lets no Thermal land: both Thermal rules of Kindling are disabled, so it is never useful.
+        game.acquireRelic(RelicId.ABSOLUTE_ZERO)
+        assertEquals(1f, game.itemSuppressedShare(kindling))
+        assertFalse(game.hasUsefulItemEffect(kindling))
+        assertFalse(kindling in game.offerableItems())
 
-        // Verdant Rot disables regeneration but not integrity: half the item still helps.
-        game.acquireRelic(RelicId.VERDANT_ROT)
-        assertEquals(0.5f, game.itemSuppressedShare(naniteMesh))
-        assertTrue(game.hasUsefulItemEffect(naniteMesh))
-        game.itemStacks[naniteMesh.id] = naniteMesh.maxStacks
-        assertFalse(game.hasUsefulItemEffect(naniteMesh))
+        // Phoenix Coil's Ignite condition never holds, but the clause's heal and shield still count: it still helps.
+        assertEquals(1f / 3f, game.itemSuppressedShare(phoenixCoil), 0.0001f)
+        assertTrue(game.hasUsefulItemEffect(phoenixCoil))
+        game.itemStacks[phoenixCoil.id] = phoenixCoil.maxStacks
+        assertFalse(game.hasUsefulItemEffect(phoenixCoil))
 
         // Owned, fully disabled items are reported to the build read.
-        game.acquireItem(shieldCell.id)
+        game.acquireItem(kindling.id)
         val summary = game.buildSummary(GameplayInstanceId(RunId(1)), GameplayRevision(1))
-        assertEquals(listOf(shieldCell.id), summary.suppressedItemIds.toList())
-        assertEquals(listOf(shieldCell.id), game.buildProjection().suppressedItemIds.toList())
+        assertEquals(listOf(kindling.id), summary.suppressedItemIds.toList())
+        assertEquals(listOf(kindling.id), game.buildProjection().suppressedItemIds.toList())
     }
 
     @Test

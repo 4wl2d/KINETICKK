@@ -57,7 +57,7 @@ class RewardPreviewTest {
         val state = engine()
         val igniter = state.content.items.single { it.name == "Igniter" }
         val rime = state.content.items.single { it.name == "Rime Rounds" }
-        val nanite = state.content.items.single { it.name == "Nanite Mesh" }
+        val kindling = state.content.items.single { it.name == "Kindling" }
         state.acquireItem(igniter.id)
         state.offer(ChoiceOption(ChoiceType.ITEM, rime.name, rime.description, "", itemId = rime.id))
         val reaction = state.rewardPreviews().single().forecasts
@@ -77,8 +77,8 @@ class RewardPreviewTest {
         assertEquals(0, tier.before)
         assertEquals(1, tier.after)
 
-        state.acquireRelic(RelicId.VERDANT_ROT)
-        state.offer(ChoiceOption(ChoiceType.ITEM, nanite.name, "", "", itemId = nanite.id))
+        state.acquireRelic(RelicId.ABSOLUTE_ZERO)
+        state.offer(ChoiceOption(ChoiceType.ITEM, kindling.name, "", "", itemId = kindling.id))
         assertEquals(ForecastKind.SUPPRESSED, state.rewardPreviews().single().forecasts.first().kind)
     }
 

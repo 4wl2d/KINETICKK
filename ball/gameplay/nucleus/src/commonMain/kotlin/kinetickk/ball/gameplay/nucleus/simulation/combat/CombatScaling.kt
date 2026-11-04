@@ -100,7 +100,7 @@ internal fun MutableGameState.effectiveDashHeatCost(): Float {
 internal fun MutableGameState.inPlasmaPool(): Boolean =
     coreInField(CombatFieldKind.PLASMA) && hasVerb(ReactionId.PLASMA_BURST)
 
-/** Magnet radius; Event Horizon's liability removes the latch instead of shrinking it. */
+/** Magnet radius. */
 internal fun MutableGameState.effectivePickupRadius(): Float = pickupRadius
 
 /** Activation multiplier from items, resonance, buffs and relics (mastery and Overdrive apply separately). */
@@ -110,7 +110,7 @@ internal fun MutableGameState.buildActivationBonus(): Float {
     if (build.upside(RelicId.HOLLOW_CROWN)) bonus += 0.08f * emptyRelicSlots()
     if (inPlasmaPool()) bonus += reactionValue(ReactionId.PLASMA_BURST, PLASMA_ACTIVATION_VALUE)
     var multiplier = 1f + bonus
-    if (build.liability(RelicId.STASIS_ANCHOR) && !braking) multiplier *= 0.7f
+    if (build.liability(RelicId.STASIS_ANCHOR) && !braking) multiplier *= STASIS_ANCHOR_IDLE_ACTIVATION
     return multiplier
 }
 
@@ -130,13 +130,12 @@ internal fun MutableGameState.emptyRelicSlots(): Int = (content.relicPolicy.maxS
 internal fun MutableGameState.runDamageMultiplier(): Float = matrix.damageMultiplier * relicRun.meldDamageMultiplier
 
 internal fun MutableGameState.shieldCapacity(): Float {
-    if (build.liability(RelicId.GLASS_COMET)) return 0f
     var capacity = maxShield + matrix.shieldShare * maxHp
     if (tagTier(BuildTag.BULWARK) >= 1) capacity += 18f
     // Aegis Shards add shield capacity while equipped.
     if (weapon == WeaponId.AEGIS_SHARDS) capacity += AEGIS_SHIELD_CAPACITY
     if (build.upside(RelicId.AEGIS_INVERSION)) {
-        capacity += maxHp * 0.6f * (if (build.pairing(RelicPairingId.ROT_WARD)) 1.3f else 1f)
+        capacity += maxHp * AEGIS_INVERSION_CAPACITY * (if (build.pairing(RelicPairingId.ROT_WARD)) 1.3f else 1f)
     }
     return capacity
 }
@@ -145,11 +144,9 @@ internal fun MutableGameState.effectiveCritChance(): Float =
     (critChance + buffAmount(BuffStat.CRIT_CHANCE) + whileAmount(BuffStat.CRIT_CHANCE, null) +
         if (tagTier(BuildTag.PRECISION) >= 1) 0.06f else 0f).coerceIn(0f, 0.75f)
 
-internal fun MutableGameState.effectiveDamageReduction(): Float {
-    if (build.liability(RelicId.GLASS_COMET)) return 0f
-    return (damageReduction + buffAmount(BuffStat.DAMAGE_REDUCTION) + whileAmount(BuffStat.DAMAGE_REDUCTION, null))
+internal fun MutableGameState.effectiveDamageReduction(): Float =
+    (damageReduction + buffAmount(BuffStat.DAMAGE_REDUCTION) + whileAmount(BuffStat.DAMAGE_REDUCTION, null))
         .coerceIn(0f, 0.65f)
-}
 
 /**
  * Power of the equipped weapon's own hits: item weapon power, Rebirth, level, generic mastery, run growth

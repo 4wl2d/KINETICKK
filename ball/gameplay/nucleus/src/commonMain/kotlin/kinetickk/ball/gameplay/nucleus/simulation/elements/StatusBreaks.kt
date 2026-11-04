@@ -81,7 +81,7 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
                     distanceSquared(enemy.x, enemy.y, coreX, coreY) <= square(110f)
                 ) {
                     cinderRecoilReadyAt = elapsed + 0.75f
-                    loseIntegrity(maxHp * 0.04f)
+                    loseIntegrity(maxHp * CINDER_SELF_BURN)
                 }
             }
             shockwave(enemy.x, enemy.y, 0.28f, radius, FxColorCode.elementTone(element))

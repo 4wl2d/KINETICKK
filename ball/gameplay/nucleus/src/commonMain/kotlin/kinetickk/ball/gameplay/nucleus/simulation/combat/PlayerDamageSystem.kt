@@ -8,7 +8,6 @@ import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
-import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.simulation.*
@@ -87,28 +86,18 @@ internal fun MutableGameState.takeDamage(
     if (kind == IncomingDamage.CONTACT) amount *= matrix.contactDamageMultiplier
     var taken = 1f + buffAmount(BuffStat.DAMAGE_TAKEN) + whileAmount(BuffStat.DAMAGE_TAKEN, null)
     if (build.liability(RelicId.HOLLOW_CROWN)) taken += 0.1f * emptyRelicSlots()
-    if (build.liability(RelicId.VERDANT_ROT)) {
-        var close = 0
-        for (index in enemies.indices) {
-            val enemy = enemies[index]
-            if (enemy.alive && distanceSquared(enemy.x, enemy.y, coreX, coreY) <= square(160f)) close += stacks(enemy, StatusElement.ENTROPY)
-        }
-        taken += min(0.3f, close * 0.015f)
-    }
-    if (kind == IncomingDamage.CONTACT && build.liability(RelicId.EVENT_HORIZON)) taken += 0.5f
     if (kind == IncomingDamage.PROJECTILE && build.pairing(RelicPairingId.BLACK_STAR)) taken += 0.5f
     amount *= taken.coerceAtLeast(MIN_DAMAGE_TAKEN_MULTIPLIER)
     if (build.liability(RelicId.GLASS_COMET)) {
-        amount *= 2f
+        amount *= GLASS_COMET_DAMAGE_TAKEN
         glassCharge = 0f
-    } else if (!ignoreReduction) {
-        amount *= 1f - effectiveDamageReduction()
     }
+    if (!ignoreReduction) amount *= 1f - effectiveDamageReduction()
     if (incoming) pauseFacetRegeneration()
     // A facet negates the whole instance; the hurt window it opens keeps it to one per window.
     if (incoming && kind.cancellableByFacets && spendFacet(amount)) return
     val shieldBefore = shield
-    if (shield > 0f && !build.liability(RelicId.GLASS_COMET)) {
+    if (shield > 0f) {
         val absorbed = min(shield, amount)
         absorbShield(absorbed, incoming)
         amount -= absorbed
@@ -120,7 +109,7 @@ internal fun MutableGameState.takeDamage(
     if (incoming) onCharacterDamaged()
     if (incoming && build.liability(RelicId.STORMHEART_CAPACITOR) && stormCharge >= 0.5f) {
         stormCharge = 0f
-        var discharge = maxHp * 0.1f
+        var discharge = maxHp * STORMHEART_SELF_DISCHARGE
         if (build.pairing(RelicPairingId.FARADAY_CAGE) && shield > 0f) {
             val absorbed = min(shield, discharge)
             absorbShield(absorbed, incoming = true)
@@ -152,21 +141,19 @@ internal const val CORE_FRACTURED_REASON: String = "CORE FRACTURED"
 internal const val OBSTACLE_COLLISION_REASON: String = "OBSTACLE COLLISION"
 
 /**
- * See [IncomingDamage.OBSTACLE]. Glass Comet's liability still holds: collisions deal double damage and
- * shields do not absorb them.
+ * See [IncomingDamage.OBSTACLE]. Glass Comet's liability still holds: collisions deal half again as much damage.
  */
 private fun MutableGameState.takeObstacleDamage(rawAmount: Float, obstacle: kinetickk.ball.content.api.ObstacleKind? = null) {
     if (rawAmount <= 0f || invulnerableUntil > elapsed) return
     var amount = rawAmount * (1f + content.obstacles.damagePerTier * rebirthLevel) * incomingDamageFactor
     // Monolith: while it runs, a facet also takes an obstacle collision (and fires its refraction).
     if (monolithTakesCollisions() && spendFacet(amount)) return
-    val glass = build.liability(RelicId.GLASS_COMET)
-    if (glass) {
-        amount *= 2f
+    if (build.liability(RelicId.GLASS_COMET)) {
+        amount *= GLASS_COMET_DAMAGE_TAKEN
         glassCharge = 0f
     }
     val shieldBefore = shield
-    if (shield > 0f && !glass) {
+    if (shield > 0f) {
         val absorbed = min(shield, amount * (1f - content.obstacles.shieldBleed))
         absorbShield(absorbed, incoming = true)
         amount -= absorbed

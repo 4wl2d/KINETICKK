@@ -32,17 +32,17 @@ internal val RelicPhrasesInRussian: List<Pair<String, String>> = listOf(
         "at most once every 1.5 seconds." to
         "Весь ваш урон +{0} %. Убийства столкновением на скорости выше 900 ед/с дают четверть секунды " +
         "неуязвимости, не чаще раза в 1,5 секунды.",
-    "You take double damage, and shields and damage reduction no longer protect you." to
-        "Вы получаете двойной урон, а щиты и снижение урона больше вас не защищают.",
+    "You take 50 % more damage." to
+        "Вы получаете на 50 % больше урона.",
 
     "Executioner's Prism" to "Призма палача",
     "Critical hits are no longer random. Every 1 % critical chance, up to 50 %, becomes {0} % critical " +
-        "damage. Hits that can crit always crit against enemies below 35 % integrity, Frozen or Brittle enemies and " +
+        "damage. Hits that can crit always crit against enemies below half their integrity, Frozen or Brittle enemies and " +
         "enemies whose status is three quarters of the way to its Break." to
         "Критические удары больше не случайны. Каждый 1 % шанса критического удара, вплоть до 50 %, " +
-        "превращается в {0} % критического урона. Удары, которые могут быть критическими, всегда критические по врагам с прочностью ниже 35 %, " +
+        "превращается в {0} % критического урона. Удары, которые могут быть критическими, всегда критические по врагам с прочностью ниже половины, " +
         "по замороженным и хрупким врагам и по врагам, чья стихия на три четверти заполнена до пробоя.",
-    "Hits that do not crit deal 20 % less." to "Некритические удары наносят на 20 % меньше урона.",
+    "Hits that do not crit deal 10 % less." to "Некритические удары наносят на 10 % меньше урона.",
 
     "Echo Chamber" to "Камера эха",
     "Weapon hits echo 0.35 seconds later for {0} % damage and apply their on-hit effects again." to
@@ -62,13 +62,13 @@ internal val RelicPhrasesInRussian: List<Pair<String, String>> = listOf(
         "releasing the bank and spreading 2 Thermal." to
         "Слои Термо больше не жгут постепенно. Они копят {0} % своего урона и вызывают Воспламенение " +
         "на 5 слоях, высвобождая накопленное и распространяя 2 слоя Термо.",
-    "Thermal fades twice as fast, and Ignites near you burn 4 % of your integrity." to
-        "Термо рассеивается вдвое быстрее, а Воспламенения рядом с вами сжигают 4 % вашей прочности.",
+    "Ignites near you burn 3 % of your integrity." to
+        "Воспламенения рядом с вами сжигают 3 % вашей прочности.",
 
     "Overdrive Cascade" to "Каскад перегрузки",
     "Overdrive gain +{0} %. Each kill during Overdrive extends it, up to 2.5 extra seconds." to
         "Накопление перегрузки +{0} %. Каждое убийство во время перегрузки продлевает её, вплоть до 2,5 дополнительной секунды.",
-    "Outside Overdrive all your damage −30 %." to "Вне перегрузки весь ваш урон −30 %.",
+    "Outside Overdrive all your damage −15 %." to "Вне перегрузки весь ваш урон −15 %.",
 
     "Absolute Zero" to "Абсолютный ноль",
     "Impacts apply {0} Cryo and Dash chills everything around you. Frozen enemies shatter on the next " +
@@ -84,23 +84,23 @@ internal val RelicPhrasesInRussian: List<Pair<String, String>> = listOf(
         "Во время торможения враги рядом с вами замедляются на {0} %, а вражеские снаряды рядом застывают, " +
         "до 24 штук. Отпущенный тормоз выпускает их как ваши. Стазис держится 3 секунды и восполняется, " +
         "когда вы отпускаете тормоз.",
-    "Weapon activation −30 % while you are not braking." to "Скорость активации оружия −30 %, пока вы не тормозите.",
+    "Weapon activation −15 % while you are not braking." to "Скорость активации оружия −15 %, пока вы не тормозите.",
 
     "Stormheart Capacitor" to "Грозовой конденсатор",
     "Above 700 u/s the Core charges in 4 seconds. The next impact discharges into five enemies for " +
         "{0} % impact damage and 3 Ion each." to
         "На скорости выше 700 ед/с Ядро заряжается за 4 секунды. Следующее столкновение выпускает заряд " +
         "в пять врагов: каждому {0} % урона от столкновения и 3 слоя Иона.",
-    "Taking a hit while half charged or more discharges into you for 10 % of your integrity." to
-        "Если вас ранят при заряде от половины, заряд бьёт по вам на 10 % вашей прочности.",
+    "Taking a hit while half charged or more discharges into you for 5 % of your integrity." to
+        "Если вас ранят при заряде от половины, заряд бьёт по вам на 5 % вашей прочности.",
 
     "Aegis Inversion" to "Инверсия эгиды",
-    "All healing becomes shield, and shield capacity grows by 60 % of your maximum integrity. A breaking " +
+    "All healing becomes shield, and shield capacity grows by 40 % of your maximum integrity. A breaking " +
         "shield releases a nova worth {0} % of the damage it absorbed." to
-        "Всё лечение становится щитом, а ёмкость щита растёт на 60 % вашей максимальной прочности. " +
+        "Всё лечение становится щитом, а ёмкость щита растёт на 40 % вашей максимальной прочности. " +
         "Разрушаясь, щит выпускает вспышку силой {0} % поглощённого урона.",
-    "Integrity can never be restored, and shields no longer recharge on their own." to
-        "Прочность больше нельзя восстановить, а щиты перестают перезаряжаться сами.",
+    "Integrity can never be restored, and shields recharge on their own at half speed." to
+        "Прочность больше нельзя восстановить, а щиты сами перезаряжаются вдвое медленнее.",
 
     "Neutron Heart" to "Нейтронное сердце",
     "Mass +{0} %, and enemies barely move you. Slow collisions hurt you only half as much." to
@@ -108,25 +108,25 @@ internal val RelicPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Dash impulse −35 % and magnetism −20 %." to "Импульс рывка −35 %, магнетизм −20 %.",
 
     "Event Horizon" to "Горизонт событий",
-    "Enemies within 280 u are dragged toward you. Impacts against enemies carrying Gravitic deal {0} % more, and " +
-        "your Collapses implode toward you." to
-        "Врагов в пределах 280 ед затягивает к вам. Столкновения с врагами под действием Гравитации наносят " +
-        "на {0} % больше урона, а ваши Коллапсы схлопываются в вашу сторону.",
-    "Contact damage taken ×1.5. Data no longer latches onto you, and level-ups no longer pull it in." to
-        "Урон от контакта с врагами ×1,5. Данные больше не прилипают к вам, а повышение уровня их не притягивает.",
+    "While you brake, enemies between 120 and 280\u00A0u away are dragged toward you. Your impacts deal {0} % more, " +
+        "twice that against enemies carrying Gravitic, and your Collapses implode toward you." to
+        "Пока вы тормозите, врагов на расстоянии от 120 до 280\u00A0ед затягивает к вам. Ваши столкновения наносят на {0} % " +
+        "больше урона, вдвое больше по врагам под действием Гравитации, а ваши Коллапсы схлопываются в вашу сторону.",
+    "Level-ups no longer pull Data in." to
+        "Повышение уровня больше не притягивает данные.",
 
     "Verdant Rot" to "Цветущая гниль",
     "Impacts apply 2 Entropy. Every Entropy stack within 320 u heals you {0} per second, up to {1}." to
         "Столкновения накладывают 2 слоя Энтропии. Каждый слой Энтропии в пределах 320 ед лечит вас " +
         "на {0} в секунду, вплоть до {1}.",
-    "All other healing is disabled, and every Entropy stack close to you makes you take 1.5 % more damage." to
-        "Любое другое лечение отключено, а каждый слой Энтропии вблизи вас увеличивает получаемый урон на 1,5 %.",
+    "All other healing is halved." to
+        "Любое другое лечение ослаблено вдвое.",
 
     "Pandemic Codex" to "Кодекс пандемии",
     "Statuses are contagious: when an enemy dies, {0} % of each of its statuses jumps to its two nearest " +
         "neighbors." to
         "Стихии заразны: когда враг погибает, {0} % каждой его стихии перескакивает на двух ближайших соседей.",
-    "Enemies carrying a status move 20 % faster." to "Враги под действием стихии двигаются на 20 % быстрее.",
+    "Enemies carrying a status move 10 % faster." to "Враги под действием стихии двигаются на 10 % быстрее.",
 
     "Agony Scepter" to "Скипетр агонии",
     "Your weapon takes its Forbidden form. Every rank deepens the mutation." to
@@ -147,21 +147,21 @@ internal val RelicPhrasesInRussian: List<Pair<String, String>> = listOf(
         "grants two seconds of invulnerability. Then the seal is spent but keeps its slot." to
         "Раз за забег смертельный урон вместо гибели восстанавливает вашу прочность, выпускает вспышку " +
         "на {0} урона и даёт две секунды неуязвимости. После этого печать истощается, но сохраняет ячейку.",
-    "Data gain −25 % while the seal is bound. The singularity still kills, and a spent seal locks its " +
+    "Data gain −15 % while the seal is bound. The singularity still kills, and a spent seal locks its " +
         "slot for two minutes." to
-        "Получение данных −25 %, пока печать привязана. Сингулярность по-прежнему убивает, а истощённая " +
+        "Получение данных −15 %, пока печать привязана. Сингулярность по-прежнему убивает, а истощённая " +
         "печать блокирует свою ячейку на две минуты.",
 
     "Thunder Choir" to "Громовой хор",
-    "Shatter also chains to the {0} nearest Resonant enemies within 260 for {1} % of its damage; your knockback +20 %." to
+    "Shatter also chains to the {0} nearest Resonant enemies within 260 for {1} % of its damage; your knockback +40 %." to
         "Раскол также перескакивает на {0} ближайших врагов с Резонансом в радиусе 260 и наносит им {1} % своего урона; " +
-        "ваше отбрасывание +20 %.",
+        "ваше отбрасывание +40 %.",
     "You take +15 % knockback from hits." to "Столкновения отбрасывают вас на 15 % сильнее.",
 
     "Null Covenant" to "Нулевой завет",
     "Unmake fires immediately and remembers {0} % more; Hollow stacks never decay on Elites." to
         "Развоплощение срабатывает сразу и запоминает на {0} % больше; слои Опустошения на элитных врагах не спадают.",
-    "Maximum integrity −10 %." to "Максимальная прочность −10 %.",
+    "Maximum integrity −5 %." to "Максимальная прочность −5 %.",
 
     // Named relic-to-relic pairings.
     "Endless Gyre" to "Бесконечный вихрь",
@@ -209,9 +209,8 @@ internal val RelicPhrasesInRussian: List<Pair<String, String>> = listOf(
     "The crown banks Cryo instead, and every Freeze releases the bank at 60 %." to
         "Корона копит Крио вместо Термо, а каждая Заморозка высвобождает 60 % накопленного.",
     "Shattered Aegis" to "Разбитая эгида",
-    "Glass ignores shields: inverted healing becomes 1 % damage per 3 points instead, lost when hit." to
-        "Стекло не признаёт щитов: инвертированное лечение вместо этого даёт 1 % урона за каждые 3 единицы " +
-        "и пропадает при получении удара.",
+    "Inverted healing becomes 1 % damage per 3 points instead of shield, lost when hit." to
+        "Инвертированное лечение вместо щита даёт 1 % урона за каждые 3 единицы и пропадает при получении удара.",
     "Contradiction" to "Противоречие",
     "Stasis only holds while you move slower than 400 u/s." to "Стазис держится, только пока вы движетесь медленнее 400 ед/с.",
     "Heavy Blink" to "Тяжёлый скачок",

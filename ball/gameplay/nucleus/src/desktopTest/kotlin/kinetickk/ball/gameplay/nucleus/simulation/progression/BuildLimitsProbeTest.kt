@@ -26,7 +26,8 @@ import kotlin.test.assertTrue
  *   start on the Flux Wake, off the bot's order, so its first chest changes weapon).
  * - VALUE compares Relic policies on the same seeds and profile (balanceSweep's fresh tier 2, half tier 7 and full tier 10): the reference bot's
  *   own picks; every offer melded; every offer a random Relic card; and, all claimed at the run start, four Melds, four
- *   random Relics and the strong build's four Relics (RebirthBalanceGateTest's). It prints win share, median survival
+ *   random Relics, the strong build's four Relics (balanceSweep's strong arm) and four Relics that fit the Arc Coil all
+ *   the probed profiles fly ([FitRelics]). It prints win share, median survival
  *   and median clear time per arm, with paired bootstrap standard errors of each arm's difference to the all-Meld arm
  *   (policy.md: 20,000 resamples, RNG seed 20261027). Target (D3): melding beats random off-build Relics and loses to the
  *   strong build, so a Meld never outweighs a strong Relic.
@@ -61,7 +62,7 @@ class BuildLimitsProbeTest {
 
     private enum class ValueTier(val arm: SweepArm, val tier: Int) { FRESH_T2(SweepArm.FRESH, 2), HALF_T7(SweepArm.HALF, 7), FULL_T10(SweepArm.FULL, 10) }
 
-    private enum class ValueArm { REFERENCE, MELD, RANDOM, MELD_START, RANDOM_START, STRONG_START }
+    private enum class ValueArm { REFERENCE, MELD, RANDOM, MELD_START, RANDOM_START, STRONG_START, FIT_START }
 
     /**
      * One run's limits: the second of each claim, Melds, bound Relics and their ranks, weapon changes, its end, and the
@@ -133,7 +134,11 @@ class BuildLimitsProbeTest {
 
     private fun flyValue(seed: Int, tier: ValueTier, arm: ValueArm, content: GameplayContentSnapshot): LimitRun {
         val profile = tier.arm.profile(tier.tier, content)
-        val strong = if (arm == ValueArm.STRONG_START) StrongRelics else emptyList()
+        val strong = when (arm) {
+            ValueArm.STRONG_START -> SweepStrongRelics
+            ValueArm.FIT_START -> FitRelics
+            else -> emptyList()
+        }
         val state = startGateRun(seed, profile, strong, content)
         val picks = Random(seed * 31 + arm.ordinal)
         when (arm) {
@@ -226,8 +231,11 @@ class BuildLimitsProbeTest {
     }
 
     private companion object {
-        /** RebirthBalanceGateTest's strong build Relics. */
-        val StrongRelics: List<RelicId> =
-            listOf(RelicId.STORMHEART_CAPACITOR, RelicId.PANDEMIC_CODEX, RelicId.THUNDER_CHOIR, RelicId.CINDER_CROWN)
+        /**
+         * A strong build that fits every probed profile's Arc Coil (Charge key, Arsenal and Chain tags, Ion): the two Charge
+         * Relics, the weapon echo and the contagion that spreads its Ion.
+         */
+        val FitRelics: List<RelicId> =
+            listOf(RelicId.STORMHEART_CAPACITOR, RelicId.AEGIS_INVERSION, RelicId.ECHO_CHAMBER, RelicId.PANDEMIC_CODEX)
     }
 }
