@@ -52,6 +52,8 @@ internal enum class FxPool(val ops: Int) {
     RUBBLE(360),
     /** Dungeon motes, telegraphs and moments (motes are secondary; telegraphs, the guardian and moments are signature). */
     DUNGEON(320),
+    /** A dimension's weather: feathers, ember rain, glyph shards and datamosh (thinned first in a crowd). */
+    ATMOSPHERE(260),
 }
 
 /**

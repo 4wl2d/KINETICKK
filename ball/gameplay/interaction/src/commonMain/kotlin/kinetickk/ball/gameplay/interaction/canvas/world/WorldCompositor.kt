@@ -70,6 +70,7 @@ private fun DrawScope.drawWorldLayer(
     drawSites(engine, shakeX, shakeY, textMeasurer)
     drawAmbientSites(engine, shakeX, shakeY)
     drawDimensionWorld(engine, shakeX, shakeY, roles)
+    drawDimensionLabels(engine, shakeX, shakeY, textMeasurer)
     drawWorldEventAmbient(engine, shakeX, shakeY, roles)
     drawEventSignals(engine, shakeX, shakeY, textMeasurer)
     // Lingering fields and skill zones are ground decals.

@@ -53,7 +53,6 @@ function-lines	foundation/design/src/commonMain/kotlin/kinetickk/foundation/desi
 main-file-lines	ball/content/api/src/commonMain/kotlin/kinetickk/ball/content/api/ItemPhrasesInRussian.kt	620
 main-file-lines	ball/gameplay/impl/src/commonMain/kotlin/kinetickk/ball/gameplay/impl/GameComponent.kt	630
 main-file-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/canvas/world/places/SiteRenderer.kt	743
-main-file-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/canvas/world/places/WorldDimensionRenderer.kt	653
 main-file-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/rewards/art/LegendaryGlacialHeartArt.kt	754
 main-file-lines	ball/profile/interaction/src/commonMain/kotlin/kinetickk/ball/profile/interaction/rebirth/impl/RebirthRenderer.kt	688
 main-file-lines	ball/profile/interaction/src/commonMain/kotlin/kinetickk/ball/profile/interaction/settings/impl/SettingsLayout.kt	646

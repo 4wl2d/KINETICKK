@@ -29,6 +29,7 @@ import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.HaloProjection
 import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
 import kinetickk.ball.gameplay.nucleus.render.PortalProjection
+import kinetickk.ball.gameplay.nucleus.render.RiftLock
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.foundation.collections.immutableListOf
@@ -36,6 +37,7 @@ import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
+import kinetickk.foundation.design.KkLayerHues
 import kinetickk.foundation.design.KkRolePalette
 import kotlin.math.abs
 import kotlin.math.floor
@@ -43,6 +45,7 @@ import kotlin.math.hypot
 import kotlin.math.sqrt
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -63,7 +66,7 @@ class WorldDimensionRenderingTest {
         val visitFacts = dimensionVisit(WorldLayer.ZENITH, 0f, 0f, course = listOf(120f to 40f, -200f to 100f), ambient = listOf(300f to -90f),
             embers = listOf(60f to 60f), localClock = 9f, scorching = 1f).copy(
             layer = WorldLayer.BASE,
-            exitPortal = PortalProjection(1, 200f, -100f, WorldLayer.BASE, locked = false, glitch = false, remaining = 20f),
+            exitPortal = PortalProjection(1, 200f, -100f, WorldLayer.BASE, locked = false, glitch = false, remaining = 20f, radius = 65f),
         )
         for (tier in listOf(0, 4, 10)) for (roles in palettes) {
             val realspace = base().with("rebirthLevel" to tier)
@@ -75,28 +78,32 @@ class WorldDimensionRenderingTest {
         }
     }
 
+    /**
+     * Each layer's sky is its own and unmistakable (the Zenith lit warm from above, the Nadir crimson with magma below,
+     * the Archive cold blue-green), yet dark enough under the play field for every role colour to read on it, and no
+     * dimension's look ever shows the threat role.
+     */
     @Test
-    fun eachLayerGroundIsInkDominantMixesInItsRoleAndNeverShowsHazard() {
-        val ink2 = luminance(Kk.Ink2.toArgb())
-        val ink3 = luminance(Kk.Ink3.toArgb())
-        for (layer in windowLayers) for (roles in palettes) {
-            val model = base().withDimension(dimensionVisit(layer, CORE, CORE))
-            val pixels = render(roles) { backdrop(model, roles) }
-            val ground = pixels.mostCommon()
-            assertTrue(luminance(ground) < ink2, "$layer ${roles.name()}: the ground itself is darker than Ink2")
-            // Ink keeps the screen's share the redesign gives it (70 %); grid lines, light wedges and motes stay faint.
-            val inkShare = pixels.count { luminance(it) < ink2 }.toFloat() / pixels.size
-            assertTrue(inkShare >= 0.7f, "$layer ${roles.name()}: ${inkShare * 100f} % of the frame is darker than Ink2")
-            val mean = pixels.average(::luminance)
-            assertTrue(mean < ink3, "$layer ${roles.name()}: the frame averages $mean, darker than Ink3 ($ink3)")
-            // The ground leans from ink toward the layer's own role and away from the other window layer's.
-            val role = when (layer) {
-                WorldLayer.ZENITH -> roles.shield
-                WorldLayer.NADIR -> roles.heat
-                else -> roles.element(6)
+    fun eachLayerHasItsOwnSkyDarkUnderThePlayAndNeverShowsHazard() {
+        for (roles in palettes) {
+            val means = windowLayers.associateWith { layer ->
+                val pixels = render(roles) { backdrop(base().withDimension(dimensionVisit(layer, CORE, CORE)), roles) }
+                // The middle of the screen, where the Core flies and the fight is, stays dark.
+                val middle = pixels.indices.filter { index ->
+                    val x = index % width
+                    val y = index / width
+                    x in width / 4 until width * 3 / 4 && y in height / 4 until height * 3 / 4
+                }.map { pixels[it] }.toIntArray()
+                assertTrue(middle.average(::luminance) < MIDDLE_LUMINANCE, "$layer ${roles.name()}: the middle averages ${middle.average(::luminance)}")
+                assertTrue(pixels.average(::luminance) < FRAME_LUMINANCE, "$layer ${roles.name()}: the frame averages ${pixels.average(::luminance)}")
+                Triple(pixels.average { channel(it, 16).toFloat() }, pixels.average { channel(it, 8).toFloat() }, pixels.average { channel(it, 0).toFloat() })
             }
-            assertTrue(leaning(ground, role) > 0.97f, "$layer ${roles.name()}: the ground mixes in its role (${leaning(ground, role)})")
-            assertTrue(ground != Kk.Ink.toArgb(), "$layer ${roles.name()}: the ground is not realspace's ink")
+            val (zr, zg, zb) = means.getValue(WorldLayer.ZENITH)
+            val (nr, ng, nb) = means.getValue(WorldLayer.NADIR)
+            val (ar, ag, ab) = means.getValue(WorldLayer.ARCHIVE)
+            assertTrue(zr > zb + 8f && zr + zg + zb > nr + ng + nb && zr + zg + zb > ar + ag + ab, "${roles.name()}: the Zenith is the warm, bright one ($means)")
+            assertTrue(nr > ng * 2f && nr > nb * 2f, "${roles.name()}: the Nadir is crimson ($means)")
+            assertTrue(ab > ar && ag > ar, "${roles.name()}: the Archive is cold ($means)")
         }
         // Hazard never grounds a layer nor marks one: with every mark of each layer drawn there is no threat pixel.
         for (roles in listOf(KkRolePalette.Default, KkRolePalette.Protan)) for (layer in windowLayers) {
@@ -158,22 +165,13 @@ class WorldDimensionRenderingTest {
         assertEquals(motes(WorldLayer.ARCHIVE, 0f, 0f, 0.6f, time = 1f).map { it.first to it.second },
             motes(WorldLayer.ARCHIVE, 0f, 0f, 0.6f, time = 9f).map { it.first to it.second })
 
-        // Drawn: moving the camera one cell to the right moves the whole Nadir and Archive backdrop one cell to the left.
-        for (layer in listOf(WorldLayer.NADIR, WorldLayer.ARCHIVE)) {
-            val model = base().withDimension(dimensionVisit(layer, CORE, CORE))
-            val moved = model.with("cameraX" to model.cameraX + cell)
-            val a = render { backdrop(model, KkRolePalette.Default) }
-            val b = render { backdrop(moved, KkRolePalette.Default) }
-            val shift = cell.toInt()
-            // Exactly, but for antialiasing rounding of a level or two where a mote's position is a different float sum.
-            var differences = 0
-            for (y in 0 until height) for (x in 0 until width - shift) {
-                val before = a[y * width + x + shift]
-                val after = b[y * width + x]
-                if (!near(before, after, 2)) differences++
-            }
-            assertEquals(0, differences, "$layer: the backdrop moves with the world")
-        }
+        // The Nadir's cracks belong to the world too: two windows a crack cell apart hold the same cracks where they overlap.
+        fun cracks(left: Float) = buildList {
+            forEachNadirCrack(left, 400f, left + width, 400f + height) { x, y, variant, _ -> add(Triple(x, y, variant)) }
+        }.filter { (x, y, _) -> x in 0f..width - 200f && y in 400f..400f + height }.toSet()
+        val here = cracks(-200f)
+        assertTrue(here.size >= 4, "a screen holds cracks: ${here.size}")
+        assertEquals(here, cracks(-200f + CRACK_CELL), "the cracks stay where the world has them")
     }
 
     @Test
@@ -217,7 +215,7 @@ class WorldDimensionRenderingTest {
             assertEquals(WorldLayer.entries.size, shapes.toSet().size)
         }
         // The Nadir's cracks turn only at obtuse angles.
-        CrackLines.flatten().forEach { line ->
+        NadirCrackLines.flatten().forEach { line ->
             for (vertex in 1 until line.size / 2 - 1) {
                 val ax = line[vertex * 2 - 2] - line[vertex * 2]
                 val ay = line[vertex * 2 - 1] - line[vertex * 2 + 1]
@@ -226,52 +224,56 @@ class WorldDimensionRenderingTest {
                 assertTrue(ax * bx + ay * by < 0f, "a crack turns at an acute angle")
             }
         }
-        // Drawn: an open Zenith rift has shield rings over an empty ink disc; a locked one has grey rings over a hatched
-        // disc (the band between its middle and outer rings shows the hatch).
+        // Drawn: an open Zenith rift's tear burns in its target's gold round a lit heart; a locked one is grey, barred and
+        // hatched with none of the gold; both keep where they lead at their centre.
         val center = Offset(width * 0.5f, height * 0.5f)
-        val open = render { drawPortal(center, WorldLayer.ZENITH, locked = false, glitch = false, time = 2f, roles = KkRolePalette.Default) }
-        val locked = render { drawPortal(center, WorldLayer.ZENITH, locked = true, glitch = false, time = 2f, roles = KkRolePalette.Default) }
+        val roles = KkRolePalette.Default
+        val open = render { drawPortal(center, WorldLayer.ZENITH, locked = false, glitch = false, time = 2f, roles = roles, radius = 65f) }
+        val locked = render { drawPortal(center, WorldLayer.ZENITH, locked = true, glitch = false, time = 2f, roles = roles, radius = 65f) }
         fun ring(pixels: IntArray, from: Float, to: Float, around: Offset = center) = pixels.indices.filter { index ->
             val distance = hypot(index % width + 0.5f - around.x, index / width + 0.5f - around.y)
             distance in from..to
         }.map { pixels[it] }
-        val shield = KkRolePalette.Default.shield.toArgb()
-        assertTrue(ring(open, 42f, 46f).count { near(it, shield, 40) } > 40, "an open rift's rings carry its target's accent")
-        assertEquals(0, ring(locked, 42f, 46f).count { near(it, shield, 40) }, "a locked rift's rings are grey")
-        assertTrue(ring(locked, 42f, 46f).count { spread(it) <= 12 && luminance(it) > 60f } > 40, "a locked rift's rings are drawn")
-        val inkDisc = ring(open, 48f, 55f).count { luminance(it) > 30f }
-        val hatched = ring(locked, 48f, 55f).count { luminance(it) > 30f }
-        assertTrue(inkDisc < 10 && hatched > 100, "the locked disc is hatched ($hatched lit px against $inkDisc)")
-        // Both keep the target's sigil in its accent at the centre.
-        assertTrue(ring(locked, 0f, 14f).count { near(it, shield, 40) } > 20, "a locked rift still shows where it leads")
-        // A window rift offered by the sites draws through the same mark and takes its locked look from the projection.
+        val gold = roles.gold.base.toArgb()
+        assertTrue(ring(open, 0f, 70f).count { near(it, gold, 40) } > 200, "an open rift burns in its target's accent")
+        assertTrue(ring(open, 0f, 12f).count { luminance(it) > 120f } > 40, "an open rift's heart is lit")
+        assertEquals(0, ring(locked, 0f, 90f).count { near(it, gold, 40) }, "a locked rift shows no accent")
+        assertTrue(ring(locked, 20f, 70f).count { spread(it) <= 12 && luminance(it) > 60f } > 200, "a locked rift is grey and barred")
+        assertTrue(ring(locked, 0f, 14f).count { spread(it) <= 12 && luminance(it) > 60f } > 20, "a locked rift still shows where it leads")
+        // A window rift offered by the sites draws through the same tear and takes its lock and its reason from the projection.
         val offer = SiteProjection(SiteKind.ZENITH_RIFT, "Zenith rift", CORE + 300f, CORE - 120f, false, 20f, 0, 0f, immutableListOf(), 0f, 0f)
         val at = Offset(center.x + 300f, center.y - 120f)
         val offered = base().with("sites" to immutableListOf(offer))
-        val openOffer = render { drawWorld(offered, VisualFxProjection.EMPTY, 0f, 0f, measurer()) }
-        val lockedOffer = render {
-            drawWorld(offered.withDimension(DimensionProjection(lockedRifts = WorldLayer.ZENITH.bit)), VisualFxProjection.EMPTY, 0f, 0f, measurer())
+        fun timerWidth(model: GameplayRenderModel): Float {
+            render { drawWorld(model, VisualFxProjection.EMPTY, 0f, 0f, measurer()) }
+            return WorldDrawProbe.rects(WorldDrawn.POINT_TIMER).single().width
         }
-        assertTrue(ring(openOffer, 42f, 46f, at).count { near(it, shield, 40) } > 40, "an offered rift that can be entered shows its accent")
-        assertEquals(0, ring(lockedOffer, 42f, 46f, at).count { near(it, shield, 40) }, "an offered rift that cannot be entered is grey")
-        assertTrue(ring(lockedOffer, 48f, 55f, at).count { luminance(it) > 30f } > 100, "an offered rift that cannot be entered is hatched")
+        val openOffer = render { drawWorld(offered, VisualFxProjection.EMPTY, 0f, 0f, measurer()) }
+        val lockedModel = offered.withDimension(DimensionProjection(lockedRifts = WorldLayer.ZENITH.bit, riftLock = RiftLock.BOSS))
+        val lockedOffer = render { drawWorld(lockedModel, VisualFxProjection.EMPTY, 0f, 0f, measurer()) }
+        assertTrue(ring(openOffer, 0f, 70f, at).count { near(it, gold, 40) } > 200, "an offered rift that can be entered shows its accent")
+        assertEquals(0, ring(lockedOffer, 0f, 70f, at).count { near(it, gold, 40) }, "an offered rift that cannot be entered is grey")
+        assertTrue(timerWidth(lockedModel) > timerWidth(offered) * 3f, "a locked rift names why in place of its timer")
         // Another layer's lock leaves it open.
         val otherLock = render {
-            drawWorld(offered.withDimension(DimensionProjection(lockedRifts = WorldLayer.NADIR.bit)), VisualFxProjection.EMPTY, 0f, 0f, measurer())
+            drawWorld(offered.withDimension(DimensionProjection(lockedRifts = WorldLayer.NADIR.bit, riftLock = RiftLock.BOSS)),
+                VisualFxProjection.EMPTY, 0f, 0f, measurer())
         }
-        assertTrue(ring(otherLock, 42f, 46f, at).count { near(it, shield, 40) } > 40, "a Nadir lock leaves the Zenith rift open")
-        // A glitch rift spreads its rings either side of the centre in bone.
-        val glitch = render { drawPortal(center, WorldLayer.ARCHIVE, locked = false, glitch = true, time = 3.3f, roles = KkRolePalette.Default) }
-        assertTrue(ring(glitch, 29f, 60f).count { it != Kk.Ink.toArgb() } > ring(render {
-            drawPortal(center, WorldLayer.ARCHIVE, locked = false, glitch = false, time = 3.3f, roles = KkRolePalette.Default)
-        }, 29f, 60f).count { it != Kk.Ink.toArgb() }, "the glitch doubles its rings")
+        assertTrue(ring(otherLock, 0f, 70f, at).count { near(it, gold, 40) } > 200, "a Nadir lock leaves the Zenith rift open")
+        // A glitch rift splits its edge into cyan and magenta copies; a plain rift into the Archive has neither.
+        val glitch = render { drawPortal(center, WorldLayer.ARCHIVE, locked = false, glitch = true, time = 3.3f, roles = roles, radius = 65f) }
+        val plain = render { drawPortal(center, WorldLayer.ARCHIVE, locked = false, glitch = false, time = 3.3f, roles = roles, radius = 65f) }
+        fun cyan(pixel: Int) = channel(pixel, 0) > channel(pixel, 16) + 80 && channel(pixel, 8) > channel(pixel, 16) + 80
+        fun magenta(pixel: Int) = channel(pixel, 16) > channel(pixel, 8) + 80 && channel(pixel, 0) > channel(pixel, 8) + 60
+        assertTrue(ring(glitch, 0f, 80f).count(::cyan) > 20 && ring(glitch, 0f, 80f).count(::magenta) > 20, "the glitch splits off its copies")
+        assertEquals(0, ring(plain, 0f, 80f).count { cyan(it) || magenta(it) }, "a plain rift has no copies")
     }
 
     @Test
     fun theNextRingIsThePlayersColourAtPaceGreyAndHatchedBelowItAndTheOneAfterWaitsInGrey() {
         val roles = KkRolePalette.Default
         val you = roles.you.toArgb()
-        val shield = roles.shield.toArgb()
+        val gold = roles.gold.base.toArgb()
         // The next ring on the Core's right, the one after on its left; the model's Core flies at its own speed.
         val speed = base().speed
         fun model(pace: Float) = base().withDimension(dimensionVisit(WorldLayer.ZENITH, CORE, CORE, course = listOf(300f to 0f, -300f to 0f), pace = pace))
@@ -289,20 +291,23 @@ class WorldDimensionRenderingTest {
         val band = around(slow, 300f, 81f, 87f)
         val lit = band.count { spread(it) <= 12 && luminance(it) > 40f }
         assertTrue(lit > band.size * 0.45f, "below the pace each dash is a solid hatched block ($lit of ${band.size} px lit)")
-        assertTrue(around(fast, 300f, 68f, 72f).count { near(it, shield, 30) } > 100, "the next ring keeps its Grace ring")
-        // The ring after the next waits as a grey stroke: no shield and no player's colour.
+        assertTrue(around(fast, 300f, 68f, 72f).count { near(it, gold, 30) } > 100, "the next ring keeps its gold halo")
+        // The ring after the next waits as a grey stroke: no gold and no player's colour.
         val following = around(fast, -300f, 64f, 90f)
-        assertEquals(0, following.count { near(it, shield, 60) || near(it, you, 60) }, "the following ring is grey only")
+        assertEquals(0, following.count { near(it, gold, 60) || near(it, you, 60) }, "the following ring is grey only")
         assertTrue(following.count { luminance(it) > 50f } > 100, "the following ring is drawn")
 
         // An ember fades over its last half second.
         fun ember(life: Float) = render {
             drawDimensionWorld(base().withDimension(dimensionVisit(WorldLayer.NADIR, CORE, CORE, embers = listOf(0f to 0f), emberLife = life)), 0f, 0f, roles)
         }
-        val heat = roles.heat
         fun brightness(pixels: IntArray) = around(pixels, 0f, 0f, 4f).maxOf { luminance(it) }
-        assertTrue(brightness(ember(0.3f)) < brightness(ember(5f)), "a dying ember is dimmer")
-        assertTrue(around(ember(5f), 0f, 0f, 3f).any { near(it, heat.toArgb(), 8) }, "an ember is heat")
+        assertTrue(brightness(ember(0.05f)) < brightness(ember(5f)), "a dying ember is dimmer")
+        // A bright magma core in a heat glow, inside its catch ring: the ring's dashes lie on the projected radius.
+        val live = ember(5f)
+        assertTrue(around(live, 0f, 0f, 3f).any { near(it, KkLayerHues.MagmaCore.toArgb(), 12) }, "an ember's core is magma")
+        assertTrue(around(live, 0f, 6f, 20f).count { leaning(it, roles.heat) > 0.9f } > 40, "in a heat glow")
+        assertTrue(around(live, 0f, FIXTURE_CATCH_RADIUS - 2f, FIXTURE_CATCH_RADIUS + 2f).count { luminance(it) > 60f } > 60, "inside its catch ring")
     }
 
     @Test
@@ -340,7 +345,7 @@ class WorldDimensionRenderingTest {
         // A thrown ember: a heat streak from its kill 200 u to its left whose tail catches up with it, gone once landed.
         fun ember(age: Float, thrown: Boolean = true) = render {
             drawDimensionWorld(
-                base().withDimension(dimensionVisit(WorldLayer.NADIR, CORE, CORE, embers = listOf(0f to 0f),
+                base().withDimension(dimensionVisit(WorldLayer.NADIR, CORE, CORE, embers = listOf(0f to 0f), emberLife = 1.25f - age,
                     thrownFrom = if (thrown) listOf(-200f to 0f) else emptyList(), emberAge = age)),
                 0f, 0f, roles,
             )
@@ -352,11 +357,12 @@ class WorldDimensionRenderingTest {
                 leaning(pixels[index], roles.heat) > 0.9f
         }
         assertTrue(streak(ember(age = 0.05f), -180f, -30f) > 100, "just thrown, the streak reaches back toward the kill")
-        val later = ember(age = 0.3f)
+        val later = ember(age = 0.17f)
         assertEquals(0, streak(later, -180f, -90f), "its tail has caught up past the kill's side")
-        assertTrue(streak(later, -60f, -20f) > 20, "and still trails the ember")
-        assertEquals(0, streak(ember(age = 0.6f), -190f, -20f), "a landed ember trails nothing")
-        assertEquals(0, streak(ember(age = 0.05f, thrown = false), -190f, -20f), "a placed ember never had a throw")
+        assertTrue(streak(later, -60f, -30f) > 20, "and still trails the ember")
+        // (Beyond the ember's own glow.)
+        assertEquals(0, streak(ember(age = 0.4f), -190f, -30f), "a landed ember trails nothing")
+        assertEquals(0, streak(ember(age = 0.05f, thrown = false), -190f, -30f), "a placed ember never had a throw")
     }
 
     @Test
@@ -368,8 +374,8 @@ class WorldDimensionRenderingTest {
         }
         val dimension = DimensionProjection(
             layer = WorldLayer.ZENITH,
-            exitPortal = PortalProjection(1, CORE + 1_800f, CORE + 300f, WorldLayer.BASE, locked = false, glitch = false, remaining = 30f),
-            glitchPortal = PortalProjection(2, CORE - 1_900f, CORE + 600f, WorldLayer.ARCHIVE, locked = false, glitch = true, remaining = 30f),
+            exitPortal = PortalProjection(1, CORE + 1_800f, CORE + 300f, WorldLayer.BASE, locked = false, glitch = false, remaining = 30f, radius = 65f),
+            glitchPortal = PortalProjection(2, CORE - 1_900f, CORE + 600f, WorldLayer.ARCHIVE, locked = false, glitch = true, remaining = 30f, radius = 65f),
             nextHaloId = 4,
             halos = immutableListOf(HaloProjection(4, CORE + 400f, CORE + 1_300f, 0), HaloProjection(5, CORE + 100f, CORE + 50f, 1)),
         )
@@ -418,13 +424,15 @@ class WorldDimensionRenderingTest {
         val plain = base().withDimension(dimensionVisit(WorldLayer.ZENITH, CORE, CORE))
         val marked = base().withDimension(dimensionVisit(WorldLayer.ZENITH, CORE, CORE, course = listOf(500f to 200f, -400f to -300f),
             ambient = listOf(300f to -500f), embers = listOf(200f to 150f, -350f to 250f), exit = 5_000f to 0f, completed = false))
-        // Thin marks antialias, so they are read by hue: cyan for the shield rings, orange for the heat dots.
-        fun cyan(pixel: Int) = channel(pixel, 0) - channel(pixel, 16) > 40 && channel(pixel, 8) - channel(pixel, 16) > 30
-        fun orange(pixel: Int) = channel(pixel, 16) - channel(pixel, 0) > 60 && channel(pixel, 16) > channel(pixel, 8)
-        assertEquals(0, minimap(plain).count(::cyan), "no halo, no shield mark")
+        // Thin marks antialias, so they are read by hue: gold for the halo rings, the player's colour for the ring to fly
+        // through next, pale magma for the embers.
+        val you = roles.you.toArgb()
+        fun gold(pixel: Int) = channel(pixel, 16) - channel(pixel, 0) > 70 && channel(pixel, 8) - channel(pixel, 0) > 40 && !near(pixel, you, 40)
+        fun next(pixel: Int) = near(pixel, you, 40)
         val marks = minimap(marked)
-        assertTrue(marks.count(::cyan) > 10, "halos are shield rings on the minimap")
-        assertTrue(marks.count(::orange) > 3, "embers are heat dots on the minimap")
+        assertTrue(marks.count(::gold) > minimap(plain).count(::gold) + 10, "halos are gold rings on the minimap")
+        assertTrue(marks.count(::next) > minimap(plain).count(::next) + 5, "the ring to fly through next stands out in the player's colour")
+        assertTrue(marks.count { near(it, KkLayerHues.MagmaCore.toArgb(), 40) } > 3, "embers are magma dots on the minimap")
         fun boneLines(pixels: List<Int>) = pixels.count { spread(it) <= 20 && luminance(it) > 90f }
         assertTrue(boneLines(marks) > boneLines(minimap(plain)) + 3, "the exit rift is pinned to the rim in bone")
     }
@@ -516,5 +524,11 @@ class WorldDimensionRenderingTest {
 
     private companion object {
         const val CORE = 1_000f
+        /**
+         * The play field's middle and the whole frame stay below these mean luminances (0..255), so every role still reads
+         * on them (enemies keep their ink bodies): the Zenith's lit sky is the brightest and sits near the bound.
+         */
+        const val MIDDLE_LUMINANCE = 90f
+        const val FRAME_LUMINANCE = 90f
     }
 }

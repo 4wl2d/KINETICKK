@@ -28,8 +28,6 @@ import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkEase
 import kinetickk.foundation.design.KkRolePalette
-import kinetickk.foundation.design.KkShape
-import kinetickk.foundation.design.KkTime
 import kinetickk.foundation.design.KkVAlign
 import kinetickk.foundation.design.TextMeasurer
 import kinetickk.foundation.design.d
@@ -38,14 +36,26 @@ import kinetickk.foundation.design.drawKkText
 import kinetickk.foundation.design.kkBoxHeight
 import kinetickk.foundation.design.kkPulse
 import kinetickk.foundation.design.kkStroke
+import kinetickk.foundation.design.measureKkText
 import kinetickk.foundation.design.monoStyle
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
+import kinetickk.foundation.design.KkLayerHues
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.math.max
 import kotlin.math.min
 
 /*
  * Dimensions on the HUD: the plate in the Rebirth strip's slot (the layer's sigil, the visit timer over its remaining
- * meter and the objective's pips), the slash shutter of a layer change, the Nadir's heat edge, and the dimension
- * objective's lines on the trial panel. Cached layouts, paths and brushes: a steady frame allocates nothing.
+ * meter, the objective's pips and the layer's gauge: Grace, Heat or Desync, or a broken course), the portal of a layer
+ * change, the Nadir's burning heat edge, and the dimension objective's lines on the trial panel. Cached layouts, paths
+ * and brushes: a steady frame allocates nothing.
  */
 
 /**
@@ -106,8 +116,23 @@ internal fun DrawScope.drawDimensionPlate(
         val objective = dimension.objective
         if (objective == DimensionObjective.ASCENT || objective == DimensionObjective.HARVEST) {
             val pipsLeft = drawnRight + frame.u(8f)
-            val pips = drawObjectivePips(dimension.goal, dimension.progress, pipsLeft, right, centerY, height, accent, frame)
-            if (pips > 0f) drawnRight = pipsLeft + pips
+            // A broken course greys its pips and strikes them through.
+            val pips = drawObjectivePips(dimension.goal, dimension.progress, pipsLeft, right, centerY, height,
+                if (dimension.failed) Kk.Mute else accent, frame)
+            if (pips > 0f) {
+                drawnRight = pipsLeft + pips
+                HudLayoutProbe.record(HudBlock.DIMENSION_PIPS, pipsLeft, top, drawnRight, top + height)
+                if (dimension.failed) {
+                    drawLine(roles.threat, Offset(pipsLeft - frame.u(2f), centerY + height * 0.28f), Offset(drawnRight + frame.u(2f),
+                        centerY - height * 0.28f), frame.u(2f))
+                }
+            }
+        }
+        val gaugeLeft = drawnRight + frame.u(10f)
+        val gauge = drawLayerGauge(engine, hostMeasurer, frame, gaugeLeft, right, centerY, height)
+        if (gauge > 0f) {
+            drawnRight = gaugeLeft + gauge
+            HudLayoutProbe.record(HudBlock.DIMENSION_GAUGE, gaugeLeft, top, drawnRight, top + height)
         }
     }
     HudLayoutProbe.record(HudBlock.REBIRTH, left, top, drawnRight, top + height)
@@ -154,89 +179,217 @@ private fun DrawScope.drawObjectivePips(
     return width
 }
 
+/**
+ * The layer's gauge right of the plate's marks (from [left] up to [right]): what the Core's speed does here, named
+ * over a thin bar. The Zenith's Grace (the speed's share of the pace, lit gold at pace, where halos mend), the Nadir's
+ * Heat (the scorch warning, in threat once it ticks) and the Archive's Desync (hostile time and its factor; the tick
+ * marks real time). A broken Ascent names its broken course instead, in threat. Returns the drawn width, 0 when it
+ * does not fit.
+ */
+private fun DrawScope.drawLayerGauge(
+    engine: GameplayRenderModel,
+    hostMeasurer: TextMeasurer,
+    frame: HudFrame,
+    left: Float,
+    right: Float,
+    centerY: Float,
+    height: Float,
+): Float {
+    val dimension = engine.dimension
+    val roles = hostMeasurer.roles
+    val language = hostMeasurer.language
+    val resource: DimensionHudText
+    val color: Color
+    var share = 0f
+    var tick = -1f
+    when {
+        dimension.failed -> {
+            resource = DimensionHudText.CourseBroken
+            color = roles.threat
+        }
+        dimension.layer == WorldLayer.ZENITH -> {
+            resource = DimensionHudText.Grace
+            val pace = dimension.pace.coerceAtLeast(1f)
+            share = (engine.speed / pace / GRACE_GAUGE_SPAN).coerceIn(0f, 1f)
+            tick = 1f / GRACE_GAUGE_SPAN
+            color = if (engine.speed >= pace) roles.gold.base else Kk.Mute
+        }
+        dimension.layer == WorldLayer.NADIR -> {
+            resource = DimensionHudText.Heat
+            share = dimension.scorching.coerceIn(0f, 1f)
+            color = when {
+                dimension.scorching >= 1f -> roles.threat
+                dimension.scorching > 0f -> roles.heat
+                else -> Kk.Mute
+            }
+        }
+        else -> {
+            resource = DimensionHudText.Desync
+            share = (dimension.timeScale / DESYNC_GAUGE_SPAN).coerceIn(0f, 1f)
+            tick = 1f / DESYNC_GAUGE_SPAN
+            color = KkLayerHues.Signal
+        }
+    }
+    // Desync carries its factor in steps of 0.05 (21 strings per language, each built once), so a Core speeding up
+    // reads a handful of cached labels instead of a new one every frame.
+    val label = if (resource == DimensionHudText.Desync) desyncLabel(dimension.timeScale, language) else language.cachedText(resource)
+    val layout = measureKkText(HudMeasurers.display(hostMeasurer), label,
+        hostMeasurer.typography.monoStyle(height * GAUGE_SIZE_SHARE / frame.density, weight = FontWeight.Bold, lineHeightEm = 1f), uppercase = true)
+    val width = max(layout.size.width.toFloat(), frame.u(GAUGE_MIN_DP))
+    if (left + width > right) return 0f
+    val barHeight = frame.u(2f)
+    val textHeight = layout.kkBoxHeight
+    val top = centerY - (textHeight + frame.u(3f) + barHeight) * 0.5f
+    drawKkText(layout, left, top, color, valign = KkVAlign.TOP)
+    val barTop = top + textHeight + frame.u(3f)
+    drawRect(Kk.Line2, Offset(left, barTop), Size(width, barHeight))
+    if (share > 0f) drawRect(color, Offset(left, barTop), Size(width * share, barHeight))
+    if (tick > 0f) {
+        drawRect(Kk.Bone, Offset(left + width * tick - frame.u(0.75f), barTop - frame.u(1.5f)), Size(frame.u(1.5f), barHeight + frame.u(3f)))
+    }
+    return width
+}
+
+/** "Desync ×0.45": the gauge's Desync label at [scale] rounded to its 0.05 step, in [language] (the locale's separator). */
+internal fun desyncLabel(scale: Float, language: AppLanguage): String {
+    val step = (scale / DESYNC_STEP).roundToInt().coerceIn(0, DESYNC_STEPS - 1)
+    val slot = language.ordinal * DESYNC_STEPS + step
+    return DesyncLabels[slot] ?: run {
+        val hundredths = step * 5
+        "${language.text(DimensionHudText.Desync)} ×${hundredths / 100}${WorldStrings.decimalSeparator(language)}" +
+            (hundredths % 100).toString().padStart(2, '0')
+    }.also { DesyncLabels[slot] = it }
+}
+
+/** A gauge label resolved once per language. */
+private fun AppLanguage.cachedText(resource: DimensionHudText): String {
+    val slot = resource.ordinal * AppLanguage.entries.size + ordinal
+    return GaugeTexts[slot] ?: text(resource).also { GaugeTexts[slot] = it }
+}
+
+private const val DESYNC_STEP = 0.05f
+/** Factors 0.00..1.50 in steps of 0.05 (the Archive spans 0.25..1.25). */
+private const val DESYNC_STEPS = 31
+private val DesyncLabels = arrayOfNulls<String>(DESYNC_STEPS * AppLanguage.entries.size)
+private val GaugeTexts = arrayOfNulls<String>(DimensionHudText.entries.size * AppLanguage.entries.size)
+
+/** Grace's bar spans the speed up to this many paces; Desync's the factor up to this. */
+private const val GRACE_GAUGE_SPAN = 1.5f
+private const val DESYNC_GAUGE_SPAN = 1.25f
+
+/** The gauge's text size as a share of the plate's height, and its narrowest bar (reference dp). */
+private const val GAUGE_SIZE_SHARE = 0.3f
+private const val GAUGE_MIN_DP = 44f
+
 /** The timer's alpha: 1, then pulsing between 0.55 and 1 once a second over the visit's last ten seconds. */
 internal fun dimensionTimerAlpha(remaining: Float, time: Float): Float =
     if (remaining > TIMER_PULSE_SECONDS) 1f else TIMER_PULSE_LOW + (1f - TIMER_PULSE_LOW) * (1f - kkPulse(time, 1f, KkEase.Out))
 
 /**
- * The slash shutter of a layer change, over the screen states and under the HUD modules: [KkTime.Shutter] ms after the
- * layer changed ([HudPresentationMemory] records the edge; never on a host's first frame or a new run's), three ink
- * slabs sheared at the slash angle start together over the whole screen and slide right at their own speeds (the right
- * one fastest), each edged in 3 dp of the new layer's accent, wiping the new layer into view from the left. One
- * cached slab and edge path per screen size, drawn under translations: zero allocation. The edge leads the wipe: it
- * runs along each slab's left side, where the new layer comes into view.
+ * The layer change as a portal, over the screen states and under the HUD modules, [DIMENSION_TRANSITION_MS] after the
+ * layer changed ([HudPresentationMemory] records the edge; never on a host's first frame or a new run's): first the old
+ * layer implodes, an iris of ink closing on the Core with a jagged rim burning in the old layer's accent and streaks
+ * pulled in after it; then the new layer explodes out of the Core, the iris reopening with a rim in the new accent
+ * behind a flash and shards thrown outward. One cached ink stroke per screen size and the rim's stateless jags: zero
+ * allocation.
  */
-internal fun DrawScope.drawDimensionShutter(
+internal fun DrawScope.drawDimensionTransition(
     engine: GameplayRenderModel,
     roles: KkRolePalette,
     renderTime: Float,
     memory: HudPresentationMemory? = null,
 ) {
-    val shutter = memory?.dimensionShutter ?: return
-    val progress = shutter.progress(renderTime)
+    val transition = memory?.dimensionTransition ?: return
+    val progress = transition.progress(renderTime)
     if (progress < 0f || progress >= 1f) return
     val w = size.width
     val h = size.height
     if (w <= 0f || h <= 0f) return
-    val geometry = dimensionShutterGeometry(w, h, d(SHUTTER_OVERLAP_DP))
-    val accent = riftAccent(engine.dimension.layer, roles)
-    val body = HudDrawCache.paths.sheared(HudPath.SHUTTER_0.ordinal, 0f, 0f, geometry.width, h, KkShape.Slash)
-    val edge = HudDrawCache.paths.sheared(HudPath.SHUTTER_1.ordinal, 0f, 0f, d(SHUTTER_EDGE_DP), h, KkShape.Slash)
-    for (index in 0 until SHUTTER_SLABS) {
-        translate(geometry.slabLeft(index, progress), 0f) {
-            drawPath(body, Kk.Ink)
-            drawPath(edge, accent)
+    val core = worldOnScreen(engine, engine.renderCoreX, engine.renderCoreY, 0f, 0f)
+    // The iris must reach the farthest corner from the Core.
+    val farX = max(core.x, w - core.x)
+    val farY = max(core.y, h - core.y)
+    val reach = sqrt(farX * farX + farY * farY) + d(24f)
+    val ink = DimensionHudScratch.inkStroke(max(w, h) * 3f)
+    val implode = progress < IMPLODE_SHARE
+    val t = if (implode) KkEase.In.transform(progress / IMPLODE_SHARE) else KkEase.Out.transform((progress - IMPLODE_SHARE) / (1f - IMPLODE_SHARE))
+    val radius = if (implode) reach * (1f - t) else reach * t
+    val accent = riftAccent(if (implode) transition.from else engine.dimension.layer, roles)
+    drawCircle(Kk.Ink, radius + ink.width * 0.5f, core, style = ink)
+    if (!implode) {
+        val flash = HudDrawCache.brush(HudBrush.DIMENSION_FLASH, 1f, 1f, 0f, 0f, accent) {
+            Brush.radialGradient(0f to Kk.Bone, 0.25f to accent, 1f to accent.copy(alpha = 0f), center = Offset.Zero, radius = 1f)
+        }
+        val flashRadius = d(60f) + radius * 0.45f
+        translate(core.x, core.y) {
+            scale(flashRadius, flashRadius, Offset.Zero) { drawCircle(flash, 1f, Offset.Zero, alpha = (1f - t) * 0.85f) }
+        }
+    }
+    drawIrisRim(core, radius, accent, renderTime, if (implode) 1f else 1f - 0.6f * t)
+    for (index in 0 until IRIS_SEGMENTS) {
+        val dx = IrisDirections[index * 2]
+        val dy = IrisDirections[index * 2 + 1]
+        if (implode) {
+            // Streaks pulled in after the closing rim.
+            val from = radius + d(40f) + d(90f) * (1f - t)
+            drawLine(accent.copy(alpha = 0.25f + 0.6f * t), Offset(core.x + dx * from, core.y + dy * from),
+                Offset(core.x + dx * (radius + d(6f)), core.y + dy * (radius + d(6f))), d(2f))
+        } else {
+            // Shards thrown out behind the opening rim.
+            val at = radius * (0.7f + 0.25f * IrisJags[index % IrisJags.size])
+            drawLine(Kk.Bone.copy(alpha = 0.8f * (1f - t)), Offset(core.x + dx * at, core.y + dy * at),
+                Offset(core.x + dx * (at + d(18f)), core.y + dy * (at + d(18f))), d(3f))
         }
     }
 }
 
-/**
- * Where the shutter's slabs go on a [width] × [height] screen: each [width] wide (0.42 of the screen, or wider when the
- * slash's lean needs it to cover the screen at the start) overlapping by [overlap], the first starting where its top
- * corner meets the screen's left edge; slab i slides right by `p × (1 + 0.12 i) × travel`, the travel long enough
- * (1.6 screens, or the screen and the lean) for even the slowest slab to leave the screen by the end.
- */
-internal fun dimensionShutterGeometry(width: Float, height: Float, overlap: Float): DimensionShutterGeometry =
-    DimensionHudScratch.geometry.update(width, height, overlap)
-
-/** The shutter's geometry for one screen size (draw-thread scratch, rebuilt only when the size changes). */
-internal class DimensionShutterGeometry {
-    private var keyWidth = Float.NaN
-    private var keyHeight = Float.NaN
-    private var keyOverlap = Float.NaN
-
-    /** One slab's width at its vertical middle. */
-    var width = 0f
-        private set
-    private var lean = 0f
-    private var step = 0f
-    private var travel = 0f
-
-    fun update(screenWidth: Float, screenHeight: Float, overlap: Float): DimensionShutterGeometry {
-        if (screenWidth == keyWidth && screenHeight == keyHeight && overlap == keyOverlap) return this
-        keyWidth = screenWidth
-        keyHeight = screenHeight
-        keyOverlap = overlap
-        lean = screenHeight * KkShape.SlashRatio
-        width = max(screenWidth * SHUTTER_SLAB_SHARE, (screenWidth + lean) / SHUTTER_SLABS + overlap)
-        step = width - overlap
-        travel = max(screenWidth * SHUTTER_TRAVEL_SCREENS, screenWidth + lean + overlap)
-        return this
+/** The iris's rim at [radius] about [center]: a glow and a jagged burning edge in [accent], at [alpha], its jags stepping at 12 Hz. */
+private fun DrawScope.drawIrisRim(center: Offset, radius: Float, accent: Color, time: Float, alpha: Float) {
+    if (radius <= 0f) return
+    drawCircle(accent.copy(alpha = 0.3f * alpha), radius, center, style = kkStroke(d(16f)))
+    val step = (time * 12f).toInt()
+    val edge = accent.copy(alpha = alpha)
+    for (index in 0 until IRIS_SEGMENTS) {
+        val next = (index + 1) % IRIS_SEGMENTS
+        val jag = radius + d(10f) * IrisJags[(index + step) % IrisJags.size]
+        val nextJag = radius + d(10f) * IrisJags[(next + step) % IrisJags.size]
+        drawLine(edge, Offset(center.x + IrisDirections[index * 2] * jag, center.y + IrisDirections[index * 2 + 1] * jag),
+            Offset(center.x + IrisDirections[next * 2] * nextJag, center.y + IrisDirections[next * 2 + 1] * nextJag), d(3f))
     }
-
-    /** The left edge (at the vertical middle) of slab [index] at [progress] 0..1. */
-    fun slabLeft(index: Int, progress: Float): Float = -lean * 0.5f + index * step + progress * (1f + SHUTTER_SPEED_STEP * index) * travel
 }
 
+/** The portal's length (longer than a shutter, so the tear reads), the share its implosion takes and its rim's segments. */
+internal const val DIMENSION_TRANSITION_MS = 900
+private const val IMPLODE_SHARE = 0.38f
+private const val IRIS_SEGMENTS = 24
+private val IrisDirections = FloatArray(IRIS_SEGMENTS * 2) { index ->
+    val angle = (index / 2) * 2f * PI.toFloat() / IRIS_SEGMENTS
+    if (index % 2 == 0) cos(angle) else sin(angle)
+}
+/** The rim's jags as shares of its 10 dp reach, cycled round it. */
+private val IrisJags = floatArrayOf(0.2f, 1f, 0.45f, 0.85f, 0f, 0.65f, 0.3f, 0.95f, 0.1f, 0.55f, 0.75f)
+
 /**
- * The Nadir's heat edge while the Core is too slow: a radial band hugging the screen's edges in the heat role (never
+ * The Nadir's heat edge while the Core is too slow, with flame tongues along the top and bottom: a radial band hugging
+ * the screen's edges in the heat role (never
  * threat), as strong as the warning ([kinetickk.ball.gameplay.nucleus.render.DimensionProjection.scorching]: 0.30 at
  * full) and pulsing at 1.2 Hz once the scorch ticks. One cached gradient per size and palette.
  */
 internal fun DrawScope.drawScorchEdge(engine: GameplayRenderModel, roles: KkRolePalette, renderTime: Float) {
     val alpha = scorchEdgeAlpha(engine.dimension.scorching, renderTime)
-    if (alpha > 0f) drawScreenVignette(HudBrush.SCORCH_EDGE, SCORCH_CLEAR_STOP, roles.heat, alpha)
+    if (alpha <= 0f) return
+    drawScreenVignette(HudBrush.SCORCH_EDGE, SCORCH_CLEAR_STOP, roles.heat, alpha)
+    // Flame tongues licking up from the bottom edge and down from the top, flickering on their own beat.
+    val tongues = DimensionHudScratch.flames(size.width, d(FLAME_DP))
+    val flicker = 0.75f + 0.25f * sin(renderTime * 11f)
+    translate(0f, size.height) {
+        scale(1f, -flicker, Offset.Zero) { drawPath(tongues, roles.heat, alpha = (alpha * 1.6f).coerceAtMost(1f)) }
+    }
+    scale(1f, 0.6f + 0.4f * flicker, Offset.Zero) { drawPath(tongues, roles.heat, alpha = (alpha * 1.1f).coerceAtMost(1f)) }
 }
+
+/** The flame tongues' tallest reach (reference dp). */
+private const val FLAME_DP = 46f
 
 /** The heat edge's alpha for a [scorching] warning at [time]: 0.30 × the warning, pulsing at 1.2 Hz at full. */
 internal fun scorchEdgeAlpha(scorching: Float, time: Float): Float {
@@ -247,36 +400,47 @@ internal fun scorchEdgeAlpha(scorching: Float, time: Float): Float {
 }
 
 /**
- * The layer edge the shutter plays on, kept by [HudPresentationMemory]: [observe] records the frame's layer and, on a
- * change between frames of one run ([armed]), the moment it changed. A host's first frame and a new run's only record.
+ * The layer edge the portal plays on, kept by [HudPresentationMemory]: [observe] records the frame's layer and, on a
+ * change between frames of one run ([armed]), the layer left and the moment it changed. A host's first frame and a new
+ * run's only record.
  */
-internal class DimensionShutterMemory {
+internal class DimensionTransitionMemory {
     private var lastLayer: WorldLayer? = null
     private var changedAt = Float.NEGATIVE_INFINITY
 
+    /** The layer the last change left (its implosion's accent). */
+    var from: WorldLayer = WorldLayer.BASE
+        private set
+
     fun observe(layer: WorldLayer, renderTime: Float, armed: Boolean) {
         val last = lastLayer
-        if (armed && last != null && layer != last) changedAt = renderTime
+        if (armed && last != null && layer != last) {
+            changedAt = renderTime
+            from = last
+        }
         lastLayer = layer
     }
 
-    /** A new run drops a shutter the last one was playing. */
+    /** A new run drops a portal the last one was playing. */
     fun forget() {
         changedAt = Float.NEGATIVE_INFINITY
     }
 
-    /** The shutter's progress over [KkTime.Shutter] at [renderTime]: below 0 or from 1 on, none plays. */
+    /** The portal's progress over [DIMENSION_TRANSITION_MS] at [renderTime]: below 0 or from 1 on, none plays. */
     fun progress(renderTime: Float): Float =
-        if (changedAt == Float.NEGATIVE_INFINITY) -1f else (renderTime - changedAt) * 1000f / KkTime.Shutter
+        if (changedAt == Float.NEGATIVE_INFINITY) -1f else (renderTime - changedAt) * 1000f / DIMENSION_TRANSITION_MS
 }
 
 /** The trial panel's first-row mark for a dimension objective: its layer's sigil, [size] px across. */
 internal fun DrawScope.drawDimensionTrialIcon(trial: TrialProjection, center: Offset, size: Float, color: Color) =
     drawDimensionSigil(trial.dimension ?: WorldLayer.BASE, center, size * 0.5f, color)
 
-/** The trial panel's reward for a dimension objective (Blessing, Pact, Legendary item), cached per reward and language. */
-internal fun dimensionTrialReward(trial: TrialProjection, language: AppLanguage): String {
-    val resource = dimensionTrialRewardText(trial.reward)
+/**
+ * The trial panel's reward line for a dimension objective (Blessing, Pact, Legendary item), or its broken course once
+ * it [failed]; cached per line and language.
+ */
+internal fun dimensionTrialReward(trial: TrialProjection, failed: Boolean, language: AppLanguage): String {
+    val resource = if (failed) DimensionHudText.CourseBroken else dimensionTrialRewardText(trial.reward)
     return DimensionHudScratch.reward.of(resource, language.ordinal.toLong()) { language.text(resource) }
 }
 
@@ -290,10 +454,45 @@ internal fun dimensionTrialRewardText(reward: TrialReward): TextResource = when 
 
 /** Draw-thread scratch of the dimension HUD. */
 private object DimensionHudScratch {
-    val geometry = DimensionShutterGeometry()
     val fade = Paint()
     val reward = HudKeyedText()
     private var bounds = Rect.Zero
+    private var inkWidth = Float.NaN
+    private var ink = Stroke(1f)
+    private val tongues = Path()
+    private var tonguesWidth = Float.NaN
+    private var tonguesHeight = Float.NaN
+
+    /** The portal's ink ring of [width] (three screens: it covers everything outside the iris), rebuilt only on a resize. */
+    fun inkStroke(width: Float): Stroke {
+        if (width != inkWidth) {
+            inkWidth = width
+            ink = Stroke(width)
+        }
+        return ink
+    }
+
+    /** A row of flame tongues hanging from the top edge, [height] deep at most, across [width]; rebuilt only on a resize. */
+    fun flames(width: Float, height: Float): Path {
+        if (width == tonguesWidth && height == tonguesHeight) return tongues
+        tonguesWidth = width
+        tonguesHeight = height
+        tongues.rewind()
+        tongues.moveTo(0f, 0f)
+        var x = 0f
+        var index = 0
+        while (x < width) {
+            val reach = height * FlameReach[index % FlameReach.size]
+            val span = height * (0.55f + 0.25f * FlameReach[(index + 3) % FlameReach.size])
+            tongues.quadraticTo(x + span * 0.2f, reach * 0.9f, x + span * 0.5f, reach)
+            tongues.quadraticTo(x + span * 0.6f, reach * 0.4f, x + span, 0f)
+            x += span
+            index++
+        }
+        tongues.lineTo(width, 0f)
+        tongues.close()
+        return tongues
+    }
 
     /** The timer's fade layer bounds; a new rect only when they moved. */
     fun layerBounds(left: Float, top: Float, right: Float, bottom: Float): Rect {
@@ -317,13 +516,8 @@ private const val TIMER_PULSE_LOW = 0.55f
 private const val MAX_PIP_DP = 7f
 private const val MIN_PIP_DP = 3f
 
-/** The shutter: three slabs of 0.42 screens, overlapping by 2 dp, led by a 3 dp edge, each 12 % faster than the last. */
-private const val SHUTTER_SLABS = 3
-private const val SHUTTER_SLAB_SHARE = 0.42f
-private const val SHUTTER_OVERLAP_DP = 2f
-private const val SHUTTER_EDGE_DP = 3f
-private const val SHUTTER_SPEED_STEP = 0.12f
-private const val SHUTTER_TRAVEL_SCREENS = 1.6f
+/** The flame tongues' reaches as shares of the tallest, cycled along the edge. */
+private val FlameReach = floatArrayOf(0.55f, 1f, 0.7f, 0.4f, 0.9f, 0.6f, 0.8f)
 
 /** The heat edge: 0.30 at full, clear inside half the corner radius, pulsing at 1.2 Hz down to 0.55 of itself. */
 private const val SCORCH_EDGE_ALPHA = 0.30f

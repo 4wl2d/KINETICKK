@@ -12,6 +12,7 @@ import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.ball.gameplay.nucleus.render.RiftLock
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.foundation.design.*
 import kotlin.math.abs
@@ -348,13 +349,14 @@ private fun DrawScope.drawOfferedPoint(
             drawCornerBrackets(center, 40f, roles.threat)
         }
         SiteKind.FAR_SIGIL -> drawSiteGlyph(SiteGlyph.SIGIL, center, OFFER_GLYPH_SIZE, sigilColor(roles))
-        SiteKind.ZENITH_RIFT -> drawPortal(center, WorldLayer.ZENITH, riftLocked(engine, WorldLayer.ZENITH), glitch = false, time = time, roles = roles)
-        SiteKind.NADIR_RIFT -> drawPortal(center, WorldLayer.NADIR, riftLocked(engine, WorldLayer.NADIR), glitch = false, time = time, roles = roles)
+        SiteKind.ZENITH_RIFT -> drawPortal(center, WorldLayer.ZENITH, riftLocked(engine, WorldLayer.ZENITH), false, time, roles, point.activationRadius)
+        SiteKind.NADIR_RIFT -> drawPortal(center, WorldLayer.NADIR, riftLocked(engine, WorldLayer.NADIR), false, time, roles, point.activationRadius)
         // Caches and easter eggs lie in the ambient window, never among the offers.
         SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL -> Unit
     }
     inScreenUnits(scale) {
-        drawOfferLabels(point, Offset(center.x * scale, center.y * scale), (point.activationRadius + 8f) * scale, textMeasurer, keepOut)
+        drawOfferLabels(point, Offset(center.x * scale, center.y * scale), (point.activationRadius + 8f) * scale, textMeasurer, keepOut,
+            riftLockOf(engine, point.kind))
     }
 }
 
@@ -601,18 +603,12 @@ internal fun DrawScope.recordMark(center: Offset, half: Float) =
     WorldDrawProbe.record(WorldDrawn.POINT_MARK, center.x - half, center.y - half, center.x + half, center.y + half)
 
 /**
- * An offer's name (`.t-label` in the kind's color) stacked above its timer [gap] below the mark at
- * [center], or the pair above the mark when the screen edge or the HUD is in the way, as
+ * An offer's name (`.t-label` in the kind's color) stacked above its timer (a locked rift: why, [lock]) [gap] below
+ * the mark at [center], or the pair above the mark when the screen edge or the HUD is in the way, as
  * [drawPointTimer] places a timer: skipped when neither side is clear. The pair moves inward to stay
  * on screen, and a name wider than the screen shrinks to fit.
  */
-private fun DrawScope.drawOfferLabels(
-    point: SiteProjection,
-    center: Offset,
-    gap: Float,
-    textMeasurer: TextMeasurer,
-    keepOut: WorldHudKeepOut,
-) {
+private fun DrawScope.drawOfferLabels(point: SiteProjection, center: Offset, gap: Float, textMeasurer: TextMeasurer, keepOut: WorldHudKeepOut, lock: RiftLock) {
     val typography = textMeasurer.typography
     val color = edgeMarkerColor(point.kind.edgeIcon(), textMeasurer.roles)
     val nameText = WorldStrings.pointName(point.kind, point.name, textMeasurer.language)
@@ -623,7 +619,8 @@ private fun DrawScope.drawOfferLabels(
         val fitted = POINT_NAME_SP * room / name.size.width * 0.98f
         name = measureKkText(textMeasurer, nameText, typography.labelStyle(fitted, color = color), uppercase = true)
     }
-    val timer = measureKkText(textMeasurer, WorldStrings.timer(point.remaining), typography.monoStyle(POINT_TIMER_SP, color = Kk.Mute))
+    val subline = if (lock == RiftLock.NONE) WorldStrings.timer(point.remaining) else riftLockText(lock, textMeasurer.language)
+    val timer = measureKkText(textMeasurer, subline, typography.monoStyle(POINT_TIMER_SP, color = Kk.Mute), uppercase = lock != RiftLock.NONE)
     val nameHeight = name.kkBoxHeight
     val spacing = d(POINT_NAME_GAP_DP)
     val width = max(name.size.width, timer.size.width).toFloat()

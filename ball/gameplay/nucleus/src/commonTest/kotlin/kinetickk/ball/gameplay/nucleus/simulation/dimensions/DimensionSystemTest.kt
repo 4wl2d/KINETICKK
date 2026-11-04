@@ -19,6 +19,7 @@ import kinetickk.ball.gameplay.nucleus.model.Ember
 import kinetickk.ball.gameplay.nucleus.model.HaloRing
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.Projectile
+import kinetickk.ball.gameplay.nucleus.model.segmentCircleIntersects
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.PickupType
@@ -33,6 +34,7 @@ import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.hypot
 import kotlin.math.max
+import kotlin.math.sign
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -163,7 +165,8 @@ class DimensionSystemTest {
             assertEquals(claim, MutableGameState(canonicalGameplayContent, seed).claimPortalForWindow(1, 165f), "seed $seed")
         }
         val share = claimed.toFloat() / samples
-        assertTrue(share in 0.27f..0.33f, "rift share $share for chance ${policy.portalWindowChance}")
+        val chance = policy.portalWindowChance
+        assertTrue(share in chance - 0.03f..chance + 0.03f, "rift share $share for chance $chance")
         assertEquals(setOf(WorldLayer.ZENITH, WorldLayer.NADIR), targets)
         assertEquals(setOf(0, 1), sides)
     }
@@ -430,6 +433,38 @@ class DimensionSystemTest {
         completeObjectiveForTesting()
         elapsed = returnAt
         exitThroughItsRift()
+    }
+
+    /**
+     * A Core flying on after its second return (the reward chosen) never meets the glitch rift by accident: it opens
+     * square to the heading, beside the path, on a side the run's hash picks.
+     */
+    @Test
+    fun theGlitchRiftOpensBesideTheCoresPathNeverOnIt() {
+        val open = canonicalGameplayContent.copy(
+            obstacles = canonicalGameplayContent.obstacles.copy(meanPerChunk = 0f),
+            structures = canonicalGameplayContent.structures.copy(enabled = false),
+        )
+        val sides = mutableSetOf<Float>()
+        for (seed in 60_601..60_640) {
+            val game = game(open, seed)
+            game.setVelocityForTesting(600f, 0f)
+            game.enterDimensionForTesting(WorldLayer.ZENITH)
+            game.completeObjectiveForTesting()
+            game.exitThroughItsRift()
+            game.enterDimensionForTesting(WorldLayer.NADIR)
+            game.completeObjectiveForTesting()
+            game.exitThroughItsRift()
+            val glitch = assertNotNull(game.dimensionRun.glitchPortal, "seed $seed")
+            val dx = glitch.x - game.coreX
+            val dy = glitch.y - game.coreY
+            assertEquals(policy.glitchPortalDistance, hypot(dx, dy), 0.01f)
+            assertEquals(0f, dx, 0.01f, "seed $seed: square to the heading")
+            // Ten seconds straight on at the same speed pass it at its full distance.
+            assertFalse(segmentCircleIntersects(game.coreX, game.coreY, game.coreX + 6_000f, game.coreY, glitch.x, glitch.y, policy.portalRadius))
+            sides += sign(dy)
+        }
+        assertEquals(setOf(-1f, 1f), sides, "the hash puts it on either side")
     }
 
     @Test

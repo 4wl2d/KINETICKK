@@ -415,8 +415,8 @@ class WorldHotPathAllocationTest {
             ambient = listOf(-380f to -180f, 400f to 230f, 60f to 250f, -60f to -260f, 330f to -230f, 2_400f to 900f), embers = embers,
             pace = if (slow) 10_000f else 1f, completed = false, localClock = 4.2f)
         val dimension = visit.copy(
-            exitPortal = PortalProjection(1, CORE + 300f, CORE + 160f, WorldLayer.BASE, locked = false, glitch = false, remaining = 30f),
-            glitchPortal = PortalProjection(2, CORE - 2_100f, CORE + 500f, WorldLayer.ARCHIVE, locked = false, glitch = true, remaining = 30f),
+            exitPortal = PortalProjection(1, CORE + 300f, CORE + 160f, WorldLayer.BASE, locked = false, glitch = false, remaining = 30f, radius = 65f),
+            glitchPortal = PortalProjection(2, CORE - 2_100f, CORE + 500f, WorldLayer.ARCHIVE, locked = false, glitch = true, remaining = 30f, radius = 65f),
             lockedRifts = WorldLayer.NADIR.bit,
         )
         fun rift(kind: SiteKind, x: Float, y: Float) = SiteProjection(kind, kind.name, x, y, false, 20f, -1, 0f, immutableListOf(), 0f, 0f)

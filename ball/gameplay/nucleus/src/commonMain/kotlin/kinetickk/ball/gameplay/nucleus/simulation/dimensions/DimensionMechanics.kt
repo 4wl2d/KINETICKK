@@ -68,7 +68,6 @@ private const val HALO_CLEARANCE: Float = 30f
 private const val HALO_BURST_COLOR: Int = 2
 /** Room kept between a thrown ember and any obstacle. */
 private const val EMBER_CLEARANCE: Float = 40f
-private const val TWO_PI: Float = (2.0 * PI).toFloat()
 
 /**
  * The speed a dimension measures flight against: the steady speed of the pace reach along the viewport's long axis
@@ -104,11 +103,49 @@ internal fun MutableGameState.layerOrdinaryCapMultiplier(): Float =
  */
 internal fun MutableGameState.layerTimeScale(enemy: Enemy?): Float {
     val physics = content.dimensions.definition(worldLayer).physics
-    if (physics.desyncMinimumScale == 1f && physics.desyncMaximumScale == 1f) return 1f
+    if (!physics.desyncs) return 1f
     val pace = dimensionPace()
     val scale = (if (pace > 0f) speed / pace else 1f).coerceIn(physics.desyncMinimumScale, physics.desyncMaximumScale)
     return if (enemy != null && enemy.isBossClass) max(scale, physics.desyncBossFloor) else scale
 }
+
+/** True where the layer's Desync bends hostile time (the Archive). */
+private val DimensionPhysics.desyncs: Boolean get() = desyncMinimumScale != 1f || desyncMaximumScale != 1f
+
+/**
+ * The clock hostile fuses run on: the run clock, or inside a layer with Desync the visit's local clock counted from its
+ * entry, so a fuse armed there burns at the hostile time scale. Volatile bursts are armed and detonated on it.
+ */
+internal fun MutableGameState.hostileElapsed(): Float {
+    val visit = dimensionRun.visit ?: return elapsed
+    return if (content.dimensions.definition(worldLayer).physics.desyncs) visit.enteredAt + dimensionLocalClock else elapsed
+}
+
+/**
+ * Desync on hostile deadlines, once per step: every deadline of every enemy still ahead (its mode, ability, shield,
+ * shift and link) moves by the share of the step its own time did not run, so a telegraph, a fuse, a phase or a shield
+ * lasts as long on the hostile clock as it does on the run clock elsewhere (a boss-class enemy at its floor). Deadlines
+ * already past stay. Countdowns ticked by the attack cadence and hostile shots follow the scale already. Identity
+ * outside a layer with Desync.
+ */
+internal fun MutableGameState.desyncHostileDeadlines(delta: Float) {
+    val physics = content.dimensions.definition(worldLayer).physics
+    if (!physics.desyncs || enemies.isEmpty()) return
+    val ordinary = layerTimeScale(null)
+    val boss = max(ordinary, physics.desyncBossFloor)
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        val lag = delta * (1f - if (enemy.isBossClass) boss else ordinary)
+        if (lag == 0f) continue
+        enemy.modeUntil = stretchedDeadline(enemy.modeUntil, lag)
+        enemy.abilityAt = stretchedDeadline(enemy.abilityAt, lag)
+        enemy.shieldUntil = stretchedDeadline(enemy.shieldUntil, lag)
+        enemy.shiftUntil = stretchedDeadline(enemy.shiftUntil, lag)
+        enemy.linkedUntil = stretchedDeadline(enemy.linkedUntil, lag)
+    }
+}
+
+private fun MutableGameState.stretchedDeadline(deadline: Float, lag: Float): Float = if (deadline > elapsed) deadline + lag else deadline
 
 /** The current layer's scale of Matter earned (the Nadir doubles it). */
 internal fun MutableGameState.layerMatterMultiplier(): Float =
@@ -205,14 +242,19 @@ private fun MutableGameState.withSplit(visit: DimensionVisit, fromX: Float, from
 
 /**
  * The split ran out before the next course ring was passed: the course breaks. Its rings leave (ambient rings stay),
- * the objective has failed (the visit runs on to its timer and pays the smaller reward) and a banner says so.
+ * the objective has failed and the exit rift opens ahead as after a completion, so the Core may leave at once with the
+ * smaller reward (or stay to its timer, which pays the same), and a banner says so.
  */
 private fun MutableGameState.breakCourse(visit: DimensionVisit) {
     val halos = visit.halos
     val kept = ArrayList<HaloRing>(halos.size)
     for (index in halos.indices) if (halos[index].courseIndex < 0) kept += halos[index]
     dimensionRun = dimensionRun.copy(
-        visit = visit.copy(halos = kept.toImmutableList(), failed = true, splitEndsAt = Float.POSITIVE_INFINITY, splitSeconds = 0f),
+        visit = visit.copy(
+            halos = kept.toImmutableList(), failed = true, splitEndsAt = Float.POSITIVE_INFINITY, splitSeconds = 0f,
+            exitPortal = exitRiftAhead(visit),
+        ),
+        nextPortalId = dimensionRun.nextPortalId + 1,
     )
     message = DimensionNotices.broken(visit.objective)
     messageTime = 2f
@@ -276,15 +318,15 @@ private fun MutableGameState.updateEmbers(visit: DimensionVisit) {
 }
 
 /**
- * A burning [enemy] died during an open Harvest: its ember is thrown from where it fell, in a direction and to a
- * distance within the tuning's throw range from a stateless hash of the run, the visit and the enemy, moved clear of
+ * A burning [enemy] died during an open Harvest: its ember is thrown from where it fell, within the tuning's half arc
+ * of the Core's heading and its throw range, from a stateless hash of the run, the visit and the enemy, moved clear of
  * obstacles. Draws nothing.
  */
 internal fun MutableGameState.throwEmber(enemy: Enemy) {
     val visit = dimensionRun.visit ?: return
     val tuning = content.dimensions.objectives
     val random = HashRandom(worldHash(runSeed, visit.layer, visit.serial, enemy.id, EMBER_SALT))
-    val angle = random.nextFloat() * TWO_PI
+    val angle = travelHeading() + (2f * random.nextFloat() - 1f) * tuning.emberThrowHalfArcDegrees * DEGREES_TO_RADIANS
     val distance = tuning.emberThrowMinimum + random.nextFloat() * (tuning.emberThrowMaximum - tuning.emberThrowMinimum)
     val (x, y) = nudgedClearOfObstacles(enemy.x + cos(angle) * distance, enemy.y + sin(angle) * distance, EMBER_CLEARANCE)
     dropEmber(x, y, enemy.x, enemy.y)

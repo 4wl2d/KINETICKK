@@ -14,6 +14,7 @@ import kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection
 import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.characters.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
+import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
 import kinetickk.ball.gameplay.nucleus.simulation.director.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
 import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
@@ -64,16 +65,18 @@ internal fun MutableGameState.queueVolatileRemains(enemy: Enemy) {
 
 /**
  * Arms a burst of [radius] at ([x], [y]) that detonates [delay] seconds from now under the Volatile Remains law
- * (Remains, embers and Volatile Elites alike). None is armed while [MutableGameState.MAX_VOLATILE_BURSTS] bursts wait.
+ * (Remains, fire traps and Volatile Elites alike), on the hostile clock ([hostileElapsed]: the Archive's Desync slows a
+ * fuse with the rest of hostile time). None is armed while [MutableGameState.MAX_VOLATILE_BURSTS] bursts wait.
  */
 internal fun MutableGameState.queueVolatileBurst(x: Float, y: Float, radius: Float, delay: Float) {
     if (volatileBursts.size >= MutableGameState.MAX_VOLATILE_BURSTS) return
+    val now = hostileElapsed()
     volatileBursts = (volatileBursts + VolatileBurstProjection(
         x = x,
         y = y,
         radius = radius,
-        armedAt = elapsed,
-        detonatesAt = elapsed + delay,
+        armedAt = now,
+        detonatesAt = now + delay,
     )).toImmutableList()
 }
 
@@ -85,14 +88,15 @@ internal fun MutableGameState.queueVolatileBurst(x: Float, y: Float, radius: Flo
  */
 internal fun MutableGameState.updateVolatileRemains() {
     if (volatileBursts.isEmpty() || phase != GamePhase.RUNNING) return
+    val now = hostileElapsed()
     var due = 0
-    for (index in volatileBursts.indices) if (volatileBursts[index].detonatesAt <= elapsed) due++
+    for (index in volatileBursts.indices) if (volatileBursts[index].detonatesAt <= now) due++
     if (due == 0) return
     val bursts = volatileBursts
-    volatileBursts = bursts.filter { it.detonatesAt > elapsed }.toImmutableList()
+    volatileBursts = bursts.filter { it.detonatesAt > now }.toImmutableList()
     for (index in bursts.indices) {
         val burst = bursts[index]
-        if (burst.detonatesAt > elapsed) continue
+        if (burst.detonatesAt > now) continue
         burst(burst.x, burst.y, 8, 2)
         val reach = burst.radius + coreRadius
         if (phase == GamePhase.RUNNING && dashPhaseTime <= 0f && speed < VOLATILE_ESCAPE_SPEED &&

@@ -90,12 +90,15 @@ private const val SITE_GUARD_MARGIN = 85f
 
 /**
  * Flies a run with [bot] and, while [target]'s rift is offered and once inside it, the visit. [takeRefuse] takes the
- * Refuse card of a Pact offer instead of the first card.
+ * Refuse card of a Pact offer instead of the first card. [reactionFrames] delays what the pilot sees of the visit (its
+ * rings, embers and rifts) by that many 20 ms inputs, a player's reaction time; 0 is the gates' instant pilot. A
+ * natural-path probe retargets [target] to whichever rift the run offers.
  */
 internal class DimensionPilot(
-    val target: WorldLayer,
+    var target: WorldLayer,
     private val bot: NoPoiBot = NoPoiBot(),
     private val takeRefuse: Boolean = false,
+    reactionFrames: Int = 0,
 ) {
     /**
      * Set by the harness once the pilot's rift is due: only then does it fly to a rift (a rift the game offers on its own
@@ -104,6 +107,9 @@ internal class DimensionPilot(
     var riftDue = false
 
     private var view: DimensionProjection? = null
+    /** The last [reactionFrames] + 1 views, a ring: the oldest is what the pilot reacts to. */
+    private val seen = arrayOfNulls<DimensionProjection>(reactionFrames + 1)
+    private var frame = 0
     private val marks = FloatArray(MAX_OPTIONAL_SITE_MARKS * 3)
     private var steering = false
     private var cursorAngle = 0f
@@ -133,7 +139,10 @@ internal class DimensionPilot(
         val dashBefore = s.dashBufferTime
         bot.control(s)
         val projection = s.dimensionProjection(view, null).also { view = it }
-        if (pickGoal(s, projection)) steer(s, dashBefore) else if (steering) handBack(s, dashBefore)
+        seen[frame % seen.size] = projection
+        val reacted = seen[(frame + 1) % seen.size] ?: projection
+        frame++
+        if (pickGoal(s, reacted)) steer(s, dashBefore) else if (steering) handBack(s, dashBefore)
     }
 
     /**
@@ -165,7 +174,8 @@ internal class DimensionPilot(
         val nadir = view.layer == WorldLayer.NADIR
         val floor = if (nadir) pace * NADIR_PACE_SHARE else 0f
         val exit = view.exitPortal
-        if (view.completed && exit != null) return goal(exit.x, exit.y, max(EXIT_SPEED, floor))
+        // Done, or broken (a failed Ascent): the way back.
+        if ((view.completed || view.failed) && exit != null) return goal(exit.x, exit.y, max(EXIT_SPEED, floor))
         when (view.objective) {
             DimensionObjective.ASCENT -> {
                 val ring = view.halos.firstOrNull { it.id == view.nextHaloId }
@@ -453,8 +463,9 @@ internal const val AFTER_RETURN_SECONDS = 5f
 /**
  * Plays [profile] on [seed]: the NoPoi bot until [riftAt], when [target]'s rift opens 560 u ahead (a window rift for
  * the Zenith or the Nadir, the glitch rift for the Archive); the pilot flies through it and the visit, with
- * [objective] forced in place of the rolled one when given. The run stops [AFTER_RETURN_SECONDS] after the return, or
- * at 900 s when [runToEnd] (a full run, as the outcome gate reads it). A null [target] plays the run with no rift.
+ * [objective] forced in place of the rolled one when given, reacting [reactionFrames] inputs late. The run stops
+ * [AFTER_RETURN_SECONDS] after the return, or at 900 s when [runToEnd] (a full run, as the outcome gate reads it). A null
+ * [target] plays the run with no rift.
  */
 internal fun flyDimensionRun(
     seed: Int,
@@ -465,11 +476,12 @@ internal fun flyDimensionRun(
     takeRefuse: Boolean = false,
     runToEnd: Boolean = false,
     content: GameplayContentSnapshot = canonicalGameplayContent,
+    reactionFrames: Int = 0,
     observer: (MutableGameState) -> Unit = {},
 ): DimensionVisitRun {
     val state = startGateRun(seed, profile.snapshot(content), profile.relics, content)
     // Without a target the pilot's rift never comes due, so the bot plays the whole run.
-    val pilot = DimensionPilot(target ?: WorldLayer.ZENITH, profile.bot(), takeRefuse)
+    val pilot = DimensionPilot(target ?: WorldLayer.ZENITH, profile.bot(), takeRefuse, reactionFrames)
     var opened = false
     var openedAt = Float.NaN
     val latestRift = if (target == WorldLayer.ARCHIVE) {

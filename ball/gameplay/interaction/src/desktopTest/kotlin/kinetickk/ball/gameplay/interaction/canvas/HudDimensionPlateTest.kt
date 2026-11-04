@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
@@ -46,8 +47,8 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
- * A dimension visit on the HUD: the plate in the Rebirth strip's slot (sigil, timer, remaining meter, objective pips),
- * the slash shutter of a layer change, the Nadir's heat edge, and the objective on the trial panel.
+ * A dimension visit on the HUD: the plate in the Rebirth strip's slot (sigil, timer, remaining meter, objective pips and
+ * the layer's gauge), the portal of a layer change, the Nadir's heat edge, and the objective on the trial panel.
  */
 class HudDimensionPlateTest {
     private val sizes = listOf(1_440 to 810, 844 to 390, 390 to 844)
@@ -73,8 +74,13 @@ class HudDimensionPlateTest {
                         affinityBits = bossAffinity(EnemyType.ELITE))).toImmutableList(),
                 )
                 val widths = HashMap<WorldLayer, Float>()
-                for (layer in listOf(WorldLayer.ZENITH, WorldLayer.NADIR, WorldLayer.ARCHIVE)) {
-                    val model = base.inVisit(visit(layer, base))
+                val duels = HashMap<WorldLayer, Float>()
+                for (layer in listOf(WorldLayer.ZENITH, WorldLayer.NADIR, WorldLayer.ARCHIVE)) for (duel in listOf(false, true)) {
+                    if (duel && layer == WorldLayer.ARCHIVE) continue
+                    val counted = visit(layer, base)
+                    // The same layer's boss objective: the same gauge, no pips.
+                    val shown = if (!duel) counted else counted.copy(objective = DimensionObjective.entries.first { it.layer == layer && it.boss != null }, goal = 1)
+                    val model = base.inVisit(shown)
                     HudDrawCache.forgetLayouts()
                     draw(w, h, language, textScale) { measurer -> drawHud(model, measurer, 1f) }
                     val where = "$language $w x $h x$textScale $layer"
@@ -90,18 +96,18 @@ class HudDimensionPlateTest {
                     }
                     val keepOut = WorldHudKeepOut().update(w.toFloat(), h.toFloat(), 1f, textScale, trialActive = true, bossPresent = true)
                     assertTrue(inside(plate, keepOut.rects()), "$where: the plate $plate is outside the keep-out")
-                    widths[layer] = plate.width
+                    if (duel) duels[layer] = plate.width else widths[layer] = plate.width
+                    // A counted objective shows its pips (where the slot has room), a duel never does; the gauge follows them
+                    // where it fits, always clear of them.
+                    val pips = HudLayoutProbe.rect(HudBlock.DIMENSION_PIPS)
+                    if (duel || layer == WorldLayer.ARCHIVE) assertNull(pips, "$where: a duel shows no pips")
+                    else if (w != 844 || textScale < 1.75f) assertNotNull(pips, "$where: the counted objective shows its pips")
+                    val gauge = HudLayoutProbe.rect(HudBlock.DIMENSION_GAUGE)
+                    if (pips != null && gauge != null) assertTrue(gauge.left >= pips.right, "$where: the gauge $gauge follows the pips $pips")
+                    if (gauge != null) assertTrue(gauge.right <= plate.right + 0.5f, "$where: the gauge stays in the plate")
                 }
                 val where = "$language $w x $h x$textScale"
-                val zenith = assertNotNull(widths[WorldLayer.ZENITH])
-                val archive = assertNotNull(widths[WorldLayer.ARCHIVE])
-                // The landscape phone's economy at the largest text leaves the slot room for the sigil and timer only.
-                if (w != 844 || textScale < 1.75f) {
-                    assertTrue(zenith > archive + 10f, "$where: the Ascent's pips follow its timer, the Antecedent shows none ($widths)")
-                    assertTrue(assertNotNull(widths[WorldLayer.NADIR]) > archive + 10f, "$where: the Harvest's pips")
-                } else {
-                    assertTrue(zenith >= archive, "$where: the sigil and the timer stay ($widths)")
-                }
+                assertTrue(widths.values.all { it > 0f } && duels.values.all { it > 0f }, "$where: every plate drawn ($widths, $duels)")
             }
         }
         // Realspace: the strip is the tier plate's again.
@@ -146,52 +152,58 @@ class HudDimensionPlateTest {
     }
 
     /**
-     * The shutter plays once per layer edge for 420 ms, never on a host's first frame or on a new run's: it starts as ink
-     * over the whole screen, half way through it has wiped the left of the screen back to the world behind its accent
-     * edges, and from 420 ms on nothing of it is drawn.
+     * The layer change as a portal, once per layer edge for its 900 ms and never on a first frame: the old layer implodes
+     * (ink closing on the Core behind a rim in the old layer's accent: realspace's bone), the iris shuts, then the new
+     * layer explodes out of the Core (the iris reopening behind a rim in the Zenith's gold), and nothing is left at the end.
      */
     @Test
-    fun theShutterPlaysOncePerLayerEdgeForItsDurationAndNeverOnAFirstFrame() {
+    fun thePortalPlaysOncePerLayerEdgeForItsDurationAndNeverOnAFirstFrame() {
         val roles = KkRolePalette.Default
         val realspace = hudTestModel().with("elapsed" to 200f)
         val zenith = realspace.inVisit(visit(WorldLayer.ZENITH, realspace)).with("elapsed" to 200.1f)
         val memory = HudPresentationMemory()
         memory.observe(realspace, 1f, BossTarget().select(realspace))
-        assertTrue(memory.dimensionShutter.progress(1f) < 0f, "nothing on a quiet first frame")
+        assertTrue(memory.dimensionTransition.progress(1f) < 0f, "nothing on a quiet first frame")
         memory.observe(zenith, 2f, BossTarget().select(zenith))
         memory.observe(zenith, 2f, BossTarget().select(zenith))
-        assertEquals(0f, memory.dimensionShutter.progress(2f))
-        assertEquals(0.5f, memory.dimensionShutter.progress(2.21f), 1e-4f)
-        assertTrue(memory.dimensionShutter.progress(2.42f) >= 1f)
+        assertEquals(WorldLayer.BASE, memory.dimensionTransition.from, "the portal remembers the layer it left")
+        assertEquals(0f, memory.dimensionTransition.progress(2f))
+        assertEquals(0.5f, memory.dimensionTransition.progress(2.45f), 1e-4f)
+        assertTrue(memory.dimensionTransition.progress(2.9f) >= 1f)
+        val world = Color(0xFF2050A0)
         sizes.forEach { (w, h) ->
-            val start = shutter(zenith, memory, roles, w, h, 2f)
-            // (The first slab's accent edge runs down from the screen's top-left corner.)
-            listOf(8 to 1, w - 2 to 1, 1 to h - 2, w - 2 to h - 2, w / 2 to h / 2).forEach { (x, y) ->
-                assertTrue(near(start[x, y], Kk.Ink, 0.02f), "$w x $h: ink over ($x, $y) at the start: ${start[x, y]}")
+            val core = Offset(w * 0.5f, h * 0.5f)
+            val corners = listOf(2 to 2, w - 3 to 2, 2 to h - 3, w - 3 to h - 3)
+            // Half way into the implosion the corners are ink while the Core still sees the world.
+            val closing = portal(zenith, memory, roles, w, h, 2.2f, world)
+            corners.forEach { (x, y) -> assertTrue(near(closing[x, y], Kk.Ink, 0.02f), "$w x $h: ink over ($x, $y) as the old layer implodes") }
+            assertTrue(near(closing[core.x.toInt(), core.y.toInt()], world, 0.02f), "$w x $h: the Core still sees through the closing iris")
+            // Shut: ink over everything.
+            val shut = portal(zenith, memory, roles, w, h, 2f + 0.9f * 0.38f, world)
+            listOf(core.x.toInt() to core.y.toInt(), 2 to 2, w - 3 to h - 3).forEach { (x, y) ->
+                assertTrue(near(shut[x, y], Kk.Ink, 0.06f) || near(shut[x, y], Kk.Bone, 0.3f), "$w x $h: the iris is shut at ($x, $y)")
             }
-            val middle = shutter(zenith, memory, roles, w, h, 2.21f)
-            assertTrue(near(middle[1, h / 2], Kk.Bone, 0.02f), "$w x $h: the left is wiped back to the world half way")
-            assertTrue(count(middle, Rect(0f, 0f, w.toFloat(), h.toFloat())) { near(it, roles.shield, 0.08f) } > h,
-                "$w x $h: the slabs' edges lead the wipe in the Zenith's accent")
-            val end = shutter(zenith, memory, roles, w, h, 2.42f)
-            assertEquals(0, count(end, Rect(0f, 0f, w.toFloat(), h.toFloat())) { !near(it, Kk.Bone, 0.02f) }, "$w x $h: done at 420 ms")
-            // Even the slowest slab leaves the screen by the end.
-            val geometry = dimensionShutterGeometry(w.toFloat(), h.toFloat(), 2f)
-            assertTrue(geometry.slabLeft(0, 1f) - h * kinetickk.foundation.design.KkShape.SlashRatio * 0.5f >= w, "$w x $h: slab 0 left")
+            // Half way out of it the new layer shows round the Core inside a gold rim; the corners still wait in ink.
+            val opening = portal(zenith, memory, roles, w, h, 2.38f, world)
+            corners.forEach { (x, y) -> assertTrue(near(opening[x, y], Kk.Ink, 0.02f), "$w x $h: ink over ($x, $y) before the iris opens") }
+            assertTrue(count(opening, Rect(0f, 0f, w.toFloat(), h.toFloat())) { it.red > 0.7f && it.green in 0.45f..0.9f && it.blue < 0.4f } > h,
+                "$w x $h: the opening rim burns in the Zenith's gold")
+            val end = portal(zenith, memory, roles, w, h, 2.9f, world)
+            assertEquals(0, count(end, Rect(0f, 0f, w.toFloat(), h.toFloat())) { !near(it, world, 0.02f) }, "$w x $h: done at 900 ms")
         }
         // A host's first frame inside a dimension, and a new run's first frame after a visit, only record.
         val fresh = HudPresentationMemory()
         fresh.observe(zenith, 5f, BossTarget().select(zenith))
-        assertTrue(fresh.dimensionShutter.progress(5f) < 0f, "a host's first frame plays nothing")
+        assertTrue(fresh.dimensionTransition.progress(5f) < 0f, "a host's first frame plays nothing")
         val restarted = realspace.with("elapsed" to 1f)
         fresh.observe(restarted, 6f, BossTarget().select(restarted))
-        assertTrue(fresh.dimensionShutter.progress(6f) < 0f, "a new run's first frame plays nothing")
-        // A new run drops a shutter the last one was playing.
+        assertTrue(fresh.dimensionTransition.progress(6f) < 0f, "a new run's first frame plays nothing")
+        // A new run drops a portal the last one was playing.
         val playing = HudPresentationMemory()
         playing.observe(realspace, 1f, BossTarget().select(realspace))
         playing.observe(zenith, 2f, BossTarget().select(zenith))
         playing.observe(restarted, 2.1f, BossTarget().select(restarted))
-        assertTrue(playing.dimensionShutter.progress(2.1f) < 0f, "the new run stops the shutter")
+        assertTrue(playing.dimensionTransition.progress(2.1f) < 0f, "the new run stops the portal")
     }
 
     /**
@@ -321,10 +333,11 @@ class HudDimensionPlateTest {
         return pixels to area
     }
 
-    private fun shutter(model: GameplayRenderModel, memory: HudPresentationMemory, roles: KkRolePalette, w: Int, h: Int, time: Float): PixelMap =
+    private fun portal(model: GameplayRenderModel, memory: HudPresentationMemory, roles: KkRolePalette, w: Int, h: Int, time: Float, world: Color): PixelMap =
         canvas(w, h) {
-            drawRect(Kk.Bone)
-            drawDimensionShutter(model, roles, time, memory)
+            drawRect(world)
+            drawDimensionTransition(model.with("screenWidth" to w.toFloat(), "screenHeight" to h.toFloat(), "cameraX" to model.coreX,
+                "cameraY" to model.coreY, "previousCameraX" to model.coreX, "previousCameraY" to model.coreY), roles, time, memory)
         }
 
     private fun canvas(w: Int, h: Int, block: DrawScope.() -> Unit): PixelMap {

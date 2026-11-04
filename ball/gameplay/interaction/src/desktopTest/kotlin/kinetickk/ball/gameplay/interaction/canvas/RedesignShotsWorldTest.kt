@@ -577,9 +577,9 @@ class RedesignShotsWorldTest {
         fun rift(kind: SiteKind, dx: Float, dy: Float) =
             SiteProjection(kind, if (kind == SiteKind.ZENITH_RIFT) "Zenith rift" else "Nadir rift", 1_000f + dx, 1_000f + dy, false, 34f, 0, 0f,
                 immutableListOf(), 0f, 0f)
-        val sites = listOf(rift(SiteKind.ZENITH_RIFT, 300f, 120f), rift(SiteKind.NADIR_RIFT, -360f, -60f))
-        val dimension = if (locked) DimensionProjection(lockedRifts = WorldLayer.ZENITH.bit or WorldLayer.NADIR.bit) else DimensionProjection.REALSPACE
-        return model(w, h, points = sites).withDimension(dimension)
+        val dimension = if (!locked) DimensionProjection.REALSPACE else DimensionProjection(lockedRifts = WorldLayer.ZENITH.bit or WorldLayer.NADIR.bit,
+            riftLock = kinetickk.ball.gameplay.nucleus.render.RiftLock.BOSS)
+        return model(w, h, points = listOf(rift(SiteKind.ZENITH_RIFT, 300f, 120f), rift(SiteKind.NADIR_RIFT, -360f, -60f))).withDimension(dimension)
     }
 
     /** A structure of the shots' content centred ([dx], [dy]) from the Core. */

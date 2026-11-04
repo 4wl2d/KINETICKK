@@ -116,7 +116,9 @@ internal fun DrawScope.drawTrialPanel(
 
     // Row 3: segmented progress.
     val meter = HudDrawCache.rect(HudRect.TRIAL_METER, innerLeft, layout.meterTop, innerRight, layout.meterTop + layout.meterHeight)
-    drawKkMeter(meter, trial.progress, roles.you, roles, segments = trial.segments)
+    // A broken dimension objective greys its meter and names its broken course as the reward line, in threat.
+    val failed = trial.source == TrialSource.DIMENSION && engine.dimension.failed
+    drawKkMeter(meter, trial.progress, if (failed) Kk.Mute else roles.you, roles, segments = trial.segments)
     if (trial.source == TrialSource.STRUCTURE) drawSealedRoomSegment(engine, trial, meter, roles)
 
     // Row 4: progress value, reward. Seconds change every frame while earned, so they are drawn from cached digit
@@ -137,7 +139,7 @@ internal fun DrawScope.drawTrialPanel(
             layout.rowValueCenter + valueHalf)
     }
     val rewardText = if (trial.reward == TrialReward.STRUCTURE_REWARDS) structureTrialRewards(engine, trial, language)
-        else if (trial.source == TrialSource.DIMENSION) dimensionTrialReward(trial, language)
+        else if (trial.source == TrialSource.DIMENSION) dimensionTrialReward(trial, failed, language)
         else siteTrialRewardLabel(trial, language)
     // A race's medal pips sit left of its medal label, a dungeon's rolled Totem chest left of its rewards on their row.
     val pipSize = (if (layout.compact) 6f else 7f) * unit
@@ -149,7 +151,7 @@ internal fun DrawScope.drawTrialPanel(
     val rewardLayout = HudDrawCache.fitted(HudText.TRIAL_REWARD, text, rewardText, layout.monoSize, rewardRoom, uppercase = true) { size ->
         measurer.typography.monoStyle(size)
     }
-    drawKkText(rewardLayout, innerRight, layout.rowRewardCenter, roles.you, KkAlign.END, KkVAlign.CENTER)
+    drawKkText(rewardLayout, innerRight, layout.rowRewardCenter, if (failed) roles.threat else roles.you, KkAlign.END, KkVAlign.CENTER)
     recordLine(HudBlock.TRIAL_REWARD, innerRight - rewardLayout.size.width, layout.rowRewardCenter, rewardLayout)
     drawRewardPips(engine, trial, innerRight - rewardLayout.size.width - pipsWidth, innerRight, layout, pipSize, pipGap, roles)
 }

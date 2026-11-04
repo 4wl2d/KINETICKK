@@ -78,8 +78,8 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
         "Петляет на средней дистанции, чинит союзников рядом и окутывает их щитами, которые пробивают только столкновения.",
     "Keeps its range and sings radial pulses that fire bolts and shove the Core away." to
         "Держит дистанцию и поёт кольцевые импульсы: они выпускают заряды и отталкивают ядро.",
-    "Jinks at the Core and bursts, scattering embers that burn a slow Core." to
-        "Петляя, летит к ядру и взрывается, разбрасывая угли, которые жгут медленное ядро.",
+    "Jinks at the Core and bursts, leaving fire traps that burn a slow Core." to
+        "Петляя, летит к ядру и взрывается, оставляя огненные ловушки, которые жгут медленное ядро.",
     "Hunts in packs, circles the Core and dashes through it." to "Охотится стаей, кружит у ядра и проносится сквозь него.",
     "Glitches out of reach, reappears elsewhere around the Core and fires." to
         "Сбоит и пропадает из досягаемости, появляется в другом месте вокруг ядра и стреляет.",
@@ -90,8 +90,8 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
         "Мини-босс, рождающий спирали роевиков из яйцевых мешков. Быстрые столкновения лопают мешки.",
     "A mini-boss behind rotating shield arcs. Only hits through the gaps land in full." to
         "Мини-босс за вращающимися дугами щита. В полную силу проходят только удары сквозь просветы.",
-    "A mini-boss with spiral volleys, a trail of embers and a shield only impacts can break." to
-        "Мини-босс со спиральными залпами, следом из углей и щитом, который пробивают только столкновения.",
+    "A mini-boss with spiral volleys, a trail of fire traps and a shield only impacts can break." to
+        "Мини-босс со спиральными залпами, следом огненных ловушек и щитом, который пробивают только столкновения.",
     "A secret boss that draws lanes of fire and lines of mines, then jumps between obstacles." to
         "Тайный босс: чертит огненные полосы и линии мин, а затем прыгает между препятствиями.",
     "When its far sigil is touched" to "Когда касаются его дальней печати",

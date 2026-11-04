@@ -251,13 +251,15 @@ class DimensionRewardsTest {
         assertEquals(Float.POSITIVE_INFINITY, broken.splitEndsAt)
         assertEquals(DimensionNotices.broken(DimensionObjective.ASCENT), state.message)
         assertEquals(-1, state.dimensionProjection(null, null).nextHaloId, "no ring to fly through next")
-        // A broken course counts nothing more, the visit runs on to its timer and pays the smaller reward.
+        // A broken course counts nothing more and never strands the Core: the exit rift opens ahead until the visit's end,
+        // and leaving through it pays the smaller reward.
+        val exit = assertNotNull(broken.exitPortal, "a broken course opens the exit rift")
+        assertEquals(WorldLayer.BASE to broken.endsAt, exit.target to exit.expiresAt)
         state.flyThrough(third.x, third.y)
         assertEquals(2, state.visit().progress)
-        assertNull(state.visit().exitPortal)
-        state.skipToVisitEndForTesting()
-        state.updateDimension(step)
+        state.flyThrough(exit.x, exit.y)
         assertEquals(WorldLayer.BASE, state.worldLayer)
+        assertEquals(DimensionNotices.REALSPACE, state.message)
         assertEquals(immutableListOf(DimensionRewardGrant(WorldLayer.ZENITH, completed = false)), state.dimensionRun.pendingRewards)
         state.openNextPendingChoice()
         assertEquals(policy.definition(WorldLayer.ZENITH).reward.cardsOnFailure, state.choices.size)
@@ -325,7 +327,8 @@ class DimensionRewardsTest {
         for (objective in listOf(DimensionObjective.JUDGEMENT, DimensionObjective.PYRE, DimensionObjective.ANTECEDENT)) {
             assertEquals(0.4f, arrival(objective, 0.4f) / arrival(objective, 1f), 1e-4f, "$objective takes its layer's share")
         }
-        assertEquals(1f, policy.definition(WorldLayer.ARCHIVE).bossIntegrityShare, "the Archive's secret keeps all of its integrity")
+        val archive = policy.definition(WorldLayer.ARCHIVE).bossIntegrityShare
+        assertTrue(archive > policy.definition(WorldLayer.ZENITH).bossIntegrityShare * 4f, "the Archive's secret keeps most of its integrity: $archive")
     }
 
     @Test
@@ -495,6 +498,7 @@ class DimensionRewardsTest {
         // [count] burning enemies in turn (each with the next entity id) at the same spot throw their embers.
         fun throws(seed: Int, count: Int): List<Pair<Float, Float>> {
             val state = game(openWorld, seed).apply { enterDimensionForTesting(WorldLayer.NADIR, DimensionObjective.HARVEST) }
+            state.setVelocityForTesting(600f, 0f)
             val streams = state.streams()
             val thrown = List(count) {
                 state.dimensionRun = state.dimensionRun.copy(visit = state.visit().copy(embers = immutableListOf()))
@@ -515,8 +519,12 @@ class DimensionRewardsTest {
         val distances = offsets.map { (dx, dy) -> hypot(dx, dy) }
         assertTrue(distances.all { it in tuning.emberThrowMinimum - 0.01f..tuning.emberThrowMaximum + 0.01f })
         assertTrue(distances.min() < tuning.emberThrowMinimum + 20f && distances.max() > tuning.emberThrowMaximum - 20f, "the range is used")
-        // Every way out of the kill: each quadrant takes some.
-        assertEquals(4, offsets.map { (dx, dy) -> (if (dx >= 0f) 1 else 0) + (if (dy >= 0f) 2 else 0) }.toSet().size)
+        // Within the half arc either side of the Core's heading (+x here), so the chase runs ahead: never straight back,
+        // and the whole arc on both sides is used.
+        val degrees = offsets.map { (dx, dy) -> atan2(dy, dx) * 180f / PI.toFloat() }
+        val half = tuning.emberThrowHalfArcDegrees
+        assertTrue(degrees.all { abs(it) <= half + 0.01f }, "outside the half arc: ${degrees.filter { abs(it) > half }}")
+        assertTrue(degrees.min() < -half + 15f && degrees.max() > half - 15f, "the arc is used")
     }
 
     @Test
