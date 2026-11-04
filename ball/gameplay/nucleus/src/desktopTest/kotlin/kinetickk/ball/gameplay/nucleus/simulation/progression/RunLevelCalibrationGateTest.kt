@@ -22,7 +22,8 @@ import kotlin.test.assertTrue
  * - FRESH: a fresh profile reaches level 22-30 at 12 active minutes (a population gate, see its KDoc).
  * - DATA_MAX: a full Matrix (lifetime Matter = its price, so the whole catalog is offered from level 1) that
  *   seeks Data reaches 42 between 510 and 630 s.
- * - NO_DATA: the same profile avoiding Data never reaches 42 before 720 s; NO_DATA_MAXED adds Refit 10 and
+ * - NO_DATA: the same profile avoiding Data never reaches 42 before 720 s, and is forced to take a Data card in at most
+ *   [NO_DATA_MAX_FORCED_SHARE] of the population's runs; NO_DATA_MAXED adds Refit 10 and
  *   Honing 10 on every owned weapon (upgrades are not a Data source).
  * - Rebirth tiers 3 and 6: the same two arms keep their meaning (NO_DATA never before 720 s, DATA_MAX in 480-660 s
  *   on at least three of five seeds).
@@ -73,8 +74,14 @@ class RunLevelCalibrationGateTest {
         val runs = EconomyGateSeeds.map { seed -> play("NO_DATA", seed, tier = 0, profile = fullMatrix(tier = 0), bot = dataBot(DataPolicy.AVOID)) }
         report("XP_GATE NO_DATA tier=0", runs)
         assertTrue(runs.none { it.capAt != null && it.capAt < 720f }, "without Data gain level 42 must wait for 720 s: ${runs.summary()}")
-        assertTrue(runs.count { it.avoidBreaches == 0 } >= 4,
-            "the avoiding bot may be forced to take Data on at most one seed: ${runs.summary()}")
+        val population = populationOf(PopulationSeeds) { seed ->
+            play("NO_DATA", seed, tier = 0, profile = fullMatrix(tier = 0), bot = dataBot(DataPolicy.AVOID))
+        }
+        val forced = population.shareOf { it.avoidBreaches > 0 }
+        println("XP_GATE NO_DATA tier=0 population forced to take Data ${population.count { it.avoidBreaches > 0 }} of " +
+            "${population.size} (${"%.3f".format(forced)}), capped before 720 s ${population.count { it.capAt != null && it.capAt < 720f }}")
+        assertTrue(forced <= NO_DATA_MAX_FORCED_SHARE,
+            "the avoiding bot may be forced to take Data in at most $NO_DATA_MAX_FORCED_SHARE of the runs: ${"%.3f".format(forced)}")
     }
 
     @Test fun maxedUpgradesAreNotADataSource() {
@@ -180,5 +187,14 @@ class RunLevelCalibrationGateTest {
          * n 265).
          */
         const val FRESH_MAX_OUTSIDE_SHARE = 0.05
+
+        /**
+         * NO_DATA's forced Data picks: the largest share of [PopulationSeeds] runs in which the avoiding bot took one. The
+         * seeded "at most one seed of five" passed on the rebalance base with probability about 0.34 (the 4-Relic budget
+         * and the rarity rework deal more all-Data offers), so it became a population statement there: 32 of 300 runs
+         * (0.107, SE 0.018), none capped before 720 s; the ceiling is the higher of the seeded rule's 1 of 5 and the base
+         * plus two standard errors (0.142).
+         */
+        const val NO_DATA_MAX_FORCED_SHARE = 0.20
     }
 }

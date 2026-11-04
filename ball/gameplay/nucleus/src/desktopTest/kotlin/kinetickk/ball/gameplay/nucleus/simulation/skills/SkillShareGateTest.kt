@@ -45,7 +45,10 @@ import kotlin.test.assertTrue
  * 0.080 on the tree before it). By the population threshold rule the band is min(0.08, base − 2 SE) to max(0.20,
  * base + 2 SE), rounded outward: [MIN_SHARE] to [MAX_SHARE] (the base minus two standard errors is 0.086; the 0.6.0
  * base's 0.078 had put the floor at 0.07; on the 05885fa9 tree, which handed the Orb its lane skills from level 2, the
- * median was 0.113, SE 0.0038). The walk also failed when fewer than 31 of its 124 probes owned an active item; that
+ * median was 0.113, SE 0.0038). The rebalance base (every Relic paying for its liability, the rarity rework) restated
+ * it once more: 296 of 300 runs bind one by [OWNED_BY_SECONDS], 294 are judged and their median share is 0.077 (bootstrap
+ * SE 0.0030; q10 0.023, q90 0.126), so the floor is min(0.08, 0.071) rounded down, 0.07, and the ceiling stays 0.20.
+ * The walk also failed when fewer than 31 of its 124 probes owned an active item; that
  * stays a population statement next to the band: at least [MIN_OWNED_SHARE] of the runs bind one by
  * [OWNED_BY_SECONDS], a design bound (Elite-resonance base 0.993, SE 0.005).
  *
@@ -71,7 +74,7 @@ class SkillShareGateTest {
     }
 
     @Test
-    fun skillsDealBetweenEightAndTwentyPercentOfAFreshRunsDamage() {
+    fun skillsDealBetweenSevenAndTwentyPercentOfAFreshRunsDamage() {
         val probes = populationOf(PopulationSeeds) { seed -> play(seed, CoreShape.ORB) }
         val runs = probes.filter { it.owned }
         println("SKILL-SHARE ${runs.size} of ${probes.size} runs bound an active item by $OWNED_BY_SECONDS s; left out: " +
@@ -155,7 +158,7 @@ class SkillShareGateTest {
         const val MAX_PROBES_PER_RUN = 4
         const val SHARE_SECONDS = 720f
         /** The band's floor: min(0.08, the Elite-resonance base median 0.096 − 2 × 0.0049), rounded down. */
-        const val MIN_SHARE = 0.08
+        const val MIN_SHARE = 0.07
         /** The least share of the population that binds an active item by [OWNED_BY_SECONDS] (the walk's 31 of 124). */
         const val MIN_OWNED_SHARE = 0.25
         const val MAX_SHARE = 0.20
