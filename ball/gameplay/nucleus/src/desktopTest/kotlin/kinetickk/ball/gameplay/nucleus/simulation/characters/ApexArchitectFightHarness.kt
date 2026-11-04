@@ -4,7 +4,6 @@ package kinetickk.ball.gameplay.nucleus.simulation.characters
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.GameplayContentSnapshot
-import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.ApexCell
 import kinetickk.ball.gameplay.nucleus.model.WeaponRuntime
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
@@ -30,12 +29,13 @@ import kinetickk.ball.gameplay.nucleus.simulation.*
  * classes only so that test forks and CI shards can run them side by side; each computes its own fights, as the
  * methods of the one class did.
  *
- * Fights: per character, tier (0 fresh; 10 with the strong build's Matrix, Arc Coil and Relics) and seed, the
- * no-POI bot plays the run to the Architect's arrival (the Core cannot be hurt on the way; a singularity contact can
- * still end a run, so a case takes the first runs of a fixed seed list that reach the Architect); the run then forks
- * into two arms that play the next 180 s with copies of the same bot, both with the level forced to the cap (so
- * neither keeps drafting): one unlocks the Apex (the bot casts it by its rule), one does not. In the fight the Core's
- * integrity is refilled every frame and the damage it takes (shield and integrity) is counted.
+ * Fights: per character, tier (0 fresh; 10 with the progression model's full Matrix, Refit and Honing 10, Arc Coil and
+ * the strong Relics) and seed, the no-POI bot plays the run to the Architect's arrival (the Core cannot be hurt on the
+ * way; a singularity contact can still end a run, so a case takes the first runs of a fixed seed list that reach the
+ * Architect); the run then forks into two arms that play the next 180 s with copies of the same bot, both with the
+ * level forced to the cap (so neither keeps drafting): one unlocks the Apex (the bot casts it by its rule), one does
+ * not. In the fight the Core's integrity is refilled every frame and the damage it takes (shield and integrity) is
+ * counted.
  */
 internal object ApexArchitectFightHarness {
     /** What one arm of a fight measured. Times are seconds since the Architect arrived. */
@@ -213,8 +213,9 @@ internal object ApexArchitectFightHarness {
         val strong = tier > 0
         val state = startGateRun(
             seed,
-            // A fresh run flies the bot's loadout (harness H1), the strong one its signature Arc Coil.
-            gateProfile(if (strong) GateMatrix.FULL else GateMatrix.NONE, tier, shape, if (strong) WeaponId.ARC_COIL else botLoadout(BotWeaponOrder, ReferenceArmory)),
+            // A fresh run flies the bot's loadout (harness H1); the strong one is the progression model's (Refit and
+            // Honing 10, Arc Coil).
+            if (strong) progressedProfile(tier, shape) else gateProfile(GateMatrix.NONE, tier, shape, botLoadout(BotWeaponOrder, ReferenceArmory)),
             relics = if (strong) DimensionProfile.STRONG_TIER_10.relics else emptyList(),
             content = content,
         )

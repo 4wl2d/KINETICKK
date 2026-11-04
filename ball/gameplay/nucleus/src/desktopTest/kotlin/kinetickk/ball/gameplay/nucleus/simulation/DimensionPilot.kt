@@ -394,7 +394,10 @@ internal enum class DimensionProfile(val label: String) {
     /** Gate A's fresh tier-0 profile: no Matrix rank, the Orb and the Flux Wake. */
     FRESH_TIER_0("fresh-t0"),
 
-    /** Gate D's strong build at tier 10: every Matrix rank, the Pentagon with Arc Coil and four Relics bound. */
+    /**
+     * The progression model's strong build at tier 10 ([SweepArm.STRONG], P4): every Matrix rank, Refit and Honing 10,
+     * the Pentagon with Arc Coil and four Relics bound.
+     */
     STRONG_TIER_10("strong-t10"),
 
     /** Gate B's profile at tier 3: every Matrix rank and the Pentagon with its signature Arc Coil, no key harmony. */
@@ -402,16 +405,11 @@ internal enum class DimensionProfile(val label: String) {
 
     fun snapshot(content: GameplayContentSnapshot): GameplayProfileSnapshot = when (this) {
         FRESH_TIER_0 -> gateProfile(GateMatrix.NONE, tier = 0, content = content)
-        STRONG_TIER_10 -> gateProfile(GateMatrix.FULL, tier = 10, CoreShape.PENTAGON, WeaponId.ARC_COIL, content = content)
+        STRONG_TIER_10 -> SweepArm.STRONG.profile(tier = 10, content)
         SIGNATURE_TIER_3 -> gateProfile(GateMatrix.FULL, tier = 3, CoreShape.PENTAGON, WeaponId.ARC_COIL, content = content)
     }
 
-    val relics: List<RelicId>
-        get() = if (this == STRONG_TIER_10) {
-            listOf(RelicId.STORMHEART_CAPACITOR, RelicId.PANDEMIC_CODEX, RelicId.THUNDER_CHOIR, RelicId.CINDER_CROWN)
-        } else {
-            emptyList()
-        }
+    val relics: List<RelicId> get() = if (this == STRONG_TIER_10) SweepArm.STRONG.relics else emptyList()
 
     fun bot(): NoPoiBot = NoPoiBot(avoidWeaponHarmony = this == SIGNATURE_TIER_3)
 
