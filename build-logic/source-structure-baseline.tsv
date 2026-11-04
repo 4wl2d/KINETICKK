@@ -71,7 +71,7 @@ test-file-lines	ball/gameplay/interaction/src/desktopTest/kotlin/kinetickk/ball/
 test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/SimulationWitnessFixtures.kt	1161
 test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/structures/DungeonSystemTest.kt	1081
 test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/world/ObstacleKindSystemTest.kt	1480
-test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/world/ObstacleSystemTest.kt	1223
+test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/world/ObstacleSystemTest.kt	1220
 test-file-lines	ball/gameplay/nucleus/src/desktopTest/kotlin/kinetickk/ball/gameplay/nucleus/performance/GameplayPerformanceBenchmark.kt	1816
 test-file-lines	ball/gameplay/nucleus/src/desktopTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/InvariantFuzzHarness.kt	1550
 test-file-lines	ball/gameplay/nucleus/src/desktopTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/builds/PerceptibleItemImpactTest.kt	1520
