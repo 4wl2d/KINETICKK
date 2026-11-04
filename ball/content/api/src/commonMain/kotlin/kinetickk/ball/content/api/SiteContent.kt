@@ -180,7 +180,7 @@ data class RacePolicy(
     val nudgeStep: Float = 80f,
     val nudgeAttempts: Int = 5,
     /** Par flight speed: the steady model at this cursor reach. */
-    val parReach: Float = 0.65f,
+    val parReach: Float = 0.67f,
     val turnAllowanceSeconds: Float = 0.3f,
     val goldFactor: Float = 1.0f,
     val silverFactor: Float = 1.3f,
