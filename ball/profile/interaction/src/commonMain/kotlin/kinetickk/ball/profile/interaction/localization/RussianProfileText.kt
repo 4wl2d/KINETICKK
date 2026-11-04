@@ -52,7 +52,7 @@ internal object RussianProfileText {
         ProfileText.CycleCompensation -> "Бонусы цикла"
         ProfileText.EliteRate -> "Частота элиты"
         ProfileText.ThreatAdvance -> "Опережение угрозы"
-        ProfileText.PlayerPower -> "Мощь игрока"
+        ProfileText.NumberScale -> "Масштаб чисел"
         ProfileText.CoreIntegrity -> "Прочность ядра"
         ProfileText.KineticMatter -> "Кинетическая материя"
         ProfileText.BonusRerolls -> "Доп. перевыборы"

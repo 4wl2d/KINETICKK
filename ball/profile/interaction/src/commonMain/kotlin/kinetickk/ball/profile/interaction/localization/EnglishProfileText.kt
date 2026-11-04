@@ -52,7 +52,7 @@ internal object EnglishProfileText {
         ProfileText.CycleCompensation -> "Cycle compensation"
         ProfileText.EliteRate -> "Elite rate"
         ProfileText.ThreatAdvance -> "Threat advance"
-        ProfileText.PlayerPower -> "Player power"
+        ProfileText.NumberScale -> "Number scale"
         ProfileText.CoreIntegrity -> "Core integrity"
         ProfileText.KineticMatter -> "Kinetic matter"
         ProfileText.BonusRerolls -> "Bonus rerolls"

@@ -111,6 +111,11 @@ class RebirthPresentationTest {
         val compensation = rebirthCompensationRows(current, next, AppLanguage.Russian)
         assertEquals(REBIRTH_COMPENSATION_ROWS, compensation.size)
         assertEquals(RebirthChange.SAME, compensation[2].change)
+        assertEquals("×2,30", compensation[0].current)
+        assertEquals("×4,20", compensation[0].next)
+        assertEquals(RebirthChange.UP, compensation[0].change)
+        assertEquals("×21", rebirthNumberScale(21.0, AppLanguage.English))
+        assertEquals("×3.6K", rebirthNumberScale(3_600.0, AppLanguage.English))
         assertEquals("×1,00", rebirthMultiplier(1f, AppLanguage.Russian))
         assertEquals("×1.05", rebirthMultiplier(1.05f, AppLanguage.English))
     }

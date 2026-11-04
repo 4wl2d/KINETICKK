@@ -538,7 +538,7 @@ private class PreviewScope(
 
 /** Text size sample: two game terms with sample values (a stat readout, not an explanation). */
 internal fun settingsTextSizeSample(language: AppLanguage): List<Pair<String, String>> = listOf(
-    language.text(ProfileText.PlayerPower) to "140",
+    language.text(ProfileText.KineticMatter) to "2450",
     language.text(ProfileText.CoreIntegrity) to "100",
 )
 

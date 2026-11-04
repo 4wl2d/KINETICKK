@@ -54,6 +54,7 @@ import kinetickk.ball.profile.interaction.profileTextScale
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthRenderModel
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthTierStatus
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.formatCompactNumber
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
 import kotlin.math.roundToInt
@@ -584,9 +585,10 @@ internal fun rebirthHostileRows(current: RebirthProfile, next: RebirthProfile, l
         rebirthChange(current.threatTimeOffsetSeconds, next.threatTimeOffsetSeconds)),
 )
 
-/** Compensation for the player for the current and next tier. */
+/** What the player gets for the current and next tier: the number scale its values read at, Matter and rerolls. */
 internal fun rebirthCompensationRows(current: RebirthProfile, next: RebirthProfile, language: AppLanguage): List<RebirthRow> = listOf(
-    multiplierRow(language.text(ProfileText.PlayerPower), current.playerPowerMultiplier, next.playerPowerMultiplier, language),
+    RebirthRow(language.text(ProfileText.NumberScale), rebirthNumberScale(current.numberScale, language),
+        rebirthNumberScale(next.numberScale, language), rebirthChange(current.numberScale.toFloat(), next.numberScale.toFloat())),
     multiplierRow(language.text(ProfileText.KineticMatter), current.matterGainMultiplier, next.matterGainMultiplier, language),
     RebirthRow(language.text(ProfileText.BonusRerolls), "+${current.bonusRerolls}", "+${next.bonusRerolls}",
         rebirthChange(current.bonusRerolls.toFloat(), next.bonusRerolls.toFloat())),
@@ -594,6 +596,10 @@ internal fun rebirthCompensationRows(current: RebirthProfile, next: RebirthProfi
 
 private fun multiplierRow(label: String, current: Float, next: Float, language: AppLanguage): RebirthRow =
     RebirthRow(label, rebirthMultiplier(current, language), rebirthMultiplier(next, language), rebirthChange(current, next))
+
+/** The number scale a tier's values read at: `×1.50` below 10, then the compact form (`×21`, `×3.6K`). */
+internal fun rebirthNumberScale(scale: Double, language: AppLanguage): String =
+    if (scale < 10.0) rebirthMultiplier(scale.toFloat(), language) else "×" + formatCompactNumber(scale.roundToLong(), language)
 
 /** `×1.10`: two decimals with the language's decimal separator. */
 internal fun rebirthMultiplier(value: Float, language: AppLanguage): String {
