@@ -24,7 +24,7 @@ import kotlin.test.assertTrue
  *   weapon changes. Arms: the fresh tier-0 Orb and the full-Matrix tier-6 Orb without POIs, the site pilot playing every
  *   window (SiteArm.MIXED, opt-in Relic sites and caches) and the dungeon campaign (Totem chests, guardians; odd seeds
  *   start on the Flux Wake, off the bot's order, so its first chest changes weapon).
- * - VALUE compares Relic policies on the same seeds and profile (fresh tier 0; full Matrix tier 6): the reference bot's
+ * - VALUE compares Relic policies on the same seeds and profile (balanceSweep's fresh tier 2, half tier 7 and full tier 10): the reference bot's
  *   own picks; every offer melded; every offer a random Relic card; and, all claimed at the run start, four Melds, four
  *   random Relics and the strong build's four Relics (RebirthBalanceGateTest's). It prints win share, median survival
  *   and median clear time per arm, with paired bootstrap standard errors of each arm's difference to the all-Meld arm
@@ -59,7 +59,7 @@ class BuildLimitsProbeTest {
 
     private enum class BudgetArm { REFERENCE_T0, REFERENCE_T6_FULL, SITES_T0, CAMPAIGN_T0 }
 
-    private enum class ValueTier(val matrix: GateMatrix, val tier: Int) { FRESH_T0(GateMatrix.NONE, 0), FULL_T6(GateMatrix.FULL, 6) }
+    private enum class ValueTier(val arm: SweepArm, val tier: Int) { FRESH_T2(SweepArm.FRESH, 2), HALF_T7(SweepArm.HALF, 7), FULL_T10(SweepArm.FULL, 10) }
 
     private enum class ValueArm { REFERENCE, MELD, RANDOM, MELD_START, RANDOM_START, STRONG_START }
 
@@ -132,7 +132,7 @@ class BuildLimitsProbeTest {
     }
 
     private fun flyValue(seed: Int, tier: ValueTier, arm: ValueArm, content: GameplayContentSnapshot): LimitRun {
-        val profile = gateProfile(tier.matrix, tier.tier, content = content)
+        val profile = tier.arm.profile(tier.tier, content)
         val strong = if (arm == ValueArm.STRONG_START) StrongRelics else emptyList()
         val state = startGateRun(seed, profile, strong, content)
         val picks = Random(seed * 31 + arm.ordinal)
