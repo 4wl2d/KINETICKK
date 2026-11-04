@@ -127,11 +127,11 @@ data class RebirthProfile(
 /** Data requirement growth per Rebirth tier: tier t needs `1 + 0.14t` times the base table (Data supply grows alike). */
 const val REBIRTH_DATA_REQUIREMENT_SCALE_PER_TIER: Float = 0.14f
 
-/** Enemy integrity grows by this factor per Rebirth tier: `H(t) = 1.27^t` (tier 10: ×10.9). */
-const val REBIRTH_ENEMY_INTEGRITY_GROWTH: Float = 1.27f
+/** Enemy integrity grows by this factor per Rebirth tier: `H(t) = 1.29^t` (tier 10: ×12.8). */
+const val REBIRTH_ENEMY_INTEGRITY_GROWTH: Float = 1.29f
 
-/** Damage the Core takes grows by this factor per Rebirth tier: `D(t) = 1.18^t` (tier 10: ×5.23). */
-const val REBIRTH_INCOMING_DAMAGE_GROWTH: Float = 1.18f
+/** Damage the Core takes grows by this factor per Rebirth tier: `D(t) = 1.19^t` (tier 10: ×5.69). */
+const val REBIRTH_INCOMING_DAMAGE_GROWTH: Float = 1.19f
 
 /** Matter a run earns grows by this factor per Rebirth tier: `1.16^t` (tier 10: ×4.41), so pushing a tier pays. */
 const val REBIRTH_MATTER_GROWTH: Float = 1.16f
@@ -157,7 +157,7 @@ val RebirthTierNames: List<String> = listOf(
 /**
  * The shipped tuning of Rebirth tier [tier] (selected tier t), the tier layer of docs/balance/progression.md. The tier
  * multiplies what the enemy brings and never the player's power ([RebirthProfile.playerPowerMultiplier] is 1 at every
- * tier): enemy integrity `H(t) = 1.27^t` ([REBIRTH_ENEMY_INTEGRITY_GROWTH]), incoming damage `D(t) = 1.18^t`
+ * tier): enemy integrity `H(t) = 1.29^t` ([REBIRTH_ENEMY_INTEGRITY_GROWTH]), incoming damage `D(t) = 1.19^t`
  * ([REBIRTH_INCOMING_DAMAGE_GROWTH]) and the Matter reward `1.16^t` ([REBIRTH_MATTER_GROWTH]), so a tier is beaten by
  * permanent progression (the Core Matrix, Refit and Honing) and pushing a tier pays. Each power is a product of t
  * factors in Float, the same on every platform. Besides: enemy speed `1 + 0.035t`, spawn rate `1 + 0.09t`, enemy cap

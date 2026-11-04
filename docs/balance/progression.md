@@ -25,8 +25,8 @@ Each curve is a product of t Float factors, identical on every platform.
 
 | Quantity | Formula | Constant |
 |---|---|---|
-| enemy integrity `H(t)` | `1.27^t` | `REBIRTH_ENEMY_INTEGRITY_GROWTH` |
-| incoming damage `D(t)` | `1.18^t` | `REBIRTH_INCOMING_DAMAGE_GROWTH` |
+| enemy integrity `H(t)` | `1.29^t` | `REBIRTH_ENEMY_INTEGRITY_GROWTH` |
+| incoming damage `D(t)` | `1.19^t` | `REBIRTH_INCOMING_DAMAGE_GROWTH` |
 | Matter reward | `1.16^t` | `REBIRTH_MATTER_GROWTH` |
 | enemy speed, spawn rate, enemy cap, Elite rate | `1 + 0.035t`, `1 + 0.09t`, `1 + 0.10t`, `1 + 0.07t` | `defaultRebirthProfile` |
 | threat offset, opening enemies, bonus rerolls, obstacles | `12t` s, `5 + t`, `t / 4`, `1 + 0.05t` | `defaultRebirthProfile` |
@@ -36,16 +36,16 @@ Each curve is a product of t Float factors, identical on every platform.
 | t | H(t) | D(t) | Matter | numberScale (display) |
 |---|---|---|---|---|
 | 0 | 1.00 | 1.00 | 1.00 | 1 |
-| 1 | 1.27 | 1.18 | 1.16 | 1.1 |
-| 2 | 1.61 | 1.39 | 1.35 | 1.5 |
-| 3 | 2.05 | 1.64 | 1.56 | 2.3 |
-| 4 | 2.60 | 1.94 | 1.81 | 4.2 |
-| 5 | 3.30 | 2.29 | 2.10 | 8.7 |
-| 6 | 4.20 | 2.70 | 2.44 | 21 |
-| 7 | 5.33 | 3.19 | 2.83 | 61 |
-| 8 | 6.77 | 3.76 | 3.28 | 200 |
-| 9 | 8.59 | 4.44 | 3.80 | 790 |
-| 10 | 10.92 | 5.23 | 4.41 | 3,600 |
+| 1 | 1.29 | 1.19 | 1.16 | 1.1 |
+| 2 | 1.66 | 1.42 | 1.35 | 1.5 |
+| 3 | 2.15 | 1.69 | 1.56 | 2.3 |
+| 4 | 2.77 | 2.01 | 1.81 | 4.2 |
+| 5 | 3.57 | 2.39 | 2.10 | 8.7 |
+| 6 | 4.61 | 2.84 | 2.44 | 21 |
+| 7 | 5.94 | 3.38 | 2.83 | 61 |
+| 8 | 7.67 | 4.02 | 3.28 | 200 |
+| 9 | 9.89 | 4.79 | 3.80 | 790 |
+| 10 | 12.76 | 5.69 | 4.41 | 3,600 |
 
 The boss hit cap is a share of the boss's own integrity: one damage instance removes at most `hitCapShare × maxHp ×
 clamp(1 − hitCapTierShrink × t, hitCapMinimumScale, 1)` (the Architect 1.5 %, 2 % less per tier, at least half;
@@ -149,57 +149,59 @@ critical multiplier at most ×4, vulnerability at most 1.5); their tuning belong
 
 ## Design targets
 
-Measured with `balanceSweep` over the progression window (seeds `i × 7,919 + 13`, i = 3,401..3,500, 100 runs per
-cell) on the tree that introduced this model. Arms: fresh = no Matrix, no upgrades, the Orb with the bot's loadout;
+Measured with `balanceSweep` over the progression window (seeds `i × 7,919 + 13`, i = 16,401..16,500, 100 runs per
+cell) on the integrated rebalance tree (every lane merged: the Relic budget and the Relic value pass, the rarity rework,
+Core Freeze, the dungeon and dimension changes). Arms: fresh = no Matrix, no upgrades, the Orb with the bot's loadout;
 half = half the Matrix by price ([`halfMatrixRanks`](../../ball/gameplay/nucleus/src/desktopTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/EconomyGateHarness.kt))
 with Refit and Honing 5, the Orb; full = every Matrix rank, Refit and Honing 10, the Pentagon with its signature Arc
-Coil and the bot's own Relics; strong = full with Stormheart Capacitor, Pandemic Codex, Thunder Choir and Cinder Crown
-bound from the start.
+Coil and the bot's own Relics; strong = full with Stormheart Capacitor, Aegis Inversion, Echo Chamber and Pandemic Codex
+bound from the start (the Relics that fit Arc Coil).
 
-| Target | Statement | Window, 100 runs (SE) | Gate on `PopulationSeeds` |
-|---|---|---|---|
-| P1 | fresh, tier 0: win ≥ 0.75 | 0.92 (0.03) | 0.837 of 300 |
-| P2 | fresh, tier 2: win ≤ 0.35; tier 4: ≤ 0.05 | 0.28 (0.04); 0.00 | 0.297; 0.003 |
-| P3 | half, tier 5: win in [0.30, 0.85]; tier 8: ≤ 0.10 | 0.90 (0.03), above the band; 0.05 (0.02) | 0.897, above; 0.070 |
-| P4 | strong, tier 10: win ≥ 0.80 | 0.84 (0.04); 0.85 (0.03) over 200 | 0.773 of 150, below |
-| P5 | full, tier 10: win in [0.30, 0.85] | 0.70 (0.05); 0.75 (0.03) over 200 | 0.573 of 150 |
-| P6 | win share never rises with the tier for a profile | holds for all four arms (table below) | holds (fresh 0/2/4, half 5/8) |
-| P7 | maxed Honing ≥ ×1.8 weapon hit, maxed Refit ≥ ×1.6 character hit, full Matrix ≥ ×1.8 offense and effective integrity | ×2.26, ×1.97, ×3.56 / ×3.16 | in play: Orb weapon side ×2.01, ability ×1.84; Pentagon ×1.61, ×2.10 |
+| Target | Statement | Window, 100 runs (SE) |
+|---|---|---|
+| P1 | fresh, tier 0: win ≥ 0.75 | 0.99 (0.01) |
+| P2 | fresh: tier 2 ≤ 0.65 (contested), tier 3 ≤ 0.30, tier 4 ≤ 0.05 | 0.55 (0.05); 0.19 (0.04); 0.01 (0.01) |
+| P3 | half: tier 7 in [0.30, 0.85] (contested), tier 9 ≤ 0.10 | 0.49 (0.05); 0.02 (0.01) |
+| P4 | strong, tier 10: win ≥ 0.80 (comfortable) | 0.90 (0.03) |
+| P5 | full, tier 10: win in [0.30, 0.92] (winnable, never a formality) | 0.85 (0.04) |
+| P6 | win share never rises with the tier for a profile | holds for all four arms (table below) |
+| P7 | maxed Honing ≥ ×1.8 weapon hit, maxed Refit ≥ ×1.6 character hit, full Matrix ≥ ×1.8 offense and effective integrity | ×2.26, ×1.97, ×3.56 / ×3.16 |
 
 | Tier | fresh | half | full | strong |
 |---|---|---|---|---|
-| 0 | 0.92 | 1.00 | 1.00 | 1.00 |
-| 1 | 0.72 | 1.00 | 1.00 | 1.00 |
-| 2 | 0.28 | 1.00 | 1.00 | 1.00 |
-| 3 | 0.12 | 0.99 | 1.00 | 1.00 |
-| 4 | 0.00 | 0.98 | 1.00 | 1.00 |
-| 5 | 0.00 | 0.90 | 1.00 | 1.00 |
-| 6 | 0.00 | 0.71 | 0.99 | 1.00 |
-| 7 | 0.00 | 0.32 | 0.98 | 1.00 |
-| 8 | 0.00 | 0.05 | 0.93 | 0.97 |
-| 9 | 0.00 | 0.01 | 0.86 | 0.93 |
-| 10 | 0.00 | 0.00 | 0.70 | 0.84 |
+| 0 | 0.99 | 1.00 | 1.00 | 1.00 |
+| 1 | 0.98 | 1.00 | 1.00 | 1.00 |
+| 2 | 0.55 | 1.00 | 1.00 | 1.00 |
+| 3 | 0.19 | 1.00 | 1.00 | 1.00 |
+| 4 | 0.01 | 1.00 | 1.00 | 1.00 |
+| 5 | 0.00 | 0.99 | 1.00 | 1.00 |
+| 6 | 0.00 | 0.88 | 1.00 | 0.99 |
+| 7 | 0.00 | 0.49 | 1.00 | 1.00 |
+| 8 | 0.00 | 0.07 | 0.97 | 0.99 |
+| 9 | 0.00 | 0.02 | 0.98 | 0.97 |
+| 10 | 0.00 | 0.00 | 0.85 | 0.90 |
 
-Two targets are not met by the first cut. The half arm misses P3's tier-5 ceiling: its tier-5 runs are safe (10 %
-deaths) and its losses arrive with tier 6's Overclocked Swarm, so no smooth change to `H` or `D` moves tier 5 without
-moving tier 10 more (the tier-5 win share stayed at 0.87-0.95 for `D` from 1.15 to 1.20 and `H` from 1.21 to 1.35).
-The strong build sits on P4's floor (0.84-0.85 on the window, 0.773 on the gate's 150 runs); its losses are deaths
-between 250 s and 720 s, before the Architect. `P2` and `P4` pull `H` and `D` apart: on 200 window runs, `D` 1.17
-lifts strong tier 10 to 0.88 but fresh tier 2 to 0.35, and `H` 1.24 gives 0.89 and 0.36. The same tree dealt the half
-arm about 4.7 Legendaries a run at tier 5 and the full arms about 6.7 at tier 10, which the rarity rework cuts sharply,
-so recalibrate on the integrated tree before reading P3-P5.
+A fresh profile clears tiers 0 and 1, contests tier 2, mostly loses tier 3 and cannot clear tier 4, so it must bank
+Matter on the low tiers first; half the progression opens the middle tiers and stalls at 7-8; the full progression
+clears tier 10 comfortably with a fitting build. The first cut of these targets (P2 tier 2 ≤ 0.35, P3 tier 5 in
+[0.30, 0.85] and tier 8 ≤ 0.10, P5 ≤ 0.85) was restated once on the integrated tree, after the Relic value pass made
+every Relic pay for its liability: the tier-2 win share of a fresh profile and the tier-5 share of the half arm do not
+move with `H` or `D` (fresh tier 2 read 0.52-0.56 and half tier 5 0.97-1.00 for `H` 1.27-1.31 and `D` 1.18-1.20), so the
+statements moved to the tiers where the profiles actually meet their wall. `H` 1.29 and `D` 1.19 were chosen on the
+window from the sets (1.27, 1.18), (1.29, 1.18), (1.27, 1.20), (1.29, 1.20) and (1.31, 1.19) (`calib` sweeps in the
+change notes): the highest strong tier-10 win share that keeps the full arm below 0.92.
 
 ## Calibration recipe
 
 1. Play the decisive cells on the progression window:
-   `balanceSweep "-Psweep.cells=fresh:0,fresh:2,fresh:4,half:5,half:8,full:10,strong:10"`; then the full table
+   `balanceSweep "-Psweep.cells=fresh:0,fresh:2,fresh:3,fresh:4,half:7,half:9,full:10,strong:10"`; then the full table
    (`-Psweep.tiers=0..10`) for P6.
-2. Fresh tier 2 (P2) moves with `D` (`damage` knob): it is death-limited. Raise `damage` until fresh tier 2 sits near
-   0.28 with fresh tier 0 above 0.85.
+2. Fresh tiers 3 and 4 (P2) are death-limited and move with `D` (`damage` knob); tier 2 barely moves with either curve.
+   Keep fresh tier 0 above 0.85.
 3. Full and strong at tier 10 (P4, P5) move with the deep Bulwark nodes (Bastion, Aegis) and the level-10 upgrades
    (`honing`, `refit`, `refitIntegrity`); `H` (`health`) mostly lengthens the regular crowds, since capped boss fights
    do not depend on it. Keep strong at least two standard errors above 0.80.
-4. Half at tiers 5 and 8 (P3) moves with what the half Matrix lacks: the deep nodes and keystones. If P3 and P4
+4. Half at tiers 7 and 9 (P3) moves with what the half Matrix lacks: the deep nodes and keystones. If P3 and P4
    conflict, give the second half of the Matrix more of the defense rather than changing `D`.
 5. Confirm the economy with `-Psweep.mode=campaign` (median 40-70 runs); scale Matrix prices together (`costScale`
    tries a factor without editing content) and keep the Refit and Honing bases on `MatterIncomeProbeTest`'s

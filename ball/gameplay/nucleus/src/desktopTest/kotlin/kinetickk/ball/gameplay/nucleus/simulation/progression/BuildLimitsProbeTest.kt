@@ -235,7 +235,6 @@ class BuildLimitsProbeTest {
          * A strong build that fits every probed profile's Arc Coil (Charge key, Arsenal and Chain tags, Ion): the two Charge
          * Relics, the weapon echo and the contagion that spreads its Ion.
          */
-        val FitRelics: List<RelicId> =
-            listOf(RelicId.STORMHEART_CAPACITOR, RelicId.AEGIS_INVERSION, RelicId.ECHO_CHAMBER, RelicId.PANDEMIC_CODEX)
+        val FitRelics: List<RelicId> = SweepStrongRelics
     }
 }

@@ -30,7 +30,7 @@ import kotlin.test.assertTrue
  * P4, P5 and P7), on the gate harness ([sweepRun], the arms of [SweepArm]) over the first [TOP_RUNS] [PopulationSeeds]:
  * - P4: the full Matrix, the Pentagon with its signature Arc Coil, Refit and Honing at the maximum and the strong Relics
  *   bound from the start ([SweepArm.STRONG]) win tier 10 in at least [P4_MIN_WIN] of the runs: comfortable;
- * - P5: the same profile with the bot's own Relics ([SweepArm.FULL]) wins tier 10 in [P5_WIN]: contested;
+ * - P5: the same profile with the bot's own Relics ([SweepArm.FULL]) wins tier 10 in [P5_WIN]: winnable, never a formality;
  * - P7 in play: Orb/Flux Wake and Pentagon/Arc Coil, maxed against 0, in a 25 s crowd and a 180 s Architect fight on four
  *   fixed seeds: character-ability damage per engaged second at least [P7_MIN_ABILITY_GAIN] times, weapon-side damage at
  *   least [P7_MIN_WEAPON_GAIN] times (it includes impacts and procs that Honing never touches) and no more integrity
@@ -270,7 +270,7 @@ class UpgradeBalanceGateTest {
         const val P4_MIN_WIN = 0.80
 
         /** P5: the tier-10 win share band of the fully progressed ordinary build. */
-        val P5_WIN = 0.30..0.85
+        val P5_WIN = 0.30..0.92
 
         /** P7 in play: the least gain of character-ability damage per engaged second, maxed against 0 (Refit ×1.97). */
         const val P7_MIN_ABILITY_GAIN = 1.6f

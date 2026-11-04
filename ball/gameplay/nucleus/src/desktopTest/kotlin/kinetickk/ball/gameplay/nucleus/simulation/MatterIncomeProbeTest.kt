@@ -91,7 +91,7 @@ class MatterIncomeProbeTest {
         /** RebirthBalanceGateTest's strong build: Pentagon, Arc Coil and four Relics bound from the start, full Matrix. */
         T10_STRONG(
             { gateProfile(GateMatrix.FULL, tier = 10, shape = CoreShape.PENTAGON, weapon = WeaponId.ARC_COIL) },
-            listOf(RelicId.STORMHEART_CAPACITOR, RelicId.PANDEMIC_CODEX, RelicId.THUNDER_CHOIR, RelicId.CINDER_CROWN),
+            SweepStrongRelics,
         ),
     }
 

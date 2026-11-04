@@ -64,9 +64,13 @@ internal enum class SweepArm(val label: String) {
     val relics: List<RelicId> get() = if (this == STRONG) SweepStrongRelics else emptyList()
 }
 
-/** RebirthBalanceGateTest's strong build Relics. */
+/**
+ * The strong build's Relics (P4 and every strong gate arm): a set that fits the Pentagon's signature Arc Coil (Charge key,
+ * Arsenal and Chain tags, Ion): the two Charge Relics (Stormheart Capacitor in key harmony, Aegis Inversion), the weapon
+ * echo and the contagion that spreads its Ion.
+ */
 internal val SweepStrongRelics: List<RelicId> =
-    listOf(RelicId.STORMHEART_CAPACITOR, RelicId.PANDEMIC_CODEX, RelicId.THUNDER_CHOIR, RelicId.CINDER_CROWN)
+    listOf(RelicId.STORMHEART_CAPACITOR, RelicId.AEGIS_INVERSION, RelicId.ECHO_CHAMBER, RelicId.PANDEMIC_CODEX)
 
 /** What one sweep run ended with. [clear] is the seconds from the Architect's arrival to the Victory (null otherwise). */
 internal data class SweepRun(

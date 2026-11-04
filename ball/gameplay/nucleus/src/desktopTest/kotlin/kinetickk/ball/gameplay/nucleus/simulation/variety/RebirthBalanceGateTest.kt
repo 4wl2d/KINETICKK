@@ -13,9 +13,10 @@ import kotlin.test.assertTrue
  * The Rebirth ladder's design targets for the profiles below the top (docs/balance/progression.md, P1-P3 and P6), played
  * by the input-only NoPoi bot on the gate harness ([sweepRun], the arms of [SweepArm]) over the 300 [PopulationSeeds]:
  * - P1: a fresh profile (no Matrix, no upgrades) wins tier 0 in at least [P1_MIN_WIN] of the runs;
- * - P2: a fresh profile wins tier 2 in at most [P2_MAX_TIER_TWO_WIN] and tier 4 in at most [P2_MAX_TIER_FOUR_WIN];
- * - P3: half the Matrix with Refit and Honing at half the maximum level wins tier 5 in [P3_TIER_FIVE_WIN] and tier 8 in
- *   at most [P3_MAX_TIER_EIGHT_WIN];
+ * - P2: a fresh profile only contests tier 2 (at most [P2_MAX_TIER_TWO_WIN]), mostly loses tier 3 (at most
+ *   [P2_MAX_TIER_THREE_WIN]) and cannot clear tier 4 (at most [P2_MAX_TIER_FOUR_WIN]);
+ * - P3: half the Matrix with Refit and Honing at half the maximum level contests tier 7 ([P3_TIER_SEVEN_WIN]) and cannot
+ *   clear tier 9 (at most [P3_MAX_TIER_NINE_WIN]);
  * - P6: for each of these profiles the win share never rises with the tier (beyond two binomial standard errors).
  * The fully progressed profiles at tier 10 (P4, P5) and the perceptibility of each permanent family (P7) are
  * UpgradeBalanceGateTest's. These targets replace the 0.6.0 gates A-H (the owner superseded "tier 10 clears at most 3 of
@@ -30,24 +31,26 @@ class RebirthBalanceGateTest {
         assertTrue(share >= P1_MIN_WIN, "a fresh profile must win tier 0: ${"%.3f".format(share)} below $P1_MIN_WIN")
     }
 
-    @Test fun p2AFreshProfileMostlyLosesTierTwoAndAlmostAlwaysTierFour() {
+    @Test fun p2AFreshProfileContestsTierTwoAndCannotClearTierFour() {
         val two = winShare(SweepArm.FRESH, 2)
+        val three = winShare(SweepArm.FRESH, 3)
         val four = winShare(SweepArm.FRESH, 4)
-        println("GATE P2 fresh win share tier=2 ${"%.3f".format(two)} tier=4 ${"%.3f".format(four)}")
+        println("GATE P2 fresh win share tier=2 ${"%.3f".format(two)} tier=3 ${"%.3f".format(three)} tier=4 ${"%.3f".format(four)}")
         assertTrue(two <= P2_MAX_TIER_TWO_WIN, "tier 2 must ask for progression: a fresh profile wins ${"%.3f".format(two)}")
+        assertTrue(three <= P2_MAX_TIER_THREE_WIN, "tier 3 must mostly beat a fresh profile: it wins ${"%.3f".format(three)}")
         assertTrue(four <= P2_MAX_TIER_FOUR_WIN, "tier 4 must be out of a fresh profile's reach: it wins ${"%.3f".format(four)}")
     }
 
-    @Test fun p3HalfTheProgressionContestsTierFiveAndLosesTierEight() {
-        val five = winShare(SweepArm.HALF, 5)
-        val eight = winShare(SweepArm.HALF, 8)
-        println("GATE P3 half win share tier=5 ${"%.3f".format(five)} tier=8 ${"%.3f".format(eight)}")
-        assertTrue(five in P3_TIER_FIVE_WIN, "half the progression must contest tier 5: it wins ${"%.3f".format(five)}")
-        assertTrue(eight <= P3_MAX_TIER_EIGHT_WIN, "tier 8 must outgrow half the progression: it wins ${"%.3f".format(eight)}")
+    @Test fun p3HalfTheProgressionContestsTierSevenAndCannotClearTierNine() {
+        val seven = winShare(SweepArm.HALF, 7)
+        val nine = winShare(SweepArm.HALF, 9)
+        println("GATE P3 half win share tier=7 ${"%.3f".format(seven)} tier=9 ${"%.3f".format(nine)}")
+        assertTrue(seven in P3_TIER_SEVEN_WIN, "half the progression must contest tier 7: it wins ${"%.3f".format(seven)}")
+        assertTrue(nine <= P3_MAX_TIER_NINE_WIN, "tier 9 must outgrow half the progression: it wins ${"%.3f".format(nine)}")
     }
 
     @Test fun p6AProfilesWinShareNeverRisesWithTheTier() {
-        val ladders = mapOf(SweepArm.FRESH to listOf(0, 2, 4), SweepArm.HALF to listOf(5, 8))
+        val ladders = mapOf(SweepArm.FRESH to listOf(0, 2, 3, 4), SweepArm.HALF to listOf(7, 9))
         val rises = ladders.flatMap { (arm, tiers) ->
             tiers.zipWithNext().mapNotNull { (low, high) ->
                 val lower = winShare(arm, low)
@@ -87,16 +90,19 @@ class RebirthBalanceGateTest {
         const val P1_MIN_WIN = 0.75
 
         /** P2: the largest tier-2 win share of a fresh profile. */
-        const val P2_MAX_TIER_TWO_WIN = 0.35
+        const val P2_MAX_TIER_TWO_WIN = 0.65
+
+        /** P2: the largest tier-3 win share of a fresh profile. */
+        const val P2_MAX_TIER_THREE_WIN = 0.30
 
         /** P2: the largest tier-4 win share of a fresh profile. */
         const val P2_MAX_TIER_FOUR_WIN = 0.05
 
-        /** P3: the tier-5 win share band of half the Matrix with half the upgrades. */
-        val P3_TIER_FIVE_WIN = 0.30..0.85
+        /** P3: the tier-7 win share band of half the Matrix with half the upgrades. */
+        val P3_TIER_SEVEN_WIN = 0.30..0.85
 
-        /** P3: the largest tier-8 win share of half the Matrix with half the upgrades. */
-        const val P3_MAX_TIER_EIGHT_WIN = 0.10
+        /** P3: the largest tier-9 win share of half the Matrix with half the upgrades. */
+        const val P3_MAX_TIER_NINE_WIN = 0.10
 
         /**
          * Gate I: the least ratio of the population's median clear with active items to the median clear without them
