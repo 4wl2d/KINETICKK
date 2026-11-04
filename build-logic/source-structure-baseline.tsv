@@ -19,7 +19,7 @@ function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/ga
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/layout/ChoiceLayoutGeometry.kt#choiceLayoutGeometry	107
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/layout/GameplayLayoutGeometry.kt#forEachRunningControlBounds	120
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/overlay/PauseBuildLayouts.kt#drawCompactBuild	117
-function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/overlay/ReportSummary.kt#ReportSummary	136
+function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/overlay/ReportSummary.kt#ReportSummary	121
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/rewards/RelicPanel.kt#RelicPanel	115
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/rewards/RewardCard.kt#RewardCard	139
 function-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/rewards/RewardCardStyles.kt#buildRewardCardLook	123
@@ -51,9 +51,9 @@ function-lines	flow/session/interaction/src/commonMain/kotlin/kinetickk/flow/ses
 function-lines	foundation/design/src/commonMain/kotlin/kinetickk/foundation/design/KkCards.kt#drawSkillSlotBody	124
 main-file-lines	ball/content/api/src/commonMain/kotlin/kinetickk/ball/content/api/ItemPhrasesInRussian.kt	620
 main-file-lines	ball/gameplay/impl/src/commonMain/kotlin/kinetickk/ball/gameplay/impl/GameComponent.kt	630
-main-file-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/canvas/world/places/SiteRenderer.kt	743
+main-file-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/canvas/world/places/SiteRenderer.kt	740
 main-file-lines	ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/rewards/art/LegendaryGlacialHeartArt.kt	754
-main-file-lines	ball/profile/interaction/src/commonMain/kotlin/kinetickk/ball/profile/interaction/rebirth/impl/RebirthRenderer.kt	688
+main-file-lines	ball/profile/interaction/src/commonMain/kotlin/kinetickk/ball/profile/interaction/rebirth/impl/RebirthRenderer.kt	651
 main-file-lines	ball/profile/interaction/src/commonMain/kotlin/kinetickk/ball/profile/interaction/settings/impl/SettingsLayout.kt	646
 main-file-lines	flow/session/interaction/src/commonMain/kotlin/kinetickk/flow/session/interaction/codex/impl/CodexDetailViews.kt	672
 main-file-lines	flow/session/interaction/src/commonMain/kotlin/kinetickk/flow/session/interaction/codex/impl/CodexViews.kt	623
@@ -68,7 +68,7 @@ package-files	foundation/design/src/commonMain/kotlin/kinetickk/foundation/desig
 test-file-lines	ball/gameplay/impl/src/commonTest/kotlin/kinetickk/ball/gameplay/impl/GameComponentTest.kt	1183
 test-file-lines	ball/gameplay/interaction/src/desktopTest/kotlin/kinetickk/ball/gameplay/interaction/canvas/RedesignShotsWorldTest.kt	1224
 test-file-lines	ball/gameplay/interaction/src/desktopTest/kotlin/kinetickk/ball/gameplay/interaction/canvas/WorldHotPathAllocationTest.kt	1081
-test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/SimulationWitnessFixtures.kt	1208
+test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/SimulationWitnessFixtures.kt	1161
 test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/structures/DungeonSystemTest.kt	1081
 test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/world/ObstacleKindSystemTest.kt	1480
 test-file-lines	ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/world/ObstacleSystemTest.kt	1223
