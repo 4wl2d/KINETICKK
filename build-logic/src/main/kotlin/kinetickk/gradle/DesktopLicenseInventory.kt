@@ -13,6 +13,7 @@ import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
@@ -278,8 +279,7 @@ abstract class PackageSteamAppImageTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val distributableRoot: DirectoryProperty
 
-    @get:InputDirectory
-    @get:PathSensitive(PathSensitivity.RELATIVE)
+    @get:Internal
     abstract val repositoryDirectory: DirectoryProperty
 
     @get:Input

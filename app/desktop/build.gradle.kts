@@ -89,6 +89,7 @@ val collectDesktopLicenses = tasks.register<CollectDesktopLicensesTask>("collect
 val packageSteamAppImage = tasks.register<PackageSteamAppImageTask>("packageSteamAppImage") {
     group = "distribution"
     description = "Packages the desktop app image with LICENSES/ and corresponding source."
+    doNotTrackState("The task reads the Git repository and writes into the app image.")
     dependsOn(collectDesktopLicenses, "createDistributable")
     licensesDirectory.set(collectDesktopLicenses.flatMap { it.outputDirectory })
     distributableRoot.set(layout.buildDirectory.dir("compose/binaries/main/app"))
