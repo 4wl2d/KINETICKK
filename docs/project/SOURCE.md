@@ -26,7 +26,9 @@ Release notes must record:
 - any patch, platform adapter, SDK binding, or build input used for that binary.
 
 Prototype artifacts built from an uncommitted working tree are development
-builds, not official releases.
+builds, not official releases. `:app:desktop:packageSteamAppImage` refuses a
+dirty tree and records the exact commit. Its zip is a Steam candidate, not an
+official release, until that commit is a signed tag.
 
 The current project version is `0.5.0`. The macOS `jpackage` tool rejects an
 application version whose first number is zero, so `createDistributable` cannot

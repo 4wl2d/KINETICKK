@@ -15,6 +15,7 @@ private val legalDocumentPaths = listOf(
     "docs/project/THIRD_PARTY_NOTICES.md",
     "docs/project/ASSET_PROVENANCE.md",
     "docs/project/PRIVACY.md",
+    "docs/project/STEAMWORKS.md",
 )
 
 internal fun Project.packageLegalDocuments() {

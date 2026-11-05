@@ -40,3 +40,7 @@ docs/project/TRADEMARKS.md.
 The Gradle Wrapper and all other third-party material remain under their own
 licenses. See docs/project/THIRD_PARTY_NOTICES.md and the notices embedded in
 those files and artifacts.
+
+Official Steam binaries that Vladislav Tomilov publishes may additionally be
+combined with the Steamworks SDK. That permission is in
+docs/project/STEAMWORKS.md. It does not change this GPL grant.

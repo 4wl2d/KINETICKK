@@ -1,0 +1,71 @@
+# SPDX-FileCopyrightText: 2026 Vladislav Tomilov
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Steam Windows package
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/steam-windows.yml
+      - app/desktop/build.gradle.kts
+      - build-logic/src/main/kotlin/kinetickk/gradle/DesktopLicenseInventory.kt
+      - docs/legal/**
+      - docs/project/STEAMWORKS.md
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Windows app image
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out KINETICKK
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17.0.20+8"
+
+      - name: Verify JDK
+        run: java -version
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@4733eaac7c1b0da527e4206b7671e0061de1ce37 # v6
+
+      - name: Package the Windows app image
+        run: >-
+          ./gradlew :app:desktop:packageSteamAppImage
+          --no-daemon
+          --stacktrace
+
+      - name: Check the package contents
+        run: |
+          set -euo pipefail
+          zip=app/desktop/build/steam/KINETICKK-windows-app-image.zip
+          test -s "$zip"
+          unzip -l "$zip" | grep -F 'KINETICKK.exe'
+          unzip -l "$zip" | grep -F 'LICENSES/INDEX.md'
+          unzip -l "$zip" | grep -F 'corresponding-source.tar.gz'
+          unzip -l "$zip" | grep -F 'PACKAGE.txt'
+          cat app/desktop/build/steam/KINETICKK-windows-app-image.sha256
+
+      - name: Upload the Windows package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: kinetickk-windows-app-image
+          path: |
+            app/desktop/build/steam/KINETICKK-windows-app-image.zip
+            app/desktop/build/steam/KINETICKK-windows-app-image.sha256
+            app/desktop/build/licenses/INDEX.md
+          if-no-files-found: error
+          retention-days: 14
