@@ -65,10 +65,13 @@ versioned upstream source and actual license text before distribution.
 
 ## Release requirement
 
-The current build copies the KINETICKK legal documents into `META-INF`, but it
-does not yet assemble a complete release-grade `LICENSES/` directory. Do not
-treat a development artifact as ready for public distribution until this gate
-is complete.
+The current build copies the KINETICKK legal documents into `META-INF`.
+`:app:desktop:packageSteamAppImage` also assembles `LICENSES/` from the resolved
+desktop runtime classpath, the bundled font notices, and the packaging JDK, and
+fails if a shipped third-party artifact has no license text. That gate is
+necessary for a desktop package. It does not by itself make a build an official
+release: an official binary still needs a signed tag and the release notes in
+SOURCE.md.
 
 Before distributing any Android, desktop, or web build:
 
