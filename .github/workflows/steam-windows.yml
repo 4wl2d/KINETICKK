@@ -5,6 +5,13 @@ name: Steam Windows package
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/steam-windows.yml
+      - app/desktop/build.gradle.kts
+      - build-logic/src/main/kotlin/kinetickk/gradle/DesktopLicenseInventory.kt
+      - docs/legal/**
+      - docs/project/STEAMWORKS.md
 
 permissions:
   contents: read
